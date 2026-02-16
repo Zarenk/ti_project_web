@@ -133,7 +133,7 @@ export class SalePostedController {
         : `${data.saleId}`;
 
       // Información del cliente
-      const client = await this.prisma.clients.findUnique({
+      const client = await this.prisma.client.findUnique({
         where: { id: sale.clientId },
         select: { name: true },
       });

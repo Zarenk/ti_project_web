@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LayoutGrid, List } from "lucide-react"
+import { LayoutGrid, List, Search, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,6 +32,7 @@ import { isProductActive } from "./status.utils"
 
 type ViewMode = "table" | "gallery"
 const VIEW_MODE_KEY = "products-view-mode"
+const ITEMS_PER_PAGE_KEY = "products-items-per-page"
 
 type MigrationFilter = "all" | "legacy" | "migrated"
 type CategoryFilter = "all" | string
@@ -47,6 +48,13 @@ export function ProductsClient() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all")
   const { selection } = useTenantSelection()
 
+  // Pagination state for gallery view
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    if (typeof window === "undefined") return 24
+    return Number(localStorage.getItem(ITEMS_PER_PAGE_KEY)) || 24
+  })
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "table"
     return (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || "table"
@@ -54,6 +62,14 @@ export function ProductsClient() {
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode)
     localStorage.setItem(VIEW_MODE_KEY, mode)
+    setCurrentPage(1) // Reset to first page when changing view
+  }
+
+  const handleItemsPerPageChange = (value: string) => {
+    const newValue = Number(value)
+    setItemsPerPage(newValue)
+    localStorage.setItem(ITEMS_PER_PAGE_KEY, String(newValue))
+    setCurrentPage(1) // Reset to first page
   }
 
   useEffect(() => {
@@ -161,6 +177,19 @@ export function ProductsClient() {
     }, 0)
     return total / filteredProducts.length
   }, [filteredProducts])
+
+  // Pagination for gallery view
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredProducts.slice(startIndex, endIndex)
+  }, [filteredProducts, currentPage, itemsPerPage])
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm, categoryFilter])
 
   return (
     <section className="py-2 sm:py-6">
@@ -381,8 +410,94 @@ export function ProductsClient() {
             ) : error ? (
               <div className="px-5 text-sm text-destructive">{error}</div>
             ) : viewMode === "gallery" ? (
-              <div className="px-5">
-                <ProductsGallery data={data} onProductUpdated={reloadProducts} />
+              <div className="space-y-4 px-5">
+                {/* Search and controls for gallery view */}
+                <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Buscar producto por nombre o descripción..."
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={handleItemsPerPageChange}
+                  >
+                    <SelectTrigger className="w-full sm:w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="12">12 por página</SelectItem>
+                      <SelectItem value="24">24 por página</SelectItem>
+                      <SelectItem value="48">48 por página</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Products count */}
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <p>
+                    Mostrando {paginatedProducts.length} de {filteredProducts.length} productos
+                  </p>
+                </div>
+
+                {/* Gallery */}
+                <ProductsGallery data={paginatedProducts} onProductUpdated={reloadProducts} />
+
+                {/* Pagination controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Anterior
+                    </Button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            className="h-9 w-9"
+                            onClick={() => setCurrentPage(pageNum)}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Siguiente
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">

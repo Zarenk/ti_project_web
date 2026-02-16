@@ -84,14 +84,14 @@ export class PurchasePostedController {
       // Obtener detalles de productos para las líneas contables
       const productDetails = await this.prisma.entryDetail.findMany({
         where: { entryId: purchase.id },
-        include: { product: true },
+        include: { product: true, series: true },
       });
 
       const products = productDetails.map(detail => ({
         quantity: detail.quantity,
         name: detail.product?.name || 'Producto',
         price: detail.priceInSoles ?? detail.price ?? 0,
-        series: detail.series || undefined,
+        series: detail.series?.[0]?.serial || undefined,
       }));
 
       const lines = this.mapper.buildEntryFromPurchase({

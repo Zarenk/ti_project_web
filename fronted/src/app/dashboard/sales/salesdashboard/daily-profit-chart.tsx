@@ -70,7 +70,7 @@ export function DailyProfitChart({ dateRange }: Props) {
               axisLine={false}
               tickMargin={10}
               style={{ fontSize: "12px" }}
-              tickFormatter={(value) => `S/. ${value}`}
+              tickFormatter={(value) => `S/. ${Number(value).toFixed(2)}`}
             />
             <Tooltip
               content={({ active, payload }) => {
@@ -85,7 +85,7 @@ export function DailyProfitChart({ dateRange }: Props) {
                         </div>
                         <div className="flex flex-col">
                           <span className="text-[0.70rem] uppercase text-muted-foreground">Utilidad</span>
-                          <span className="font-bold">S/. {profit}</span>
+                          <span className="font-bold">S/. {Number(profit).toFixed(2)}</span>
                         </div>
                       </div>
                     </div>

@@ -41,8 +41,8 @@ model Product {
   restaurantOrderItems RestaurantOrderItem[]
   reviews              Review[]
   transfers            Transfer[]
-  finishedProductBOMs  BillOfMaterials[]    @relation("FinishedProduct")
-  componentBOMs        BillOfMaterials[]    @relation("Component")
+  finishedProductBOMs  BillOfMaterials[]     @relation("FinishedProduct")
+  componentBOMs        BillOfMaterials[]     @relation("Component")
   workOrders           WorkOrder[]
 
   @@unique([organizationId, name])
@@ -1272,8 +1272,8 @@ model PosStation {
 model BillOfMaterials {
   id             Int      @id @default(autoincrement())
   companyId      Int
-  productId      Int      // Finished product
-  componentId    Int      // Raw material/component
+  productId      Int // Finished product
+  componentId    Int // Raw material/component
   quantity       Decimal  @db.Decimal(10, 4)
   unit           String
   wastagePercent Decimal? @db.Decimal(5, 2)
@@ -1292,7 +1292,7 @@ model BillOfMaterials {
 model WorkOrder {
   id            Int       @id @default(autoincrement())
   companyId     Int
-  woNumber      String    // WO-2024-001
+  woNumber      String // WO-2024-001
   productId     Int
   quantity      Decimal   @db.Decimal(10, 2)
   status        String    @default("pending") // pending, in_progress, completed, cancelled

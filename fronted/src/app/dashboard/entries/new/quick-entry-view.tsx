@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Search, ShoppingCart, Loader2, ChevronsUpDown, Check } from "lucide-react"
+import { Search, ShoppingCart, Loader2, ChevronsUpDown, Check, ChevronLeft, ChevronRight } from "lucide-react"
 import { jwtDecode } from "jwt-decode"
 
 import { Input } from "@/components/ui/input"
@@ -73,6 +73,11 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false)
+  const [showAllCategories, setShowAllCategories] = useState(false)
+
+  // --- Pagination ---
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(12) // Fixed for quick entry
 
   // --- Context ---
   const [providerId, setProviderId] = useState<number | null>(null)
@@ -170,21 +175,47 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
     return result
   }, [products, searchQuery, selectedCategory])
 
-  // --- Category list from loaded products ---
+  // --- Category list from loaded products (sorted by product count) ---
   const usedCategories = useMemo(() => {
-    const map = new Map<number, string>()
+    const countMap = new Map<number, { name: string; count: number }>()
     for (const p of products) {
       const catId = Number(p.categoryId)
       if (catId && p.category_name) {
-        map.set(catId, p.category_name)
+        const existing = countMap.get(catId)
+        if (existing) {
+          existing.count++
+        } else {
+          countMap.set(catId, { name: p.category_name, count: 1 })
+        }
       }
     }
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+    return Array.from(countMap.entries())
+      .map(([id, { name, count }]) => ({ id, name, count }))
+      .sort((a, b) => b.count - a.count) // Most used first
   }, [products])
 
   const selectedCategoryName = usedCategories.find(
     (c) => c.id === selectedCategory,
   )?.name
+
+  // --- Pagination for products ---
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredProducts.slice(startIndex, endIndex)
+  }, [filteredProducts, currentPage, itemsPerPage])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedCategory])
+
+  // --- Visible categories (limit to 10 most used) ---
+  const visibleCategories = useMemo(() => {
+    if (showAllCategories) return usedCategories
+    return usedCategories.slice(0, 10)
+  }, [usedCategories, showAllCategories])
 
   // --- Cart operations ---
   const addToCart = useCallback((product: ProductCardItem) => {
@@ -504,7 +535,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
               )}
             </div>
 
-            {/* Category pills (quick access) */}
+            {/* Category pills (quick access) - show top 10 most used */}
             {usedCategories.length > 1 && (
               <div className="flex flex-wrap gap-1.5">
                 <Badge
@@ -514,7 +545,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                 >
                   Todas
                 </Badge>
-                {usedCategories.map((cat) => (
+                {visibleCategories.map((cat) => (
                   <Badge
                     key={cat.id}
                     variant={
@@ -530,9 +561,32 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                     {cat.name}
                   </Badge>
                 ))}
+                {usedCategories.length > 10 && (
+                  <Badge
+                    variant="secondary"
+                    className="cursor-pointer transition-colors hover:bg-secondary/80"
+                    onClick={() => setShowAllCategories(!showAllCategories)}
+                  >
+                    {showAllCategories ? "Ver menos..." : `Ver más... (+${usedCategories.length - 10})`}
+                  </Badge>
+                )}
               </div>
             )}
           </div>
+
+          {/* Products count and pagination info */}
+          {filteredProducts.length > 0 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <p>
+                Mostrando {paginatedProducts.length} de {filteredProducts.length} productos
+              </p>
+              {totalPages > 1 && (
+                <p>
+                  Página {currentPage} de {totalPages}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Product grid */}
           {filteredProducts.length === 0 ? (
@@ -544,18 +598,72 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
               </p>
             </div>
           ) : (
-            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  cartQuantity={cartMap.get(product.id)?.quantity ?? 0}
-                  onAdd={() => addToCart(product)}
-                  onIncrement={() => addToCart(product)}
-                  onDecrement={() => decrementCart(product.id)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                {paginatedProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    cartQuantity={cartMap.get(product.id)?.quantity ?? 0}
+                    onAdd={() => addToCart(product)}
+                    onIncrement={() => addToCart(product)}
+                    onDecrement={() => decrementCart(product.id)}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum: number
+                      if (totalPages <= 5) {
+                        pageNum = i + 1
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i
+                      } else {
+                        pageNum = currentPage - 2 + i
+                      }
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          className="h-9 w-9"
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
 

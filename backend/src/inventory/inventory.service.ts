@@ -687,7 +687,9 @@ export class InventoryService {
             item.storeOnInventory.length > 0 || item.entryDetails.length > 0,
         );
     } catch (error) {
+      this.logger.error('Error in getInventoryWithEntries:', error);
       handlePrismaError(error);
+      return []; // Return empty array on error instead of undefined
     }
   }
 
@@ -696,17 +698,23 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
-    await this.ensureInventoryFeatureEnabled(companyId ?? null);
-    const inventory = await this.getInventoryWithEntries(
-      organizationId,
-      companyId,
-    );
+    try {
+      await this.ensureInventoryFeatureEnabled(companyId ?? null);
+      const inventory = await this.getInventoryWithEntries(
+        organizationId,
+        companyId,
+      );
 
-    return inventory.map((item) => {
+      if (!inventory || !Array.isArray(inventory)) {
+        this.logger.error('getInventoryWithEntries returned invalid data:', inventory);
+        return [];
+      }
+
+      return inventory.map((item) => {
       // Agrupar los detalles de entrada por tienda
       const stockByStore = item.storeOnInventory.map((storeInventory) => {
         const stockByCurrency = item.entryDetails
-          .filter((detail) => detail.entry.storeId === storeInventory.storeId)
+          .filter((detail) => detail.entry && detail.entry.storeId === storeInventory.storeId)
           .reduce(
             (acc, detail) => {
               const sold = detail.salesDetails.reduce(
@@ -726,7 +734,7 @@ export class InventoryService {
 
         return {
           storeId: storeInventory.storeId,
-          storeName: storeInventory.store.name,
+          storeName: storeInventory.store?.name ?? 'Tienda desconocida',
           stockByCurrency,
         };
       });
@@ -736,6 +744,10 @@ export class InventoryService {
         stockByStore,
       };
     });
+    } catch (error) {
+      this.logger.error('Error in calculateInventoryWithCurrencyByStore:', error);
+      handlePrismaError(error);
+    }
   }
 
   // Obtener el inventario con desglose por moneda
@@ -765,6 +777,7 @@ export class InventoryService {
 
       // Acumular las cantidades totales por moneda
       item.entryDetails.forEach((detail) => {
+        if (!detail.entry) return; // Skip if entry is null
         const sold = detail.salesDetails.reduce((s, sd) => s + sd.quantity, 0);
         const remaining = detail.quantity - sold;
         const currency = detail.entry.tipoMoneda;
@@ -776,7 +789,7 @@ export class InventoryService {
       // Acumular las cantidades por tienda
       item.storeOnInventory.forEach((storeInventory) => {
         const storeId = storeInventory.storeId;
-        const storeName = storeInventory.store.name;
+        const storeName = storeInventory.store?.name ?? 'Tienda desconocida';
 
         if (!acc[productId].stockByStoreAndCurrency[storeId]) {
           acc[productId].stockByStoreAndCurrency[storeId] = {
@@ -788,7 +801,7 @@ export class InventoryService {
 
         // Filtrar los detalles de entrada para esta tienda
         const entryDetailsForStore = item.entryDetails.filter(
-          (detail) => detail.entry.storeId === storeId,
+          (detail) => detail.entry && detail.entry.storeId === storeId,
         );
 
         // Sumar las cantidades por moneda para esta tienda
@@ -972,7 +985,7 @@ export class InventoryService {
       quantity: sale.quantity,
       price: sale.price,
       series: sale.series,
-      storeName: sale.sale.store.name,
+      storeName: sale.sale.store?.name ?? 'Tienda desconocida',
       clientName: sale.sale.client?.name || 'Sin cliente',
       responsibleId: sale.sale.user?.id ?? null,
       responsibleName:
