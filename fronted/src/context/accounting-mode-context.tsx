@@ -43,7 +43,7 @@ export function AccountingModeProvider({ children }: { children: ReactNode }) {
 
         // Then sync with backend preference
         try {
-          const res = await authFetch("/api/users/me")
+          const res = await authFetch("/users/me")
           if (res.ok) {
             const userData = await res.json()
             const serverMode = userData.accountingMode as AccountingMode | undefined
@@ -77,7 +77,7 @@ export function AccountingModeProvider({ children }: { children: ReactNode }) {
 
     // Persist to backend (fire and forget)
     try {
-      await authFetch("/api/users/preferences", {
+      await authFetch("/users/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountingMode: newMode }),

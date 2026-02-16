@@ -1,4 +1,6 @@
 import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -762,7 +764,19 @@ function filterOrganizations(
 export async function applyMultiTenantFixtures(
   options: ApplyFixturesOptions = {},
 ): Promise<MultiTenantFixtureSummary> {
-  const prisma = (options.prisma ?? new PrismaClient()) as PrismaSeedClient;
+  // Create PrismaClient with adapter for Prisma 7.x
+  let prisma: PrismaSeedClient;
+  if (options.prisma) {
+    prisma = options.prisma as PrismaSeedClient;
+  } else {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
+    const pool = new Pool({ connectionString });
+    const adapter = new PrismaPg(pool);
+    prisma = new PrismaClient({ adapter }) as PrismaSeedClient;
+  }
   const logger = options.logger ?? console.log;
   const shouldDisconnect = !options.prisma;
 

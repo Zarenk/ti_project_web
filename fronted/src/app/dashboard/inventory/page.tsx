@@ -37,6 +37,7 @@ import {
 } from "./inventory.api";
 import { DataTable } from "./data-table";
 import { CreateTemplateDialog } from "./create-template-dialog";
+import { TablePageSkeleton } from "@/components/table-page-skeleton";
 
 interface InventoryItem {
   id: number;
@@ -387,7 +388,7 @@ export default function InventoryPage() {
   
 
   if (loading) {
-    return <div className="px-4">Cargando inventario...</div>;
+    return <TablePageSkeleton filters={3} columns={5} rows={8} />;
   }
 
   return (

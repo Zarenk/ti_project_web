@@ -6,7 +6,19 @@ function getBaseUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL || ''
 }
 
+let refreshPromise: Promise<boolean> | null = null
+
 export async function refreshAuthToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = doRefresh()
+  try {
+    return await refreshPromise
+  } finally {
+    refreshPromise = null
+  }
+}
+
+async function doRefresh(): Promise<boolean> {
   if (wasManualLogoutRecently()) {
     return false
   }

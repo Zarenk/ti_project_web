@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import SimplePagination from "@/components/simple-pagination"
 import { Campaign, fetchCampaigns, createCampaign } from "./ads.api"
 import { useRBAC } from "../hooks/use-rbac"
@@ -69,9 +70,19 @@ export default function AdsDashboardPage() {
       </div>
 
       {loading && (
-        <Card>
-          <CardContent>Cargando...</CardContent>
-        </Card>
+        <div className="grid gap-4 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-9 w-28 rounded-md" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
       {error && (
         <Card>

@@ -1,7 +1,9 @@
+import { BACKEND_URL } from "./utils";
+
 export function resolveImageUrl(path?: string): string {
   if (!path) return "";
 
-  const backend = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  const backend = BACKEND_URL;
 
   // If it's an absolute URL, rewrite only if it's an uploads path
   // so we can recover from stale hosts/IPs stored in DB.

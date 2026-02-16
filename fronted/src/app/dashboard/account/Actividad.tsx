@@ -40,8 +40,7 @@ import {
   OrganizationCompaniesOverview,
 } from "@/app/dashboard/tenancy/tenancy.api";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+import { BACKEND_URL } from "@/lib/utils";
 
 interface AuditLog {
   id: string;

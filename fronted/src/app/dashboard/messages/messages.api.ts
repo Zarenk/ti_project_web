@@ -66,7 +66,18 @@ export async function sendMessage(data: {
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    throw new Error('Error al enviar el mensaje');
+    let message = 'Error al enviar el mensaje';
+    try {
+      const payload = (await res.json()) as { message?: string | string[] };
+      if (typeof payload?.message === 'string' && payload.message.trim()) {
+        message = payload.message;
+      } else if (Array.isArray(payload?.message) && payload.message.length > 0) {
+        message = String(payload.message[0]);
+      }
+    } catch {
+      // Ignore malformed backend payload and preserve default message.
+    }
+    throw new Error(message);
   }
   return res.json();
 }

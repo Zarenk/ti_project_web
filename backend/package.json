@@ -133,6 +133,7 @@
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^16.0.0",
     "jest": "^29.7.0",
+    "jest-mock-extended": "^4.0.0",
     "prettier": "^3.4.2",
     "prisma": "^7.3.0",
     "source-map-support": "^0.5.21",
@@ -155,7 +156,8 @@
     "roots": [
       "<rootDir>/src",
       "<rootDir>/test",
-      "<rootDir>/prisma"
+      "<rootDir>/prisma",
+      "<rootDir>/scripts"
     ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {

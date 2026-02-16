@@ -1,5 +1,7 @@
+/** @jsxImportSource react */
 import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
+import React from 'react'
 import { UserManualDocument } from './UserManualDocument'
 import { HELP_SECTIONS } from '@/data/help'
 import fs from 'fs'
@@ -137,7 +139,7 @@ async function generateManual(): Promise<Buffer> {
 
   // Renderizar PDF
   const pdfBuffer = await renderToBuffer(
-    <UserManualDocument data={manualData} />
+    React.createElement(UserManualDocument, { data: manualData })
   )
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2)

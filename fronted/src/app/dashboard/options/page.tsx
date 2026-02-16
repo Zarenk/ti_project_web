@@ -80,7 +80,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-import { getAuthHeaders } from "@/utils/auth-token";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
@@ -89,7 +88,7 @@ import {
 } from "@/lib/typography-fonts";
 import { DeleteActionsGuard } from "@/components/delete-actions-guard";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+import { BACKEND_URL } from "@/lib/utils";
 
 export type SettingsFormData = SiteSettings;
 

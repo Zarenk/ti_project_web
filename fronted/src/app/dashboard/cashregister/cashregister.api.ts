@@ -1,32 +1,6 @@
+import { BACKEND_URL } from "@/lib/utils";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-import { getAuthHeaders } from "@/utils/auth-token";
 import { getTenantSelection } from "@/utils/tenant-preferences";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-
-async function authorizedFetch(
-  url: string,
-  init: RequestInit = {},
-  requireAuth = true,
-): Promise<Response> {
-  const authHeaders = await getAuthHeaders();
-  if (requireAuth && !("Authorization" in authHeaders)) {
-    throw new Error("No se encontro un token de autenticacion");
-  }
-
-  const headers = new Headers(init.headers ?? {});
-  for (const [key, value] of Object.entries(authHeaders)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, {
-    ...init,
-    headers,
-    credentials: init.credentials ?? "include",
-  });
-}
 
 async function safeJson<T>(response: Response): Promise<T | null> {
   if (response.status === 204) return null;
@@ -174,7 +148,7 @@ export const createIndependentTransaction = async (data: {
 
   const payload = await withTenantIdentifiers(basePayload);
 
-  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister/transaction`, {
+  const response = await authFetch(`${BACKEND_URL}/api/cashregister/transaction`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -289,7 +263,7 @@ export async function createCashClosure(payload: any): Promise<CreateCashClosure
 
   const payloadWithTenant = await withTenantIdentifiers(cleanPayload);
 
-  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister/closure`, {
+  const response = await authFetch(`${BACKEND_URL}/api/cashregister/closure`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -419,7 +393,7 @@ export async function getClosureByDate(storeId: number, date: string) {
 
 export const createCashRegister = async (payload: any) => {
   const payloadWithTenant = await withTenantIdentifiers(payload);
-  const response = await authorizedFetch(`${BACKEND_URL}/api/cashregister`, {
+  const response = await authFetch(`${BACKEND_URL}/api/cashregister`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

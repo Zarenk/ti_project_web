@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { BACKEND_URL } from '@/lib/utils';
-import { getAuthHeaders } from '@/utils/auth-token';
+import { createGuestUser } from './chat.api';
+
+export const CHAT_GUEST_ID_KEY = 'guestId';
+export const CHAT_GUEST_ID_EXPIRES_KEY = 'guestIdExpires';
+export const CHAT_GUEST_TOKEN_KEY = 'chatGuestToken';
+export const CHAT_GUEST_TOKEN_EXPIRES_KEY = 'chatGuestTokenExpires';
 
 export function useChatUserId() {
   const { userId: contextUserId } = useAuth();
@@ -14,20 +18,31 @@ export function useChatUserId() {
         return;
       }
       try {
-        let storedId = localStorage.getItem('guestId');
-        const expiresAt = Number(localStorage.getItem('guestIdExpires'));
-        if (!storedId || !expiresAt || expiresAt < Date.now()) {
-          const headers = await getAuthHeaders();
-          const res = await fetch(`${BACKEND_URL}/api/public/clients/guest`, {
-            method: 'POST',
-            headers,
-          });
-          if (!res.ok) throw new Error('Failed to create guest');
-          const data = await res.json();
+        let storedId = localStorage.getItem(CHAT_GUEST_ID_KEY);
+        const expiresAt = Number(
+          localStorage.getItem(CHAT_GUEST_ID_EXPIRES_KEY),
+        );
+        const guestToken = localStorage.getItem(CHAT_GUEST_TOKEN_KEY);
+        const guestTokenExpiresAt = Number(
+          localStorage.getItem(CHAT_GUEST_TOKEN_EXPIRES_KEY),
+        );
+        const shouldRefreshGuestSession =
+          !storedId ||
+          !expiresAt ||
+          expiresAt < Date.now() ||
+          !guestToken ||
+          !guestTokenExpiresAt ||
+          guestTokenExpiresAt < Date.now();
+
+        if (shouldRefreshGuestSession) {
+          const data = await createGuestUser();
           storedId = String(data.userId);
-          const nextDay = Date.now() + 24 * 60 * 60 * 1000;
-          localStorage.setItem('guestId', storedId);
-          localStorage.setItem('guestIdExpires', String(nextDay));
+          const nextExpiry =
+            Date.now() + Math.max(60, data.guestTokenExpiresInSeconds) * 1000;
+          localStorage.setItem(CHAT_GUEST_ID_KEY, storedId);
+          localStorage.setItem(CHAT_GUEST_ID_EXPIRES_KEY, String(nextExpiry));
+          localStorage.setItem(CHAT_GUEST_TOKEN_KEY, data.guestToken);
+          localStorage.setItem(CHAT_GUEST_TOKEN_EXPIRES_KEY, String(nextExpiry));
         }
         setUserId(Number(storedId));
       } catch (err) {

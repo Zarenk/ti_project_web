@@ -1,58 +1,8 @@
-import { getAuthHeaders } from "@/utils/auth-token";
+import { BACKEND_URL } from "@/lib/utils";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-
-async function authorizedFetch(url: string, init: RequestInit = {}) {
-  let auth: Record<string, string> = {};
-  try {
-    auth = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes("No se encontro un token")
-    ) {
-      throw new UnauthenticatedError();
-    }
-    throw error;
-  }
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, { ...init, headers });
-}
-
-async function publicFetch(url: string, init: RequestInit = {}) {
-  let auth: Record<string, string> = {};
-  try {
-    auth = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes("No se encontro un token")
-    ) {
-      throw new UnauthenticatedError();
-    }
-    throw error;
-  }
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, { ...init, headers });
-}
-
 export async function createCategory(categoryData: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -75,7 +25,7 @@ export async function createCategory(categoryData: any) {
 
 export async function createCategoryDefault() {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/categories/verify-or-create-default`, {
+    const response = await authFetch(`${BACKEND_URL}/api/categories/verify-or-create-default`, {
       method: "POST",
     });
 
@@ -119,7 +69,7 @@ export async function getCategories() {
 export async function getCategory(id: string) {
   let data: Response;
   try {
-    data = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+    data = await authFetch(`${BACKEND_URL}/api/category/${id}`, {
       cache: "no-store",
     });
   } catch (error) {
@@ -142,7 +92,7 @@ export async function getCategory(id: string) {
 
 export async function verifyCategories(categories: { name: string }[]) {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/category/verify`, {
+    const response = await authFetch(`${BACKEND_URL}/api/category/verify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -163,7 +113,7 @@ export async function verifyCategories(categories: { name: string }[]) {
 }
 
 export async function deleteCategory(id: string) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/${id}`, {
     method: "DELETE",
   });
 
@@ -176,7 +126,7 @@ export async function deleteCategory(id: string) {
 }
 
 export async function deleteCategories(ids: string[]) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -191,7 +141,7 @@ export async function deleteCategories(ids: string[]) {
 }
 
 export async function updateCategory(id: string, newCategory: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/${id}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -215,7 +165,7 @@ export async function updateCategory(id: string, newCategory: any) {
 
 export async function getCategoriesWithCount() {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/category/with-count`, {
+    const response = await authFetch(`${BACKEND_URL}/api/category/with-count`, {
       cache: "no-store",
     });
     if (!response.ok) {
@@ -235,7 +185,7 @@ export async function validateCategoryName(payload: {
   name: string;
   categoryId?: number;
 }): Promise<{ nameAvailable: boolean }> {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/category/validate-name`, {
+  const res = await authFetch(`${BACKEND_URL}/api/category/validate-name`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -257,7 +207,7 @@ export async function validateCategoryName(payload: {
 
 export async function getPublicCategoriesWithCount() {
   try {
-    const response = await publicFetch(`${BACKEND_URL}/api/public/category/with-count`, {
+    const response = await authFetch(`${BACKEND_URL}/api/public/category/with-count`, {
       cache: "no-store",
     });
     if (!response.ok) {

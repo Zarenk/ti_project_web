@@ -11,6 +11,7 @@ import { TablePageSkeleton } from "@/components/table-page-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HelpAdminTab } from "./help-admin-tab";
 import { HelpTestingPanel } from "./help-testing";
+import { HelpLearningDashboard } from "./help-learning";
 
 type UsersState = {
   data: DashboardUser[];
@@ -123,11 +124,15 @@ export default function UsersPage(): React.ReactElement {
             <TabsList>
               <TabsTrigger value="users">Usuarios</TabsTrigger>
               <TabsTrigger value="help-assistant">Asistente</TabsTrigger>
+              <TabsTrigger value="help-learning">🧠 Auto-Aprendizaje</TabsTrigger>
               <TabsTrigger value="testing">🧪 Testing</TabsTrigger>
             </TabsList>
             <TabsContent value="users">{usersTable}</TabsContent>
             <TabsContent value="help-assistant">
               <HelpAdminTab />
+            </TabsContent>
+            <TabsContent value="help-learning">
+              <HelpLearningDashboard />
             </TabsContent>
             <TabsContent value="testing">
               <HelpTestingPanel />

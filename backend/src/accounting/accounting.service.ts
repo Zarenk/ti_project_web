@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { AccEntryStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
@@ -11,8 +11,11 @@ export interface AccountNode {
   id: number;
   code: string;
   name: string;
+  accountType?: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
   parentId: number | null;
   children?: AccountNode[];
+  balance?: number;
+  updatedAt?: string;
 }
 
 const LIMA_TZ = 'America/Lima';
@@ -60,11 +63,19 @@ export class AccountingService {
     private readonly verticalConfig: VerticalConfigService,
   ) {}
 
-  private async ensureAccountingFeatureEnabled(companyId?: number | null) {
-    if (!companyId) {
+  private async ensureAccountingFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
       return;
     }
-    await this.verticalConfig.getConfig(companyId);
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.accounting === false) {
+      throw new ForbiddenException(
+        'El modulo de contabilidad no esta habilitado para esta empresa.',
+      );
+    }
   }
 
   private emitTenantLog(
@@ -95,7 +106,10 @@ export class AccountingService {
 
     this.emitTenantLog('getAccounts', tenantContext);
 
+    const organizationId = tenantContext?.organizationId ?? null;
+
     const accounts = await this.prisma.account.findMany({
+      where: organizationId ? { organizationId } : undefined,
       orderBy: { code: 'asc' },
     });
 
@@ -105,7 +119,9 @@ export class AccountingService {
         id: acc.id,
         code: acc.code,
         name: acc.name,
+        accountType: acc.accountType,
         parentId: acc.parentId,
+        updatedAt: acc.updatedAt.toISOString(),
         children: [],
       });
     }
@@ -140,14 +156,21 @@ export class AccountingService {
     data: {
       code: string;
       name: string;
+      accountType: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
       parentId?: number | null;
     },
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
     await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
 
+    const organizationId = tenantContext?.organizationId;
+    if (!organizationId) {
+      throw new Error('Organization ID is required to create an account');
+    }
+
     this.emitTenantLog('createAccount', tenantContext, {
       code: data.code,
+      accountType: data.accountType,
       parentId: data.parentId ?? null,
     });
 
@@ -155,7 +178,10 @@ export class AccountingService {
       data: {
         code: data.code,
         name: data.name,
+        accountType: data.accountType,
         parentId: data.parentId ?? null,
+        organizationId,
+        companyId: tenantContext?.companyId ?? null,
         level: data.code.length,
         isPosting: data.code.length >= 4,
       },
@@ -164,13 +190,20 @@ export class AccountingService {
       id: account.id,
       code: account.code,
       name: account.name,
+      accountType: account.accountType,
       parentId: account.parentId,
+      updatedAt: account.updatedAt.toISOString(),
     };
   }
 
   async updateAccount(
     id: number,
-    data: { code: string; name: string; parentId?: number | null },
+    data: {
+      code: string;
+      name: string;
+      accountType?: 'ACTIVO' | 'PASIVO' | 'PATRIMONIO' | 'INGRESO' | 'GASTO';
+      parentId?: number | null;
+    },
     tenantContext?: TenantContext | null,
   ): Promise<AccountNode> {
     await this.ensureAccountingFeatureEnabled(tenantContext?.companyId ?? null);
@@ -178,24 +211,33 @@ export class AccountingService {
     this.emitTenantLog('updateAccount', tenantContext, {
       id,
       code: data.code,
+      accountType: data.accountType,
       parentId: data.parentId ?? null,
     });
 
+    const updateData: any = {
+      code: data.code,
+      name: data.name,
+      parentId: data.parentId ?? null,
+      level: data.code.length,
+      isPosting: data.code.length >= 4,
+    };
+
+    if (data.accountType) {
+      updateData.accountType = data.accountType;
+    }
+
     const account = await this.prisma.account.update({
       where: { id },
-      data: {
-        code: data.code,
-        name: data.name,
-        parentId: data.parentId ?? null,
-        level: data.code.length,
-        isPosting: data.code.length >= 4,
-      },
+      data: updateData,
     });
     return {
       id: account.id,
       code: account.code,
       name: account.name,
+      accountType: account.accountType,
       parentId: account.parentId,
+      updatedAt: account.updatedAt.toISOString(),
     };
   }
 

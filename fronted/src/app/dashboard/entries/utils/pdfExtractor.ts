@@ -5,6 +5,7 @@ import { toast } from "sonner";
 // Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
 const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
 const INGRAM_PATTERNS: (string | RegExp)[] = ["20267163228", /ingram\s+micro/i];
+const NEXSYS_PATTERNS: (string | RegExp)[] = ["20470145901", /nexsys\s+del\s+peru/i];
 const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   /gozu gaming/i,
   /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
@@ -12,7 +13,7 @@ const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   "20519078520", // RUC del nuevo proveedor
 ];
 
-type InvoiceProvider = "deltron" | "template" | "ingram" | "unknown";
+type InvoiceProvider = "deltron" | "template" | "ingram" | "nexsys" | "unknown";
 
 type GuideItem = { name: string; quantity: number; series?: string[] };
 
@@ -33,6 +34,10 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
 
   if (matches(INGRAM_PATTERNS)) {
     return "ingram";
+  }
+
+  if (matches(NEXSYS_PATTERNS)) {
+    return "nexsys";
   }
 
   if (matches(TEMPLATE_PROVIDER_PATTERNS)) {
@@ -1165,7 +1170,6 @@ export function processDeltronGuideText(
       itemLines.push(line);
     }
 
-    console.log("[DELTRON Guide] Items section lines:", itemLines);
 
     let pendingName = "";
     let pendingSeries: string[] = [];
@@ -1259,5 +1263,450 @@ export function processDeltronGuideText(
     );
   } else {
     toast.warning("No se encontraron productos en la guía de remisión DELTRON.");
+  }
+}
+
+// =====================================================================
+// INGRAM MICRO INVOICE PROCESSOR
+// Handles "Factura Electrónica" from INGRAM MICRO S.A.C. (RUC 20267163228)
+// Format: pdf-parse scatters table columns; code+unit lines anchor each item
+// =====================================================================
+
+export function processIngramInvoiceText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // --- PROVIDER INFO ---
+  const rucMatch = fullText.match(
+    /R\.?U\.?C\.?\s*(?:N[°º]?)?\s*:?\s*(\d{11})/i
+  );
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // Provider name + address (INGRAM MICRO line, address on next line)
+  const nameIdx = lines.findIndex((l) => /INGRAM\s+MICRO/i.test(l));
+  if (nameIdx >= 0) {
+    setValue("provider_name", lines[nameIdx]);
+    if (nameIdx + 1 < lines.length) {
+      setValue("provider_adress", lines[nameIdx + 1]);
+    }
+  }
+
+  // --- SERIE / CORRELATIVO ---
+  const serieMatch = fullText.match(/\b([A-Z]\d{3}-\d{5,})\b/);
+  if (serieMatch) {
+    setValue("serie", serieMatch[1]);
+    setValue("nroCorrelativo", serieMatch[1]);
+  }
+
+  // --- COMPROBANTE TYPE ---
+  const comprobanteMatch = fullText.match(
+    /(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i
+  );
+  if (comprobanteMatch) {
+    setValue("comprobante", comprobanteMatch[0].trim());
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // In Ingram PDFs the date line appears BEFORE the "Fecha de Emisión:" label
+  // e.g. "2026-01-30  12:00:00a.m.\nFecha de Emisión:"
+  const fechaMatch = fullText.match(
+    /(\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}:\d{2}[ap]\.m\./i
+  );
+  if (fechaMatch) {
+    setValue("fecha_emision_comprobante", fechaMatch[1]);
+  }
+
+  // --- CURRENCY ---
+  if (/d[óo]lar\s+estadounidense/i.test(fullText)) {
+    setCurrency("USD");
+    setValue("tipo_moneda", "USD");
+  } else {
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
+  }
+
+  // --- DATOS ADICIONALES → OBSERVACIÓN ---
+  // Ingram header block (consistent across invoices):
+  //   line X:   "Fecha de Vencimiento:Moneda:Orden de Compra:Factura Interna:"
+  //   line X+1: "Cod. Vendedor:Nro Pedido:"
+  //   line X+2: "{yyyy-mm-dd} {moneda}"   → Fecha de Vencimiento
+  //   line X+3: "{orden_compra}"
+  //   line X+4: "{factura_interna}"
+  //   line X+5: "{condicion}"
+  //   line X+6: "{nro_pedido}"
+  const obsParts: string[] = [];
+  const headerIdx = lines.findIndex((l) =>
+    /^Fecha de Vencimiento:.*Orden de Compra:/i.test(l)
+  );
+  if (headerIdx >= 0) {
+    // Fecha de Vencimiento (line headerIdx+2): "2026-03-01 Dólar..."
+    const vencLine = lines[headerIdx + 2] || "";
+    const vencMatch = vencLine.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (vencMatch) {
+      obsParts.push(`Venc: ${vencMatch[1]}`);
+    }
+
+    // Orden de Compra (line headerIdx+3): purely numeric or alphanumeric
+    const ocVal = (lines[headerIdx + 3] || "").trim();
+    if (ocVal && /^[\dA-Za-z-]+$/.test(ocVal)) {
+      obsParts.push(`OC: ${ocVal}`);
+    }
+
+    // Nro Pedido (line headerIdx+6): numeric
+    const pedidoVal = (lines[headerIdx + 6] || "").trim();
+    if (pedidoVal && /^\d+$/.test(pedidoVal)) {
+      obsParts.push(`Pedido: ${pedidoVal}`);
+    }
+  }
+
+  // Condición / Términos de Pago
+  const terminosIdx = lines.findIndex((l) => /^Terminos de Pago:/i.test(l));
+  if (terminosIdx >= 0 && terminosIdx + 1 < lines.length) {
+    const terminosVal = lines[terminosIdx + 1]?.trim();
+    if (terminosVal && /\d/.test(terminosVal)) {
+      obsParts.push(`Pago: ${terminosVal}`);
+    }
+  }
+
+  if (obsParts.length > 0) {
+    setValue("entry_description", obsParts.join(" | ").slice(0, 200));
+  }
+
+  // --- ITEMS ---
+  // Anchor on code+unit lines: "06627549EA 1.00 894.00"
+  // Pattern: {code}{unit} {val} {val}  (unit = EA, UN, NIU, UND, PZA, SET)
+  // Then look backward for description and forward for {precio_unitario} {cantidad}
+  const items: { name: string; quantity: number; price: number }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Match code+unit line
+    if (!/^\d{4,}(?:EA|UN|NIU|UND|PZA|SET)\s+[\d.]+\s+[\d,.]+$/i.test(line))
+      continue;
+
+    // Look backward for description (nearest non-numeric text line)
+    let name = "";
+    for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+      const prev = lines[j];
+      if (
+        prev.length >= 5 &&
+        /[A-Za-z]/.test(prev) &&
+        !/^\d+[.,]?\d*$/.test(prev) &&
+        !/^\d+$/.test(prev) &&
+        !/^\d+[A-Z]{2,}\s/i.test(prev)
+      ) {
+        name = prev;
+        break;
+      }
+    }
+
+    // Look forward for {precio_unitario} {cantidad} line (two decimals)
+    let price = 0;
+    let quantity = 0;
+    for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+      const next = lines[j];
+      const twoNums = next.match(/^([\d,]+\.\d{2})\s+(\d+\.\d{2})$/);
+      if (twoNums) {
+        price = parseFloat(twoNums[1].replace(/,/g, ""));
+        quantity = parseFloat(twoNums[2]);
+        break;
+      }
+    }
+
+    if (name && quantity > 0) {
+      items.push({ name, quantity, price });
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        category_name: "Sin categoria",
+      }))
+    );
+  } else {
+    toast.warning(
+      "No se encontraron productos en la factura de Ingram Micro."
+    );
+  }
+
+  // --- TOTAL ---
+  // Between "Observaciones:" and "REPRESENTACIÓN IMPRESA" the IGV and total appear
+  // The largest number in that range is the IMPORTE TOTAL
+  const obsIdx = lines.findIndex((l) => /^Observaciones/i.test(l));
+  const repIdx = lines.findIndex((l) => /REPRESENTACI[ÓO]N/i.test(l));
+  if (obsIdx >= 0 && repIdx > obsIdx) {
+    let maxVal = 0;
+    for (let k = obsIdx + 1; k < repIdx; k++) {
+      const numMatch = lines[k].match(/^([\d,]+\.\d{2})$/);
+      if (numMatch) {
+        const val = parseFloat(numMatch[1].replace(/,/g, ""));
+        if (val > maxVal) maxVal = val;
+      }
+    }
+    if (maxVal > 0) {
+      setValue("total_comprobante", maxVal.toFixed(2));
+    }
+  }
+}
+
+// =====================================================================
+// NEXSYS INVOICE PROCESSOR
+// Handles "Factura Electrónica" from NEXSYS DEL PERU S.R.L. (RUC 20470145901)
+// Format: values line {base} {igv_price} {qty}, then description, then code line
+// =====================================================================
+
+export function processNexsysInvoiceText(
+  text: string,
+  setSelectedProducts: Function,
+  setValue: Function,
+  setCurrency: Function
+) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // --- PROVIDER INFO ---
+  const rucMatch = fullText.match(
+    /R\.?U\.?C\.?\s*N[°º]?\s*(\d{11})/i
+  );
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // Provider name + address (lines between name and phone/website)
+  const nameIdx = lines.findIndex((l) => /NEXSYS\s+DEL\s+PERU/i.test(l));
+  if (nameIdx >= 0) {
+    setValue("provider_name", lines[nameIdx]);
+    const addrParts: string[] = [];
+    for (let j = nameIdx + 1; j < Math.min(nameIdx + 5, lines.length); j++) {
+      if (/Telef|www\.|http/i.test(lines[j])) break;
+      if (lines[j].length > 0) addrParts.push(lines[j]);
+    }
+    if (addrParts.length > 0) {
+      setValue(
+        "provider_adress",
+        addrParts.join(" ").replace(/\s+/g, " ").trim()
+      );
+    }
+  }
+
+  // --- SERIE / CORRELATIVO ---
+  const serieMatch = fullText.match(/N[°º]\s*([A-Z]\d{3}-\d{5,})/i);
+  if (serieMatch) {
+    setValue("serie", serieMatch[1]);
+    setValue("nroCorrelativo", serieMatch[1]);
+  }
+
+  // --- COMPROBANTE TYPE ---
+  const comprobanteMatch = fullText.match(
+    /(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i
+  );
+  if (comprobanteMatch) {
+    setValue("comprobante", comprobanteMatch[0].trim());
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // In NEXSYS the date appears on the line right after the "FECHA" label
+  const fechaIdx = lines.findIndex((l) => /^FECHA$/i.test(l));
+  if (fechaIdx >= 0 && fechaIdx + 1 < lines.length) {
+    const dateStr = lines[fechaIdx + 1].trim();
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+      setValue("fecha_emision_comprobante", dateStr);
+    }
+  }
+
+  // --- CURRENCY ---
+  if (/US\$|DOLARES\s+AMERICANOS|d[óo]lar/i.test(fullText)) {
+    setCurrency("USD");
+    setValue("tipo_moneda", "USD");
+  } else {
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
+  }
+
+  // --- DATOS ADICIONALES → OBSERVACIÓN ---
+  // Extract: REFERENCIA, TERMINOS, VENCIMIENTO, ASESOR COMERCIAL, PEDIDO DE VENTA
+  // These appear in a known order between the address block and "ITEM"
+  const obsParts: string[] = [];
+
+  const refIdx = lines.findIndex((l) => /^REFERENCIA$/i.test(l));
+  const asesorIdx = lines.findIndex((l) => /^ASESOR COMERCIAL:/i.test(l));
+  const pedidoIdx = lines.findIndex((l) => /^PEDIDO DE VENTA:/i.test(l));
+  const itemIdx = lines.findIndex((l) => /^ITEM$/i.test(l));
+  const terminosLine = lines.find((l) => /^:TERMINOS/i.test(l));
+  const vencimientoLine = lines.findIndex((l) => /^:VENCIMIENTO$/i.test(l));
+
+  // TERMINOS: value appears 2 lines before "ITEM" (e.g., "CONTADO")
+  if (itemIdx > 0) {
+    const terminosVal = lines[itemIdx - 1]?.trim();
+    if (terminosVal && !/^ITEM$/i.test(terminosVal) && !/^\d/.test(terminosVal)) {
+      obsParts.push(`Términos: ${terminosVal}`);
+    }
+  }
+
+  // REFERENCIA: value appears a few lines after "REFERENCIA" label
+  if (refIdx >= 0) {
+    // Look for a short numeric-dash value (e.g., "30-12", "18-12")
+    for (let j = refIdx + 1; j < Math.min(refIdx + 5, lines.length); j++) {
+      if (/^\d{1,2}-\d{1,2}$/.test(lines[j].trim())) {
+        obsParts.push(`Ref: ${lines[j].trim()}`);
+        break;
+      }
+    }
+  }
+
+  // VENCIMIENTO: date appears 2 lines before "CONTADO"/"CREDITO" before ITEM
+  if (vencimientoLine >= 0 && itemIdx > 0) {
+    const vencVal = lines[itemIdx - 2]?.trim();
+    if (vencVal && /^\d{1,2}-\d{1,2}-\d{4}$/.test(vencVal)) {
+      obsParts.push(`Venc: ${vencVal}`);
+    }
+  }
+
+  // ASESOR COMERCIAL: value on line after PEDIDO DE VENTA value
+  if (pedidoIdx >= 0 && pedidoIdx + 2 < lines.length) {
+    const asesorVal = lines[pedidoIdx + 2]?.trim();
+    if (asesorVal && !/^\d{1,2}[/-]/.test(asesorVal) && !/^ITEM$/i.test(asesorVal)) {
+      obsParts.push(`Asesor: ${asesorVal}`);
+    }
+  }
+
+  // PEDIDO DE VENTA: value is on the line right after "PEDIDO DE VENTA:"
+  if (pedidoIdx >= 0 && pedidoIdx + 1 < lines.length) {
+    const pedidoVal = lines[pedidoIdx + 1]?.trim();
+    if (pedidoVal && /^PV-/i.test(pedidoVal)) {
+      obsParts.push(`PV: ${pedidoVal}`);
+    }
+  }
+
+  if (obsParts.length > 0) {
+    setValue("entry_description", obsParts.join(" | ").slice(0, 200));
+  }
+
+  // --- ITEMS ---
+  // NEXSYS has TWO item formats depending on the invoice:
+  //
+  // Format A (multi-line): values on one line, description on next lines
+  //   Line 1: "{base_price} {igv_price} {quantity}"
+  //   Line 2+: "{DESCRIPTION}"
+  //   Line N: "{CODE} {item_sequence}"
+  //
+  // Format B (single-line): everything merged on one line
+  //   "{base_price} {igv_price} {qty}{DESCRIPTION}{CODE} {item_sequence}"
+  //   e.g. "385.00 454.30 1NoteBook IPS3...FreeDosS83K100C3LM 1.00"
+  //
+  // Section: between "ITEM" header and "***" total-in-words footer
+
+  const itemStartIdx = lines.findIndex((l) => /^ITEM$/i.test(l));
+  const itemEndIdx = lines.findIndex(
+    (l, i) =>
+      i > (itemStartIdx >= 0 ? itemStartIdx : 0) && /^\*{3}\s/.test(l)
+  );
+  const startIdx = itemStartIdx >= 0 ? itemStartIdx + 1 : 0;
+  const endIdx = itemEndIdx >= 0 ? itemEndIdx : lines.length;
+  const itemLines = lines.slice(startIdx, endIdx);
+
+  const items: { name: string; quantity: number; price: number }[] = [];
+  // Format A: values only (3 numbers, qty is integer at end)
+  const valuesRegex = /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d+)$/;
+  // Format B: values + qty + description + code + seq all on one line
+  const singleLineRegex =
+    /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d{1,3})([A-Za-z].+?)\s+(\d+\.\d{2})$/;
+  const codeLineRegex = /^[A-Z0-9][\w-]+\s+\d+\.\d{2}$/i;
+
+  for (let i = 0; i < itemLines.length; i++) {
+    // Try Format A first (multi-line: values only on this line)
+    const multiMatch = itemLines[i].match(valuesRegex);
+    if (multiMatch) {
+      const igvPrice = parseFloat(multiMatch[2].replace(/,/g, ""));
+      const quantity = parseInt(multiMatch[3], 10);
+
+      // Collect description from subsequent lines
+      const descParts: string[] = [];
+      for (let j = i + 1; j < itemLines.length; j++) {
+        const nextLine = itemLines[j];
+        if (valuesRegex.test(nextLine)) break;
+        if (singleLineRegex.test(nextLine)) break;
+        if (codeLineRegex.test(nextLine)) break;
+        if (/^\*{3}\s|^Forma\s+de\s+Pago/i.test(nextLine)) break;
+        if (nextLine.length > 0 && /[A-Za-z]/.test(nextLine)) {
+          descParts.push(nextLine);
+        }
+      }
+
+      const name = descParts.join(" ").replace(/\s+/g, " ").trim();
+      if (name && quantity > 0) {
+        items.push({ name, quantity, price: igvPrice });
+      }
+      continue;
+    }
+
+    // Try Format B (single-line: everything merged)
+    const singleMatch = itemLines[i].match(singleLineRegex);
+    if (singleMatch) {
+      const igvPrice = parseFloat(singleMatch[2].replace(/,/g, ""));
+      const quantity = parseInt(singleMatch[3], 10);
+      let rawDesc = singleMatch[4];
+
+      // Strip trailing product code merged with description
+      // Detect case transition: lowercase → UPPERCASE+digits (8+ chars)
+      // e.g. "FreeDosS83K100C3LM" → strip "S83K100C3LM", keep "FreeDos"
+      const codeStrip = rawDesc.match(/^(.*[a-z])([A-Z][A-Z0-9-]{7,})$/);
+      const name =
+        codeStrip && codeStrip[1].trim().length >= 10
+          ? codeStrip[1].trim()
+          : rawDesc.trim();
+
+      if (name && quantity > 0) {
+        items.push({ name, quantity, price: igvPrice });
+      }
+      continue;
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  if (items.length > 0) {
+    setSelectedProducts(
+      items.map((item, index) => ({
+        id: index + 1,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        category_name: "Sin categoria",
+      }))
+    );
+  } else {
+    toast.warning("No se encontraron productos en la factura de Nexsys.");
+  }
+
+  // --- TOTAL ---
+  // Computed from extracted items (avoids pdf-parse column alignment issues)
+  const total = items.reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0
+  );
+  if (total > 0) {
+    setValue("total_comprobante", total.toFixed(2));
   }
 }

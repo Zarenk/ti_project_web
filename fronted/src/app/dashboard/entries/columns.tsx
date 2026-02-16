@@ -117,8 +117,9 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
             )
         },
         cell: ({ row }) => {
-            const store = row.original.store; // Accede al usuario desde los datos de la fila
-            return <div className="font-medium">{store?.name || 'Sin tienda'}</div>;
+            const store = row.original.store;
+            const name = store?.name || 'Sin tienda';
+            return <div className="font-medium truncate" title={name}>{name}</div>;
           },
           filterFn: (row, columnId, filterValue) => { // no elimines el columnId
             // Filtra las filas basándose en el ID de la categoría
@@ -139,8 +140,9 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
             )
         },
         cell: ({ row }) => {
-            const user = row.original.user; // Accede al usuario desde los datos de la fila
-            return <div className="font-medium">{user?.username || 'Sin usuario'}</div>;
+            const user = row.original.user;
+            const name = user?.username || 'Sin usuario';
+            return <div className="font-medium truncate" title={name}>{name}</div>;
           },
           filterFn: (row, columnId, filterValue) => { // no elimines el columnId
             // Filtra las filas basándose en el ID de la categoría
@@ -161,8 +163,9 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
             )
         },
         cell: ({ row }) => {
-            const provider = row.original.provider; // Accede al usuario desde los datos de la fila
-            return <div className="font-medium">{provider?.name || 'Sin proveedor'}</div>;
+            const provider = row.original.provider;
+            const name = provider?.name || 'Sin proveedor';
+            return <div className="font-medium truncate" title={name}>{name}</div>;
         }
     },
     {

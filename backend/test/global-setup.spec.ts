@@ -104,6 +104,7 @@ describe('globalSetup multi-tenant fixtures orchestration', () => {
 
   it('applies fixtures with a prefixed logger when configuration is valid', async () => {
     process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/db';
+    process.env.NODE_ENV = 'test';
     mockedApplyFixtures.mockResolvedValueOnce({
       processedAt: '2024-01-01T00:00:00.000Z',
       organizations: [

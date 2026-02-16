@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   NotFoundException,
@@ -24,6 +25,7 @@ import {
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import {
   InventoryUncheckedCreateInputWithOrganization,
   InventoryHistoryCreateInputWithOrganization,
@@ -40,7 +42,23 @@ export class EntriesService {
     private accountingHook: AccountingHook,
     private accountingService: AccountingService,
     private readonly tenantContext: TenantContextService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
+
+  private async ensureEntriesFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.inventory === false) {
+      throw new ForbiddenException(
+        'El modulo de entradas/compras no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   // Crear una nueva entrada con detalles
   async createEntry(
@@ -94,6 +112,13 @@ export class EntriesService {
     organizationIdFromContext?: number | null,
   ) {
     try {
+      // Validate entries feature is enabled
+      const storeForValidation = await this.prisma.store.findUnique({
+        where: { id: data.storeId },
+        select: { companyId: true },
+      });
+      await this.ensureEntriesFeatureEnabled(storeForValidation?.companyId);
+
       if (data.referenceId) {
         try {
           const existingEntry = await this.prisma.entry.findFirst({
@@ -545,6 +570,9 @@ export class EntriesService {
         organizationId ?? ctx.organizationId ?? null;
       const resolvedCompanyId = ctx.companyId ?? null;
 
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(resolvedCompanyId);
+
       logOrganizationContext({
         service: EntriesService.name,
         operation: 'findAllEntries',
@@ -662,6 +690,9 @@ export class EntriesService {
       const resolvedOrganizationId =
         organizationId ?? ctx.organizationId ?? null;
       const resolvedCompanyId = ctx.companyId ?? null;
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(resolvedCompanyId);
 
       const organizationFilter = buildOrganizationFilter(
         resolvedOrganizationId,
@@ -998,6 +1029,9 @@ export class EntriesService {
         organizationId ?? ctx.organizationId ?? null;
       const resolvedCompanyId = ctx.companyId ?? null;
 
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(resolvedCompanyId);
+
       const store = await this.prisma.store.findFirst({
         where: {
           id: storeId,
@@ -1105,11 +1139,15 @@ export class EntriesService {
 
       const entry = await this.prisma.entry.findUnique({
         where: { id: entryId },
+        include: { store: { select: { companyId: true } } },
       });
 
       if (!entry) {
         throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
       }
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(entry.store?.companyId);
 
       return this.prisma.entry.update({
         where: { id: entryId },
@@ -1135,11 +1173,15 @@ export class EntriesService {
 
       const entry = await this.prisma.entry.findUnique({
         where: { id: entryId },
+        include: { store: { select: { companyId: true } } },
       });
 
       if (!entry) {
         throw new NotFoundException(`La entrada con ID ${entryId} no existe.`);
       }
+
+      // Validate entries feature is enabled
+      await this.ensureEntriesFeatureEnabled(entry.store?.companyId);
 
       return this.prisma.entry.update({
         where: { id: entryId },

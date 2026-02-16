@@ -1,6 +1,5 @@
+import { BACKEND_URL } from "@/lib/utils"
 import { authFetch } from "@/utils/auth-fetch"
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"
 
 export type DashboardOverview = {
   inventoryTotals: Array<{ productId: number; name: string; totalStock: number }>
@@ -43,5 +42,40 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
                 : null,
           }
         : { total: 0, growth: null },
+  }
+}
+
+// ── Sparklines ──────────────────────────────────────────────────────────
+
+export type SparklinePoint = { date: string; value: number }
+
+export type DashboardSparklines = {
+  inventory: SparklinePoint[]
+  sales: SparklinePoint[]
+  outOfStock: SparklinePoint[]
+  pendingOrders: SparklinePoint[]
+}
+
+const EMPTY_SPARKLINES: DashboardSparklines = {
+  inventory: [],
+  sales: [],
+  outOfStock: [],
+  pendingOrders: [],
+}
+
+export async function fetchDashboardSparklines(days = 30): Promise<DashboardSparklines> {
+  const res = await authFetch(`${BACKEND_URL}/api/dashboard/sparklines?days=${days}`, {
+    credentials: "include",
+  })
+
+  if (res.status === 403) return EMPTY_SPARKLINES
+  if (!res.ok) return EMPTY_SPARKLINES
+
+  const p = await res.json()
+  return {
+    inventory: Array.isArray(p?.inventory) ? p.inventory : [],
+    sales: Array.isArray(p?.sales) ? p.sales : [],
+    outOfStock: Array.isArray(p?.outOfStock) ? p.outOfStock : [],
+    pendingOrders: Array.isArray(p?.pendingOrders) ? p.pendingOrders : [],
   }
 }

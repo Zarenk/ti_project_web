@@ -30,6 +30,7 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 @ModulePermission(['inventory', 'catalog'])
 @Controller('products')
@@ -192,9 +193,12 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, EntityOwnershipGuard)
   @Roles('ADMIN')
+  @EntityModel('product')
+  @EntityIdParam('id')
   async remove(@Param('id') id: string, @Req() req: Request) {
+    // 🔒 Ownership validado por EntityOwnershipGuard
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) {
       throw new BadRequestException('El ID debe ser un número válido.');

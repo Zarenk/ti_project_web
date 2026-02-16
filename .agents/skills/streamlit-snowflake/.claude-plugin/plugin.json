@@ -1,0 +1,12 @@
+{
+  "name": "streamlit-snowflake",
+  "description": "Build and deploy Streamlit apps natively in Snowflake. Covers snowflake.yml scaffolding, Snowpark sessions, multi-page structure, Marketplace publishing as Native Apps, and callers rights connections (v1.53.0+). Use when building data apps on Snowflake, deploying SiS, fixing package channel errors, authentication issues, cache key bugs, or path resolution errors.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": []
+}

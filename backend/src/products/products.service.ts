@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   NotFoundException,
@@ -40,6 +41,21 @@ export class ProductsService {
     private tenantContext: TenantContextService,
     private verticalConfigService: VerticalConfigService,
   ) {}
+
+  private async ensureProductsFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfigService.getConfig(companyId);
+    if (config.features.inventory === false) {
+      throw new ForbiddenException(
+        'El modulo de productos/inventario no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   /** Helpers */
   private mapBrand(brand: Pick<Brand, 'name' | 'logoSvg' | 'logoPng'> | null) {
@@ -103,6 +119,10 @@ export class ProductsService {
     } = createProductDto as any;
 
     const ctx = this.tenantContext.getContext();
+
+    // Validate products/inventory feature is enabled
+    await this.ensureProductsFeatureEnabled(ctx.companyId);
+
     const trimmedName = String(createProductDto?.name ?? '').trim();
     if (!trimmedName) {
       throw new BadRequestException('El nombre del producto es obligatorio.');
@@ -269,6 +289,10 @@ export class ProductsService {
 
   async findAll(filters?: { migrationStatus?: 'legacy' | 'migrated' }) {
     try {
+      // Validate products/inventory feature is enabled
+      const ctx = this.tenantContext.getContext();
+      await this.ensureProductsFeatureEnabled(ctx.companyId);
+
       const where: Prisma.ProductWhereInput = {
         ...this.orgFilter(),
       };
@@ -307,6 +331,11 @@ export class ProductsService {
     if (!id || typeof id !== 'number') {
       throw new BadRequestException('El ID proporcionado no es valido.');
     }
+
+    // Validate products/inventory feature is enabled
+    const ctx = this.tenantContext.getContext();
+    await this.ensureProductsFeatureEnabled(ctx.companyId);
+
     try {
       const product = await this.prismaService.product.findFirst({
         where: { id, ...this.orgFilter() },
@@ -329,6 +358,10 @@ export class ProductsService {
 
   async update(id: number, updateProductDto: UpdateProductDto) {
     const ctx = this.tenantContext.getContext();
+
+    // Validate products/inventory feature is enabled
+    await this.ensureProductsFeatureEnabled(ctx.companyId);
+
     const {
       specification,
       images,

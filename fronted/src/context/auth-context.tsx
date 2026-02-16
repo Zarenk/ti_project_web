@@ -30,6 +30,8 @@ import { userContextStorage } from "@/utils/user-context-storage"
 import { useUserContextSync } from "@/hooks/use-user-context-sync"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import { SESSION_EXPIRED_EVENT } from "@/utils/session-expired-event"
+import { logoutSession } from "./auth.api"
+import { SessionExpiryOverlay } from "@/components/session-expiry-overlay"
 
 type AuthContextType = {
   userId: number | null
@@ -138,11 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 5000)
-        const logoutReq = fetch('/api/logout', {
-          method: 'POST',
-          credentials: 'include',
-          signal: controller.signal,
-        })
+        const logoutReq = logoutSession(controller.signal)
         const nextAuth = signOut({ redirect: false })
         await Promise.allSettled([logoutReq, nextAuth])
         clearTimeout(timeout)
@@ -404,24 +402,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{ userId, userName, role, isPublicSignup, userPermissions, authPending, sessionExpiring: sessionExpiryOverlay, refreshUser, logout, logoutAndRedirect }}>
       {children}
       {sessionExpiryOverlay && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm text-center px-6">
-          <div className="rounded-lg border bg-card px-6 py-4 shadow-lg">
-            <p className="text-lg font-semibold text-card-foreground">Tu sesión ha expirado</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Estamos redirigiéndote al inicio de sesión para que puedas continuar trabajando.
-            </p>
-            <button
-              type="button"
-              className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              onClick={() => {
-                setSessionExpiryOverlay(false)
-                redirectToLogin()
-              }}
-            >
-              Ir al inicio de sesión
-            </button>
-          </div>
-        </div>
+        <SessionExpiryOverlay
+          onRedirect={() => {
+            setSessionExpiryOverlay(false)
+            redirectToLogin()
+          }}
+        />
       )}
     </AuthContext.Provider>
   )

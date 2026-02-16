@@ -1,6 +1,5 @@
-import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+import { BACKEND_URL } from "@/lib/utils"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 
 // Crear una nueva entrada
 export async function createEntry(data: {
@@ -13,7 +12,7 @@ export async function createEntry(data: {
   tipoCambioId?: number;
   paymentMethod?: string;
   paymentTerm?: 'CASH' | 'CREDIT';
-  details: { productId: number; quantity: number; price: number; priceInSoles: number }[];
+  details: { productId: number; quantity: number; price: number; priceInSoles: number; series?: string[] }[];
   invoice?: { serie: string; nroCorrelativo: string; tipoComprobante: string; tipoMoneda: string; total: number; fechaEmision: Date; };
   guide?: {
     serie?: string;

@@ -1,0 +1,12 @@
+{
+  "name": "testing-library",
+  "description": "Test React components with Testing Library patterns. Covers queries (getBy/findBy/queryBy), user-event interactions, async testing (findBy vs waitFor), accessibility testing, and MSW integration for API mocking. Use when: testing React components, simulating user interactions, testing forms, mocking API calls with MSW, or writing accessible tests.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": ["testing-library","react testing library","getByRole","user-event","waitFor","MSW","screen."]
+}

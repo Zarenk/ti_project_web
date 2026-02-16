@@ -12,7 +12,9 @@ import { BusinessVertical } from 'src/types/business-vertical.enum';
 import { VERTICAL_REGISTRY } from 'src/config/verticals.config';
 import {
   runVerticalScript,
+  runVerticalCleanup,
   VerticalScriptName,
+  BusinessVertical as VerticalType,
 } from '../../scripts/verticals';
 import { VerticalConfigService } from './vertical-config.service';
 import { VerticalEventsService } from './vertical-events.service';
@@ -57,18 +59,47 @@ export class VerticalMigrationService {
     return scripts as VerticalScriptName[];
   }
 
+  private getDataTransformationsFor(
+    vertical: BusinessVertical,
+  ): VerticalScriptName[] {
+    const config = VERTICAL_REGISTRY[vertical];
+    if (!config?.migrations?.dataTransformations) {
+      return [];
+    }
+    // Extract transformation script names from the dataTransformations array
+    return config.migrations.dataTransformations.map(
+      (dt) => dt.transformation as VerticalScriptName,
+    );
+  }
+
   private async runScripts(
     scripts: VerticalScriptName[],
     companyId: number,
     organizationId: number,
+    metadata?: Record<string, unknown>,
   ) {
     for (const script of scripts) {
       await runVerticalScript(script, {
         companyId,
         organizationId,
         prisma: this.prisma,
+        metadata,
       });
     }
+  }
+
+  private async runCleanup(
+    vertical: BusinessVertical,
+    companyId: number,
+    organizationId: number,
+    reason?: string,
+  ) {
+    await runVerticalCleanup(vertical as unknown as VerticalType, {
+      companyId,
+      organizationId,
+      prisma: this.prisma,
+      metadata: { reason },
+    });
   }
 
   async changeVertical(params: ChangeVerticalParams): Promise<void> {
@@ -88,10 +119,19 @@ export class VerticalMigrationService {
       throw new NotFoundException('Empresa no encontrada.');
     }
 
+    // Run onDeactivate scripts for previous vertical
     await this.runScripts(
       this.getScriptsFor(previousVertical, 'onDeactivate'),
       companyId,
       company.organizationId,
+    );
+
+    // Archive vertical-specific data before switching
+    await this.runCleanup(
+      previousVertical,
+      companyId,
+      company.organizationId,
+      params.reason,
     );
 
     await this.prisma.$transaction(async (tx) => {
@@ -144,11 +184,23 @@ export class VerticalMigrationService {
     });
 
     try {
+      // Run onActivate scripts for target vertical
       await this.runScripts(
         this.getScriptsFor(targetVertical, 'onActivate'),
         companyId,
         company.organizationId,
       );
+
+      // Run data transformations for target vertical
+      const dataTransformations = this.getDataTransformationsFor(targetVertical);
+      if (dataTransformations.length > 0) {
+        await this.runScripts(
+          dataTransformations,
+          companyId,
+          company.organizationId,
+          { phase: 'dataTransformation' },
+        );
+      }
     } catch (activationError) {
       // Compensate: revert the vertical change
       await this.prisma.$transaction(async (tx) => {
@@ -226,10 +278,19 @@ export class VerticalMigrationService {
 
     const currentVertical = company.businessVertical;
 
+    // Run onDeactivate scripts for current vertical
     await this.runScripts(
       this.getScriptsFor(currentVertical, 'onDeactivate'),
       companyId,
       company.organizationId,
+    );
+
+    // Archive vertical-specific data before rolling back
+    await this.runCleanup(
+      currentVertical,
+      companyId,
+      company.organizationId,
+      'rollback',
     );
 
     await this.prisma.$transaction(async (tx) => {
@@ -268,11 +329,23 @@ export class VerticalMigrationService {
     });
 
     try {
+      // Run onActivate scripts for target vertical (rollback)
       await this.runScripts(
         this.getScriptsFor(targetVertical, 'onActivate'),
         companyId,
         company.organizationId,
       );
+
+      // Run data transformations for target vertical (rollback)
+      const dataTransformations = this.getDataTransformationsFor(targetVertical);
+      if (dataTransformations.length > 0) {
+        await this.runScripts(
+          dataTransformations,
+          companyId,
+          company.organizationId,
+          { phase: 'dataTransformation' },
+        );
+      }
     } catch (activationError) {
       // Compensate: revert the vertical change
       await this.prisma.$transaction(async (tx) => {

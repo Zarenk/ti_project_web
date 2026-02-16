@@ -1,0 +1,12 @@
+{
+  "name": "rocket-net-api",
+  "description": "Build integrations with Rocket.nets WordPress hosting API. Manage sites, domains, backups, plugins, themes, CDN cache, FTP accounts, and more programmatically. Use when: building WordPress hosting management tools, automating site deployment, creating reseller portals, managing multiple WordPress sites, integrating with Rocket.net hosting services, automating backup workflows, or building custom control panels.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": []
+}

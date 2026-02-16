@@ -107,9 +107,9 @@ export function AdditionalInfoSection({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Input
-                  {...register('entry_description', { maxLength: 100 })}
-                  maxLength={100}
-                  placeholder="Ingrese una observacion (max. 100 caracteres)"
+                  {...register('entry_description', { maxLength: 200 })}
+                  maxLength={200}
+                  placeholder="Ingrese una observacion (max. 200 caracteres)"
                   className="w-full transition-colors hover:border-border hover:bg-accent hover:text-foreground"
                 />
               </TooltipTrigger>

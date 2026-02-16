@@ -11,6 +11,9 @@ import { VerticalCompatibilityService } from './vertical-compatibility.service';
 import { CompanyVerticalController } from './company-vertical.controller';
 import { VerticalMigrationService } from './vertical-migration.service';
 import { VerticalEventsService } from './vertical-events.service';
+import { VerticalSnapshotCleanupService } from './vertical-snapshot-cleanup.service';
+import { VerticalNotificationsService } from './vertical-notifications.service';
+import { VerticalWebhooksService } from './vertical-webhooks.service';
 
 @Module({
   controllers: [TenancyController, CompaniesController, CompanyVerticalController],
@@ -24,6 +27,9 @@ import { VerticalEventsService } from './vertical-events.service';
     VerticalCompatibilityService,
     VerticalMigrationService,
     VerticalEventsService,
+    VerticalSnapshotCleanupService,
+    VerticalNotificationsService,
+    VerticalWebhooksService,
   ],
   exports: [
     TenantContextService,

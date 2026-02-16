@@ -1,0 +1,13 @@
+{
+  "name": "deep-debug",
+  "description": "Multi-agent investigation for stubborn bugs. Use when: going in circles debugging, need to investigate browser/API interactions, complex bugs resisting normal debugging, or when symptoms dont match expectations. Launches parallel agents with different perspectives and uses Chrome tools for evidence gathering.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": [],
+  "commands": "./commands/"
+}

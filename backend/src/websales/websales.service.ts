@@ -1,5 +1,6 @@
 ﻿import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Logger,
@@ -16,6 +17,7 @@ import { ActivityService } from '../activity/activity.service';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { Request } from 'express';
 import { InventoryService } from 'src/inventory/inventory.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import {
   CompleteOrderDto,
   isDeliveryShipping,
@@ -43,7 +45,20 @@ export class WebSalesService {
     private readonly activityService: ActivityService,
     private readonly accountingHook: AccountingHook,
     private readonly inventoryService: InventoryService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
+
+  private async ensureEcommerceFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) return;
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.ecommerceIntegration === false) {
+      throw new ForbiddenException(
+        'El modulo de ventas web/ecommerce no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   /** ---------- helpers ---------- */
   private async assertCompanyMatchesOrganization(
@@ -148,6 +163,8 @@ export class WebSalesService {
       );
     }
 
+    await this.ensureEcommerceFeatureEnabled(resolvedCompanyId);
+
     const { shippingName, shippingAddress, city, postalCode, phone, code } =
       data;
 
@@ -243,6 +260,8 @@ export class WebSalesService {
       companyId: inputCompanyId ?? undefined,
       metadata: { storeId, userId },
     });
+
+    await this.ensureEcommerceFeatureEnabled(inputCompanyId);
 
     let resolvedClientId = clientId;
 
@@ -837,6 +856,8 @@ export class WebSalesService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
+    await this.ensureEcommerceFeatureEnabled(companyId);
+
     const where = buildOrganizationFilter(
       organizationId,
       companyId,

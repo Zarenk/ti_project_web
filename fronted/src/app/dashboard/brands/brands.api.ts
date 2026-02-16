@@ -1,30 +1,5 @@
+import { BACKEND_URL } from '@/lib/utils';
 import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch';
-
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
-async function buildAuthHeaders(base?: HeadersInit): Promise<Headers> {
-  const { getAuthHeaders } = await import('@/utils/auth-token');
-  const authHeaders = await getAuthHeaders();
-  const headers = new Headers(base ?? {});
-  for (const [key, value] of Object.entries(authHeaders)) {
-    if (value != null) {
-      headers.set(key, value);
-    }
-  }
-  return headers;
-}
-
-async function fetchWithAuth(
-  input: RequestInfo | URL,
-  init: RequestInit = {},
-): Promise<Response> {
-  const headers = await buildAuthHeaders(init.headers);
-  return fetch(input, {
-    ...init,
-    headers,
-    credentials: 'include',
-  });
-}
 
 export async function getBrands(page = 1, limit = 10) {
   try {
@@ -75,7 +50,7 @@ export async function createBrand(data: {
     formData.append('logoPng', data.logoPng);
   }
 
-  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands`, {
+  const res = await authFetch(`${BACKEND_URL}/api/brands`, {
     method: 'POST',
     body: formData,
   });
@@ -97,7 +72,7 @@ export async function updateBrand(
   if (data.logoSvg) formData.append('logoSvg', data.logoSvg);
   if (data.logoPng) formData.append('logoPng', data.logoPng);
 
-  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/brands/${id}`, {
     method: 'PATCH',
     body: formData,
   });
@@ -109,7 +84,7 @@ export async function updateBrand(
 }
 
 export async function deleteBrand(id: number) {
-  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/brands/${id}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -120,7 +95,7 @@ export async function deleteBrand(id: number) {
 }
 
 export async function convertBrandPngToSvg(id: number) {
-  const res = await fetchWithAuth(`${BACKEND_URL}/api/brands/${id}/convert-png`, {
+  const res = await authFetch(`${BACKEND_URL}/api/brands/${id}/convert-png`, {
     method: 'POST',
   });
   if (!res.ok) {

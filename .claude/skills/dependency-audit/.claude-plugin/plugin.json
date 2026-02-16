@@ -1,0 +1,14 @@
+{
+  "name": "dependency-audit",
+  "description": "Comprehensive dependency health auditing for JavaScript/TypeScript projects. Run npm audit, detect outdated packages, check for security advisories, and verify license compliance. Prioritises vulnerabilities by severity and provides actionable fix recommendations. Use when: auditing project dependencies, checking for vulnerabilities, updating packages, preparing for release, or investigating npm audit warnings.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": ["audit","vulnerabilities","outdated","security","npm audit","pnpm audit","CVE","GHSA","license."],
+  "commands": "./commands/",
+  "agents": "./agents/"
+}

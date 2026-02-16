@@ -4,8 +4,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "http://localhost:4000"
+import { BACKEND_URL } from "@/lib/utils"
 
 type LoginPayload = {
   access_token?: string

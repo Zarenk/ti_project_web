@@ -1,0 +1,200 @@
+import type { HelpSection } from "../types"
+
+export const catalogSection: HelpSection = {
+  id: "catalog",
+  label: "Catalogo",
+  description: "Crea, personaliza y comparte catalogos de productos.",
+  welcomeMessage:
+    "Estas en Catalogo. Crea y comparte tu catalogo de productos.",
+  quickActions: [
+    "catalog-export",
+    "catalog-customize-cover",
+    "catalog-select-products",
+    "catalog-layout",
+    "catalog-share",
+  ],
+  entries: [
+    {
+      id: "catalog-export",
+      question: "Como exporto mi catalogo de productos?",
+      aliases: [
+        "exportar catalogo",
+        "descargar catalogo",
+        "generar catalogo pdf",
+        "imprimir catalogo",
+        "catalogo en pdf",
+        // 🆕 Aliases genéricos contextuales
+        "paso a paso",
+        "el paso a paso",
+        "pasos",
+        "cuales son los pasos",
+        "dame los pasos",
+        "como funciona esto",
+        "que hace esto",
+        "para que sirve esto",
+        "de que se encarga esto",
+        "explicame esto",
+        "explicame eso",
+        "no se como funciona esto",
+        "no entiendo esto",
+        "ayudame",
+        "necesito ayuda",
+        "ayuda con esto",
+        "quiero ayuda",
+        "detalle",
+        "dame el detalle",
+        "necesito mas detalle",
+        "especificacion",
+        "especificacion completa",
+        "que hacen los botones",
+        "explicame los botones",
+        "como funciona",
+        "que hago",
+        "como se usa",
+        "guia",
+        "tutorial",
+      ],
+      answer:
+        "Desde la seccion de Catalogo, haz clic en el boton de exportar o descargar. El sistema generara un archivo PDF con los productos seleccionados, las imagenes y los precios configurados. Puedes descargar el archivo para imprimirlo o compartirlo digitalmente con tus clientes.",
+      keywords: ["exporto", "catalogo", "productos", "desde", "seccion", "haz", "clic", "boton", "exportar", "descargar", "sistema", "generara", "archivo", "pdf", "seleccionados"],
+      steps: [
+        { text: "Ve al menu lateral y haz clic en 'Catalogo', luego en 'Exportar Catalogo'", image: "/help/catalog/step1-menu-catalogo.png" },
+        { text: "Personaliza la portada y configuracion del catalogo", image: "/help/catalog/step2-configurar-catalogo.png" },
+        { text: "Selecciona los productos que deseas incluir", image: "/help/catalog/step3-seleccionar-productos.png" },
+        { text: "Haz clic en 'Exportar' para generar el catalogo en PDF", image: "/help/catalog/step4-exportar.png" },
+      ],
+      relatedActions: ["catalog-select-products", "catalog-layout"],
+    },
+    {
+      id: "catalog-customize-cover",
+      question: "Como personalizo la portada del catalogo?",
+      aliases: [
+        "portada catalogo",
+        "caratula catalogo",
+        "personalizar portada",
+        "diseno portada",
+        "imagen portada catalogo",
+      ],
+      answer:
+        "En la seccion de Catalogo encontraras la opcion para editar la portada. Puedes subir una imagen de fondo, agregar el logo de tu empresa y personalizar el titulo del catalogo. La portada es la primera impresion que recibiran tus clientes, asi que asegurate de usar imagenes de buena calidad y un diseno acorde a tu marca.",
+      keywords: ["personalizo", "portada", "catalogo", "seccion", "encontraras", "opcion", "editar", "puedes", "subir", "imagen", "fondo", "agregar", "logo", "empresa", "personalizar"],
+      relatedActions: ["catalog-layout", "catalog-export"],
+    },
+    {
+      id: "catalog-select-products",
+      question: "Como selecciono los productos que aparecen en el catalogo?",
+      aliases: [
+        "elegir productos catalogo",
+        "agregar productos catalogo",
+        "seleccionar items catalogo",
+        "productos del catalogo",
+        "incluir productos",
+      ],
+      answer:
+        "Al crear o editar un catalogo, veras la lista completa de tus productos. Marca los productos que deseas incluir usando las casillas de seleccion. Puedes filtrar por categoria para facilitar la seleccion. Solo los productos marcados apareceran en el catalogo exportado, permitiendote crear catalogos tematicos o por temporada.",
+      keywords: ["selecciono", "productos", "aparecen", "catalogo", "crear", "editar", "veras", "lista", "completa", "tus", "marca", "deseas", "incluir", "usando", "casillas"],
+      relatedActions: ["catalog-export", "catalog-layout"],
+    },
+    {
+      id: "catalog-layout",
+      question: "Como configuro el diseno del catalogo?",
+      aliases: [
+        "diseno catalogo",
+        "formato catalogo",
+        "disposicion productos catalogo",
+        "estilo catalogo",
+        "plantilla catalogo",
+      ],
+      answer:
+        "La seccion de Catalogo ofrece opciones de diseno para definir como se muestran los productos. Puedes elegir la cantidad de productos por pagina, si se muestran los precios, las descripciones y el tamano de las imagenes. Experimenta con diferentes configuraciones hasta encontrar el diseno que mejor represente tu negocio.",
+      keywords: ["configuro", "diseno", "catalogo", "seccion", "ofrece", "opciones", "definir", "muestran", "productos", "puedes", "elegir", "cantidad", "pagina", "precios", "descripciones"],
+      relatedActions: ["catalog-customize-cover", "catalog-export"],
+    },
+    {
+      id: "catalog-share",
+      question: "Como comparto el enlace del catalogo?",
+      aliases: [
+        "compartir catalogo",
+        "link catalogo",
+        "enviar catalogo",
+        "enlace catalogo",
+        "url catalogo",
+      ],
+      answer:
+        "Una vez generado tu catalogo, el sistema crea un enlace unico que puedes compartir con tus clientes. Copia el enlace desde la seccion de Catalogo y envialo por WhatsApp, correo electronico o redes sociales. Tus clientes podran ver el catalogo actualizado directamente desde su navegador sin necesidad de descargar archivos.",
+      keywords: ["comparto", "enlace", "catalogo", "vez", "generado", "sistema", "crea", "unico", "puedes", "compartir", "tus", "clientes", "copia", "desde", "seccion"],
+      relatedActions: ["catalog-export"],
+    },
+    {
+      id: "catalog-update",
+      question: "Como actualizo un catalogo existente?",
+      aliases: [
+        "actualizar catalogo",
+        "modificar catalogo",
+        "editar catalogo",
+        "cambiar catalogo",
+      ],
+      answer:
+        "Accede a la seccion de Catalogo y realiza los cambios necesarios: agrega o quita productos, modifica la portada o ajusta el diseno. Si compartes el catalogo mediante enlace, los clientes veran la version actualizada automaticamente. Si lo exportaste como PDF, necesitaras generar un nuevo archivo con los cambios aplicados.",
+      keywords: ["actualizo", "catalogo", "existente", "accede", "seccion", "realiza", "cambios", "necesarios", "agrega", "quita", "productos", "modifica", "portada", "ajusta", "diseno"],
+      relatedActions: ["catalog-select-products", "catalog-share"],
+    },
+    {
+      id: "catalog-prices",
+      question: "Puedo mostrar u ocultar precios en el catalogo?",
+      aliases: [
+        "precios catalogo",
+        "ocultar precios",
+        "mostrar precios catalogo",
+        "catalogo sin precios",
+        "catalogo con precios",
+      ],
+      answer:
+        "Si, en las opciones de diseno del catalogo puedes activar o desactivar la visualizacion de precios. Esto es util si deseas usar el catalogo solo como muestra de productos sin revelar precios, por ejemplo para distribuidores que manejan precios diferenciados. Los precios mostrados corresponden al precio de venta configurado en cada producto.",
+      keywords: ["puedo", "mostrar", "ocultar", "precios", "catalogo", "opciones", "diseno", "puedes", "activar", "desactivar", "visualizacion", "esto", "util", "deseas", "usar"],
+      relatedActions: ["catalog-layout"],
+    },
+    {
+      id: "catalog-categories",
+      question: "Puedo organizar el catalogo por categorias?",
+      aliases: [
+        "categorias catalogo",
+        "secciones catalogo",
+        "organizar catalogo",
+        "catalogo por categoria",
+      ],
+      answer:
+        "Si, al seleccionar productos para el catalogo puedes filtrar por categoria y agruparlos de forma ordenada. Los productos se presentaran organizados segun las categorias de tu sistema, facilitando la navegacion para tus clientes. Cada seccion del catalogo mostrara el nombre de la categoria como encabezado.",
+      keywords: ["puedo", "organizar", "catalogo", "categorias", "seleccionar", "productos", "puedes", "filtrar", "categoria", "agruparlos", "forma", "ordenada", "presentaran", "organizados", "segun"],
+      relatedActions: ["catalog-select-products", "catalog-layout"],
+    },
+    {
+      id: "catalog-images",
+      question: "Que pasa si un producto no tiene imagen?",
+      aliases: [
+        "imagen producto catalogo",
+        "foto producto catalogo",
+        "producto sin foto",
+        "catalogo sin imagenes",
+      ],
+      answer:
+        "Los productos sin imagen aparecen en el catalogo con un marcador de posicion generico. Para un catalogo mas profesional, se recomienda que todos los productos incluidos tengan al menos una foto. Puedes subir imagenes desde la ficha de cada producto en la seccion de Productos antes de generar el catalogo.",
+      keywords: ["pasa", "producto", "tiene", "imagen", "productos", "aparecen", "catalogo", "marcador", "posicion", "generico", "mas", "profesional", "recomienda", "todos", "incluidos"],
+      relatedActions: ["catalog-select-products"],
+    },
+    {
+      id: "catalog-multiple",
+      question: "Puedo crear varios catalogos diferentes?",
+      aliases: [
+        "multiples catalogos",
+        "varios catalogos",
+        "catalogo por linea",
+        "diferentes catalogos",
+      ],
+      answer:
+        "Puedes generar diferentes versiones del catalogo seleccionando distintos grupos de productos cada vez. Por ejemplo, crea un catalogo solo de una categoria especifica para un cliente y otro catalogo completo para otro. Cada exportacion genera un archivo independiente que puedes guardar y compartir por separado.",
+      keywords: ["puedo", "crear", "varios", "catalogos", "diferentes", "puedes", "generar", "versiones", "catalogo", "seleccionando", "distintos", "grupos", "productos", "cada", "vez"],
+      relatedActions: ["catalog-select-products", "catalog-export"],
+    },
+  ],
+}

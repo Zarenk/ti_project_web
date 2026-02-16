@@ -11,6 +11,7 @@ export interface RouteContext {
   action?: 'view' | 'create' | 'edit' | 'list'
   entityId?: string
   breadcrumb: string[]
+  route: string  // 🆕 Ruta completa para detectar sub-routes específicas
 }
 
 /**
@@ -197,7 +198,8 @@ export function detectCurrentSection(pathname?: string): RouteContext {
     subsection,
     action,
     entityId,
-    breadcrumb
+    breadcrumb,
+    route: normalizedPath  // 🆕 Agregar ruta completa normalizada
   }
 }
 
@@ -317,23 +319,35 @@ export function useCurrentSection(): RouteContext {
 }
 
 /**
- * Prioriza entries de la sección actual en los resultados
+ * Prioriza entries de la sección actual y ruta exacta en los resultados
+ * 🆕 MEJORADO: Ahora prioriza también por ruta exacta (boost mayor)
  */
-export function prioritizeCurrentSection<T extends { section?: string }>(
+export function prioritizeCurrentSection<T extends { section?: string; route?: string }>(
   results: T[],
   currentSection: string,
-  boost: number = 0.2
+  boost: number = 0.2,
+  currentRoute?: string
 ): T[] {
   return results.map(result => {
-    if (result.section === currentSection) {
-      // Agregar boost al score si existe
-      if ('score' in result && typeof result.score === 'number') {
-        return {
-          ...result,
-          score: Math.min(result.score + boost, 1.0)
-        }
+    let finalBoost = 0
+
+    // 🎯 PRIORIDAD MÁXIMA: Match exacto de ruta (boost +0.5)
+    if (currentRoute && result.route === currentRoute) {
+      finalBoost = 0.5
+    }
+    // 🎯 PRIORIDAD MEDIA: Match de sección (boost +0.2)
+    else if (result.section === currentSection) {
+      finalBoost = boost
+    }
+
+    // Aplicar boost al score si existe
+    if (finalBoost > 0 && 'score' in result && typeof result.score === 'number') {
+      return {
+        ...result,
+        score: Math.min(result.score + finalBoost, 1.0)
       }
     }
+
     return result
   })
 }

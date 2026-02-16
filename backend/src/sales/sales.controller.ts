@@ -20,6 +20,7 @@ import { Roles } from 'src/users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 const SALES_ALLOWED_ROLES = [
   'ADMIN',
@@ -432,12 +433,16 @@ export class SalesController {
   }
 
   @Delete(':id')
+  @UseGuards(EntityOwnershipGuard)
+  @EntityModel('sales')
+  @EntityIdParam('id')
   async deleteSale(
     @Param('id', ParseIntPipe) id: number,
     @Req() req,
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
   ) {
+    // 🔒 Ownership validado por EntityOwnershipGuard
     const userId = req?.user?.userId;
     return this.salesService.deleteSale(
       id,

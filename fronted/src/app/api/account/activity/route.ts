@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+import { BACKEND_URL } from '@/lib/utils'
 
 const querySchema = z.object({
   clientId: z.string().optional(),

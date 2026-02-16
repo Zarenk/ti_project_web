@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2, Package, Info, DollarSign, Settings, ImageIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +55,15 @@ import { resolveImageUrl } from '@/lib/images'
 import { useVerticalConfig } from '@/hooks/use-vertical-config'
 import { useDebounce } from '@/app/hooks/useDebounce'
 import { useAuth } from '@/context/auth-context'
+
+import { ProductBasicFields } from './components/product-basic-fields'
+import { ProductBrandDescription } from './components/product-brand-description'
+import { ProductPricingFields } from './components/product-pricing-fields'
+import { ProductFeaturesSection } from './components/product-features-section'
+import { ProductSchemaFields } from './components/product-schema-fields'
+import { ProductComputerSpecs } from './components/product-computer-specs'
+import { ProductImagesSection } from './components/product-images-section'
+import { ProductBatchPanel } from './components/product-batch-panel'
 
 const normalizeImagePath = (input?: string): string => {
   const raw = input?.trim() ?? ''
@@ -727,21 +736,45 @@ export function ProductForm({
     }),
     brand: z.string().optional(),
     price: z.preprocess(
-      (value) => (value === "" || value === null || Number.isNaN(value) ? undefined : value),
+      (value) => {
+        if (value === "" || value === null || value === undefined) return undefined
+        if (typeof value === "string") {
+          const normalized = value.replace(",", ".")
+          const parsed = Number(normalized)
+          return Number.isFinite(parsed) ? parsed : undefined
+        }
+        return Number.isFinite(value as number) ? value : undefined
+      },
       z.number()
         .min(0, "El precio debe ser un numero positivo")
         .max(99999999.99, "El precio no puede exceder 99999999.99")
         .optional(),
     ),
     priceSell: z.preprocess(
-      (value) => (value === "" || value === null || Number.isNaN(value) ? undefined : value),
+      (value) => {
+        if (value === "" || value === null || value === undefined) return undefined
+        if (typeof value === "string") {
+          const normalized = value.replace(",", ".")
+          const parsed = Number(normalized)
+          return Number.isFinite(parsed) ? parsed : undefined
+        }
+        return Number.isFinite(value as number) ? value : undefined
+      },
       z.number()
         .min(0, "El precio de venta debe ser un numero positivo")
         .max(99999999.99, "El precio no puede exceder 99999999.99")
         .optional(),
     ),
     initialStock: z.preprocess(
-      (value) => (value === "" || value === null || Number.isNaN(value) ? undefined : value),
+      (value) => {
+        if (value === "" || value === null || value === undefined) return undefined
+        if (typeof value === "string") {
+          const normalized = value.replace(",", ".")
+          const parsed = Number(normalized)
+          return Number.isFinite(parsed) ? parsed : undefined
+        }
+        return Number.isFinite(value as number) ? value : undefined
+      },
       z.number()
         .min(0, "La cantidad inicial debe ser un numero positivo")
         .max(99999999.99, "La cantidad inicial no puede exceder 99999999.99")
@@ -1183,9 +1216,20 @@ const VariantRowItem = memo(function VariantRowItem({
     setPendingCategoryId(null)
   }, [pendingCategoryId, categoryOptions, setValue, clearErrors, form])
 
+  // FIX: Solo resetear el formulario cuando el producto cambia (modo edición),
+  // no cada vez que defaultValues se recalcula
+  const productIdRef = useRef(product?.id)
+
   useEffect(() => {
-    form.reset(defaultValues)
-  }, [defaultValues, form])
+    // Solo resetear si estamos cambiando de producto (crear -> editar, o editar -> otro producto)
+    const currentProductId = product?.id
+    const hasProductChanged = productIdRef.current !== currentProductId
+
+    if (hasProductChanged) {
+      productIdRef.current = currentProductId
+      form.reset(defaultValues)
+    }
+  }, [product?.id, defaultValues, form])
 
   useEffect(() => {
     setCategoryOptions(categories ?? [])
@@ -2155,8 +2199,31 @@ const VariantRowItem = memo(function VariantRowItem({
   // They are now memoized components defined outside this component
 
   return (
-    <div className="container mx-auto grid w-full max-w-2xl sm:max-w-2xl md:max-w-5xl lg:max-w-6xl xl:max-w-none">
-      <form className='relative flex flex-col gap-2' onSubmit={handleSubmitWithBatchGuard}>
+    <div className="flex flex-col">
+      {/* ── Header contextual sticky ── */}
+      <div className="sticky top-0 z-20 mb-4 border-b bg-white/85 backdrop-blur-lg dark:bg-background/85">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Package className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold">
+                {currentProductId ? 'Actualizar Producto' : 'Crear Producto'}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Completa los campos para {currentProductId ? 'actualizar' : 'registrar'} un producto
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {verticalInfo?.config?.displayName ?? verticalName}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="px-4">
+      <form className='relative flex flex-col gap-4' onSubmit={handleSubmitWithBatchGuard}>
         {isProcessing && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-3">
@@ -2166,938 +2233,253 @@ const VariantRowItem = memo(function VariantRowItem({
           </div>
         )}
         <fieldset disabled={isProcessing} className="contents">
-          <div className="grid grid-cols-1 gap-x-0.5 gap-y-4 md:gap-x-1 md:gap-y-5 lg:grid-cols-3 lg:gap-x-4">
-                    <div className='flex flex-col lg:col-start-1 lg:row-start-1'>
-                        <Label className='py-3'>
-                            Nombre del Producto
-                            {<RequiredValidationChip status={nameValidation.status} filled={hasName} />}
-                        </Label>
-                        <Input
-                        {...nameRegister}
-                        ref={(node) => {
-                          nameRegister.ref(node)
-                          nameInputRef.current = node
-                        }}
-                        maxLength={200} // Limita a 50 caracteres
-                        ></Input>
-                        {nameValidation.status === "checking" ? (
-                            <p className="mt-2 text-xs text-amber-600">Validando nombre...</p>
-                          ) : nameValidation.status === "invalid" ? (
-                            <p className="mt-2 text-xs text-rose-500">
-                              {nameValidation.message ?? "Ya existe un producto con ese nombre."}
-                            </p>
-                          ) : null}
-                        {!suppressInlineErrors && form.formState.errors.name && (
-                            <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              {form.formState.errors.name.message}
-                            </p>
-                        )}
-                          {!suppressInlineErrors && nameError && (
-                            <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              {nameError}
-                            </p>
-                          )}
-                    </div>
 
-                    <div className="flex flex-col lg:col-start-2 lg:row-start-1">
-                        {/* CATEGORIA */}
-                        <Label className='py-3'>
-                          Categoria
-                          <span
-                            className={`ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                              hasCategory
-                                ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200'
-                                : 'border-rose-200/70 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200'
-                            }`}
-                          >
-                            {hasCategory ? 'Listo' : 'Requerido'}
-                          </span>
-                        </Label>
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1">
-                            {categoryOptions.length > 0 ? (
-                              <Controller
-                                name="categoryId"
-                                control={control}
-                                render={({ field, fieldState }) => (
-                                  <>
-                                    <Select
-                                      disabled={isProcessing || isLoadingCategories}
-                                      value={field.value ?? ''}                         // valor controlado
-                                      onValueChange={(val) => { field.onChange(val); clearErrors('categoryId') }}
-                                    >
-                                      <SelectTrigger className="w-full cursor-pointer border border-border rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <SelectValue placeholder="Seleccione una categoria" />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-card text-foreground border border-border rounded-lg max-h-60 overflow-y-auto">
-                                        {categoryOptions.map((category: any) => (
-                                          <SelectItem
-                                            key={category.id}
-                                            value={String(category.id)}
-                                            className="px-4 py-2 hover:bg-muted dark:hover:bg-muted/50 cursor-pointer"
-                                          >
-                                            {category.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                    {!suppressInlineErrors && fieldState.error && (
-                                      <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-                                        <AlertTriangle className="h-3.5 w-3.5" />
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            ) : isLoadingCategories ? (
-                              <div className="flex h-10 items-center justify-center rounded-md border border-dashed border-border px-4 text-sm text-muted-foreground">
-                                Cargando categorias...
-                              </div>
-                            ) : (
-                              <div className="flex h-10 items-center justify-center rounded-md border border-dashed border-border px-4 text-sm text-muted-foreground">
-                                No hay categorias disponibles
-                              </div>
-                            )}
-                          </div>
-                          <Dialog
-                            open={isCategoryDialogOpen}
-                            onOpenChange={(open) => {
-                              setIsCategoryDialogOpen(open)
-                              if (!open) {
-                                setNewCategoryName('')
-                                setNewCategoryDescription('')
-                                setCategoryError(null)
-                              }
-                            }}
-                          >
-                            <TooltipProvider delayDuration={150}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="outline"
-                                      className="cursor-pointer border-emerald-500/60 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-500 dark:border-emerald-400/50 dark:text-emerald-400"
-                                    >
-                                      <Plus className="h-4 w-4" aria-hidden="true" />
-                                      <span className="sr-only">Agregar nueva categoria</span>
-                                    </Button>
-                                  </DialogTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  Agregar nueva categoria
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Nueva categoria</DialogTitle>
-                              </DialogHeader>
-                              <div className="flex flex-col gap-3">
-                                <div className="flex flex-col gap-1">
-                                  <Label htmlFor="new-category-name">Nombre</Label>
-                                  <Input
-                                    id="new-category-name"
-                                    value={newCategoryName}
-                                    onChange={(event) => setNewCategoryName(event.target.value)}
-                                    placeholder="Nombre de la categoria"
-                                  />
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <Label htmlFor="new-category-description">Descripcion (opcional)</Label>
-                                  <Input
-                                    id="new-category-description"
-                                    value={newCategoryDescription}
-                                    onChange={(event) => setNewCategoryDescription(event.target.value)}
-                                    placeholder="Descripcion de la categoria"
-                                  />
-                                </div>
-                                {categoryError && (
-                                  <p className="text-sm text-red-500">{categoryError}</p>
-                                )}
-                              </div>
-                              <DialogFooter>
-                                <DialogClose asChild>
-                                  <Button type="button" variant="outline" disabled={isCreatingCategory}>
-                                    Cancelar
-                                  </Button>
-                                </DialogClose>
-                                <Button
-                                  type="button"
-                                  onClick={handleCreateCategory}
-                                  disabled={isCreatingCategory}
-                                >
-                                {isCreatingCategory ? (
-                                    <span className="flex items-center gap-2">
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                      Guardando
-                                    </span>
-                                  ) : (
-                                    'Crear'
-                                  )}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                        {categoryOptions.length === 0 && !isLoadingCategories && (
-                          <p className="pt-2 text-sm text-muted-foreground">
-                            Crea una categoria para continuar.
-                          </p>
-                        )}
-                    </div>
-                    
-                    <div className="flex flex-col lg:col-start-1 lg:row-start-2">
-                        <Label className='py-3'>
-                            Marca
-                            {<OptionalChip filled={hasBrand} />}
-                        </Label>
-                        <Input
-                        disabled={isProcessing || isLoadingBrands}
-                        list="brand-options"
-                        maxLength={50}
-                        {...register('brand')}></Input>
-                        <datalist id="brand-options">
-                          {brands.map((b) => (
-                            <option key={b.id} value={b.name} />
-                          ))}
-                        </datalist>
-                        {isLoadingBrands && (
-                          <p className="pt-1 text-xs text-muted-foreground">
-                            Cargando marcas...
-                          </p>
-                        )}
-                        {form.formState.errors.brand && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.brand.message}</p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-col lg:col-start-2 lg:row-start-2">
-                        <Label className='py-3'>
-                            Descripcion
-                            {<OptionalChip filled={hasDescription} />}
-                        </Label>
-                        <Input
-                        maxLength={200} // Limita a 100 caracteres
-                        {...register('description')}></Input>
-                        {form.formState.errors.description && (
-                            <p className="text-red-500 text-sm">{form.formState.errors.description.message}</p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-col lg:col-start-3 lg:row-start-2">
-                        <Label className='py-3'>
-                            Selecciona un estado
-                        </Label>
-                        <Select
-                          value={form.watch("status")}
-                          disabled={isProcessing}
-                          defaultValue={form.getValues("status")}
-                          onValueChange={(value:any) => setValue("status", value as "Activo" | "Inactivo", {shouldValidate: true})}
-                        >
-                            <TooltipProvider delayDuration={150}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <SelectTrigger className="w-full cursor-pointer">
-                                      <SelectValue /> {/*placeholder="Estado" */}
-                                  </SelectTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">Selecciona el estado del producto</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <SelectContent>
-                                <SelectItem value="Activo">Activo</SelectItem>
-                                <SelectItem value="Inactivo">Inactivo</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 lg:col-span-3 lg:row-start-3 lg:grid-cols-[1fr_1fr_1fr_1.35fr]">
-                        <div className="flex flex-col">
-                            <Label className='py-3'>
-                                Precio de Compra
-                                {<OptionalChip filled={hasPrice} />}
-                            </Label>
-                            <div className="flex items-center gap-2">
-                              <div className="flex flex-1 items-center rounded-md bg-background px-3 py-1">
-                                <Input
-                                  step="0.01"
-                                  min={0}
-                                  max={99999999.99}
-                                  type="number"
-                                  className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  {...register('price', { valueAsNumber: true })}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-7 w-7 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 hover:border-sky-500/80 hover:text-sky-800 dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100"
-                                      aria-label="Disminuir precio de compra"
-                                      onClick={() => {
-                                        const current = Number(form.getValues('price') ?? 0)
-                                        const next = Math.max(0, current - 1)
-                                        setValue('price', next, { shouldDirty: true, shouldValidate: true })
-                                      }}
-                                    >
-                                      −
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Disminuir precio de compra</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-7 w-7 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 hover:border-sky-500/80 hover:text-sky-800 dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100"
-                                      aria-label="Aumentar precio de compra"
-                                      onClick={() => {
-                                        const current = Number(form.getValues('price') ?? 0)
-                                        const next = current + 1
-                                        setValue('price', next, { shouldDirty: true, shouldValidate: true })
-                                      }}
-                                    >
-                                      +
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Aumentar precio de compra</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </div>
-                            {form.formState.errors.price && (
-                                <p className="text-red-500 text-sm">{form.formState.errors.price.message}</p>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col">
-                            <Label className='py-3'>
-                                Precio de Venta
-                                {<OptionalChip filled={hasPriceSell} />}
-                            </Label>
-                            <div className="flex items-center gap-2">
-                              <div className="flex flex-1 items-center rounded-md bg-background px-3 py-1">
-                                <Input
-                                  step="0.01"
-                                  min={0}
-                                  max={99999999.99}
-                                  type="number"
-                                  className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  {...register('priceSell', { valueAsNumber: true })}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-7 w-7 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
-                                      aria-label="Disminuir precio de venta"
-                                      onClick={() => {
-                                        const current = Number(form.getValues('priceSell') ?? 0)
-                                        const next = Math.max(0, current - 1)
-                                        setValue('priceSell', next, { shouldDirty: true, shouldValidate: true })
-                                      }}
-                                    >
-                                      −
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Disminuir precio de venta</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-7 w-7 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
-                                      aria-label="Aumentar precio de venta"
-                                      onClick={() => {
-                                        const current = Number(form.getValues('priceSell') ?? 0)
-                                        const next = current + 1
-                                        setValue('priceSell', next, { shouldDirty: true, shouldValidate: true })
-                                      }}
-                                    >
-                                      +
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Aumentar precio de venta</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </div>
-                            {form.formState.errors.priceSell && (
-                                <p className="text-red-500 text-sm">{form.formState.errors.priceSell.message}</p>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col">
-                            <Label className='py-3'>
-                                Cantidad / Stock inicial
-                                {<OptionalChip filled={hasInitialStock} />}
-                            </Label>
-                            <div className="flex items-center gap-2">
-                              <div className="flex flex-1 items-center rounded-md bg-background px-3 py-1">
-                                <Input
-                                  step="1"
-                                  min={0}
-                                  max={99999999.99}
-                                  type="number"
-                                  className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  {...register('initialStock', { valueAsNumber: true })}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
-                                      aria-label="Disminuir stock inicial"
-                                      onClick={() => {
-                                        const current = Number(form.getValues('initialStock') ?? 0)
-                                        const next = Math.max(0, current - 1)
-                                        setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
-                                      }}
-                                    >
-                                      −
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Disminuir stock inicial</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
-                                      aria-label="Aumentar stock inicial"
-                                      onClick={() => {
-                                        const current = Number(form.getValues('initialStock') ?? 0)
-                                        const next = current + 1
-                                        setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
-                                      }}
-                                    >
-                                      +
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">Aumentar stock inicial</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </div>
-                            {form.formState.errors.initialStock && (
-                              <p className="text-red-500 text-sm">{form.formState.errors.initialStock.message}</p>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col">
-                          <Label className='py-3 font-semibold'>
-                            Caracteristicas
-                            {<OptionalChip filled={hasFeatures} />}
-                          </Label>
-                          {featureFields.map((field, index) => (
-                            <div key={field.id} className="flex flex-col md:flex-row gap-2 mb-2">
-                              <Select
-                                disabled={isProcessing}
-                                value={form.watch(`features.${index}.icon` as const)}
-                                onValueChange={(value:any) =>
-                                  setValue(`features.${index}.icon` as const, value as IconName)
-                                }
-                              >
-                                <SelectTrigger className="flex-1">
-                                  <SelectValue placeholder="Icono" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Object.keys(icons).map((key) => {
-                                    const Icon = icons[key as IconName]
-                                    return (
-                                      <SelectItem key={key} value={key} className="flex items-center gap-2">
-                                        <Icon className="w-4 h-4" /> {key}
-                                      </SelectItem>
-                                    )
-                                  })}
-                                </SelectContent>
-                              </Select>
-                              <Input placeholder='Titulo' {...register(`features.${index}.title` as const)} className='flex-1'/>
-                              <Input placeholder='Descripcion' {...register(`features.${index}.description` as const)} className='flex-1'/>
-                              <Button
-                                type='button'
-                                variant='destructive'
-                                className="h-10 w-10 px-0"
-                                onClick={() => removeFeature(index)}
-                              >
-                                <span className="text-base leading-none">X</span>
-                              </Button>
-                            </div>
-                          ))}
-                          <TooltipProvider delayDuration={150}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="cursor-pointer"
-                                  onClick={() =>
-                                    appendFeature({ icon: '', title: '', description: '' })
-                                  }
-                                >
-                                  Agregar caracteristica
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">Agregar caracteristica</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                    </div>
-                    </div>
-
-                    {schemaFields.length > 0 && (
-                      <div className="mt-4 space-y-4 rounded-lg border bg-muted/30 p-4 md:col-span-1 lg:col-span-2 lg:col-start-1 lg:row-start-5 lg:pr-6">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <Label className="text-sm font-medium">
-                              Campos del vertical ({verticalInfo?.config?.displayName ?? 'Vertical'})
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                              Ajusta la informacion requerida por el esquema {verticalName}.
-                            </p>
-                            {extraFieldError && (
-                              <p className="mt-1 text-xs text-red-500">{extraFieldError}</p>
-                            )}
-                          </div>
-                          {isLegacyProduct && (
-                            <Badge variant="destructive" className="self-start">
-                              Legacy
-                            </Badge>
-                          )}
-                        </div>
-                        {isLegacyProduct && (
-                          <div className="rounded-md bg-amber-50/70 p-3 text-xs text-amber-800">
-                            Este producto aun no se ha migrado al esquema de {verticalName}.{" "}
-                            <Link
-                              href={`${MIGRATION_ASSISTANT_PATH}?productId=${product?.id ?? ""}`}
-                              className="font-semibold underline"
-                            >
-                              Dividir stock / completar datos
-                            </Link>
-                          </div>
-                        )}
-                        {groupedSchemaFields.map(([groupKey, fields]) => (
-                          <div key={groupKey} className="space-y-3 rounded-md border border-dashed p-3">
-                            <div>
-                              <p className="text-sm font-semibold capitalize">
-                                {groupKey === "general"
-                                  ? "Campos generales"
-                                  : groupKey.replace(/[-_]/g, " ")}
-                              </p>
-                              {groupKey === "clothing" && (
-                                <p className="text-xs text-muted-foreground">
-                                  Administra tallas y colores para cada variante.
-                                </p>
-                              )}
-                              {groupKey === "kitchen" && (
-                                <p className="text-xs text-muted-foreground">
-                                  Define estaciones y tiempos de preparacion para la cocina.
-                                </p>
-                              )}
-                            </div>
-                            {fields.map((field) => (
-                              <div key={field.key} className="space-y-2">
-                                <Label className="text-sm font-medium">
-                                  {field.label}
-                                  {field.required && <span className="ml-1 text-red-500">*</span>}
-                                </Label>
-                                {renderSchemaField(field)}
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    
-                    {showComputerSpecs && (
-                      <div className="flex flex-col pt-4 md:col-span-1 md:col-start-1 lg:col-span-3 lg:col-start-1 lg:row-start-5">
-                          <Label className='py-3 font-semibold'>
-                            Especificaciones
-                            {<OptionalChip filled={hasSpecs} />}
-                          </Label>
-                          <Input placeholder='Procesador' {...register('processor')} className='mb-2'></Input>
-                          <Input placeholder='RAM' {...register('ram')} className='mb-2'></Input>
-                          <Input placeholder='Almacenamiento' {...register('storage')} className='mb-2'></Input>
-                          <Input placeholder='Graficos' {...register('graphics')} className='mb-2'></Input>
-                          <Input placeholder='Pantalla' {...register('screen')} className='mb-2'></Input>
-                          <Input placeholder='Resolucion' {...register('resolution')} className='mb-2'></Input>
-                          <Input placeholder='Tasa de refresco' {...register('refreshRate')} className='mb-2'></Input>
-                          <Input placeholder='Conectividad' {...register('connectivity')}></Input>
-                      </div>
-                    )}
-
-                    <div
-                      className={`flex flex-col pt-4 md:col-span-1 md:col-start-2 ${
-                        showComputerSpecs
-                          ? "lg:col-span-3 lg:col-start-1 lg:row-start-6"
-                          : isGeneralVertical
-                            ? "lg:col-span-3 lg:col-start-1 lg:row-start-5"
-                            : "lg:col-span-1 lg:col-start-3 lg:row-start-5"
-                      } ${showComputerSpecs || isGeneralVertical ? "" : "lg:pl-4"}`}
-                    >
-                      <Label className="py-3 font-semibold">
-                        Imagenes
-                        {<OptionalChip filled={hasImages} />}
-                      </Label>
-                      {imageFields.length === 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          No hay imagenes registradas aun.
-                        </p>
-                      )}
-                      <div className="space-y-4">
-                        {imageFields.map((field, index) => {
-                          const preview = form.watch(`images.${index}` as const) || '';
-                          return (
-                            <div
-                              key={field.id}
-                              className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-start"
-                            >
-                              <div className="flex-1 space-y-2">
-                                <Input
-                                  placeholder="URL o ruta relativa /uploads"
-                                  {...register(`images.${index}` as const)}
-                                />
-                                <TooltipProvider delayDuration={150}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Input
-                                        type="file"
-                                        accept="image/*"
-                                        disabled={isProcessing}
-                                        className="cursor-pointer"
-                                        onChange={(event) => handleImageFile(event, index)}
-                                      />
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">Seleccionar imagen</TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                                <p className="text-xs text-muted-foreground">
-                                  Puedes ingresar una URL externa o subir un archivo (se almacenara en /uploads).
-                                </p>
-                              </div>
-                              <div className="flex flex-col items-center gap-2">
-                                {preview ? (
-                                  <img
-                                    src={resolveImageUrl(preview)}
-                                    alt={`preview-${index}`}
-                                    className="h-24 w-24 rounded border object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-24 w-24 items-center justify-center rounded border text-xs text-muted-foreground">
-                                    Sin vista previa
-                                  </div>
-                                )}
-                                <TooltipProvider delayDuration={150}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="destructive"
-                                        size="sm"
-                                        className="cursor-pointer"
-                                        onClick={() => removeImage(index)}
-                                        disabled={isProcessing}
-                                      >
-                                        Quitar
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">Quitar imagen</TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <TooltipProvider delayDuration={150}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="mt-3 w-fit cursor-pointer"
-                              disabled={isProcessing}
-                              onClick={() => appendImage('')}
-                            >
-                              Agregar imagen
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">Agregar imagen</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
+          {/* ── Sección 1: Información básica ── */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <Info className="h-4 w-4" /> Información básica
+            </h3>
+            <div className="grid grid-cols-1 gap-x-0.5 gap-y-4 md:gap-x-1 md:gap-y-5 lg:grid-cols-3 lg:gap-x-4">
+              <ProductBasicFields
+                form={form}
+                register={register}
+                control={control}
+                setValue={setValue}
+                clearErrors={clearErrors}
+                isProcessing={isProcessing}
+                suppressInlineErrors={suppressInlineErrors}
+                nameValidation={nameValidation}
+                nameError={nameError}
+                nameInputRef={nameInputRef}
+                nameRegister={nameRegister}
+                categoryOptions={categoryOptions}
+                isLoadingCategories={isLoadingCategories}
+                isCategoryDialogOpen={isCategoryDialogOpen}
+                setIsCategoryDialogOpen={setIsCategoryDialogOpen}
+                newCategoryName={newCategoryName}
+                setNewCategoryName={setNewCategoryName}
+                newCategoryDescription={newCategoryDescription}
+                setNewCategoryDescription={setNewCategoryDescription}
+                categoryError={categoryError}
+                setCategoryError={setCategoryError}
+                isCreatingCategory={isCreatingCategory}
+                handleCreateCategory={handleCreateCategory}
+                hasName={hasName}
+                hasCategory={hasCategory}
+                OptionalChip={OptionalChip}
+                RequiredValidationChip={RequiredValidationChip}
+              />
+              <ProductBrandDescription
+                form={form}
+                register={register}
+                control={control}
+                setValue={setValue}
+                clearErrors={clearErrors}
+                isProcessing={isProcessing}
+                suppressInlineErrors={suppressInlineErrors}
+                brands={brands}
+                isLoadingBrands={isLoadingBrands}
+                hasBrand={hasBrand}
+                hasDescription={hasDescription}
+                OptionalChip={OptionalChip}
+              />
+            </div>
           </div>
-          <div className="mt-6 flex flex-col gap-2 lg:flex-row lg:justify-end">
-            <Button
-              className="cursor-pointer transition-colors hover:bg-primary/90 hover:shadow-sm"
-              disabled={isProcessing || Boolean(editingBatchId)}
-            >
-              {currentProductId
-                ? 'Actualizar Producto'
-                : batchCount > 0
-                  ? `Crear Productos (${createProductsCount || batchCount})`
-                  : 'Crear Producto'}
-            </Button>
-            {!currentProductId && (
+
+          {/* ── Sección 2: Precios y stock ── */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <DollarSign className="h-4 w-4" /> Precios y stock
+            </h3>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_1fr_1.35fr]">
+              <ProductPricingFields
+                form={form}
+                register={register}
+                control={control}
+                setValue={setValue}
+                clearErrors={clearErrors}
+                isProcessing={isProcessing}
+                suppressInlineErrors={suppressInlineErrors}
+                hasPrice={hasPrice}
+                hasPriceSell={hasPriceSell}
+                hasInitialStock={hasInitialStock}
+                OptionalChip={OptionalChip}
+              />
+              <ProductFeaturesSection
+                form={form}
+                register={register}
+                control={control}
+                setValue={setValue}
+                clearErrors={clearErrors}
+                isProcessing={isProcessing}
+                suppressInlineErrors={suppressInlineErrors}
+                featureFields={featureFields}
+                appendFeature={appendFeature}
+                removeFeature={removeFeature}
+                hasFeatures={hasFeatures}
+                OptionalChip={OptionalChip}
+              />
+            </div>
+          </div>
+
+          {/* ── Sección 3: Configuración del vertical ── */}
+          {(schemaFields.length > 0 || showComputerSpecs) && (
+            <div className="rounded-lg border bg-card p-4 shadow-sm">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                <Settings className="h-4 w-4" /> Configuración del vertical
+              </h3>
+              <ProductSchemaFields
+                form={form}
+                register={register}
+                control={control}
+                setValue={setValue}
+                clearErrors={clearErrors}
+                isProcessing={isProcessing}
+                suppressInlineErrors={suppressInlineErrors}
+                schemaFields={schemaFields}
+                groupedSchemaFields={groupedSchemaFields}
+                verticalInfo={verticalInfo}
+                verticalName={verticalName}
+                isLegacyProduct={isLegacyProduct}
+                extraFieldError={extraFieldError}
+                renderSchemaField={renderSchemaField}
+                productId={product?.id}
+                migrationAssistantPath={MIGRATION_ASSISTANT_PATH}
+              />
+              {showComputerSpecs && (
+                <ProductComputerSpecs
+                  form={form}
+                  register={register}
+                  control={control}
+                  setValue={setValue}
+                  clearErrors={clearErrors}
+                  isProcessing={isProcessing}
+                  suppressInlineErrors={suppressInlineErrors}
+                  hasSpecs={hasSpecs}
+                  OptionalChip={OptionalChip}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ── Sección 4: Imágenes ── */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <ImageIcon className="h-4 w-4" /> Imágenes
+            </h3>
+            <ProductImagesSection
+              form={form}
+              register={register}
+              control={control}
+              setValue={setValue}
+              clearErrors={clearErrors}
+              isProcessing={isProcessing}
+              suppressInlineErrors={suppressInlineErrors}
+              imageFields={imageFields}
+              appendImage={appendImage}
+              removeImage={removeImage}
+              handleImageFile={handleImageFile}
+              hasImages={hasImages}
+              showComputerSpecs={showComputerSpecs}
+              isGeneralVertical={isGeneralVertical}
+              OptionalChip={OptionalChip}
+            />
+          </div>
+          {/* ── Sticky footer: botones de acción ── */}
+          <div className="sticky bottom-0 z-10 mt-2 rounded-t-lg border-t bg-white/90 py-3 backdrop-blur dark:bg-background/90">
+            <div className="flex flex-col gap-2 lg:flex-row lg:justify-end">
               <Button
-                type="button"
-                className="cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
-                onClick={handleAddAnother}
-                disabled={isProcessing}
+                className="cursor-pointer transition-colors hover:bg-primary/90 hover:shadow-sm"
+                disabled={isProcessing || Boolean(editingBatchId)}
               >
-                {editingBatchId ? "Actualizar producto" : "Agregar otro producto"}
+                {currentProductId
+                  ? 'Actualizar Producto'
+                  : batchCount > 0
+                    ? `Crear Productos (${createProductsCount || batchCount})`
+                    : 'Crear Producto'}
               </Button>
-            )}
-            <Button
-              variant="outline"
-              className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
-              type="button"
-              onClick={() => {
-                setEditingBatchId(null)
-                setExtraAttributes({})
-                setVariantRows([])
-                setIngredientRows([])
-                setExtraFieldError(null)
-                setNameError(null)
-                form.reset({
-                  name: "",
-                  description: "",
-                  brand: "",
-                  price: 0.0,
-                  priceSell: 0.0,
-                  initialStock: 0,
-                  images: [""],
-                  status: "Activo",
-                  categoryId: "",
-                  processor: "",
-                  ram: "",
-                  storage: "",
-                  graphics: "",
-                  screen: "",
-                  resolution: "",
-                  refreshRate: "",
-                  connectivity: "",
-                  features: [],
-                })
-              }}
-            >
-              Limpiar
-            </Button>
-            <Button
-              variant="outline"
-              className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
-              type="button"
-              onClick={() => {
-                if (onCancel) {
-                  onCancel()
-                } else {
-                  router.back()
-                }
-              }}
-            >
-              Volver
-            </Button>
+              {!currentProductId && (
+                <Button
+                  type="button"
+                  className="cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+                  onClick={handleAddAnother}
+                  disabled={isProcessing}
+                >
+                  {editingBatchId ? "Actualizar producto" : "Agregar otro producto"}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+                type="button"
+                onClick={() => {
+                  setEditingBatchId(null)
+                  setExtraAttributes({})
+                  setVariantRows([])
+                  setIngredientRows([])
+                  setExtraFieldError(null)
+                  setNameError(null)
+                  form.reset({
+                    name: "",
+                    description: "",
+                    brand: "",
+                    price: 0.0,
+                    priceSell: 0.0,
+                    initialStock: 0,
+                    images: [""],
+                    status: "Activo",
+                    categoryId: "",
+                    processor: "",
+                    ram: "",
+                    storage: "",
+                    graphics: "",
+                    screen: "",
+                    resolution: "",
+                    refreshRate: "",
+                    connectivity: "",
+                    features: [],
+                  })
+                }}
+              >
+                Limpiar
+              </Button>
+              <Button
+                variant="outline"
+                className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+                type="button"
+                onClick={() => {
+                  if (onCancel) {
+                    onCancel()
+                  } else {
+                    router.back()
+                  }
+                }}
+              >
+                Volver
+              </Button>
+            </div>
           </div>
         </fieldset>
       </form>
-      {batchCart.length > 0 && !currentProductId && (
-        <div
-          ref={floatingPanelRef}
-          className={`fixed z-40 w-[280px] rounded-xl border border-border/60 bg-card/95 p-4 shadow-lg backdrop-blur ${
-            isFloatingPanelDragging ? "cursor-grabbing" : ""
-          }`}
-          style={{
-            left: floatingPanelPosition?.x ?? 0,
-            top: floatingPanelPosition?.y ?? 0,
-          }}
-        >
-          <div
-            className={`flex items-center justify-between ${
-              isFloatingPanelDragging ? "cursor-grabbing" : "cursor-grab"
-            }`}
-            onPointerDown={(event) => {
-              setIsFloatingPanelDragging(true)
-              floatingPanelPinnedRef.current = true
-              floatingDragOffsetRef.current = {
-                x: event.clientX - (floatingPanelPosition?.x ?? 0),
-                y: event.clientY - (floatingPanelPosition?.y ?? 0),
-              }
-            }}
-          >
-            <p className="text-sm font-semibold">Productos agregados</p>
-            <Badge variant="secondary">{batchCart.length}</Badge>
-          </div>
-          <div className="mt-3 max-h-40 space-y-2 overflow-auto text-xs">
-              {batchCart.map((item) => {
-                const imageSrc =
-                  Array.isArray(item.payload?.images) && item.payload.images[0]
-                    ? resolveImageUrl(String(item.payload.images[0]))
-                    : null
-                const categoryLabel =
-                  categories?.find(
-                    (category) =>
-                      String(category.id) === String(item.payload?.categoryId ?? ""),
-                  )?.name ??
-                  item.payload?.category?.name ??
-                  ""
-                const brandLabel =
-                  typeof item.payload?.brand === "string"
-                    ? item.payload.brand.trim()
-                    : ""
-                const purchasePrice = formatMoney(item.payload?.price)
-                const salePrice = formatMoney(item.payload?.priceSell)
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-start justify-between gap-2"
-                  >
-                    <div
-                      className={`flex min-w-0 flex-1 items-start gap-2 rounded-md p-2 transition-colors ${
-                        editingBatchId === item.id
-                          ? "bg-muted/10 ring-1 ring-primary/30"
-                          : "cursor-pointer hover:bg-muted/10"
-                      }`}
-                      onClick={() => startBatchEditFromCart(item)}
-                      title="Clic para editar en el formulario"
-                    >
-                      <div className="flex h-7 w-7 items-center justify-center rounded border border-border/60 bg-muted/20">
-                        {imageSrc ? (
-                          <img
-                            src={imageSrc}
-                            alt={item.name}
-                            className="h-6 w-6 rounded object-cover"
-                          />
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">IMG</span>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Producto
-                        </p>
-                        <p className="truncate text-xs font-medium">{item.name}</p>
-                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                          <span className="font-semibold text-foreground/80">
-                            Marca:
-                          </span>{" "}
-                          {brandLabel || "-"}{" "}
-                          <span className="text-muted-foreground">|</span>{" "}
-                          <span className="font-semibold text-foreground/80">
-                            Categoria:
-                          </span>{" "}
-                          {categoryLabel || "-"}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">
-                          <span className="font-semibold text-foreground/80">
-                            Compra:
-                          </span>{" "}
-                          {purchasePrice ?? "-"}{" "}
-                          <span className="text-muted-foreground">|</span>{" "}
-                          <span className="font-semibold text-foreground/80">
-                            Venta:
-                          </span>{" "}
-                          {salePrice ?? "-"}
-                        </p>
-                      </div>
-                    </div>
-                    <TooltipProvider delayDuration={150}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="outline"
-                          className="h-8 w-8 cursor-pointer border-rose-500/60 bg-rose-50 text-rose-700 transition-all duration-200 hover:scale-105 hover:border-rose-500/80 hover:text-rose-800 hover:shadow-[0_0_18px_rgba(244,63,94,0.25)] dark:border-rose-400/40 dark:bg-transparent dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100 dark:hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              setBatchCart((prev) =>
-                                prev.filter((entry) => entry.id !== item.id),
-                              )
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Quitar producto</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                )
-              })}
-          </div>
-          <div className="mt-4 flex items-center gap-2">
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 transition-all duration-200 hover:scale-105 hover:border-emerald-500/80 hover:text-emerald-800 hover:shadow-[0_0_18px_rgba(16,185,129,0.25)] dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100 dark:hover:shadow-[0_0_18px_rgba(16,185,129,0.35)]"
-                    onClick={() => setIsBatchStockDialogOpen(true)}
-                    disabled={isProcessing}
-                  >
-                    <Boxes className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Asignar stock por tienda</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 transition-all duration-200 hover:scale-105 hover:border-sky-500/80 hover:text-sky-800 hover:shadow-[0_0_18px_rgba(56,189,248,0.25)] dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100 dark:hover:shadow-[0_0_18px_rgba(56,189,248,0.35)]"
-                    onClick={() => {
-                      setFloatingPanelPosition(getDefaultPanelPosition())
-                      floatingPanelPinnedRef.current = true
-                    }}
-                    disabled={isProcessing}
-                  >
-                    <LocateFixed className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Restaurar posición</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 cursor-pointer border-rose-500/60 bg-rose-50 text-rose-700 transition-all duration-200 hover:scale-105 hover:border-rose-500/80 hover:text-rose-800 hover:shadow-[0_0_18px_rgba(244,63,94,0.25)] dark:border-rose-400/40 dark:bg-transparent dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100 dark:hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
-                    onClick={() => setBatchCart([])}
-                    disabled={isProcessing}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Vaciar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-      )}
+      <ProductBatchPanel
+        batchCart={batchCart}
+        setBatchCart={setBatchCart}
+        editingBatchId={editingBatchId}
+        startBatchEditFromCart={startBatchEditFromCart}
+        floatingPanelRef={floatingPanelRef}
+        floatingPanelPosition={floatingPanelPosition}
+        setFloatingPanelPosition={setFloatingPanelPosition}
+        isFloatingPanelDragging={isFloatingPanelDragging}
+        setIsFloatingPanelDragging={setIsFloatingPanelDragging}
+        floatingDragOffsetRef={floatingDragOffsetRef}
+        floatingPanelPinnedRef={floatingPanelPinnedRef}
+        getDefaultPanelPosition={getDefaultPanelPosition}
+        setIsBatchStockDialogOpen={setIsBatchStockDialogOpen}
+        isProcessing={isProcessing}
+        categories={categories}
+        formatMoney={formatMoney}
+        currentProductId={currentProductId}
+      />
       <Dialog open={isBatchConfirmOpen} onOpenChange={setIsBatchConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -3665,6 +3047,7 @@ const VariantRowItem = memo(function VariantRowItem({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   )
 }

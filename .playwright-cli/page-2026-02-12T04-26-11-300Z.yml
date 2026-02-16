@@ -1,0 +1,376 @@
+- generic [active] [ref=e1]:
+  - region "Notifications alt+T"
+  - generic [ref=e2]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: Bienvenido a Mi Sitio Web
+      - generic [ref=e7]: ¡Envíos gratis por compras superiores a S/. 500!
+      - generic [ref=e8]: Visita nuestras nuevas ofertas semanales
+    - navigation [ref=e9]:
+      - generic [ref=e10]:
+        - link "Mi Sitio Web Mi Sitio Web" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img "Mi Sitio Web" [ref=e12]
+          - generic [ref=e13]: Mi Sitio Web
+        - generic [ref=e14]:
+          - textbox "Buscar productos" [ref=e16]
+          - link "Inicio" [ref=e17] [cursor=pointer]:
+            - /url: /
+          - link "Productos" [ref=e18] [cursor=pointer]:
+            - /url: /productos
+          - link "Contacto" [ref=e19] [cursor=pointer]:
+            - /url: /contacto
+          - link "Rastrea tu pedido" [ref=e20] [cursor=pointer]:
+            - /url: /track-order
+            - generic [ref=e21]: Rastrea tu pedido
+          - link [ref=e22] [cursor=pointer]:
+            - /url: /favorites
+            - img [ref=e23]
+          - button [ref=e25] [cursor=pointer]:
+            - img
+          - generic [ref=e27]:
+            - generic [ref=e28]:
+              - generic [ref=e29]:
+                - img [ref=e31]
+                - heading "Tu Carrito" [level=2] [ref=e35]
+              - button [ref=e36]:
+                - img
+            - generic [ref=e38]:
+              - img [ref=e39]
+              - paragraph [ref=e43]: Tu carrito está vacío
+              - paragraph [ref=e44]: Añade productos para comenzar
+          - button "Toggle theme" [ref=e45] [cursor=pointer]:
+            - img
+            - img
+            - generic [ref=e46]: Toggle theme
+          - link "Iniciar sesión" [ref=e47] [cursor=pointer]:
+            - /url: /login
+            - img [ref=e48]
+            - generic [ref=e51]: Iniciar sesión
+    - generic [ref=e52]:
+      - generic [ref=e383]:
+        - generic [ref=e384]:
+          - generic [ref=e385]:
+            - heading "B i e n v e n i d o a n u e s t r o s i t i o" [level=1] [ref=e386]:
+              - generic [ref=e387]:
+                - generic [ref=e388]: B
+                - generic [ref=e389]: i
+                - generic [ref=e390]: e
+                - generic [ref=e391]: "n"
+                - generic [ref=e392]: v
+                - generic [ref=e393]: e
+                - generic [ref=e394]: "n"
+                - generic [ref=e395]: i
+                - generic [ref=e396]: d
+                - generic [ref=e397]: o
+              - generic [ref=e400]: a
+              - generic [ref=e402]:
+                - generic [ref=e403]: "n"
+                - generic [ref=e404]: u
+                - generic [ref=e405]: e
+                - generic [ref=e406]: s
+                - generic [ref=e407]: t
+                - generic [ref=e408]: r
+                - generic [ref=e409]: o
+              - generic [ref=e411]:
+                - generic [ref=e412]: s
+                - generic [ref=e413]: i
+                - generic [ref=e414]: t
+                - generic [ref=e415]: i
+                - generic [ref=e416]: o
+            - paragraph [ref=e417]: Descubre todo lo que tenemos para ti
+          - generic [ref=e418]:
+            - link "Comenzar" [ref=e419] [cursor=pointer]:
+              - /url: /store
+              - generic [ref=e420]:
+                - text: Comenzar
+                - img
+            - link "Ofertas especiales" [ref=e421] [cursor=pointer]:
+              - /url: /store
+              - generic [ref=e422]: Ofertas especiales
+        - generic [ref=e423]:
+          - link "probando" [ref=e610] [cursor=pointer]:
+            - /url: /store/8
+            - img "probando" [ref=e612]
+          - generic [ref=e431]:
+            - paragraph [ref=e432]: probando
+            - generic [ref=e433]:
+              - generic "Precio" [ref=e434]: S/. 0.00
+              - generic "Oferta" [ref=e435]: ¡OFERTA!
+          - generic [ref=e437]:
+            - img [ref=e439]
+            - generic [ref=e441]:
+              - paragraph [ref=e442]: Garantía extendida
+              - paragraph [ref=e443]: Hasta 3 años
+          - button "Anterior" [ref=e444]:
+            - img [ref=e445]
+          - button "Siguiente" [ref=e447]:
+            - img [ref=e448]
+      - generic [ref=e451]:
+        - generic [ref=e452]:
+          - heading "Productos destacados" [level=2] [ref=e453]:
+            - generic [ref=e454]: Productos destacados
+          - paragraph [ref=e455]: Descubre la selección más popular de Mi Sitio Web con las mejores ofertas
+        - generic [ref=e456]:
+          - generic [ref=e458]:
+            - link "MEMORA KINGSTON FURY DDR4 3.2GHZ 16GB MEMORIAS MEMORA KINGSTON FURY DDR4 3.2GHZ 16GB JEEEEE1 KINGSTON KINGSTON S/.480.00 Sin stock" [ref=e459] [cursor=pointer]:
+              - /url: /store/24
+              - img "MEMORA KINGSTON FURY DDR4 3.2GHZ 16GB" [ref=e462]
+              - generic [ref=e463]:
+                - generic [ref=e465]: MEMORIAS
+                - heading "MEMORA KINGSTON FURY DDR4 3.2GHZ 16GB" [level=3] [ref=e466]
+                - paragraph [ref=e467]: JEEEEE1
+                - generic [ref=e468]:
+                  - img "KINGSTON" [ref=e469]
+                  - text: KINGSTON
+                - generic [ref=e471]: S/.480.00
+                - paragraph [ref=e472]: Sin stock
+            - button "Agregar favoritos" [ref=e473]:
+              - img
+          - generic [ref=e475]:
+            - link "probando LAPTOPS probando S/.0.00 Sin stock" [ref=e476] [cursor=pointer]:
+              - /url: /store/8
+              - img "probando" [ref=e479]
+              - generic [ref=e480]:
+                - generic [ref=e482]: LAPTOPS
+                - heading "probando" [level=3] [ref=e483]
+                - paragraph
+                - generic [ref=e485]: S/.0.00
+                - paragraph [ref=e486]: Sin stock
+            - button "Agregar favoritos" [ref=e487]:
+              - img
+          - generic [ref=e489]:
+            - link "ASUS VIVOBOOK M1502YA LAPTOPS ASUS VIVOBOOK M1502YA Notebook ASUS M1502YA-NJ147W, 15.6\" FHD LED, AMD Ryzen 7 7730U 2.0/4.5GHz, 16GB DDR4 ASUS ASUS S/.2400.00 Sin stock" [ref=e490] [cursor=pointer]:
+              - /url: /store/7
+              - img "ASUS VIVOBOOK M1502YA" [ref=e493]
+              - generic [ref=e494]:
+                - generic [ref=e496]: LAPTOPS
+                - heading "ASUS VIVOBOOK M1502YA" [level=3] [ref=e497]
+                - paragraph [ref=e498]: Notebook ASUS M1502YA-NJ147W, 15.6" FHD LED, AMD Ryzen 7 7730U 2.0/4.5GHz, 16GB DDR4
+                - generic [ref=e499]:
+                  - img "ASUS" [ref=e500]
+                  - text: ASUS
+                - generic [ref=e502]: S/.2400.00
+                - paragraph [ref=e503]: Sin stock
+            - button "Agregar favoritos" [ref=e504]:
+              - img
+          - generic [ref=e506]:
+            - link "Notebook ASUS Vivobook I7 LAPTOPS Notebook ASUS Vivobook I7 Notebook ASUS Vivobook 16, 16\" WUXGA IPS, Core i7 13620H 2.4/4.9GHz, 16GB DDR4, 512GB ASUS ASUS S/.2750.00 Sin stock" [ref=e507] [cursor=pointer]:
+              - /url: /store/5
+              - img "Notebook ASUS Vivobook I7" [ref=e510]
+              - generic [ref=e511]:
+                - generic [ref=e513]: LAPTOPS
+                - heading "Notebook ASUS Vivobook I7" [level=3] [ref=e514]
+                - paragraph [ref=e515]: Notebook ASUS Vivobook 16, 16" WUXGA IPS, Core i7 13620H 2.4/4.9GHz, 16GB DDR4, 512GB
+                - generic [ref=e516]:
+                  - img "ASUS" [ref=e517]
+                  - text: ASUS
+                - generic [ref=e519]: S/.2750.00
+                - paragraph [ref=e520]: Sin stock
+            - button "Agregar favoritos" [ref=e521]:
+              - img
+          - generic [ref=e523]:
+            - 'link "Notebook Gaming LENOVO LOQ LAPTOPS Notebook Gaming LENOVO LOQ LENOVO - IDEA NB LENOVO LOQ 15ARP9, 15.6\" FHD IPS, AMD RYZEN 7-7435HS 4.5 GHz, 16GB DDR5-4800 LENOVO LENOVO S/.3800.00 Stock: 1" [ref=e524] [cursor=pointer]':
+              - /url: /store/4
+              - img "Notebook Gaming LENOVO LOQ" [ref=e527]
+              - generic [ref=e528]:
+                - generic [ref=e530]: LAPTOPS
+                - heading "Notebook Gaming LENOVO LOQ" [level=3] [ref=e531]
+                - paragraph [ref=e532]: LENOVO - IDEA NB LENOVO LOQ 15ARP9, 15.6" FHD IPS, AMD RYZEN 7-7435HS 4.5 GHz, 16GB DDR5-4800
+                - generic [ref=e533]:
+                  - img "LENOVO" [ref=e534]
+                  - text: LENOVO
+                - generic [ref=e536]: S/.3800.00
+                - paragraph [ref=e537]: "Stock: 1"
+            - generic:
+              - button "Agregar al carrito" [ref=e538]:
+                - img
+                - text: Agregar al carrito
+              - button "Agregar favoritos" [ref=e539]:
+                - img
+          - generic [ref=e541]:
+            - link "probando ando LAPTOPS probando ando LENOVO LENOVO S/.20.00 Sin stock" [ref=e542] [cursor=pointer]:
+              - /url: /store/3
+              - img "probando ando" [ref=e545]
+              - generic [ref=e546]:
+                - generic [ref=e548]: LAPTOPS
+                - heading "probando ando" [level=3] [ref=e549]
+                - paragraph
+                - generic [ref=e550]:
+                  - img "LENOVO" [ref=e551]
+                  - text: LENOVO
+                - generic [ref=e553]: S/.20.00
+                - paragraph [ref=e554]: Sin stock
+            - button "Agregar favoritos" [ref=e555]:
+              - img
+      - generic [ref=e557]:
+        - generic [ref=e558]:
+          - heading "Explora por categoría" [level=2] [ref=e559]
+          - paragraph [ref=e560]: Encuentra exactamente lo que necesitas en nuestras categorías especializadas
+        - generic [ref=e562]:
+          - link "LAPTOPS 5+ productos" [ref=e563] [cursor=pointer]:
+            - /url: /store?category=LAPTOPS
+            - generic [ref=e566]:
+              - img [ref=e568]
+              - heading "LAPTOPS" [level=3] [ref=e570]
+              - paragraph [ref=e571]: 5+ productos
+          - link "MEMORIAS 1+ productos" [ref=e572] [cursor=pointer]:
+            - /url: /store?category=MEMORIAS
+            - generic [ref=e575]:
+              - img [ref=e577]
+              - heading "MEMORIAS" [level=3] [ref=e579]
+              - paragraph [ref=e580]: 1+ productos
+          - link "Sin categoria 0+ productos" [ref=e581] [cursor=pointer]:
+            - /url: /store?category=Sin%20categoria
+            - generic [ref=e584]:
+              - img [ref=e586]
+              - heading "Sin categoria" [level=3] [ref=e588]
+              - paragraph [ref=e589]: 0+ productos
+      - generic [ref=e201]:
+        - generic [ref=e202]:
+          - heading "¿Por qué comprar con nosotros?" [level=2] [ref=e203]
+          - paragraph [ref=e204]: Ofrecemos la mejor experiencia de compra con servicios que marcan la diferencia
+        - generic [ref=e205]:
+          - generic [ref=e206]:
+            - img [ref=e208]
+            - heading "Envíos a todo el Perú" [level=3] [ref=e213]
+            - paragraph [ref=e214]: Entrega rápida y segura en 24-72 horas
+          - generic [ref=e215]:
+            - img [ref=e217]
+            - heading "Garantía asegurada" [level=3] [ref=e219]
+            - paragraph [ref=e220]: Hasta 3 años de garantía extendida en todos nuestros productos
+          - generic [ref=e221]:
+            - img [ref=e223]
+            - heading "Soporte técnico" [level=3] [ref=e226]
+            - paragraph [ref=e227]: Atención especializada 24/7 para resolver tus dudas
+          - generic [ref=e228]:
+            - img [ref=e230]
+            - heading "Pagos seguros" [level=3] [ref=e232]
+            - paragraph [ref=e233]: Múltiples métodos de pago con máxima seguridad
+      - generic [ref=e236]:
+        - generic [ref=e237]:
+          - heading "Lo que dicen nuestros clientes" [level=2] [ref=e238]
+          - paragraph [ref=e239]: Miles de clientes satisfechos confían en nosotros para sus necesidades tecnológicas
+        - generic [ref=e240]:
+          - generic [ref=e242]:
+            - generic [ref=e243]:
+              - img [ref=e244]
+              - img [ref=e246]
+              - img [ref=e248]
+              - img [ref=e250]
+              - img [ref=e252]
+            - paragraph [ref=e254]: "\"Excelente servicio y productos de calidad. Mi laptop gaming llegó perfecta y funciona increíble.\""
+            - generic [ref=e255]:
+              - paragraph [ref=e256]: Carlos Mendoza
+              - paragraph [ref=e257]: Lima, Perú
+          - generic [ref=e259]:
+            - generic [ref=e260]:
+              - img [ref=e261]
+              - img [ref=e263]
+              - img [ref=e265]
+              - img [ref=e267]
+              - img [ref=e269]
+            - paragraph [ref=e271]: "\"Compré una PC para mi oficina y el soporte técnico fue excepcional. Muy recomendado.\""
+            - generic [ref=e272]:
+              - paragraph [ref=e273]: María González
+              - paragraph [ref=e274]: Arequipa, Perú
+          - generic [ref=e276]:
+            - generic [ref=e277]:
+              - img [ref=e278]
+              - img [ref=e280]
+              - img [ref=e282]
+              - img [ref=e284]
+              - img [ref=e286]
+            - paragraph [ref=e288]: "\"Los mejores precios del mercado y entrega súper rápida. Ya es mi tienda de confianza.\""
+            - generic [ref=e289]:
+              - paragraph [ref=e290]: Diego Ramírez
+              - paragraph [ref=e291]: Trujillo, Perú
+      - generic [ref=e295]:
+        - heading "Suscríbete y recibe ofertas exclusivas" [level=2] [ref=e296]
+        - paragraph [ref=e297]: Mantente al día con las últimas novedades, ofertas especiales y lanzamientos de productos
+        - generic [ref=e298]:
+          - textbox "Tu correo electrónico" [ref=e300]
+          - button "Suscribirme" [ref=e301]
+  - link [ref=e303] [cursor=pointer]:
+    - /url: https://wa.me/51949426294
+    - img [ref=e305]
+  - generic [ref=e308]:
+    - generic [ref=e590]: Comunícate con nostros por nuestro chat
+    - button "Logo" [ref=e309] [cursor=pointer]:
+      - img [ref=e310]
+      - img "Logo" [ref=e313]
+  - contentinfo [ref=e314]:
+    - generic [ref=e315]:
+      - generic [ref=e316]:
+        - generic [ref=e317]:
+          - generic [ref=e318]:
+            - img "Mi Sitio Web" [ref=e319]
+            - generic [ref=e320]: Mi Sitio Web
+          - paragraph [ref=e321]: Mi Sitio Web es tu socio de confianza para computadoras, laptops y accesorios tecnológicos de primera calidad. Productos de calidad, soporte experto y precios inmejorables.
+        - generic [ref=e322]:
+          - heading "Acceso Rapido" [level=3] [ref=e323]
+          - list [ref=e324]:
+            - listitem [ref=e325]:
+              - link "Laptops" [ref=e326] [cursor=pointer]:
+                - /url: /laptops
+            - listitem [ref=e327]:
+              - link "Computadoras" [ref=e328] [cursor=pointer]:
+                - /url: /desktops
+            - listitem [ref=e329]:
+              - link "PCs Gaming" [ref=e330] [cursor=pointer]:
+                - /url: /gaming
+            - listitem [ref=e331]:
+              - link "Accesorios" [ref=e332] [cursor=pointer]:
+                - /url: /accessories
+            - listitem [ref=e333]:
+              - link "Ofertas" [ref=e334] [cursor=pointer]:
+                - /url: /deals
+            - listitem [ref=e335]:
+              - link "Soporte Tecnico" [ref=e336] [cursor=pointer]:
+                - /url: /support
+        - generic [ref=e337]:
+          - heading "Servicio al Cliente" [level=3] [ref=e338]
+          - list [ref=e339]:
+            - listitem [ref=e340]:
+              - link "Contactos" [ref=e341] [cursor=pointer]:
+                - /url: /contact
+            - listitem [ref=e342]:
+              - link "Informacion de envio" [ref=e343] [cursor=pointer]:
+                - /url: /shipping
+            - listitem [ref=e344]:
+              - link "Devoluciones" [ref=e345] [cursor=pointer]:
+                - /url: /warranty
+            - listitem [ref=e346]:
+              - link "Garantias" [ref=e347] [cursor=pointer]:
+                - /url: /warranty
+            - listitem [ref=e348]:
+              - link "FAQ" [ref=e349] [cursor=pointer]:
+                - /url: /faq
+            - listitem [ref=e350]:
+              - link "Revisa tu pedido" [ref=e351] [cursor=pointer]:
+                - /url: /track-order
+        - generic [ref=e352]:
+          - heading "Contactanos" [level=3] [ref=e353]
+          - generic [ref=e354]:
+            - generic [ref=e355]:
+              - img [ref=e356]
+              - generic [ref=e358]: +51 949 426 294
+            - generic [ref=e359]:
+              - img [ref=e360]
+              - generic [ref=e363]: tecnologiatitacna@gmail.com
+            - generic [ref=e364]:
+              - img [ref=e365]
+              - generic [ref=e368]: Av. Coronel Mendoza 1945 C.C. Mercadillo Bolognesi K-367 Primera Fila Tacna - Peru
+            - generic [ref=e369]:
+              - img [ref=e370]
+              - generic [ref=e372]: 24/7 Soporte a Clientes
+      - generic [ref=e373]:
+        - paragraph [ref=e374]: © 2026 Mi Sitio Web. Todos los derechos reservados. | Politicas de Privacidad | Terminos de Servicio
+        - generic [ref=e375]:
+          - generic [ref=e376]: Pagos seguros a través de
+          - generic [ref=e377]:
+            - generic [ref=e378]: VISA
+            - generic [ref=e379]: MC
+            - generic [ref=e380]: AMEX
+  - button "Open Next.js Dev Tools" [ref=e596] [cursor=pointer]:
+    - img [ref=e597]
+  - alert [ref=e600]: Mi Sitio Web

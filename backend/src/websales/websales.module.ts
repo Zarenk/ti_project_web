@@ -5,9 +5,10 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { InventoryModule } from 'src/inventory/inventory.module';
+import { TenancyModule } from 'src/tenancy/tenancy.module';
 
 @Module({
-  imports: [ActivityModule, InventoryModule],
+  imports: [ActivityModule, InventoryModule, TenancyModule],
   controllers: [WebSalesController],
   providers: [WebSalesService, PrismaService, AccountingHook],
 })

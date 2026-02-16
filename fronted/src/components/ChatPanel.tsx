@@ -11,6 +11,7 @@ import socket from '@/lib/utils';
 import TypingIndicator from './TypingIndicator';
 import { useChatUserId } from '@/hooks/use-chat-user-id';
 import MessagesList from './MessageList';
+import { toast } from 'sonner';
 
 interface Message {
   id: number;
@@ -21,6 +22,35 @@ interface Message {
   seenAt?: string | null;
   file?: string;
   tempId?: number;
+}
+
+interface SeenPayload {
+  clientId: number;
+  viewerId: number;
+  seenAt: string;
+}
+
+interface TypingPayload {
+  clientId: number;
+  senderId: number;
+  isTyping: boolean;
+}
+
+interface UpdatePayload {
+  id: number;
+  text: string;
+}
+
+interface DeletePayload {
+  id: number;
+}
+
+interface SendPayload {
+  clientId: number;
+  senderId: number;
+  text: string;
+  tempId: number;
+  file?: string;
 }
 
 interface ChatPanelProps {
@@ -34,7 +64,6 @@ export default function ChatPanel({
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hookUserId = useChatUserId();
@@ -76,7 +105,7 @@ export default function ChatPanel({
       }
     };
 
-    const seenHandler = ({ clientId, viewerId, seenAt }: any) => {
+    const seenHandler = ({ clientId, viewerId, seenAt }: SeenPayload) => {
       if (clientId !== userId) return;
       if (viewerId === userId) {
         setMessages((prev) =>
@@ -98,28 +127,30 @@ export default function ChatPanel({
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:history', historyHandler);
     socket.on('chat:seen', seenHandler);
-    const typingHandler = ({ clientId, senderId, isTyping }: any) => {
+    const typingHandler = ({ clientId, senderId, isTyping }: TypingPayload) => {
       if (clientId === userId && senderId !== userId) {
         setAgentTyping(isTyping);
       }
     };
-    const updateHandler = ({ id, text }: any) => {
+    const updateHandler = ({ id, text }: UpdatePayload) => {
       setMessages((prev) =>
         prev.map((m) => (m.id === id ? { ...m, text } : m)),
       );
     };
-    const deleteHandler = ({ id }: any) => {
+    const deleteHandler = ({ id }: DeletePayload) => {
       setMessages((prev) => prev.filter((m) => m.id !== id));
     };
     const rateLimitHandler = () => {
       setRateLimited(true);
-      alert(
-        'Has excedido el límite de mensajes. Intenta nuevamente en unos segundos.',
-      );
+      toast.error('Has excedido el limite de mensajes. Intenta nuevamente en unos segundos.');
       setTimeout(() => setRateLimited(false), 10_000);
+    };
+    const errorHandler = (payload: { message?: string }) => {
+      toast.error(payload?.message || 'Error en tiempo real de chat.');
     };
     socket.on('chat:typing', typingHandler);
     socket.on('chat:rate-limit', rateLimitHandler);
+    socket.on('chat:error', errorHandler);
     socket.on('chat:updated', updateHandler);
     socket.on('chat:deleted', deleteHandler);
     return () => {
@@ -128,6 +159,7 @@ export default function ChatPanel({
       socket.off('chat:seen', seenHandler);
       socket.off('chat:typing', typingHandler);
       socket.off('chat:rate-limit', rateLimitHandler);
+      socket.off('chat:error', errorHandler);
       socket.off('chat:updated', updateHandler);
       socket.off('chat:deleted', deleteHandler);
     };
@@ -184,7 +216,7 @@ export default function ChatPanel({
       };
       setMessages((prev) => [...prev, newMessage]);
       pendingTempIds.current.add(tempId);
-      const payload: any = {
+      const payload: SendPayload = {
         clientId: userId,
         senderId: userId,
         text,
@@ -195,7 +227,6 @@ export default function ChatPanel({
       }
       socket.emit('chat:send', payload);
       setText('');
-      setFile(null);
       setPreview(null);
     }
   };
@@ -203,7 +234,6 @@ export default function ChatPanel({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
-      setFile(selected);
       const reader = new FileReader();
       reader.onload = () => setPreview(reader.result as string);
       reader.readAsDataURL(selected);
@@ -211,7 +241,6 @@ export default function ChatPanel({
   };
 
   const clearFile = () => {
-    setFile(null);
     setPreview(null);
   };
 
@@ -324,3 +353,4 @@ export default function ChatPanel({
     </motion.div>
   );
 }
+

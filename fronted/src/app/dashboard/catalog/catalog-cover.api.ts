@@ -1,7 +1,5 @@
-﻿import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch'
-import { getAuthHeaders } from '@/utils/auth-token'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://192.168.1.40:4000'
+﻿import { BACKEND_URL } from '@/lib/utils'
+import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch'
 
 export interface CatalogCover {
   id: number
@@ -37,15 +35,12 @@ export async function getCatalogCover(): Promise<CatalogCover | null> {
 }
 
 export async function uploadCatalogCover(file: File): Promise<CatalogCover> {
-  const headers = await getAuthHeaders()
   const formData = new FormData()
   formData.append('file', file)
 
-  const res = await fetch(`${BACKEND_URL}/api/catalog/cover`, {
+  const res = await authFetch(`${BACKEND_URL}/api/catalog/cover`, {
     method: 'POST',
-    headers,
     body: formData,
-    credentials: 'include',
   })
 
   if (!res.ok) {
@@ -61,11 +56,8 @@ export async function uploadCatalogCover(file: File): Promise<CatalogCover> {
 }
 
 export async function deleteCatalogCover(): Promise<void> {
-  const headers = await getAuthHeaders()
-  const res = await fetch(`${BACKEND_URL}/api/catalog/cover`, {
+  const res = await authFetch(`${BACKEND_URL}/api/catalog/cover`, {
     method: 'DELETE',
-    headers,
-    credentials: 'include',
   })
 
   if (!res.ok) {

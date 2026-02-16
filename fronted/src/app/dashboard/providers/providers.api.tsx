@@ -1,34 +1,8 @@
-import { getAuthHeaders } from "@/utils/auth-token";
+import { BACKEND_URL } from "@/lib/utils";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-
-async function authorizedFetch(url: string, init: RequestInit = {}) {
-  let auth: Record<string, string> = {};
-  try {
-    auth = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes("No se encontro un token")
-    ) {
-      throw new UnauthenticatedError();
-    }
-    throw error;
-  }
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, { ...init, headers });
-}
-
 export async function createProvider(providerData: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -66,7 +40,7 @@ export async function getProviders() {
 export async function getProvider(id: string) {
   let res: Response;
   try {
-    res = await authorizedFetch(`${BACKEND_URL}/api/providers/${id}`, {
+    res = await authFetch(`${BACKEND_URL}/api/providers/${id}`, {
       cache: "no-store",
     });
   } catch (error) {
@@ -91,7 +65,7 @@ export async function getProvider(id: string) {
 
 export async function checkProviderExists(documentNumber: string): Promise<boolean> {
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/providers/check`, {
+    const response = await authFetch(`${BACKEND_URL}/api/providers/check`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -113,7 +87,7 @@ export async function checkProviderExists(documentNumber: string): Promise<boole
 }
 
 export async function deleteProvider(id: string) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers/${id}`, {
     method: "DELETE",
   });
 
@@ -126,7 +100,7 @@ export async function deleteProvider(id: string) {
 }
 
 export async function deleteProviders(ids: string[]) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers/`, {
     method: "DELETE",
     headers: {
       "Content-Type": "application/json",
@@ -141,7 +115,7 @@ export async function deleteProviders(ids: string[]) {
 }
 
 export async function updateProvider(id: string, newProvider: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers/${id}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -162,7 +136,7 @@ export async function updateManyProviders(providers: any[]) {
   console.log("Enviando proveedores al backend para actualizacion masiva:", providers);
 
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/providers`, {
+    const response = await authFetch(`${BACKEND_URL}/api/providers`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -190,7 +164,7 @@ export async function validateProviderFields(payload: {
   documentNumber?: string;
   providerId?: number;
 }): Promise<{ nameAvailable: boolean; documentAvailable: boolean }> {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/validate`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers/validate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -214,7 +188,7 @@ export async function uploadProviderImage(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await authorizedFetch(`${BACKEND_URL}/api/clients/upload-image`, {
+  const res = await authFetch(`${BACKEND_URL}/api/clients/upload-image`, {
     method: "POST",
     body: formData,
   });
@@ -231,7 +205,7 @@ export async function importProvidersExcelFile(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/import-excel`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers/import-excel`, {
     method: "POST",
     body: formData,
   });
@@ -245,7 +219,7 @@ export async function importProvidersExcelFile(file: File) {
 }
 
 export async function commitProvidersExcelData(previewData: any[]) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/providers/import-excel/commit`, {
+  const res = await authFetch(`${BACKEND_URL}/api/providers/import-excel/commit`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

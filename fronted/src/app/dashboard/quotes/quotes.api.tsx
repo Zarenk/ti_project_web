@@ -6,15 +6,19 @@ import { getRegisteredClients } from "@/app/dashboard/clients/clients.api"
 import { getCompanyDetail } from "@/app/dashboard/tenancy/tenancy.api"
 import { getProductsByStore } from "@/app/dashboard/sales/sales.api"
 import { getTenantSelection } from "@/utils/tenant-preferences"
+import { authFetch } from "@/utils/auth-fetch"
 
 export type QuoteCategoryKey = "pc" | "laptops" | "hardware"
 
 export type QuoteOption = {
   id: string
   name: string
+  categoryName?: string
   price: number
+  costPrice?: number
   image: string
   specs: string[]
+  description?: string
   compatibility?: string[]
   highlight?: boolean
   editablePrice?: boolean
@@ -54,6 +58,66 @@ export type QuoteClient = {
   email?: string
   phone?: string
   document?: string
+  documentType?: string
+  documentNumber?: string
+}
+
+export type QuoteItemPayload = {
+  productId?: number | null
+  name: string
+  description?: string | null
+  specs?: string[] | null
+  unitPrice: number
+  costPrice?: number | null
+  quantity: number
+  type?: "PRODUCT" | "SERVICE" | "WARRANTY"
+  category?: "PC" | "LAPTOP" | "HARDWARE" | "SERVICE" | "WARRANTY"
+}
+
+export type QuoteDraftPayload = {
+  clientId?: number | null
+  clientNameSnapshot?: string | null
+  contactSnapshot?: string | null
+  currency: string
+  validity: string
+  conditions?: string | null
+  taxRate?: number | null
+  subtotal?: number | null
+  taxAmount?: number | null
+  marginAmount?: number | null
+  total?: number | null
+  items: QuoteItemPayload[]
+}
+
+export type QuoteDetail = {
+  id: number
+  quoteNumber: string | null
+  status: "DRAFT" | "ISSUED" | "CANCELLED"
+  createdAt: string
+  issuedAt: string | null
+  currency: string
+  validity: string
+  conditions: string | null
+  taxRate: number
+  subtotal: number
+  taxAmount: number
+  marginAmount: number
+  total: number
+  clientNameSnapshot: string | null
+  contactSnapshot: string | null
+  items: Array<{
+    id: number
+    productId: number | null
+    name: string
+    description: string | null
+    specs: any
+    unitPrice: number
+    costPrice: number | null
+    quantity: number
+    lineTotal: number
+    type: "PRODUCT" | "SERVICE" | "WARRANTY"
+    category: "PC" | "LAPTOP" | "HARDWARE" | "SERVICE" | "WARRANTY"
+  }>
 }
 
 const DEFAULT_META: QuoteMeta = {
@@ -171,6 +235,12 @@ function getProductPrice(product: any): number {
   return 0
 }
 
+function getProductCost(product: any): number {
+  if (typeof product?.price === "number") return product.price
+  if (typeof product?.price === "string") return Number(product.price) || 0
+  return 0
+}
+
 function getProductStock(product: any): number | null {
   const candidates = [
     product?.stock,
@@ -193,6 +263,90 @@ function getProductImage(product: any): string {
 function normalizeCompanyLogo(url?: string | null): string {
   if (!url) return "/logo_ti.png"
   return resolveImageUrl(url)
+}
+
+function formatSpecLabel(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function shouldIgnoreSpecKey(key: string): boolean {
+  const normalized = key.replace(/_/g, "").toLowerCase()
+  return [
+    "id",
+    "productid",
+    "createdat",
+    "updatedat",
+    "deletedat",
+  ].includes(normalized)
+}
+
+function formatSpecValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : null
+  }
+  if (typeof value === "number") return String(value)
+  if (typeof value === "boolean") return value ? "Sí" : "No"
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => formatSpecValue(item))
+      .filter(Boolean)
+    return items.length ? items.join(", ") : null
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => {
+        const formatted = formatSpecValue(v)
+        return formatted ? `${formatSpecLabel(k)}: ${formatted}` : null
+      })
+      .filter(Boolean)
+    return entries.length ? entries.join(", ") : null
+  }
+  return null
+}
+
+function buildProductSpecs(product: any): { description?: string; details: string[] } {
+  const specs: string[] = []
+  let description: string | undefined
+  if (product?.brand?.name) specs.push(`Marca: ${product.brand.name}`)
+  if (product?.model) specs.push(`Modelo: ${product.model}`)
+  if (product?.category?.name) specs.push(`Categoría: ${product.category.name}`)
+  if (product?.description) description = String(product.description)
+
+  const specification = product?.specification
+  if (specification && typeof specification === "object") {
+    Object.entries(specification as Record<string, unknown>).forEach(([key, value]) => {
+      if (shouldIgnoreSpecKey(key)) return
+      const formatted = formatSpecValue(value)
+      if (!formatted) return
+      const label = formatSpecLabel(key)
+      const entry = `${label}: ${formatted}`
+      specs.push(entry)
+    })
+  }
+
+  const extra = product?.extraAttributes
+  if (extra && typeof extra === "object") {
+    Object.entries(extra as Record<string, unknown>).forEach(([key, value]) => {
+      if (shouldIgnoreSpecKey(key)) return
+      const formatted = formatSpecValue(value)
+      if (!formatted) return
+      const label = formatSpecLabel(key)
+      const entry = `${label}: ${formatted}`
+      specs.push(entry)
+    })
+  }
+
+  const unique = Array.from(new Set(specs.map((item) => item.trim()).filter(Boolean)))
+  return {
+    description,
+    details: unique.length ? unique : ["Especificación no registrada"],
+  }
 }
 
 function extractCompatibilityTags(product: any): string[] {
@@ -246,21 +400,16 @@ function mapProductToOption(product: any): QuoteOption {
   else if (lowered.includes("case") || lowered.includes("gabinete") || lowered.includes("chasis")) componentType = "case"
   else if (lowered.includes("fuente") || lowered.includes("power supply") || lowered.includes("psu")) componentType = "psu"
   else if (lowered.includes("teclado") || lowered.includes("mouse") || lowered.includes("audifono")) componentType = "peripheral"
+  const specData = buildProductSpecs(product)
   return {
     id: `product-${product.id}`,
     name: String(product.name ?? "Producto"),
+    categoryName: product?.category?.name ? String(product.category.name) : undefined,
     price: getProductPrice(product),
+    costPrice: getProductCost(product),
     image: getProductImage(product),
-    specs: [
-      product?.brand?.name ? `Marca: ${product.brand.name}` : "Marca no registrada",
-      product?.model ? `Modelo: ${product.model}` : "Modelo no registrado",
-      product?.specification?.processor
-        ? `CPU: ${product.specification.processor}`
-        : product?.specification?.ram
-          ? `RAM: ${product.specification.ram}`
-          : "Especificación no registrada",
-      product?.category?.name ? `Categoría: ${product.category.name}` : "Categoría general",
-    ],
+    specs: specData.details,
+    description: specData.description,
     compatibility: compatibility.length ? compatibility : undefined,
     stock: getProductStock(product),
     componentType,
@@ -272,19 +421,34 @@ function splitByCategory(products: any[]) {
   const hardwareSections: Record<string, QuoteSection> = {}
   const laptopItems: QuoteOption[] = []
 
+  const toSectionId = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+
+  const ensureSection = (
+    target: Record<string, QuoteSection>,
+    sectionId: string,
+    sectionTitle: string,
+  ) => {
+    if (!target[sectionId]) {
+      target[sectionId] = {
+        id: sectionId,
+        title: sectionTitle,
+        description: "Selecciona opciones disponibles del inventario.",
+        options: [],
+      }
+    }
+    return target[sectionId]
+  }
+
   products.forEach((product) => {
     const name = String(product?.name ?? "")
     const categoryName = String(product?.category?.name ?? "")
     const combined = `${name} ${categoryName}`.toLowerCase()
     const isLaptop = combined.includes("laptop") || combined.includes("notebook") || combined.includes("portatil")
-    const isPeripheral =
-      combined.includes("teclado") ||
-      combined.includes("mouse") ||
-      combined.includes("audifono") ||
-      combined.includes("headset") ||
-      combined.includes("monitor") ||
-      combined.includes("mousepad")
-
     const option = mapProductToOption(product)
 
     if (isLaptop) {
@@ -292,18 +456,12 @@ function splitByCategory(products: any[]) {
       return
     }
 
-    const targetSections = isPeripheral ? hardwareSections : pcSections
-    const { id, label } = inferSection(combined)
+    const { id: pcId, label: pcLabel } = inferSection(combined)
+    ensureSection(pcSections, pcId, pcLabel).options.push(option)
 
-    if (!targetSections[id]) {
-      targetSections[id] = {
-        id,
-        title: label,
-        description: "Selecciona opciones disponibles del inventario.",
-        options: [],
-      }
-    }
-    targetSections[id].options.push(option)
+    const hardwareLabel = categoryName.trim() || "Otros componentes"
+    const hardwareId = `hw-${toSectionId(hardwareLabel) || "otros"}`
+    ensureSection(hardwareSections, hardwareId, hardwareLabel).options.push(option)
   })
 
   const pc = Object.values(pcSections)
@@ -376,6 +534,8 @@ export async function getQuoteClients(): Promise<QuoteClient[]> {
     email: client.email ?? undefined,
     phone: client.phone ?? undefined,
     document: client.typeNumber ?? undefined,
+    documentType: client.type ?? undefined,
+    documentNumber: client.typeNumber ?? undefined,
   }))
 }
 
@@ -403,10 +563,115 @@ export async function sendQuoteWhatsApp(params: {
   }
 }
 
+export async function createQuoteDraft(payload: QuoteDraftPayload) {
+  const res = await authFetch(`/quotes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    const message = typeof data?.message === "string" ? data.message : "No se pudo guardar la cotización."
+    throw new Error(message)
+  }
+  return (await res.json()) as QuoteDetail
+}
+
+export async function updateQuoteDraft(id: number, payload: Partial<QuoteDraftPayload>) {
+  const res = await authFetch(`/quotes/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    const message = typeof data?.message === "string" ? data.message : "No se pudo actualizar la cotización."
+    throw new Error(message)
+  }
+  return (await res.json()) as QuoteDetail
+}
+
+export async function issueQuote(
+  id: number,
+  options?: {
+    stockValidationMode?: "STORE" | "GLOBAL" | "NONE"
+    storeId?: number | null
+  },
+) {
+  const res = await authFetch(`/quotes/${id}/issue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      stockValidationMode: options?.stockValidationMode ?? "NONE",
+      storeId: typeof options?.storeId === "number" ? options.storeId : null,
+    }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    const message = typeof data?.message === "string" ? data.message : "No se pudo emitir la cotización."
+    throw new Error(message)
+  }
+  return (await res.json()) as QuoteDetail
+}
+
+export async function cancelQuote(id: number) {
+  const res = await authFetch(`/quotes/${id}/cancel`, {
+    method: "POST",
+  })
+  if (!res.ok) {
+    throw new Error("No se pudo cancelar la cotización.")
+  }
+  return (await res.json()) as QuoteDetail
+}
+
+export async function getQuoteById(id: number) {
+  const res = await authFetch(`/quotes/${id}`, { cache: "no-store" })
+  if (!res.ok) {
+    throw new Error("No se pudo cargar la cotización.")
+  }
+  return (await res.json()) as QuoteDetail
+}
+
 export async function getDefaultQuoteStoreId(): Promise<number | null> {
   const selection = await getTenantSelection()
   return selection?.companyId ?? null
 }
+
+export type BankAccount = {
+  bankName: string
+  accountHolderName: string
+  accountNumber: string
+  cci?: string
+}
+
+export async function getBankAccounts(companyId: number): Promise<BankAccount[]> {
+  const res = await authFetch(`/companies/${companyId}/bank-accounts`, { cache: "no-store" })
+  if (!res.ok) return []
+  const data = await res.json()
+  return Array.isArray(data?.bankAccounts) ? data.bankAccounts : []
+}
+
+export async function saveBankAccounts(companyId: number, bankAccounts: BankAccount[]): Promise<BankAccount[]> {
+  const res = await authFetch(`/companies/${companyId}/bank-accounts`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bankAccounts }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(typeof data?.message === "string" ? data.message : "No se pudieron guardar las cuentas bancarias.")
+  }
+  const data = await res.json()
+  return Array.isArray(data?.bankAccounts) ? data.bankAccounts : bankAccounts
+}
+
+
 
 
 

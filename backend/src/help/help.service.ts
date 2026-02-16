@@ -162,8 +162,18 @@ export class HelpService {
     return conversation;
   }
 
-  /** Load full conversation history */
-  async getConversation(userId: number): Promise<ConversationMessage[]> {
+  /**
+   * Load conversation history with pagination
+   * MEDIUM-TERM OPTIMIZATION #2: Support for limit/offset
+   * - Orders DESC (newest first)
+   * - Frontend reverses for display (oldest at top)
+   * - "Load more" prepends older messages
+   */
+  async getConversation(
+    userId: number,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<ConversationMessage[]> {
     const conversation = await this.prisma.helpConversation.findFirst({
       where: { userId },
       orderBy: { lastMessageAt: 'desc' },
@@ -173,7 +183,9 @@ export class HelpService {
 
     const messages = await this.prisma.helpMessage.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' }, // Newest first for pagination
+      skip: offset,
+      take: limit,
       select: {
         id: true,
         role: true,
@@ -185,6 +197,7 @@ export class HelpService {
       },
     });
 
+    // Return in descending order (frontend will reverse if needed)
     return messages;
   }
 
@@ -192,21 +205,23 @@ export class HelpService {
   async ask(params: AskParams): Promise<AskResult> {
     const conversation = await this.getOrCreateConversation(params.userId);
 
-    // Persist user message
-    await this.prisma.helpMessage.create({
-      data: {
-        conversationId: conversation.id,
-        role: 'USER',
-        content: params.question,
-        section: params.section,
-        route: params.route,
-      },
-    });
-
-    await this.prisma.helpConversation.update({
-      where: { id: conversation.id },
-      data: { lastMessageAt: new Date() },
-    });
+    // 🚀 OPTIMIZACIÓN: Batch DB writes - crear mensaje + update conversación en una transacción
+    // Reduce de 2 roundtrips a 1 (50% reducción)
+    await this.prisma.$transaction([
+      this.prisma.helpMessage.create({
+        data: {
+          conversationId: conversation.id,
+          role: 'USER',
+          content: params.question,
+          section: params.section,
+          route: params.route,
+        },
+      }),
+      this.prisma.helpConversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: new Date() },
+      }),
+    ]);
 
     // 1. Semantic search via embeddings (if available)
     let bestEmbeddingResult: { answer: string; sourceType: string; sourceId: string; similarity: number } | null = null;
@@ -674,4 +689,391 @@ Reglas:
       );
     }
   }
+
+  // ========== ADAPTIVE LEARNING METHODS ==========
+
+  async recordLearningSession(session: {
+    query: string;
+    normalizedQuery: string;
+    matchFound: boolean;
+    matchScore?: number;
+    matchedEntryId?: string;
+    userFeedback?: 'POSITIVE' | 'NEGATIVE';
+    section: string;
+    userId: number;
+    timestamp: number;
+    // 🆕 ENHANCED TRACKING FIELDS
+    source?: 'static' | 'ai' | 'promoted' | 'offline';
+    responseTimeMs?: number;
+    isMetaQuestion?: boolean;
+    isInvalidQuery?: boolean;
+    hasSteps?: boolean;
+    userType?: 'beginner' | 'intermediate' | 'advanced';
+    urgency?: 'normal' | 'high' | 'critical';
+    isContextual?: boolean;
+  }): Promise<void> {
+    this.logger.log(
+      `Learning session: query="${session.query}", matchFound=${session.matchFound}, score=${session.matchScore}, source=${session.source}`,
+    );
+
+    await this.prisma.helpLearningSession.create({
+      data: {
+        userId: session.userId,
+        query: session.query,
+        queryNorm: session.normalizedQuery,
+        section: session.section,
+        matchFound: session.matchFound,
+        matchedFaqId: session.matchedEntryId,
+        confidence: session.matchScore,
+        wasHelpful: session.userFeedback === 'POSITIVE' ? true : session.userFeedback === 'NEGATIVE' ? false : null,
+        timestamp: new Date(session.timestamp),
+        // 🆕 ENHANCED FIELDS
+        source: session.source,
+        responseTimeMs: session.responseTimeMs,
+        isMetaQuestion: session.isMetaQuestion ?? false,
+        isInvalidQuery: session.isInvalidQuery ?? false,
+        hasSteps: session.hasSteps ?? false,
+        userType: session.userType,
+        urgency: session.urgency,
+        isContextual: session.isContextual ?? false,
+      },
+    });
+  }
+
+  async getLearningSessions(limit: number = 500): Promise<any[]> {
+    return this.prisma.helpLearningSession.findMany({
+      take: limit,
+      orderBy: { timestamp: 'desc' },
+      select: {
+        id: true,
+        userId: true,
+        query: true,
+        queryNorm: true,
+        section: true,
+        matchFound: true,
+        matchedFaqId: true,
+        confidence: true,
+        wasHelpful: true,
+        timestamp: true,
+        // 🆕 ENHANCED FIELDS
+        source: true,
+        responseTimeMs: true,
+        isMetaQuestion: true,
+        isInvalidQuery: true,
+        hasSteps: true,
+        userType: true,
+        urgency: true,
+        isContextual: true,
+      },
+    });
+  }
+
+  async generateLearningInsights(): Promise<{
+    totalSessions: number;
+    failureRate: number;
+    topFailedQueries: Array<{ query: string; count: number }>;
+    suggestedImprovements: number;
+    autoApprovedCount: number;
+    pendingReviewCount: number;
+    learningVelocity: number;
+  }> {
+    // Total de sesiones
+    const totalSessions = await this.prisma.helpLearningSession.count();
+
+    // Sesiones fallidas
+    const failedSessions = await this.prisma.helpLearningSession.count({
+      where: { matchFound: false },
+    });
+
+    const failureRate = totalSessions > 0 ? failedSessions / totalSessions : 0;
+
+    // Top queries fallidas (agrupar por queryNorm)
+    const failedQueries = await this.prisma.helpLearningSession.groupBy({
+      by: ['queryNorm'],
+      where: { matchFound: false },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 10,
+    });
+
+    const topFailedQueries = failedQueries.map((item) => ({
+      query: item.queryNorm,
+      count: item._count.id,
+    }));
+
+    // Candidatos aprobados y pendientes
+    const autoApprovedCount = await this.prisma.helpKBCandidate.count({
+      where: { status: 'APPROVED' },
+    });
+
+    const pendingReviewCount = await this.prisma.helpKBCandidate.count({
+      where: { status: 'PENDING' },
+    });
+
+    // Learning velocity: nuevos candidatos en últimas 24 horas
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const learningVelocity = await this.prisma.helpKBCandidate.count({
+      where: {
+        createdAt: { gte: yesterday },
+      },
+    });
+
+    return {
+      totalSessions,
+      failureRate,
+      topFailedQueries,
+      suggestedImprovements: pendingReviewCount, // Pendientes son sugerencias
+      autoApprovedCount,
+      pendingReviewCount,
+      learningVelocity,
+    };
+  }
+
+  async getLearningSuggestions(): Promise<{
+    suggestedAliases: any[];
+    suggestedEntries: any[];
+  }> {
+    // Obtener candidatos pendientes de aprobación
+    const pendingCandidates = await this.prisma.helpKBCandidate.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        question: true,
+        questionNorm: true,
+        answer: true,
+        section: true,
+        positiveVotes: true,
+        negativeVotes: true,
+        createdAt: true,
+      },
+    });
+
+    // Obtener sinónimos aprendidos automáticamente
+    const learnedSynonyms = await this.prisma.helpSynonymRule.findMany({
+      where: { autoLearned: true },
+      orderBy: { confidence: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        canonical: true,
+        synonym: true,
+        section: true,
+        confidence: true,
+        autoLearned: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      suggestedAliases: learnedSynonyms,
+      suggestedEntries: pendingCandidates,
+    };
+  }
+
+  async approveAlias(entryId: string, alias: string, adminId: number): Promise<void> {
+    this.logger.log(`Alias approved: entryId=${entryId}, alias="${alias}", by admin=${adminId}`);
+    // TODO: Agregar alias a entrada existente en KB
+    // await this.prisma.helpKBEntry.update({
+    //   where: { id: entryId },
+    //   data: {
+    //     aliases: { push: alias }
+    //   }
+    // });
+  }
+
+  async rejectAlias(aliasId: number, adminId: number): Promise<void> {
+    this.logger.log(`Alias rejected: id=${aliasId}, by admin=${adminId}`);
+    // TODO: Marcar alias como rechazado
+    // await this.prisma.suggestedAlias.update({
+    //   where: { id: aliasId },
+    //   data: { status: 'REJECTED', reviewedBy: adminId }
+    // });
+  }
+
+  async approveNewEntry(
+    question: string,
+    answer: string,
+    section: string,
+    adminId: number,
+    relatedEntries?: string[],
+  ): Promise<any> {
+    this.logger.log(`New entry approved: question="${question}", section=${section}, by admin=${adminId}`);
+
+    // Crear nueva entrada en HelpKBCandidate y marcarla como aprobada
+    const questionNorm = this.normalizeQuestion(question);
+    const candidate = await this.prisma.helpKBCandidate.create({
+      data: {
+        question,
+        questionNorm,
+        answer,
+        section,
+        status: 'APPROVED',
+        approvedById: adminId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    // Generar embedding
+    this.embeddingService.onCandidateApproved({
+      id: candidate.id,
+      question: candidate.question,
+      answer: candidate.answer,
+      section: candidate.section,
+    }).catch((err) =>
+      this.logger.warn(
+        `Failed to generate embedding for new entry ${candidate.id}: ${err instanceof Error ? err.message : err}`,
+      ),
+    );
+
+    return candidate;
+  }
+
+  async rejectEntry(entryId: number, adminId: number): Promise<void> {
+    this.logger.log(`Entry suggestion rejected: id=${entryId}, by admin=${adminId}`);
+    // TODO: Marcar entrada sugerida como rechazada
+    // await this.prisma.suggestedEntry.update({
+    //   where: { id: entryId },
+    //   data: { status: 'REJECTED', reviewedBy: adminId }
+    // });
+  }
+
+  async analyzePatterns(): Promise<void> {
+    this.logger.log('Analyzing patterns manually triggered');
+
+    // 1. Obtener queries fallidas recientes (últimas 7 días)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const failedSessions = await this.prisma.helpLearningSession.findMany({
+      where: {
+        matchFound: false,
+        timestamp: { gte: sevenDaysAgo },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    // 2. Agrupar queries similares por queryNorm
+    const queryGroups = new Map<string, number>();
+    failedSessions.forEach((session) => {
+      const count = queryGroups.get(session.queryNorm) || 0;
+      queryGroups.set(session.queryNorm, count + 1);
+    });
+
+    // 3. Crear candidatos para queries frecuentes (>=3 ocurrencias)
+    const MIN_FREQUENCY = 3;
+    const candidates: Array<{ query: string; count: number }> = [];
+
+    for (const [query, count] of queryGroups.entries()) {
+      if (count >= MIN_FREQUENCY) {
+        // Verificar si ya existe un candidato para esta query
+        const existing = await this.prisma.helpKBCandidate.findFirst({
+          where: { questionNorm: query },
+        });
+
+        if (!existing) {
+          candidates.push({ query, count });
+        }
+      }
+    }
+
+    this.logger.log(`Pattern analysis complete: ${candidates.length} new patterns identified`);
+
+    // 4. Los candidatos se crearán automáticamente o manualmente por admin
+    // Por ahora solo reportamos las sugerencias
+  }
+
+  async exportLearningData(): Promise<any> {
+    const [sessions, synonymRules, candidates] = await Promise.all([
+      this.prisma.helpLearningSession.findMany({
+        orderBy: { timestamp: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.helpSynonymRule.findMany({
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.helpKBCandidate.findMany({
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      sessions,
+      suggestedAliases: synonymRules,
+      suggestedEntries: candidates.filter((c) => c.status === 'PENDING'),
+      promotedAnswers: candidates.filter((c) => c.status === 'APPROVED'),
+      exportedAt: new Date().toISOString(),
+    };
+  }
+
+  async promoteAnswer(
+    entryId: string,
+    originalAnswer: string,
+    feedback: 'POSITIVE' | 'NEGATIVE',
+    userId: number,
+  ): Promise<void> {
+    this.logger.log(`Answer feedback: entryId=${entryId}, feedback=${feedback}, user=${userId}`);
+
+    // Buscar candidato por ID numérico
+    const candidateId = parseInt(entryId, 10);
+    if (isNaN(candidateId)) {
+      this.logger.warn(`Invalid candidate ID: ${entryId}`);
+      return;
+    }
+
+    const candidate = await this.prisma.helpKBCandidate.findUnique({
+      where: { id: candidateId },
+    });
+
+    if (!candidate) {
+      this.logger.warn(`Candidate not found: ${candidateId}`);
+      return;
+    }
+
+    // Actualizar votos
+    await this.prisma.helpKBCandidate.update({
+      where: { id: candidateId },
+      data: {
+        positiveVotes: feedback === 'POSITIVE' ? { increment: 1 } : undefined,
+        negativeVotes: feedback === 'NEGATIVE' ? { increment: 1 } : undefined,
+      },
+    });
+
+    // Si alcanza suficientes votos positivos, aprobar automáticamente
+    const AUTO_APPROVE_THRESHOLD = 5;
+    if (feedback === 'POSITIVE' && candidate.positiveVotes + 1 >= AUTO_APPROVE_THRESHOLD && candidate.status === 'PENDING') {
+      await this.prisma.helpKBCandidate.update({
+        where: { id: candidateId },
+        data: {
+          status: 'APPROVED',
+          reviewedAt: new Date(),
+        },
+      });
+      this.logger.log(`Candidate ${candidateId} auto-approved after ${AUTO_APPROVE_THRESHOLD} positive votes`);
+    }
+  }
+
+  async getPromotedAnswers(): Promise<any[]> {
+    // Retornar candidatos aprobados con alta confianza (positiveVotes >= 3)
+    return this.prisma.helpKBCandidate.findMany({
+      where: {
+        status: 'APPROVED',
+        positiveVotes: { gte: 3 },
+      },
+      orderBy: { positiveVotes: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        question: true,
+        questionNorm: true,
+        answer: true,
+        section: true,
+        positiveVotes: true,
+        negativeVotes: true,
+        createdAt: true,
+        reviewedAt: true,
+      },
+    });
+  }
+
+  // ========== END ADAPTIVE LEARNING METHODS ==========
 }

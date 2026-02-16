@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
+import { subscribeToNewsletter } from './newsletter.api';
 
 const schema = z.object({
   email: z.string().email('Ingresa un correo electrónico válido'),
@@ -22,12 +23,7 @@ export default function NewsletterSection() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      const res = await fetch('/api/newsletter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-      if (!res.ok) throw new Error('Failed');
+      await subscribeToNewsletter(values.email);
       toast.success('Suscripción exitosa');
       reset();
     } catch (err) {

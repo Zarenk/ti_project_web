@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { getProviders } from "@/app/dashboard/providers/providers.api"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000"
+import { BACKEND_URL } from "@/lib/utils"
 
 interface CreateTemplateDialogProps {
   organizationId?: number | null;

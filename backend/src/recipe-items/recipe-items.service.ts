@@ -1,13 +1,32 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import { buildOrganizationFilter, resolveCompanyId } from 'src/tenancy/organization.utils';
 import { CreateRecipeItemDto } from './dto/create-recipe-item.dto';
 import { UpdateRecipeItemDto } from './dto/update-recipe-item.dto';
 
 @Injectable()
 export class RecipeItemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
+  ) {}
+
+  private async ensureProductionFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.production === false) {
+      throw new ForbiddenException(
+        'El modulo de produccion/recetas no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   async create(
     dto: CreateRecipeItemDto,
@@ -38,6 +57,9 @@ export class RecipeItemsService {
       );
     }
 
+    // Validate production feature is enabled
+    await this.ensureProductionFeatureEnabled(resolvedCompanyId);
+
     return this.prisma.recipeItem.create({
       data: {
         productId: dto.productId,
@@ -50,10 +72,13 @@ export class RecipeItemsService {
     });
   }
 
-  findAll(
+  async findAll(
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
   ) {
+    // Validate production feature is enabled
+    await this.ensureProductionFeatureEnabled(companyIdFromContext);
+
     const where = buildOrganizationFilter(
       organizationIdFromContext,
       companyIdFromContext,
@@ -70,6 +95,9 @@ export class RecipeItemsService {
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
   ) {
+    // Validate production feature is enabled
+    await this.ensureProductionFeatureEnabled(companyIdFromContext);
+
     const where = {
       id,
       ...buildOrganizationFilter(
@@ -91,6 +119,9 @@ export class RecipeItemsService {
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
   ) {
+    // Validate production feature is enabled (also called in findOne below)
+    await this.ensureProductionFeatureEnabled(companyIdFromContext);
+
     await this.findOne(id, organizationIdFromContext, companyIdFromContext);
     return this.prisma.recipeItem.update({
       where: { id },

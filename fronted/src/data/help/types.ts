@@ -41,4 +41,6 @@ export interface ChatMessage {
   /** FASE 3: Indicates if this message used conversation context */
   isContextual?: boolean
   previousTopic?: string
+  /** Indicates if this is a system message (section change, separator, etc.) */
+  isSystemMessage?: boolean
 }

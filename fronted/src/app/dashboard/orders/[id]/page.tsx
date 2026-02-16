@@ -12,6 +12,7 @@ import {
   Calendar,
   Clipboard,
   FileText,
+  Loader2,
   MapPin,
   Package,
   Receipt,
@@ -110,6 +111,8 @@ export default function OrderDetailPage() {
 
   const [openComplete, setOpenComplete] = useState(false);
   const [openReject, setOpenReject] = useState(false);
+  const [completingOrder, setCompletingOrder] = useState(false);
+  const [rejectingOrder, setRejectingOrder] = useState(false);
 
   const [seriesDialogOpen, setSeriesDialogOpen] = useState(false);
   const [availableSeries, setAvailableSeries] = useState<string[]>([]);
@@ -1048,9 +1051,11 @@ export default function OrderDetailPage() {
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogCancel disabled={completingOrder}>Cancelar</AlertDialogCancel>
                       <AlertDialogAction
+                        disabled={completingOrder}
                         onClick={async () => {
+                          setCompletingOrder(true);
                           try {
                             // Validar que todos los productos con series disponibles tengan la cantidad correcta seleccionada
                             for (const prod of products) {
@@ -1197,11 +1202,12 @@ export default function OrderDetailPage() {
                             console.error(e);
                             toast.error(e?.message || "Error al completar la orden");
                           } finally {
+                            setCompletingOrder(false);
                             setOpenComplete(false);
                           }
                         }}
                       >
-                        Confirmar
+                        {completingOrder ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Procesando...</> : "Confirmar"}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1215,9 +1221,11 @@ export default function OrderDetailPage() {
                       <AlertDialogDescription>Marca la orden como denegada por falta de información.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogCancel disabled={rejectingOrder}>Cancelar</AlertDialogCancel>
                       <AlertDialogAction
+                        disabled={rejectingOrder}
                         onClick={async () => {
+                          setRejectingOrder(true);
                           try {
                             await rejectWebOrder(order.id);
                             toast.success("Orden denegada");
@@ -1225,11 +1233,12 @@ export default function OrderDetailPage() {
                           } catch {
                             toast.error("Error al denegar la orden");
                           } finally {
+                            setRejectingOrder(false);
                             setOpenReject(false);
                           }
                         }}
                       >
-                        Confirmar
+                        {rejectingOrder ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Procesando...</> : "Confirmar"}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

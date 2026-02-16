@@ -11,9 +11,9 @@ import {
   getBrands,
   updateBrand,
   deleteBrand,
-  BACKEND_URL,
   convertBrandPngToSvg,
 } from './brands.api';
+import { BACKEND_URL } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';

@@ -176,7 +176,7 @@ const data: SidebarData = {
       icon: Bot,
       permission: "settings",
       items: [
-        { title: "Historial de Modificaciones", 
+        { title: "Historial de Modificaciones",
           url: "/dashboard/history",
           permission: "settings",
         },
@@ -189,6 +189,17 @@ const data: SidebarData = {
           title: "Ver Usuarios",
           url: "/dashboard/users",
           permission: "settings",
+        },
+        {
+          title: "Ver Clientes",
+          url: "/dashboard/clients",
+          permission: "settings",
+        },
+        {
+          title: "Sesiones Activas",
+          url: "/dashboard/users/sessions",
+          permission: "settings",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG"],
         },
         {
           title: "Super usuarios",
@@ -250,12 +261,7 @@ const data: SidebarData = {
       permission: "accounting",
       items: [
         {
-          title: "Nuevo Tipo de Cambio",
-          url: "/dashboard/exchange/new",
-          permission: "accounting",
-        },
-        {
-          title: "Ver Tipo de Cambio",
+          title: "Tipo de Cambio",
           url: "/dashboard/exchange",
           permission: "accounting",
         },
@@ -334,6 +340,11 @@ const data: SidebarData = {
       name: "Escaner QR",
       url: "/barcode",
       icon: QrCode,
+    },
+    {
+      name: "Ayuda Chatbot",
+      url: "#chatbot",
+      icon: Bot,
     },
     {
       name: "Login",
@@ -550,6 +561,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: PieChart,
         permission: "accounting" as const,
         items: [
+          { title: "General", url: "/dashboard/accounting", permission: "accounting" as const },
           { title: "Plan de Cuentas", url: "/dashboard/accounting/chart", permission: "accounting" as const },
           { title: "Diarios", url: "/dashboard/accounting/journals", permission: "accounting" as const },
           { title: "Asientos", url: "/dashboard/accounting/entries", permission: "accounting" as const },

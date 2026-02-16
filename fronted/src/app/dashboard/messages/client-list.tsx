@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo, Dispatch, SetStateAction } from 'react';
+import Image from 'next/image';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,12 +9,24 @@ import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Filter, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface ChatClient {
+  userId: number;
+  name?: string | null;
+  image?: string | null;
+}
+
+interface ChatPreviewMessage {
+  text?: string | null;
+  file?: string | null;
+  createdAt?: string | null;
+}
+
 interface Props {
-  clients: any[];
+  clients: ChatClient[];
   selected: number | null;
   setSelected: (id: number) => void;
-  displayName: (c: any) => string;
-  lastMessages: Record<number, any>;
+  displayName: (c: ChatClient) => string;
+  lastMessages: Record<number, ChatPreviewMessage | null>;
   pendingCounts: Record<number, number>;
   search: string;
   setSearch: Dispatch<SetStateAction<string>>;
@@ -40,13 +53,11 @@ function ClientListComponent({
   const filteredClients = useMemo(
     () =>
       clients
-        .filter((c: any) =>
+        .filter((c) =>
           displayName(c).toLowerCase().includes(search.toLowerCase()),
         )
-        .filter(
-          (c: any) => !showPendingOnly || (pendingCounts[c.userId] ?? 0) > 0,
-        )
-        .sort((a: any, b: any) =>
+        .filter((c) => !showPendingOnly || (pendingCounts[c.userId] ?? 0) > 0)
+        .sort((a, b) =>
           sortByName
             ? displayName(a).localeCompare(displayName(b))
             : new Date(lastMessages[b.userId]?.createdAt ?? 0).getTime() -
@@ -96,7 +107,7 @@ function ClientListComponent({
         />
       </div>
       <ul className="flex-1 overflow-y-auto divide-y">
-        {filteredClients.map((c: any) => (
+        {filteredClients.map((c) => (
           <li key={c.userId}>
             <button
               onClick={() => setSelected(c.userId)}
@@ -107,10 +118,13 @@ function ClientListComponent({
             >
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <img
+                  <Image
                     src={c.image || '/placeholder.svg'}
                     alt={displayName(c)}
-                    className="w-10 h-10 rounded-full object-cover"
+                    width={40}
+                    height={40}
+                    unoptimized
+                    className="h-10 w-10 rounded-full object-cover"
                   />
                   <div className="flex flex-col text-left">
                     <span className="font-medium">{displayName(c)}</span>

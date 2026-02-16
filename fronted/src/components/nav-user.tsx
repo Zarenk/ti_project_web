@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/context/auth-context"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 export function NavUser({
   user,
@@ -44,6 +45,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { logoutAndRedirect, role } = useAuth()
+  const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
   const isGlobalSuperAdmin = role === "SUPER_ADMIN_GLOBAL"
 

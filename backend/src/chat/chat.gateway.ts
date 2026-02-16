@@ -7,7 +7,12 @@ import {
   OnGatewayDisconnect,
   ConnectedSocket,
 } from '@nestjs/websockets';
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Logger,
+  UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { Request } from 'express';
@@ -309,6 +314,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('chat:error', { message: 'Cliente inválido.' });
         return;
       }
+
+      // 🔒 Validar ownership antes de acceder al historial
+      const clientRecord = await this.prisma.client.findUnique({
+        where: { userId: clientId },
+        select: { id: true, organizationId: true, companyId: true },
+      });
+
+      if (!clientRecord) {
+        throw new NotFoundException('Cliente no encontrado.');
+      }
+
+      const allowedOrgIds = new Set([
+        context.organizationId,
+        ...context.allowedOrganizationIds,
+      ]);
+
+      if (
+        allowedOrgIds.size > 0 &&
+        !allowedOrgIds.has(clientRecord.organizationId)
+      ) {
+        throw new ForbiddenException('No autorizado para este cliente.');
+      }
+
       const tenant = this.buildTenantContextFromSocket(context);
       const history = await this.chatService.getMessages(clientId, tenant);
       await client.join(
@@ -369,6 +397,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('chat:error', { message: 'Cliente inválido.' });
         return;
       }
+
+      // 🔒 Validar que clientId pertenece a la organización del usuario (prevenir IDOR)
+      const clientRecord = await this.prisma.client.findUnique({
+        where: { userId: resolvedClientId },
+        select: { id: true, organizationId: true, companyId: true },
+      });
+
+      if (!clientRecord) {
+        throw new NotFoundException('Cliente no encontrado.');
+      }
+
+      const allowedOrgIds = new Set([
+        context.organizationId,
+        ...context.allowedOrganizationIds,
+      ]);
+
+      if (
+        allowedOrgIds.size > 0 &&
+        !allowedOrgIds.has(clientRecord.organizationId)
+      ) {
+        throw new ForbiddenException('No autorizado para este cliente.');
+      }
+
       const tenant = this.buildTenantContextFromSocket(context);
       const message = await this.chatService.addMessage(
         {
@@ -475,6 +526,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.emit('chat:error', { message: 'Cliente inválido.' });
         return;
       }
+
+      // 🔒 Validar ownership antes de marcar como visto
+      const clientRecord = await this.prisma.client.findUnique({
+        where: { userId: clientId },
+        select: { id: true, organizationId: true, companyId: true },
+      });
+
+      if (!clientRecord) {
+        throw new NotFoundException('Cliente no encontrado.');
+      }
+
+      const allowedOrgIds = new Set([
+        context.organizationId,
+        ...context.allowedOrganizationIds,
+      ]);
+
+      if (
+        allowedOrgIds.size > 0 &&
+        !allowedOrgIds.has(clientRecord.organizationId)
+      ) {
+        throw new ForbiddenException('No autorizado para este cliente.');
+      }
+
       const seenAt = new Date();
       await this.chatService.markAsSeen(
         clientId,

@@ -2,15 +2,19 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
+  Header,
   NotFoundException,
   Param,
   ParseIntPipe,
   Post,
   Put,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -27,6 +31,7 @@ import { UpdateBusinessVerticalDto } from './dto/update-business-vertical.dto';
 import { SetProductSchemaEnforcedDto } from './dto/set-product-schema-enforced.dto';
 import { BusinessVertical } from 'src/types/business-vertical.enum';
 import { VerticalMigrationService } from './vertical-migration.service';
+import { VerticalNotificationsService } from './vertical-notifications.service';
 
 const ALLOWED_VERTICALS = new Set<BusinessVertical>([
   BusinessVertical.GENERAL,
@@ -39,6 +44,9 @@ const ALLOWED_VERTICALS = new Set<BusinessVertical>([
 @UseGuards(JwtAuthGuard, TenantContextGuard)
 export class CompanyVerticalController {
   private readonly compatibilityThrottle = new Map<number, number>();
+  private readonly csvExportThrottle = new Map<number, number[]>();
+  private readonly CSV_EXPORT_LIMIT = 10; // Max exports per hour
+  private readonly CSV_EXPORT_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
 
   constructor(
     private readonly prisma: PrismaService,
@@ -46,7 +54,48 @@ export class CompanyVerticalController {
     private readonly verticalConfigService: VerticalConfigService,
     private readonly compatibilityService: VerticalCompatibilityService,
     private readonly migrationService: VerticalMigrationService,
+    private readonly notificationsService: VerticalNotificationsService,
   ) {}
+
+  /**
+   * Check if user has exceeded CSV export rate limit
+   * Throws ForbiddenException if limit exceeded
+   */
+  private checkCsvExportRateLimit(userId: number): void {
+    const now = Date.now();
+    const userExports = this.csvExportThrottle.get(userId) || [];
+
+    // Remove exports outside the time window
+    const recentExports = userExports.filter(
+      (timestamp) => now - timestamp < this.CSV_EXPORT_WINDOW,
+    );
+
+    if (recentExports.length >= this.CSV_EXPORT_LIMIT) {
+      const oldestExport = Math.min(...recentExports);
+      const resetTime = new Date(oldestExport + this.CSV_EXPORT_WINDOW);
+      throw new ForbiddenException(
+        `Límite de exportaciones excedido. Has alcanzado el máximo de ${this.CSV_EXPORT_LIMIT} exportaciones por hora. Intenta nuevamente después de ${resetTime.toLocaleTimeString('es-PE')}.`,
+      );
+    }
+
+    // Add current export and update map
+    recentExports.push(now);
+    this.csvExportThrottle.set(userId, recentExports);
+
+    // Cleanup old entries (optional optimization)
+    if (this.csvExportThrottle.size > 1000) {
+      for (const [uid, exports] of this.csvExportThrottle.entries()) {
+        const validExports = exports.filter(
+          (timestamp) => now - timestamp < this.CSV_EXPORT_WINDOW,
+        );
+        if (validExports.length === 0) {
+          this.csvExportThrottle.delete(uid);
+        } else {
+          this.csvExportThrottle.set(uid, validExports);
+        }
+      }
+    }
+  }
 
   private ensurePermissionForCompany(
     companyId: number,
@@ -323,6 +372,79 @@ export class CompanyVerticalController {
     };
   }
 
+  /**
+   * GET /companies/:id/vertical/override
+   * Fetch the current vertical configuration override for a company
+   */
+  @Get(':id/vertical/override')
+  async getVerticalOverride(@Param('id', ParseIntPipe) id: number) {
+    await this.getCompanyWithReadAccess(id);
+    const override = await this.prisma.companyVerticalOverride.findUnique({
+      where: { companyId: id },
+      select: { companyId: true, configJson: true },
+    });
+
+    if (!override) {
+      return {
+        companyId: id,
+        configJson: null,
+      };
+    }
+
+    return override;
+  }
+
+  /**
+   * PUT /companies/:id/vertical/override
+   * Create or update the vertical configuration override for a company
+   */
+  @Put(':id/vertical/override')
+  async updateVerticalOverride(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { configJson: Record<string, any> },
+  ) {
+    const company = await this.getCompanyOrThrow(id);
+
+    if (!body.configJson || typeof body.configJson !== 'object') {
+      throw new BadRequestException(
+        'configJson debe ser un objeto de configuracion valido.',
+      );
+    }
+
+    const override = await this.prisma.companyVerticalOverride.upsert({
+      where: { companyId: id },
+      update: { configJson: body.configJson },
+      create: { companyId: id, configJson: body.configJson },
+      select: { companyId: true, configJson: true },
+    });
+
+    // Invalidate cache to force reload with new override
+    this.verticalConfigService.invalidateCache(id, company.organizationId);
+
+    return override;
+  }
+
+  /**
+   * DELETE /companies/:id/vertical/override
+   * Remove the vertical configuration override for a company
+   */
+  @Delete(':id/vertical/override')
+  async deleteVerticalOverride(@Param('id', ParseIntPipe) id: number) {
+    const company = await this.getCompanyOrThrow(id);
+
+    await this.prisma.companyVerticalOverride.deleteMany({
+      where: { companyId: id },
+    });
+
+    // Invalidate cache to force reload without override
+    this.verticalConfigService.invalidateCache(id, company.organizationId);
+
+    return {
+      companyId: id,
+      deleted: true,
+    };
+  }
+
   private async getMigrationProgress(companyId: number) {
     const total = await this.prisma.product.count({
       where: { companyId },
@@ -340,5 +462,233 @@ export class CompanyVerticalController {
     const legacy = total - migrated;
     const percentage = total === 0 ? 100 : Math.round((migrated / total) * 100);
     return { total, migrated, legacy, percentage };
+  }
+
+  /**
+   * GET /companies/:id/vertical/history
+   * Fetch migration history for a specific company
+   */
+  @Get(':id/vertical/history')
+  async getVerticalHistory(@Param('id', ParseIntPipe) id: number) {
+    await this.getCompanyWithReadAccess(id);
+
+    const history = await this.prisma.companyVerticalChangeAudit.findMany({
+      where: { companyId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        oldVertical: true,
+        newVertical: true,
+        changeReason: true,
+        warningsJson: true,
+        success: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Get available rollback snapshot
+    const snapshot = await this.prisma.companyVerticalRollbackSnapshot.findFirst({
+      where: {
+        companyId: id,
+        expiresAt: { gte: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        snapshotData: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+    });
+
+    return {
+      companyId: id,
+      history,
+      rollbackAvailable: !!snapshot,
+      rollbackSnapshot: snapshot,
+      totalChanges: history.length,
+    };
+  }
+
+  /**
+   * GET /companies/:id/vertical/metrics
+   * Fetch detailed migration metrics for a specific company
+   */
+  @Get(':id/vertical/metrics')
+  async getVerticalMetrics(@Param('id', ParseIntPipe) id: number) {
+    const company = await this.getCompanyWithReadAccess(id);
+
+    // Migration progress
+    const progress = await this.getMigrationProgress(id);
+
+    // Recent history (last 10 changes)
+    const recentHistory = await this.prisma.companyVerticalChangeAudit.findMany({
+      where: { companyId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        oldVertical: true,
+        newVertical: true,
+        success: true,
+        createdAt: true,
+      },
+    });
+
+    // Count successes vs failures
+    const totalChanges = await this.prisma.companyVerticalChangeAudit.count({
+      where: { companyId: id },
+    });
+
+    const successfulChanges = await this.prisma.companyVerticalChangeAudit.count({
+      where: { companyId: id, success: true },
+    });
+
+    const failedChanges = totalChanges - successfulChanges;
+
+    // Check for rollback availability
+    const rollbackSnapshot = await this.prisma.companyVerticalRollbackSnapshot.findFirst({
+      where: {
+        companyId: id,
+        expiresAt: { gte: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      companyId: id,
+      currentVertical: company.businessVertical,
+      migration: progress,
+      statistics: {
+        totalChanges,
+        successfulChanges,
+        failedChanges,
+        successRate:
+          totalChanges > 0
+            ? Math.round((successfulChanges / totalChanges) * 100)
+            : 100,
+      },
+      recentHistory,
+      rollbackAvailable: !!rollbackSnapshot,
+      rollbackExpiresAt: rollbackSnapshot?.expiresAt,
+    };
+  }
+
+  /**
+   * GET /companies/:id/vertical/notifications
+   * Fetch recent vertical change notifications for a specific company
+   */
+  @Get(':id/vertical/notifications')
+  async getVerticalNotifications(@Param('id', ParseIntPipe) id: number) {
+    await this.getCompanyWithReadAccess(id);
+
+    const notifications =
+      await this.notificationsService.getRecentNotifications(id);
+
+    return {
+      companyId: id,
+      notifications,
+      total: notifications.length,
+    };
+  }
+
+  /**
+   * GET /companies/:id/vertical/history/export/csv
+   * Export vertical change history as CSV file
+   */
+  @Get(':id/vertical/history/export/csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="vertical-history.csv"')
+  async exportHistoryCSV(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    await this.getCompanyWithReadAccess(id);
+
+    // Rate limiting: max 10 CSV exports per hour per user
+    const context = this.tenantContextService.getContextWithFallback();
+    if (context.userId) {
+      this.checkCsvExportRateLimit(context.userId);
+    }
+
+    const history = await this.prisma.companyVerticalChangeAudit.findMany({
+      where: { companyId: id },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        oldVertical: true,
+        newVertical: true,
+        changeReason: true,
+        warningsJson: true,
+        success: true,
+        createdAt: true,
+        user: {
+          select: {
+            username: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Generate CSV content
+    const headers = [
+      'ID',
+      'Fecha',
+      'Usuario',
+      'Email Usuario',
+      'Vertical Anterior',
+      'Vertical Nuevo',
+      'Razón',
+      'Advertencias',
+      'Estado',
+    ];
+
+    const rows = history.map((entry) => {
+      const warnings = Array.isArray(entry.warningsJson)
+        ? entry.warningsJson.join('; ')
+        : '';
+
+      return [
+        entry.id,
+        new Date(entry.createdAt).toLocaleString('es-PE', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        }),
+        entry.user?.username || 'N/A',
+        entry.user?.email || 'N/A',
+        entry.oldVertical,
+        entry.newVertical,
+        entry.changeReason || '',
+        warnings,
+        entry.success ? 'Exitoso' : 'Fallido',
+      ];
+    });
+
+    // Escape CSV values
+    const escapeCSV = (value: any): string => {
+      const str = String(value ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const csvContent = [
+      headers.map(escapeCSV).join(','),
+      ...rows.map((row) => row.map(escapeCSV).join(',')),
+    ].join('\n');
+
+    // Add BOM for Excel compatibility with UTF-8
+    const bom = '\uFEFF';
+    res.send(bom + csvContent);
   }
 }

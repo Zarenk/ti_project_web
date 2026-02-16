@@ -100,6 +100,16 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         return "No pudimos restaurar tu contexto. Selecciona una organización manualmente."
     }
   }
+
+  const shouldSuppressRestoreToast = useCallback(() => {
+    if (typeof window === "undefined") return false
+    const key = "quotes:suppress-restore-toast-once"
+    const current = window.sessionStorage.getItem(key)
+    if (current !== "1") return false
+    window.sessionStorage.removeItem(key)
+    return true
+  }, [])
+
   const ensureDefaultSelection = useCallback(
     async (current: TenantSelection): Promise<TenantSelection> => {
       if (!userId) {
@@ -114,11 +124,13 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
           restoration.source &&
           restoration.source !== "session"
         ) {
-          const message =
-            restoration.source === "local"
-              ? "Restauramos tu contexto desde este dispositivo."
-              : "Sincronizamos tu contexto desde la nube."
-          toast.success(message)
+          if (!shouldSuppressRestoreToast()) {
+            const message =
+              restoration.source === "local"
+                ? "Restauramos tu contexto desde este dispositivo."
+                : "Sincronizamos tu contexto desde la nube."
+            toast.success(message)
+          }
           restoreToastShownRef.current = true
         }
         const resolved = restoration.selection
@@ -194,7 +206,7 @@ export function TenantSelectionProvider({ children }: { children: ReactNode }): 
         return current
       }
     },
-    [contextRestore, userId],
+    [contextRestore, shouldSuppressRestoreToast, userId],
   )
   const applySelection = useCallback((next: TenantSelection) => {
     setSelection((prev) => {

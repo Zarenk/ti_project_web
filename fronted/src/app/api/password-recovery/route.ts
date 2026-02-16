@@ -2,8 +2,7 @@
 
 import { NextResponse } from "next/server"
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "http://localhost:4000"
+import { BACKEND_URL } from "@/lib/utils"
 
 type PasswordRecoveryRequestBody = {
   email: string

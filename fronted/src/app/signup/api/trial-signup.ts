@@ -1,3 +1,5 @@
+import { BACKEND_URL } from "@/lib/utils";
+
 export type TrialSignupPayload = {
   fullName: string;
   email: string;
@@ -9,11 +11,7 @@ export type TrialSignupPayload = {
 };
 
 export async function submitTrialSignup(payload: TrialSignupPayload) {
-  const backendBase =
-    process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ||
-    "http://localhost:4000";
-
-  const response = await fetch(`${backendBase}/api/public/signup`, {
+  const response = await fetch(`${BACKEND_URL}/api/public/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

@@ -1,8 +1,7 @@
+import { BACKEND_URL } from "@/lib/utils"
+import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch"
 import { getAuthHeaders } from "@/utils/auth-token"
 import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
 
 export interface OrganizationUnitInput {
   name: string
@@ -1152,6 +1151,24 @@ export interface UpdateCompanyVerticalResponse {
   warnings: string[]
 }
 
+export async function getCurrentUserRole(): Promise<string | null> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) return null
+
+  const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
+    method: "POST",
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) return null
+
+  const data = (await response.json().catch(() => null)) as { role?: string } | null
+  if (!data || typeof data.role !== "string") return null
+
+  return data.role.toUpperCase()
+}
+
 export async function fetchCompanyVerticalInfo(
   companyId: number,
 ): Promise<CompanyVerticalInfo | null> {
@@ -1376,5 +1393,284 @@ export async function rollbackCompanyVertical(
     companyId: data?.companyId ?? companyId,
     businessVertical: (data?.businessVertical as VerticalName) ?? "GENERAL",
   }
+}
+
+export interface CompanyVerticalOverride {
+  companyId: number
+  configJson: Record<string, any> | null
+}
+
+export async function getCompanyVerticalOverride(
+  companyId: number,
+): Promise<CompanyVerticalOverride> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/override`, {
+    headers,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo obtener la configuracion personalizada"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as CompanyVerticalOverride | null
+  return data ?? { companyId, configJson: null }
+}
+
+export async function updateCompanyVerticalOverride(
+  companyId: number,
+  configJson: Record<string, any>,
+): Promise<CompanyVerticalOverride> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/override`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({ configJson }),
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo actualizar la configuracion personalizada"
+    throw new Error(message)
+  }
+
+  const data = (await response.json().catch(() => null)) as CompanyVerticalOverride | null
+  return data ?? { companyId, configJson }
+}
+
+export async function deleteCompanyVerticalOverride(
+  companyId: number,
+): Promise<{ companyId: number; deleted: boolean }> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/override`, {
+    method: "DELETE",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo eliminar la configuracion personalizada"
+    throw new Error(message)
+  }
+
+  return { companyId, deleted: true }
+}
+
+// ===== Migration Metrics & History =====
+
+export interface VerticalChangeHistoryEntry {
+  id: number
+  oldVertical: string
+  newVertical: string
+  changeReason: string | null
+  warningsJson: any
+  success: boolean
+  createdAt: string
+  user: {
+    id: number
+    username: string
+    email: string
+  } | null
+}
+
+export interface VerticalHistoryResponse {
+  companyId: number
+  history: VerticalChangeHistoryEntry[]
+  rollbackAvailable: boolean
+  rollbackSnapshot: {
+    id: string
+    snapshotData: any
+    createdAt: string
+    expiresAt: string
+  } | null
+  totalChanges: number
+}
+
+export interface VerticalMetricsResponse {
+  companyId: number
+  currentVertical: string
+  migration: {
+    total: number
+    migrated: number
+    legacy: number
+    percentage: number
+  }
+  statistics: {
+    totalChanges: number
+    successfulChanges: number
+    failedChanges: number
+    successRate: number
+  }
+  recentHistory: Array<{
+    id: number
+    oldVertical: string
+    newVertical: string
+    success: boolean
+    createdAt: string
+  }>
+  rollbackAvailable: boolean
+  rollbackExpiresAt: string | null
+}
+
+export async function fetchCompanyVerticalHistory(
+  companyId: number,
+): Promise<VerticalHistoryResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/history`, {
+    method: "GET",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo obtener el historial de migraciones"
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+export async function fetchCompanyVerticalMetrics(
+  companyId: number,
+): Promise<VerticalMetricsResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/companies/${companyId}/vertical/metrics`, {
+    method: "GET",
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudo obtener las metricas de migracion"
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+// ===== Vertical Notifications =====
+
+export interface VerticalNotification {
+  id: number
+  message: string
+  severity: string
+  metadata: {
+    previousVertical: string
+    newVertical: string
+    timestamp: string
+  }
+  createdAt: string
+}
+
+export interface VerticalNotificationsResponse {
+  companyId: number
+  notifications: VerticalNotification[]
+  total: number
+}
+
+export async function fetchCompanyVerticalNotifications(
+  companyId: number,
+): Promise<VerticalNotificationsResponse> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/notifications`,
+    {
+      method: "GET",
+      headers,
+    },
+  )
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const message =
+      (payload && typeof payload === "object" && "message" in payload
+        ? (payload as { message?: string }).message
+        : undefined) || "No se pudieron obtener las notificaciones"
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+/**
+ * Export vertical change history as CSV
+ */
+export async function exportVerticalHistoryCSV(companyId: number): Promise<Blob> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error("No se encontro un token de autenticacion")
+  }
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/vertical/history/export/csv`,
+    {
+      method: "GET",
+      headers,
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error("No se pudo exportar el historial a CSV")
+  }
+
+  return response.blob()
+}
+
+/**
+ * Helper function to trigger file download in browser
+ */
+export function downloadFile(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 

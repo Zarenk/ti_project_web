@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Logger,
@@ -56,11 +57,19 @@ export class SalesService {
     private readonly verticalConfig: VerticalConfigService,
   ) {}
 
-  private async ensureSalesFeatureEnabled(companyId?: number | null) {
-    if (!companyId) {
+  private async ensureSalesFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
       return;
     }
-    await this.verticalConfig.getConfig(companyId);
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.sales === false) {
+      throw new ForbiddenException(
+        'El modulo de ventas no esta habilitado para esta empresa.',
+      );
+    }
   }
 
 
@@ -102,6 +111,9 @@ export class SalesService {
       } = data;
 
       this.logger.debug(`[createSale] Received data - isSuperAdmin=${isSuperAdmin}, inputOrganizationId=${inputOrganizationId}`);
+
+      // Validate sales feature is enabled for this company
+      await this.ensureSalesFeatureEnabled(inputCompanyId);
 
       const { store, cashRegister, clientIdToUse } = await prepareSaleContext(
         this.prisma,
@@ -466,6 +478,17 @@ export class SalesService {
 
       const organizationFilter = this.buildSalesWhere(organizationId, companyId);
 
+      // 🔒 SECURITY NOTE: Validar ownership de la venta ANTES de verificar SUNAT
+      // Esto previene information disclosure sobre existencia de transmisiones SUNAT
+      const saleOwnership = await this.prisma.sales.findFirst({
+        where: { id, ...organizationFilter },
+        select: { id: true },
+      });
+
+      if (!saleOwnership) {
+        throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
+      }
+
       // Validar que la venta no tenga transmisiones SUNAT aceptadas
       const sunatAccepted = await this.prisma.sunatTransmission.findFirst({
         where: { saleId: id, status: 'ACCEPTED' },
@@ -673,11 +696,15 @@ export class SalesService {
       // Anular asientos contables asociados (no-crítico)
       if (invoiceData?.serie && invoiceData?.nroCorrelativo) {
         try {
+          // 🔒 SECURITY FIX: Agregar filtros de tenant para prevenir fuga multi-tenant
           const accEntry = await this.prisma.accEntry.findFirst({
             where: {
               serie: invoiceData.serie,
               correlativo: invoiceData.nroCorrelativo,
               status: { not: 'VOID' },
+              // Filtrar por tenant context
+              ...(organizationId !== undefined && { organizationId }),
+              ...(companyId !== undefined && { companyId }),
             },
             select: { id: true },
           });
@@ -1760,7 +1787,7 @@ export class SalesService {
       });
 
       return sales.map((sale) => {
-        const invoice = sale.invoices[0];
+        const invoice = sale.invoices?.[0];
         return {
           id: sale.id,
           user: sale.user.username,
@@ -1854,23 +1881,26 @@ export class SalesService {
           clientName: client?.name ?? 'Desconocido',
           totalAmount: g._sum.total ?? 0,
           salesCount: g._count._all ?? 0,
-          sales: clientSales.map((s) => ({
-            id: s.id,
-            total: s.total,
-            createdAt: s.createdAt,
-            invoice: s.invoices[0]
-              ? {
-                  serie: s.invoices[0].serie,
-                  nroCorrelativo: s.invoices[0].nroCorrelativo,
-                  tipoComprobante: s.invoices[0].tipoComprobante,
-                }
-              : null,
-            products: s.salesDetails.map((d) => ({
-              name: d.entryDetail.product.name,
-              quantity: d.quantity,
-              price: d.price,
-            })),
-          })),
+          sales: clientSales.map((s) => {
+            const invoice = s.invoices?.[0];
+            return {
+              id: s.id,
+              total: s.total,
+              createdAt: s.createdAt,
+              invoice: invoice
+                ? {
+                    serie: invoice.serie,
+                    nroCorrelativo: invoice.nroCorrelativo,
+                    tipoComprobante: invoice.tipoComprobante,
+                  }
+                : null,
+              products: s.salesDetails.map((d) => ({
+                name: d.entryDetail.product.name,
+                quantity: d.quantity,
+                price: d.price,
+              })),
+            };
+          }),
         };
       });
     } catch (error) {

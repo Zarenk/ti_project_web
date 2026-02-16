@@ -1,31 +1,5 @@
-import { getAuthHeaders } from '@/utils/auth-token';
+import { BACKEND_URL } from '@/lib/utils';
 import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch';
-
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
-async function authorizedFetch(url: string, init: RequestInit = {}) {
-  let auth: Record<string, string> = {};
-  try {
-    auth = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes('No se encontro un token')
-    ) {
-      throw new UnauthenticatedError();
-    }
-    throw error;
-  }
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== '') {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, { ...init, headers });
-}
 
 // Función para realizar el login
 export async function loginUser(email: string, password: string) {
@@ -76,26 +50,10 @@ export async function loginUser(email: string, password: string) {
 
 // Función para obtener el perfil del usuario autenticado
 export async function getUserProfile() {
-  let headers: Record<string, string>;
   try {
-    headers = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes('No se encontro un token')
-    ) {
-      return null;
-    }
-    throw error;
-  }
-  if (Object.keys(headers).length === 0) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
+    const response = await authFetch(`${BACKEND_URL}/api/users/profile`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { 'Content-Type': 'application/json' },
     })
 
     if (response.ok) {
@@ -105,37 +63,24 @@ export async function getUserProfile() {
     if (response.status === 401) {
       return null
     }
-    
+
     const errorData = await response.json()
     throw new Error(errorData.message || 'Error al obtener el perfil del usuario')
 
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error('Error en getUserProfile:', error.message)
     throw error
   }
 }
 
 export async function getUserProfileId() {
-  let headers: Record<string, string>;
   try {
-    headers = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes('No se encontro un token')
-    ) {
-      return null;
-    }
-    throw error;
-  }
-  if (!('Authorization' in headers)) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/users/profileid`, {
+    const response = await authFetch(`${BACKEND_URL}/api/users/profileid`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { 'Content-Type': 'application/json' },
     });
 
     if (!response.ok) {
@@ -145,8 +90,11 @@ export async function getUserProfileId() {
       throw new Error('Error al obtener el perfil del usuario');
     }
 
-    return await response.json(); // Devuelve el perfil del usuario
+    return await response.json();
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return null;
+    }
     console.error('Error en getUserProfileId:', error.message);
     throw error;
   }
@@ -192,7 +140,7 @@ export async function createUser(
   status: string,
   organizationId?: number | null,
 ) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/users/manage/create`, {
+  const res = await authFetch(`${BACKEND_URL}/api/users/manage/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, username, password, role, status, organizationId }),
@@ -210,7 +158,7 @@ export async function checkUserAvailability(payload: {
   email?: string;
   username?: string;
 }): Promise<{ emailExists: boolean; usernameExists: boolean }> {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/users/check`, {
+  const res = await authFetch(`${BACKEND_URL}/api/users/check`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -225,12 +173,7 @@ export async function checkUserAvailability(payload: {
 }
 
 export async function updateUser(data: { email?: string; username?: string; password?: string }) {
-  const headers = await getAuthHeaders();
-  if (!('Authorization' in headers)) {
-    throw new Error('No se encontró un token de autenticación');
-  }
-
-  const res = await authorizedFetch(`${BACKEND_URL}/api/users/profile`, {
+  const res = await authFetch(`${BACKEND_URL}/api/users/profile`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -249,13 +192,14 @@ export async function updateUserAdmin(
   payload: { role?: UserRole; status?: "ACTIVO" | "INACTIVO" },
   organizationId?: number | null,
 ) {
-  const headers = await getAuthHeaders();
-  headers["Content-Type"] = "application/json";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (organizationId != null) {
     headers["x-org-id"] = String(organizationId);
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/users/${userId}/manage`, {
+  const res = await authFetch(`${BACKEND_URL}/api/users/${userId}/manage`, {
     method: "PATCH",
     headers,
     body: JSON.stringify(payload),
@@ -267,4 +211,63 @@ export async function updateUserAdmin(
   }
 
   return (await res.json()) as DashboardUser;
+}
+
+export interface ActiveSession {
+  id: number
+  username: string
+  email: string
+  role: string
+  lastActiveAt: string
+  organizations: {
+    id: number
+    name: string
+    membershipRole: string
+  }[]
+}
+
+export async function getActiveSessions(): Promise<ActiveSession[]> {
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/users/active-sessions`, {
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      throw new Error('Error al obtener sesiones activas')
+    }
+
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return []
+    }
+    throw error
+  }
+}
+
+export async function requestPasswordRecovery(
+  email: string,
+): Promise<{ message: string }> {
+  const response = await fetch('/api/password-recovery', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error: any = new Error(
+      data?.message || 'No pudimos enviar el correo de recuperacion.',
+    );
+    error.response = { status: response.status, data };
+    throw error;
+  }
+
+  return {
+    message:
+      data?.message ||
+      'Te enviamos un correo electronico con los pasos para recuperar tu contraseña.',
+  };
 }

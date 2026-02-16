@@ -410,7 +410,16 @@ export function SiteSettingsProvider({
     return fetch(input, { ...init, headers });
   }, []);
 
+  // Track if a fetch is already in progress to prevent concurrent requests
+  const fetchInProgressRef = useRef(false);
+
   const refresh = useCallback(async () => {
+    if (fetchInProgressRef.current) {
+      console.log("[site-settings] Fetch already in progress, skipping");
+      return;
+    }
+
+    fetchInProgressRef.current = true;
     setIsLoading(true);
     try {
       const url = `${API_ENDPOINT}?tenantVersion=${encodeURIComponent(
@@ -443,18 +452,26 @@ export function SiteSettingsProvider({
       setError(err instanceof Error ? err.message : "No se pudieron cargar los ajustes del sitio.");
     } finally {
       setIsLoading(false);
+      fetchInProgressRef.current = false;
     }
   }, [tenantAwareFetch, tenantVersionKey]);
+
+  // Store refresh in a ref to avoid including it as a dependency
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   useEffect(() => {
     if (initialSettings) {
       setIsLoading(false);
       return;
     }
-    refresh().catch((err) => {
+    refreshRef.current().catch((err) => {
       console.error("Error initializing site settings", err);
     });
-  }, [initialSettings, refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSettings]); // Only run when initialSettings changes, not when refresh changes
 
   useEffect(() => {
     if (tenantSelection) {
@@ -486,10 +503,11 @@ export function SiteSettingsProvider({
     setPersistedUpdatedAt(null);
     setPersistedCreatedAt(null);
     setError(null);
-    refresh().catch((err) => {
+    refreshRef.current().catch((err) => {
       console.error("Error loading site settings for tenant", err);
     });
-  }, [tenantVersionKey, refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantVersionKey]); // Only run when tenantVersionKey changes, not when refresh changes
 
   useIsomorphicLayoutEffect(() => {
     if (typeof document !== "undefined") {

@@ -26,6 +26,7 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 @ModulePermission(['inventory', 'purchases', 'providers'])
 @Controller('providers')
@@ -187,11 +188,15 @@ export class ProvidersController {
   }
 
   @Delete(':id')
+  @UseGuards(EntityOwnershipGuard)
+  @EntityModel('provider')
+  @EntityIdParam('id')
   remove(
     @Param('id') id: string,
     @CurrentTenant('organizationId') organizationId: number | null,
     @Req() req: Request,
   ) {
+    // 🔒 Ownership validado por EntityOwnershipGuard
     return this.providersService.remove(
       +id,
       req,

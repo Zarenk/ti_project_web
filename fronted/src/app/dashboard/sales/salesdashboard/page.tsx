@@ -24,6 +24,7 @@ import { ProfitProductsTable } from "./profit-products-table"
 import { DailyProfitChart } from "./daily-profit-chart"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
 import { useAuth } from "@/context/auth-context"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function SalesDashboard() {
     const router = useRouter()
@@ -494,6 +495,41 @@ export default function SalesDashboard() {
     const igvDelta = buildDelta(taxTotals.igvTotal, prevTaxTotals?.igvTotal ?? null)
     const irDelta = buildDelta(taxTotals.total * 0.02, prevTaxTotals?.total != null ? prevTaxTotals.total * 0.02 : null)
     const taxableDelta = buildDelta(taxTotals.taxableTotal, prevTaxTotals?.taxableTotal ?? null)
+
+  if (permissionLoading || tenantLoading || authPending || sessionExpiring) {
+    return (
+      <div className="flex w-full max-w-full flex-col gap-5 p-6">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-9 w-48 rounded-md" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4 rounded" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-7 w-28" />
+                <Skeleton className="h-3 w-36" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-96 rounded-md" />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <Skeleton className="h-64 rounded-xl lg:col-span-4" />
+            <Skeleton className="h-64 rounded-xl lg:col-span-3" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="sales-dashboard-theme flex w-full max-w-full flex-col gap-5 p-6 overflow-x-hidden">

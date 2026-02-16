@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, RestaurantOrderStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import { buildOrganizationFilter, resolveCompanyId } from 'src/tenancy/organization.utils';
 import { CreateRestaurantOrderDto } from './dto/create-restaurant-order.dto';
 import { UpdateRestaurantOrderDto } from './dto/update-restaurant-order.dto';
@@ -8,7 +9,25 @@ import { UpdateRestaurantOrderItemDto } from './dto/update-restaurant-order-item
 
 @Injectable()
 export class RestaurantOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
+  ) {}
+
+  private async ensureReservationsFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.reservations === false) {
+      throw new ForbiddenException(
+        'El modulo de ordenes/reservas no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   private resolveContext(dto: { organizationId?: number | null; companyId?: number | null }, organizationIdFromContext?: number | null, companyIdFromContext?: number | null) {
     const resolvedOrganizationId =
@@ -49,6 +68,9 @@ export class RestaurantOrdersService {
       organizationIdFromContext,
       companyIdFromContext,
     );
+
+    // Validate reservations feature is enabled
+    await this.ensureReservationsFeatureEnabled(resolvedCompanyId);
 
     const subtotal = dto.items.reduce(
       (acc, item) => acc + item.quantity * item.unitPrice,
@@ -126,6 +148,9 @@ export class RestaurantOrdersService {
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
   ) {
+    // Validate reservations feature is enabled
+    await this.ensureReservationsFeatureEnabled(companyIdFromContext);
+
     await this.ensureOrder(id, organizationIdFromContext, companyIdFromContext);
     return this.prisma.restaurantOrder.findUnique({
       where: { id },
@@ -172,6 +197,9 @@ export class RestaurantOrdersService {
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
   ) {
+    // Validate reservations feature is enabled
+    await this.ensureReservationsFeatureEnabled(companyIdFromContext);
+
     await this.ensureOrder(id, organizationIdFromContext, companyIdFromContext);
     return this.prisma.restaurantOrder.update({
       where: { id },

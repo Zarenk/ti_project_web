@@ -20,6 +20,7 @@ import { DateRange } from "react-day-picker";
 import Link from "next/link";
 import { BarChart3, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { TablePageSkeleton } from "@/components/table-page-skeleton";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
@@ -320,6 +321,7 @@ const normalizeApiSale = (sale: any): Sale => {
 
 export default function Page() {
   const [sales, setSales] = useState<Sale[]>([]);
+  const [salesLoading, setSalesLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -338,9 +340,12 @@ export default function Page() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
+      setSalesLoading(true);
       try {
         const data = await getSales();
+        if (cancelled) return;
         const mapped: Sale[] = data
           .map(normalizeApiSale)
           .sort(
@@ -350,9 +355,12 @@ export default function Page() {
         setSales(mapped);
       } catch (error) {
         console.error("Error al obtener las ventas:", error);
+      } finally {
+        if (!cancelled) setSalesLoading(false);
       }
     };
     fetchData();
+    return () => { cancelled = true; };
   }, [selectionKey]);
 
   const handleDeleted = useCallback((id: number) => {
@@ -1097,6 +1105,16 @@ export default function Page() {
       setIsExportingDetailed(false);
     }
   }, [buildDetailedWorkbook, downloadWorkbook, filteredSales, isFiltered, sales]);
+
+  if (salesLoading && sales.length === 0) {
+    return (
+      <section className="py-2 sm:py-6">
+        <div className="container mx-auto px-1 sm:px-6 lg:px-8">
+          <TablePageSkeleton filters={4} columns={6} rows={8} />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>

@@ -1,5 +1,4 @@
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-import { getAuthHeaders } from "@/utils/auth-token";
 import { BACKEND_URL } from "@/lib/utils";
 
 interface InventoryApiEntryDetail {
@@ -266,30 +265,11 @@ export async function getStoresWithProduct(productId: number) {
 
 export async function getPublicStoresWithProduct(productId: number) {
   try {
-    let auth: Record<string, string> = {};
-    try {
-      auth = await getAuthHeaders();
-    } catch (error: any) {
-      if (
-        error instanceof UnauthenticatedError ||
-        error?.message?.includes("No se encontro un token")
-      ) {
-        return [];
-      }
-      throw error;
-    }
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    for (const [key, value] of Object.entries(auth)) {
-      if (value != null && value !== '') {
-        headers.set(key, value);
-      }
-    }
-
-    const response = await fetch(
+    const response = await authFetch(
       `${BACKEND_URL}/api/public/inventory/stores-with-product/${productId}`,
       {
         method: 'GET',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
       },
     );
 
@@ -302,6 +282,9 @@ export async function getPublicStoresWithProduct(productId: number) {
 
     return await response.json();
   } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
     console.error('Error al obtener las tiendas con stock del producto:', error.message || error);
     throw error;
   }

@@ -1,4 +1,24 @@
 import { PrismaClient } from '@prisma/client';
+import { ensureDefaultSettings, cleanupGeneralData } from './general';
+import {
+  createRestaurantTables,
+  createKitchenStations,
+  convertToMenuItems,
+  cleanupRestaurantsData,
+} from './restaurants';
+import {
+  setupPosStations,
+  initializeBarcodeSystem,
+  createRetailCatalogs,
+  cleanupRetailData,
+} from './retail';
+import {
+  setupBomSystem,
+  initializeWorkOrders,
+  cleanupManufacturingData,
+} from './manufacturing';
+import { setupProjectTemplates, cleanupServicesData } from './services';
+import { cleanupComputersData } from './computers';
 
 export interface VerticalScriptContext {
   companyId: number;
@@ -33,36 +53,16 @@ const noop = async (
 };
 
 const handlers: Record<VerticalScriptName, VerticalScriptHandler> = {
-  ensure_default_settings: async (ctx) => {
-    await noop('ensure_default_settings', ctx);
-  },
-  create_retail_catalogs: async (ctx) => {
-    await noop('create_retail_catalogs', ctx);
-  },
-  setup_pos_stations: async (ctx) => {
-    await noop('setup_pos_stations', ctx);
-  },
-  initialize_barcode_system: async (ctx) => {
-    await noop('initialize_barcode_system', ctx);
-  },
-  create_restaurant_tables: async (ctx) => {
-    await noop('create_restaurant_tables', ctx);
-  },
-  create_kitchen_stations: async (ctx) => {
-    await noop('create_kitchen_stations', ctx);
-  },
-  convert_to_menu_items: async (ctx) => {
-    await noop('convert_to_menu_items', ctx);
-  },
-  setup_project_templates: async (ctx) => {
-    await noop('setup_project_templates', ctx);
-  },
-  setup_bom_system: async (ctx) => {
-    await noop('setup_bom_system', ctx);
-  },
-  initialize_work_orders: async (ctx) => {
-    await noop('initialize_work_orders', ctx);
-  },
+  ensure_default_settings: ensureDefaultSettings,
+  create_retail_catalogs: createRetailCatalogs,
+  setup_pos_stations: setupPosStations,
+  initialize_barcode_system: initializeBarcodeSystem,
+  create_restaurant_tables: createRestaurantTables,
+  create_kitchen_stations: createKitchenStations,
+  convert_to_menu_items: convertToMenuItems,
+  setup_project_templates: setupProjectTemplates,
+  setup_bom_system: setupBomSystem,
+  initialize_work_orders: initializeWorkOrders,
 };
 
 export async function runVerticalScript(
@@ -81,4 +81,50 @@ export async function runVerticalScript(
 
 export function availableVerticalScripts(): VerticalScriptName[] {
   return Object.keys(handlers) as VerticalScriptName[];
+}
+
+// ── Cleanup Handlers ────────────────────────────────────────────────────────
+
+export type BusinessVertical =
+  | 'GENERAL'
+  | 'RESTAURANTS'
+  | 'RETAIL'
+  | 'SERVICES'
+  | 'MANUFACTURING'
+  | 'COMPUTERS';
+
+export type VerticalCleanupHandler = (
+  context: VerticalScriptContext,
+) => Promise<void>;
+
+const cleanupHandlers: Record<BusinessVertical, VerticalCleanupHandler> = {
+  GENERAL: cleanupGeneralData,
+  RESTAURANTS: cleanupRestaurantsData,
+  RETAIL: cleanupRetailData,
+  SERVICES: cleanupServicesData,
+  MANUFACTURING: cleanupManufacturingData,
+  COMPUTERS: cleanupComputersData,
+};
+
+/**
+ * Runs cleanup handler for a specific vertical
+ * This is called when switching AWAY from a vertical
+ * It archives and removes vertical-specific data
+ */
+export async function runVerticalCleanup(
+  vertical: BusinessVertical,
+  context: VerticalScriptContext,
+): Promise<void> {
+  const handler = cleanupHandlers[vertical];
+  if (!handler) {
+    console.warn(
+      `[vertical-cleanup] no existe handler de limpieza para "${vertical}", se omite.`,
+    );
+    return;
+  }
+
+  console.log(
+    `[vertical-cleanup] Ejecutando limpieza para vertical ${vertical} (empresa ${context.companyId})`,
+  );
+  await handler(context);
 }

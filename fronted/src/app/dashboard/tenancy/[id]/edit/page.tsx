@@ -5,14 +5,9 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { getAuthHeaders } from "@/utils/auth-token"
-
 import type { OrganizationResponse } from "../../tenancy.api"
-import { getOrganization } from "../../tenancy.api"
+import { getOrganization, getCurrentUserRole } from "../../tenancy.api"
 import { EditOrganizationForm } from "./edit-organization-form"
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:4000"
 
 async function fetchOrganizationById(id: string): Promise<OrganizationResponse | null> {
   try {
@@ -20,35 +15,6 @@ async function fetchOrganizationById(id: string): Promise<OrganizationResponse |
   } catch {
     return null
   }
-}
-
-async function fetchCurrentUserRole(): Promise<string | null> {
-  let headers: Record<string, string>
-  try {
-    headers = await getAuthHeaders()
-  } catch {
-    return null
-  }
-  if (!headers.Authorization) {
-    return null
-  }
-
-  const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
-    method: "POST",
-    headers,
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    return null
-  }
-
-  const data = (await response.json().catch(() => null)) as { role?: string } | null
-  if (!data || typeof data.role !== "string") {
-    return null
-  }
-
-  return data.role.toUpperCase()
 }
 
 function canManage(role: string | null) {
@@ -65,7 +31,7 @@ export default async function EditOrganizationPage({
 }) {
   const [organization, role] = await Promise.all([
     fetchOrganizationById(params.id),
-    fetchCurrentUserRole(),
+    getCurrentUserRole(),
   ])
 
   if (!organization) {

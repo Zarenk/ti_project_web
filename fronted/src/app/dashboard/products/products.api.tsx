@@ -1,56 +1,6 @@
-import { getAuthHeaders } from '@/utils/auth-token'
+import { BACKEND_URL } from '@/lib/utils'
 import { authFetch, UnauthenticatedError } from '@/utils/auth-fetch'
 import { isProductActive, normalizeProductStatus } from './status.utils'
-
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
-
-async function authorizedFetch(url: string, init: RequestInit = {}) {
-  let auth: Record<string, string> = {}
-  try {
-    auth = await getAuthHeaders()
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes('No se encontro un token')
-    ) {
-      throw new UnauthenticatedError()
-    }
-    throw error
-  }
-  const headers = new Headers(init.headers ?? {})
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== '') {
-      headers.set(key, value)
-    }
-  }
-
-  return fetch(url, { ...init, headers })
-}
-
-async function publicFetch(url: string, init: RequestInit = {}) {
-  let auth: Record<string, string> = {}
-  try {
-    auth = await getAuthHeaders()
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes('No se encontro un token')
-    ) {
-      throw new UnauthenticatedError()
-    }
-    throw error
-  }
-  const headers = new Headers(init.headers ?? {})
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== '') {
-      headers.set(key, value)
-    }
-  }
-
-  return fetch(url, { ...init, headers })
-}
 
 type ProductFilters = {
   migrationStatus?: 'legacy' | 'migrated'
@@ -107,7 +57,7 @@ export async function getPublicProducts(filters?: ProductFilters) {
 
   let response: Response
   try {
-    response = await publicFetch(url.toString(), {
+    response = await authFetch(url.toString(), {
       cache: 'no-store',
     })
   } catch (error) {
@@ -137,7 +87,7 @@ export async function getPublicProducts(filters?: ProductFilters) {
 export async function getPublicProduct(id: string) {
   let response: Response
   try {
-    response = await publicFetch(`${BACKEND_URL}/api/public/products/${id}`, {
+    response = await authFetch(`${BACKEND_URL}/api/public/products/${id}`, {
       cache: 'no-store',
     })
   } catch (error) {
@@ -165,7 +115,7 @@ export async function getPublicProduct(id: string) {
 export async function getProduct(id: string) {
   let response: Response
   try {
-    response = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+    response = await authFetch(`${BACKEND_URL}/api/products/${id}`, {
       cache: 'no-store',
     })
   } catch (error) {
@@ -192,7 +142,7 @@ export async function getProduct(id: string) {
 }
 
 export async function createProduct(productData: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/products`, {
+  const res = await authFetch(`${BACKEND_URL}/api/products`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -222,7 +172,7 @@ export async function createProduct(productData: any) {
 
 export async function verifyOrCreateProducts(products: { name: string; price: number; description?: string; brand?: string; categoryId?: number }[]) {
   try {
-    const res = await authorizedFetch(`${BACKEND_URL}/api/products/verify-or-create-products`, {
+    const res = await authFetch(`${BACKEND_URL}/api/products/verify-or-create-products`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -245,7 +195,7 @@ export async function verifyOrCreateProducts(products: { name: string; price: nu
 }
 
 export async function deleteProduct(id: string) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/products/${id}`, {
     method: 'DELETE',
   })
 
@@ -258,7 +208,7 @@ export async function deleteProduct(id: string) {
 }
 
 export async function updateProduct(id: string, newProduct: any) {
-  const res = await authorizedFetch(`${BACKEND_URL}/api/products/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/products/${id}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -288,7 +238,7 @@ export async function updateManyProducts(products: any[]) {
   console.log('Enviando productos al backend para actualización masiva:', products)
 
   try {
-    const response = await authorizedFetch(`${BACKEND_URL}/api/products`, {
+    const response = await authFetch(`${BACKEND_URL}/api/products`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -317,7 +267,7 @@ export const deleteProducts = async (ids: string[]) => {
   try {
     const numericIds = ids.map((id) => Number(id))
 
-    const response = await authorizedFetch(`${BACKEND_URL}/api/products/`, {
+    const response = await authFetch(`${BACKEND_URL}/api/products/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -341,7 +291,7 @@ export async function uploadProductImage(file: File) {
   const formData = new FormData()
   formData.append('file', file)
 
-  const res = await authorizedFetch(`${BACKEND_URL}/api/products/upload-image`, {
+  const res = await authFetch(`${BACKEND_URL}/api/products/upload-image`, {
     method: 'POST',
     body: formData,
   })
@@ -358,7 +308,7 @@ export async function validateProductName(payload: {
   name: string
   productId?: number | null
 }): Promise<{ nameAvailable: boolean }> {
-  const response = await authorizedFetch(`${BACKEND_URL}/api/products/validate-name`, {
+  const response = await authFetch(`${BACKEND_URL}/api/products/validate-name`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -388,7 +338,7 @@ export async function getLegacyProducts() {
 }
 
 export async function markProductAsMigrated(productId: number) {
-  const res = await authorizedFetch(
+  const res = await authFetch(
     `${BACKEND_URL}/api/products/${productId}/vertical-migration`,
     { method: 'PATCH' },
   )
@@ -408,7 +358,7 @@ export async function updateProductVerticalAttributes(
   productId: number,
   payload: ProductVerticalMigrationPayload,
 ) {
-  const res = await authorizedFetch(
+  const res = await authFetch(
     `${BACKEND_URL}/api/products/${productId}/vertical-migration`,
     {
       method: 'POST',

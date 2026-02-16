@@ -1,19 +1,8 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Plus, FileDown, Filter, ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Card,
   CardContent,
@@ -29,538 +18,181 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Journal,
-  fetchJournals,
-  deleteJournal,
-  fetchAccountingEntries,
-  fetchSalesTransactions,
-  fetchEntryById,
-} from "./journals.api";
-import { JournalForm } from "./journal-form";
-import { DeleteActionsGuard } from "@/components/delete-actions-guard";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { BACKEND_URL } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatGlosa } from "./formatGlosa";
-import { formatDisplayGlosa } from "./formatDisplayGlosa";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  JournalEntry,
+  getJournalEntries,
+  exportPLE,
+  JournalEntryFilters,
+} from "./journals.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { cn } from "@/lib/utils";
+import { JournalEntryForm } from "./JournalEntryForm";
 
-const sortByDateDesc = <T extends { date: string }>(arr: T[]) =>
-  arr
-    .slice()
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+type PeriodView = "day" | "month" | "year";
 
-type EntryLineDetail = {
-  date: string;
-  account: string;
-  description?: string;
-  debit: number;
-  credit: number;
-  quantity?: number;
+const statusLabels: Record<string, string> = {
+  DRAFT: "Borrador",
+  POSTED: "Contabilizado",
+  VOID: "Anulado",
 };
 
-type DailyLine = EntryLineDetail & {
-  date: string;
-  provider?: string;
-  voucher?: string;
-  documentType?: string;
-  series?: string[];
-  entryId?: number;
-  invoiceUrl?: string;
-  entryDescription?: string;
-  sale?: Sale;
-  entryLines?: EntryLineDetail[];
+const statusIcons: Record<string, React.ReactNode> = {
+  DRAFT: <Clock className="h-4 w-4" />,
+  POSTED: <CheckCircle2 className="h-4 w-4" />,
+  VOID: <XCircle className="h-4 w-4" />,
 };
 
-type InventoryEntrySummaryMap = Map<number, string>;
-
-const accountNames: Record<string, string> = {
-  "1011": "Caja",
-  "1041": "Banco – Yape/Transferencia",
-  "1212": "Cuentas por cobrar",
-  "2011": "Mercaderías",
-  "4011": "IGV por pagar",
-  "6911": "Costo de ventas",
-  "7011": "Ventas",
+const sourceLabels: Record<string, string> = {
+  SALE: "Venta",
+  PURCHASE: "Compra",
+  ADJUSTMENT: "Ajuste",
+  MANUAL: "Manual",
 };
 
-type Sale = {
-  date: string;
-  serie: string;
-  correlativo: string;
-  tipoComprobante: string;
-  customerName: string;
-  total: number;
-  payments: { method: string; amount: number }[];
-  items: {
-    qty: number;
-    unitPrice: number;
-    costUnit: number;
-    productName: string;
-    series: string[];
-  }[];
-  voucher?: string;
-  pdfUrl?: string;
-};
+interface ParsedDescription {
+  type: string;
+  invoice?: string;
+  entity?: string; // Cliente o Proveedor
+  products?: string;
+  paymentMethod?: string;
+  raw: string;
+}
 
-const dedupeVoucherValue = (value?: string | null): string | undefined => {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
+function parseDescription(description: string): ParsedDescription {
+  // Current format: "Venta -F001-123 | Cliente XYZ | Efectivo"
+  // or: "Compra -56 | Proveedor ABC | Contado"
+  const parts = description.split(" | ");
 
-  const repeatedWithDash = trimmed.match(/^(.+?)(?:\s*[-–]\s*\1)+$/);
-  if (repeatedWithDash) {
-    return repeatedWithDash[1];
-  }
+  if (parts.length === 3) {
+    const [typePart, entity, paymentMethod] = parts;
+    const typeMatch = typePart.match(/^(Venta|Compra)\s+-(.+)$/);
 
-  const repeatedWithSpaces = trimmed.match(/^(.+?)(?:\s+\1)+$/);
-  if (repeatedWithSpaces) {
-    return repeatedWithSpaces[1];
-  }
-
-  return trimmed;
-};
-
-const buildVoucher = (
-  serie?: string | null,
-  correlativo?: string | null
-): string | undefined => {
-  const serieValue = dedupeVoucherValue(serie);
-  const correlativoValue = dedupeVoucherValue(correlativo);
-
-  if (serieValue && correlativoValue) {
-    return dedupeVoucherValue(`${serieValue}-${correlativoValue}`) ??
-      `${serieValue}-${correlativoValue}`;
-  }
-
-  return serieValue ?? correlativoValue ?? undefined;
-};
-
-const normalizeVoucherKey = (value?: string | null): string | undefined => {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  const trimmed = value.toString().trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const sanitized = trimmed.replace(/[–—−]/g, "-").replace(/\s+/g, "");
-  const parts = sanitized.split("-").filter(Boolean);
-
-  if (parts.length >= 2) {
-    const serie = parts[0]?.toUpperCase();
-    const correlativoRaw = parts.slice(1).join("-");
-    const correlativoDigits = correlativoRaw.replace(/\D+/g, "");
-
-    if (correlativoDigits) {
-      const numeric = parseInt(correlativoDigits, 10);
-      if (!Number.isNaN(numeric)) {
-        return `${serie}-${numeric}`;
-      }
+    if (!typeMatch) {
+      return { type: "unknown", raw: description };
     }
 
-    return `${serie}-${correlativoRaw.toUpperCase()}`;
+    return {
+      type: typeMatch[1],
+      invoice: typeMatch[2],
+      entity: entity.trim(),
+      paymentMethod: paymentMethod.trim(),
+      raw: description,
+    };
   }
 
-  const onlyPart = parts[0] ?? sanitized;
-  if (/^\d+$/.test(onlyPart)) {
-    return String(parseInt(onlyPart, 10));
+  // Unknown format
+  return { type: "unknown", raw: description };
+}
+
+function DescriptionTags({ description }: { description: string }) {
+  const parsed = parseDescription(description);
+
+  if (parsed.type === "unknown") {
+    return <div className="max-w-[300px] truncate" title={parsed.raw}>{parsed.raw}</div>;
   }
 
-  return onlyPart.toUpperCase();
-};
-
-const buildInvoiceUrl = (invoiceUrl?: string | null): string | undefined => {
-  if (!invoiceUrl) {
-    return undefined;
-  }
-  const trimmed = invoiceUrl.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-  return trimmed.startsWith('/')
-    ? `${BACKEND_URL}${trimmed}`
-    : `${BACKEND_URL}/${trimmed}`;
-};
-
-const COMPANY_RUC = "20519857538";
-
-const buildSalePdfUrl = (sale: Sale): string | undefined => {
-  const tipo = sale.tipoComprobante?.toLowerCase();
-  const serie = sale.serie?.toString().trim();
-  const correlativo = sale.correlativo?.toString().trim();
-
-  if (!tipo || !serie || !correlativo) {
-    return undefined;
-  }
-
-  const typeInfo = tipo.includes("boleta")
-    ? { folder: "boleta", code: "03" }
-    : tipo.includes("factura")
-    ? { folder: "factura", code: "01" }
-    : null;
-
-  if (!typeInfo) {
-    return undefined;
-  }
-
-  const fileName = `${COMPANY_RUC}-${typeInfo.code}-${serie}-${correlativo}.pdf`;
-  return `${BACKEND_URL}/api/sunat/pdf/${typeInfo.folder}/${fileName}`;
-};
-
-const formatInventoryQuantity = (value: number): string => {
-  if (!Number.isFinite(value)) {
-    return "";
-  }
-
-  if (Number.isInteger(value)) {
-    return String(value);
-  }
-
-  return value.toFixed(2).replace(/\.00$/, "");
-};
-
-// --- NUEVO: glosa corta para vista compacta (móvil)
-const shortGlosa = (desc?: string, max = 80) => {
-  if (!desc) return '-';
-  // Toma la parte izquierda antes del " – " (para no mostrar proveedor/voucher)
-  const [left] = desc.split(' – ');
-  const clean = left.trim().replace(/\s{2,}/g, ' ');
-  return clean.length > max ? clean.slice(0, max - 1).trimEnd() + '…' : clean;
-};
-
-const enhanceDescriptionWithInventorySummary = (
-  baseDescription?: string | null,
-  summary?: string
-): string | undefined => {
-  const description = baseDescription ?? undefined;
-
-  if (!summary || !summary.trim()) {
-    return description;
-  }
-
-  const trimmedSummary = summary.trim();
-
-  if (!description) {
-    return trimmedSummary;
-  }
-
-  if (description.toLowerCase().includes(trimmedSummary.toLowerCase())) {
-    return description;
-  }
-
-  const [leftRaw, ...restParts] = description.split(" – ");
-  const left = leftRaw?.trim() ?? "";
-
-  if (!left) {
-    const rest = restParts.join(" – ").trim();
-    return rest ? `${trimmedSummary} – ${rest}` : trimmedSummary;
-  }
-
-  const prefixMatch = left.match(
-    /^(Ingreso|Salida)(?:\s+al\s+Inventario(?:\s+del\s+Item)?)?/i
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap max-w-[400px]">
+      <span className="text-sm text-muted-foreground">{parsed.type}</span>
+      {parsed.invoice && (
+        <Badge
+          variant="outline"
+          className="text-xs font-mono bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+        >
+          {parsed.invoice}
+        </Badge>
+      )}
+      {parsed.entity && (
+        <Badge
+          variant="outline"
+          className="text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+        >
+          {parsed.entity}
+        </Badge>
+      )}
+      {parsed.paymentMethod && (
+        <Badge
+          variant="outline"
+          className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+        >
+          {parsed.paymentMethod}
+        </Badge>
+      )}
+    </div>
   );
-  const prefix = prefixMatch ? prefixMatch[0].trim() : left;
-  const rest = restParts.join(" – ").trim();
-  const enhancedLeft = `${prefix} ${trimmedSummary}`.trim();
+}
 
-  return rest ? `${enhancedLeft} – ${rest}` : enhancedLeft;
-};
+function ModernTooltip({ children, content }: { children: React.ReactNode; content: string }) {
+  // Parse items separated by " | "
+  const items = content.includes(" | ") ? content.split(" | ") : [content];
+  const hasMultipleItems = items.length > 1;
 
-type InventoryEntryDetail = {
-  product_name?: string | null;
-  productName?: string | null;
-  product?: { name?: string | null } | null;
-  item?: { name?: string | null; productName?: string | null } | null;
-  name?: string | null;
-  itemName?: string | null;
-  descripcion?: string | null;
-  description?: string | null;
-  quantity?: number | string | null;
-  cantidad?: number | string | null;
-  qty?: number | string | null;
-  amount?: number | string | null;
-  stockChange?: number | string | null;
-};
-
-const normalizeInventoryDetails = (value: unknown): InventoryEntryDetail[] => {
-  if (!value) {
-    return [];
-  }
-
-  if (Array.isArray(value)) {
-    return value as InventoryEntryDetail[];
-  }
-
-  if (typeof value === "object") {
-    const maybeDetails =
-      (value as any)?.details ??
-      (value as any)?.data?.details ??
-      (value as any)?.entry?.details;
-
-    if (Array.isArray(maybeDetails)) {
-      return maybeDetails as InventoryEntryDetail[];
-    }
-  }
-
-  return [];
-};
-
-const buildInventoryEntrySummaries = async (
-  entryIds: number[],
-): Promise<InventoryEntrySummaryMap> => {
-  if (entryIds.length === 0) {
-    return new Map();
-  }
-
-  const uniqueIds = Array.from(new Set(entryIds)).filter((id) => id > 0);
-
-  if (uniqueIds.length === 0) {
-    return new Map();
-  }
-
-  const results = await Promise.all(
-    uniqueIds.map(async (entryId) => {
-      try {
-        const detailJson = await fetchEntryById(entryId);
-
-        if (!detailJson) {
-          return null;
-        }
-        const details = normalizeInventoryDetails(detailJson);
-
-        const summaryParts = details
-          .map((detail) => {
-            const nameCandidates = [
-              typeof detail?.productName === "string"
-                ? detail.productName
-                : undefined,
-              typeof detail?.product?.name === "string"
-                ? detail.product.name
-                : undefined,
-              typeof detail?.item?.productName === "string"
-                ? detail.item.productName
-                : undefined,
-              typeof detail?.item?.name === "string"
-                ? detail.item.name
-                : undefined,
-              typeof detail?.product_name === "string"
-                ? detail.product_name
-                : undefined,
-              typeof detail?.name === "string" ? detail.name : undefined,
-              typeof detail?.itemName === "string" ? detail.itemName : undefined,
-              typeof detail?.descripcion === "string"
-                ? detail.descripcion
-                : undefined,
-              typeof detail?.description === "string"
-                ? detail.description
-                : undefined,
-            ];
-            const rawName = nameCandidates.find(
-              (candidate) => candidate && candidate.trim().length > 0
-            );
-            const name = rawName?.trim();
-            if (!name) {
-              return undefined;
-            }
-
-            const normalizedName = name.replace(/\s{2,}/g, " ");
-
-            const quantityRaw =
-              detail?.quantity ??
-              detail?.cantidad ??
-              detail?.qty ??
-              detail?.amount ??
-              detail?.stockChange;
-
-            const quantityValue =
-              typeof quantityRaw === "string"
-                ? Number(quantityRaw.replace(/,/g, "."))
-                : Number(quantityRaw);
-
-            const formattedQuantity = formatInventoryQuantity(quantityValue);
-
-            return formattedQuantity
-              ? `${normalizedName} - ${formattedQuantity}`
-              : normalizedName;
-          })
-          .filter((value:any): value is string => typeof value === "string" && value.trim().length > 0);
-
-        const dedupedSummaryParts = Array.from(
-          new Map(
-            summaryParts.map((part) => {
-              const key = part.replace(/\s*-\s*\d+(?:\.\d+)?$/, "").trim();
-              return [key.toLowerCase(), part] as const;
-            })
-          ).values()
-        );
-
-        const summary = dedupedSummaryParts.join(", ");
-        if (!summary.trim()) {
-          return null;
-        }
-
-        return [entryId, summary] as const;
-      } catch {
-        return null;
-      }
-    })
+  return (
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="max-w-lg p-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700/50 shadow-2xl backdrop-blur-sm overflow-hidden"
+        sideOffset={8}
+      >
+        <div className="p-4">
+          {hasMultipleItems ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-700/50">
+                <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+                <p className="text-xs font-semibold text-slate-200">
+                  Información completa
+                </p>
+              </div>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
+                {items.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2 p-2 rounded-md bg-slate-800/40 hover:bg-slate-800/60 transition-colors"
+                  >
+                    <span className="text-blue-400 text-xs font-mono mt-0.5">•</span>
+                    <p className="text-xs text-slate-300 leading-relaxed flex-1">
+                      {item.trim()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {content}
+            </p>
+          )}
+        </div>
+        <div className="h-1 bg-gradient-to-r from-blue-500/50 via-purple-500/50 to-blue-500/50" />
+      </TooltipContent>
+    </Tooltip>
   );
-
-  return new Map(
-    results.filter((result): result is [number, string] => Array.isArray(result))
-  );
-};
-
-function buildJournalFromSale(sale: Sale): DailyLine[] {
-  const totalSale = sale.items.reduce(
-    (sum, i) => sum + i.qty * (i.unitPrice ?? 0),
-    0
-  );
-  const payments =
-    sale.payments && sale.payments.length > 0
-      ? sale.payments
-      : [{ method: "Efectivo", amount: totalSale }];
-
-  const lines: DailyLine[] = [];
-
-  const paymentMethodMap: Record<number, string> = {
-    [-1]: "EN EFECTIVO",
-    [-2]: "TRANSFERENCIA",
-    [-3]: "PAGO CON VISA",
-    [-4]: "YAPE",
-    [-5]: "PLIN",
-    [-6]: "OTRO MEDIO DE PAGO",
-  };
-
-  for (const item of sale.items) {
-    const itemTotal = Number((item.qty * (item.unitPrice ?? 0)).toFixed(2));
-    const itemBase = Number((itemTotal / 1.18).toFixed(2));
-    const itemIgv = Number((itemTotal - itemBase).toFixed(2));
-    const itemCost = Number((item.qty * (item.costUnit ?? 0)).toFixed(2));
-    const productName = item.productName ?? "producto";
-    const seriesPart =
-      item.series && item.series.length > 0
-        ? ` (${item.series.join(", ")})`
-        : "";
-    const voucher = buildVoucher(sale.serie, sale.correlativo);
-    const saleDesc = `Venta ${productName}${seriesPart}${voucher ? ` ${voucher}` : ""}`;
-    const formattedSale = formatDisplayGlosa({
-      baseDescription: saleDesc,
-      voucher,
-      serie: sale.serie,
-      tipoComprobante: sale.tipoComprobante ?? null,
-    });
-    const revenueBase = formatGlosa({
-      account: "7011",
-      serie: sale.serie,
-      correlativo: sale.correlativo,
-      productName,
-    });
-    const formattedRevenue = formatDisplayGlosa({
-      baseDescription: revenueBase,
-      voucher,
-      serie: sale.serie,
-      tipoComprobante: sale.tipoComprobante ?? null,
-    });
-
-    for (const p of payments) {
-      const proportion = p.amount / totalSale || 0;
-      const amount = Number((itemTotal * proportion).toFixed(2));
-      const account =
-        p.method && p.method.toLowerCase() === "efectivo" ? "1011" : "1041";
-      lines.push({
-        date: sale.date,
-        account,
-        description: formattedSale.description ?? saleDesc,
-        debit: amount,
-        credit: 0,
-        quantity: item.qty,
-        provider: sale.customerName ?? undefined,
-        documentType: formattedSale.documentType,
-        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
-        voucher,
-        sale,
-      });
-    }
-
-    lines.push(
-      {
-        date: sale.date,
-        account: "7011",
-        description: formattedRevenue.description ?? revenueBase,
-        debit: 0,
-        credit: itemBase,
-        quantity: item.qty,
-        documentType: formattedRevenue.documentType ?? formattedSale.documentType,
-        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
-        provider: sale.customerName ?? undefined,
-        voucher,
-        sale,
-      },
-      {
-        date: sale.date,
-        account: "4011",
-        description: formattedSale.description ?? saleDesc,
-        debit: 0,
-        credit: itemIgv,
-        quantity: item.qty,
-        documentType: formattedSale.documentType,
-        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
-        provider: sale.customerName ?? undefined,
-        voucher,
-        sale,
-      },
-      {
-        date: sale.date,
-        account: "6911",
-        description: formattedSale.description ?? saleDesc,
-        debit: itemCost,
-        credit: 0,
-        quantity: item.qty,
-        documentType: formattedSale.documentType,
-        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
-        provider: sale.customerName ?? undefined,
-        voucher,
-        sale,
-      },
-      {
-        date: sale.date,
-        account: "2011",
-        description: formattedSale.description ?? saleDesc,
-        debit: 0,
-        credit: itemCost,
-        quantity: item.qty,
-        documentType: formattedSale.documentType,
-        series: formattedSale.series.length > 0 ? formattedSale.series : item.series ?? [],
-        provider: sale.customerName ?? undefined,
-        voucher,
-        sale,
-      }
-    );
-  }
-
-  return lines;
 }
 
 export default function JournalsPage() {
-  const router = useRouter();
-  const [journals, setJournals] = useState<Journal[]>([]);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editing, setEditing] = useState<Journal | null>(null);
+  const { version } = useTenantSelection();
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
+  const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -568,820 +200,438 @@ export default function JournalsPage() {
     const dd = String(d.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   });
-  const [dailyLines, setDailyLines] = useState<DailyLine[]>([]);
-  const [dailyLoading, setDailyLoading] = useState(false);
-  const [selectedLine, setSelectedLine] = useState<DailyLine | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Journal | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const { version } = useTenantSelection();
+  const [filters, setFilters] = useState<JournalEntryFilters>({});
+  const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    fetchJournals()
-      .then((js) => {
-        if (!cancelled) {
-          setJournals(sortByDateDesc(js));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setJournals([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+    loadEntries();
+  }, [version, selectedDate, periodView, filters]);
 
-  useEffect(() => {
-    const loadDaily = async () => {
-      setDailyLoading(true);
-      try {
-        const from = new Date(`${selectedDate}T00:00:00.000Z`).toISOString();
-        const to = new Date(`${selectedDate}T23:59:59.999Z`).toISOString();
-
-        let entriesResult: { data: any[] };
-        let sales: Sale[] = [];
-        try {
-          [entriesResult, sales] = await Promise.all([
-            fetchAccountingEntries(from, to),
-            fetchSalesTransactions(from, to) as Promise<Sale[]>,
-          ]);
-        } catch (err: any) {
-          if (err?.name === "UnauthenticatedError" || err?.message?.includes("Unauthenticated")) {
-            setDailyLines([]);
-            router.push("/login");
-            return;
-          }
-          throw err;
-        }
-
-        let lines: DailyLine[] = [];
-
-        const salesByVoucher = new Map<string, Sale>();
-        for (const sale of sales) {
-          const saleVoucher = buildVoucher(sale.serie, sale.correlativo);
-          const normalizedSaleVoucher = normalizeVoucherKey(saleVoucher);
-          if (normalizedSaleVoucher) {
-            const saleWithExtras: Sale = {
-              ...sale,
-              voucher: saleVoucher,
-              pdfUrl: sale.pdfUrl ?? buildSalePdfUrl(sale),
-            };
-            salesByVoucher.set(normalizedSaleVoucher, saleWithExtras);
-          }
-        }
-
-        {
-          const entriesData = Array.isArray(entriesResult.data) ? entriesResult.data : [];
-
-          const inventoryEntryIds = entriesData
-            .filter((entry: any) => (entry?.source ?? "") === "inventory_entry")
-            .map((entry: any) => {
-              const rawId =
-                entry?.sourceId ??
-                entry?.source_id ??
-                (entry?.source === "inventory_entry" ? entry?.id : undefined);
-              const numericId = Number(rawId);
-              return Number.isInteger(numericId) ? numericId : undefined;
-            })
-            .filter((id:any): id is number => typeof id === "number");
-
-          const inventorySummaries = await buildInventoryEntrySummaries(
-            inventoryEntryIds,
-          );
-
-          lines = entriesData.flatMap((e: any) => {
-            const voucher = buildVoucher(e.serie ?? undefined, e.correlativo ?? undefined);
-            const normalizedVoucher = normalizeVoucherKey(voucher);
-            const sale = normalizedVoucher ? salesByVoucher.get(normalizedVoucher) : undefined;
-            const rawSourceId =
-              e?.sourceId ??
-              e?.source_id ??
-              (e?.source === "inventory_entry" ? e?.id : undefined);
-            const numericSourceId = Number(rawSourceId);
-            const inventorySummary =
-              e?.source === "inventory_entry" && Number.isInteger(numericSourceId)
-                ? inventorySummaries.get(numericSourceId)
-                : undefined;
-            const entryLines: EntryLineDetail[] = (e.lines ?? []).map((line: any) => {
-              const baseLineDescription =
-                line.account === "2011"
-                  ? enhanceDescriptionWithInventorySummary(
-                      line.description,
-                      inventorySummary
-                    )
-                  : line.description;
-              const formattedLine = formatDisplayGlosa({
-                baseDescription: baseLineDescription,
-                provider: e.provider,
-                voucher,
-                serie: e.serie,
-                tipoComprobante: e.tipoComprobante,
-              });
-
-              return {
-                account: line.account,
-                description: formattedLine.description ?? line.description,
-                debit: Number(line.debit ?? 0),
-                credit: Number(line.credit ?? 0),
-                quantity:
-                  line.quantity !== undefined && line.quantity !== null
-                    ? Number(line.quantity)
-                    : undefined,
-              };
-            });
-
-            return (e.lines ?? []).map((l: any, idx: number) => {
-              const baseDescription =
-                l.account === "2011"
-                  ? enhanceDescriptionWithInventorySummary(
-                      l.description ?? e.description ?? undefined,
-                      inventorySummary
-                    )
-                  : l.description ?? e.description ?? undefined;
-              const formatted = formatDisplayGlosa({
-                baseDescription,
-                provider: e.provider ?? undefined,
-                voucher,
-                serie: e.serie ?? undefined,
-                tipoComprobante: (e as any).tipoComprobante ?? null,
-              });
-
-              const entryLine = entryLines[idx] ?? {
-                account: l.account,
-                description: l.description ?? undefined,
-                debit: Number(l.debit ?? 0),
-                credit: Number(l.credit ?? 0),
-                quantity:
-                  l.quantity !== undefined && l.quantity !== null
-                    ? Number(l.quantity)
-                    : undefined,
-              };
-
-              const saleSeries =
-                sale?.items
-                  ?.flatMap((item) => item.series ?? [])
-                  .filter((serie): serie is string => typeof serie === "string")
-                  .map((serie) => serie.trim())
-                  .filter((serie) => serie.length > 0) ?? [];
-
-              const formattedSeries = (formatted.series ?? []).flatMap((serie) => {
-                if (!serie) return [];
-                const trimmed = serie.trim();
-                if (!trimmed) return [];
-
-                const plusPattern = /^(.*?)(?:\s*\+\s*\d+\s*(?:ítems?|items?))$/i;
-                const plusOnlyPattern = /^\+\s*\d+\s*(?:ítems?|items?)$/i;
-
-                if (plusOnlyPattern.test(trimmed)) {
-                  return [];
-                }
-
-                const match = trimmed.match(plusPattern);
-                if (match) {
-                  const base = match[1]?.trim();
-                  return base ? [base] : [];
-                }
-
-                return [trimmed];
-              });
-
-              const combinedSeries = Array.from(
-                new Set([...saleSeries, ...formattedSeries])
-              );
-
-              const entryInvoiceUrl = buildInvoiceUrl(e.invoiceUrl);
-              const invoiceUrl = entryInvoiceUrl ?? sale?.pdfUrl;
-
-              return {
-                date: e.date,
-                account: entryLine.account,
-                description: formatted.description,
-                debit: entryLine.debit,
-                credit: entryLine.credit,
-                quantity: entryLine.quantity,
-                provider: e.provider ?? undefined,
-                voucher,
-                documentType: formatted.documentType ?? sale?.tipoComprobante ?? undefined,
-                series: combinedSeries,
-                entryId: e.id,
-                invoiceUrl,
-                entryDescription: e.description ?? undefined,
-                sale: sale ?? undefined,
-                entryLines,
-              } as DailyLine;
-            });
-          });
-        }
-
-        setDailyLines(sortByDateDesc(lines));
-      } catch {
-        setDailyLines([]);
-      } finally {
-        setDailyLoading(false);
-      }
-    };
-    loadDaily();
-  }, [selectedDate, version]);
-
-  const totals = useMemo(() => {
-    return dailyLines.reduce(
-      (acc, l) => {
-        acc.debit += l.debit || 0;
-        acc.credit += l.credit || 0;
-        return acc;
-      },
-      { debit: 0, credit: 0 }
-    );
-  }, [dailyLines]);
-
-  const handleCreate = (journal: Journal) => {
-    setJournals((prev) => sortByDateDesc([...prev, journal]));
-  };
-
-  const handleUpdate = (journal: Journal) => {
-    setJournals((prev) =>
-      sortByDateDesc(prev.map((j) => (j.id === journal.id ? journal : j)))
-    );
-  };
-
-  const performDelete = async (id: string) => {
-    await deleteJournal(id);
-    setJournals((prev) => sortByDateDesc(prev.filter((j) => j.id !== id)));
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
+  const loadEntries = async () => {
+    setLoading(true);
     try {
-      await performDelete(deleteTarget.id);
-      setDeleteTarget(null);
+      const from = getDateRange().from;
+      const to = getDateRange().to;
+
+      const result = await getJournalEntries({
+        from,
+        to,
+        ...filters,
+      });
+
+      setEntries(result.data);
     } catch (error) {
-      console.error('Failed to delete journal entry', error);
+      console.error("Error loading journal entries:", error);
+      setEntries([]);
     } finally {
-      setIsDeleting(false);
+      setLoading(false);
     }
   };
 
-  const openLineDetail = (line: DailyLine) => setSelectedLine(line);
+  const getDateRange = () => {
+    // Parse la fecha seleccionada en hora local
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    let from: string;
+    let to: string;
+
+    if (periodView === "day") {
+      // Crear fechas en hora local, no UTC
+      const fromDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+      const toDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+      from = fromDate.toISOString();
+      to = toDate.toISOString();
+    } else if (periodView === "month") {
+      from = new Date(year, month - 1, 1, 0, 0, 0, 0).toISOString();
+      to = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+    } else {
+      from = new Date(year, 0, 1, 0, 0, 0, 0).toISOString();
+      to = new Date(year, 11, 31, 23, 59, 59, 999).toISOString();
+    }
+
+    return { from, to };
+  };
+
+  const toggleExpanded = (id: number) => {
+    const newExpanded = new Set(expandedEntries);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedEntries(newExpanded);
+  };
+
+  const handleExportPLE = async (format: "5.1" | "6.1") => {
+    try {
+      const { from, to } = getDateRange();
+      await exportPLE(from, to, format);
+    } catch (error) {
+      console.error("Error exporting PLE:", error);
+    }
+  };
+
+  const totals = entries.reduce(
+    (acc, entry) => {
+      if (entry.status !== "VOID") {
+        // Asegurar conversión a número para evitar concatenación de strings
+        acc.debit += Number(entry.debitTotal) || 0;
+        acc.credit += Number(entry.creditTotal) || 0;
+      }
+      return acc;
+    },
+    { debit: 0, credit: 0 }
+  );
+
+  const balanceOk = Math.abs(totals.debit - totals.credit) < 0.01;
 
   return (
-    <div className="space-y-4">
+    <TooltipProvider>
+      <div className="space-y-4">
+      {/* Header con filtros */}
       <Card className="shadow-sm">
-        <CardHeader className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-          <div>
-            <CardTitle className="leading-tight">Diario del Día</CardTitle>
-            <p className="text-sm text-muted-foreground">{new Date(selectedDate).toLocaleDateString("es-PE")}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Fecha</span>
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-9 w-[180px]"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="overflow-x-auto rounded-md border hidden md:block">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background">
-                <TableRow>
-                  <TableHead className="w-[120px]">Fecha y hora</TableHead>
-                  <TableHead className="min-w-[200px]">Cuenta</TableHead>
-                  <TableHead className="min-w-[320px]">Glosa</TableHead>
-                  <TableHead className="text-right w-[100px]">Cantidad</TableHead>
-                  <TableHead className="text-right w-[140px]">Debe</TableHead>
-                  <TableHead className="text-right w-[140px]">Haber</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dailyLoading ? (
-                  Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-44" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-80" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : dailyLines.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                      Sin movimientos para la fecha seleccionada.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <>
-                    {dailyLines.map((l, idx) => (
-                      <TableRow key={idx} className="odd:bg-muted/5">
-                        <TableCell>{new Date(l.date).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
-                              {l.account}
-                            </span>
-                            <span className="text-sm text-muted-foreground">
-                              {accountNames[l.account] ?? ""}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          className="text-sm cursor-zoom-in"
-                          onDoubleClick={() => openLineDetail(l)}
-                        >
-                          {/* UNA LÍNEA con ellipsis y tooltip */}
-                          <div className="max-w-[520px] truncate" title={l.description ?? '-'}>
-                            {l.description ?? '-'}
-                          </div>
-                          {l.documentType && (
-                            <div className="mt-1 text-xs font-medium text-muted-foreground">
-                              Tipo: {l.documentType}
-                            </div>
-                          )}
-                          {l.series && l.series.length > 0 && (
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              Series: {l.series.join(", ")}
-                            </div>
-                          )}
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            Doble clic para ver detalle
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">{l.quantity ? l.quantity : ""}</TableCell>
-                        <TableCell className="text-right">
-                          {l.debit ? l.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {l.credit ? l.credit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-right font-medium">Totales</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {totals.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {totals.credit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  </>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="space-y-3 md:hidden">
-            {dailyLoading ? (
-              Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="space-y-2 rounded-md border p-4 shadow-sm"
-                >
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-full" />
-                  <div className="grid grid-cols-2 gap-3 pt-2 text-xs text-muted-foreground">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-full" />
-                  </div>
-                </div>
-              ))
-            ) : dailyLines.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                Sin movimientos para la fecha seleccionada.
+        <CardHeader>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="leading-tight">Libro Diario</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Registro cronológico de asientos contables
               </p>
-            ) : (
-              dailyLines.map((line, index) => (
-                <div
-                  key={`${line.account}-${index}`}
-                  className="space-y-3 rounded-md border p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-medium">
-                      {new Date(line.date).toLocaleString("es-PE", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </div>
-                    <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium">
-                      {line.account}
-                    </span>
-                  </div>
-                  {accountNames[line.account] && (
-                    <p className="text-xs text-muted-foreground">
-                      {accountNames[line.account]}
-                    </p>
-                  )}
-                  <div className="space-y-1 text-sm">
-                    <p className="font-medium">Glosa</p>
-                    <p className="whitespace-pre-wrap text-muted-foreground">
-                      {shortGlosa(line.description)}
-                    </p>
-                    {line.documentType && (
-                      <p className="text-xs text-muted-foreground">
-                        Tipo: {line.documentType}
-                      </p>
-                    )}
-                    {line.series && line.series.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Series: {line.series.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-muted-foreground">Cantidad</p>
-                      <p className="font-medium">{line.quantity ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Proveedor</p>
-                      <p className="font-medium">{line.provider ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Debe</p>
-                      <p className="font-medium">
-                        {line.debit
-                          ? line.debit.toLocaleString("es-PE", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })
-                          : "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Haber</p>
-                      <p className="font-medium">
-                        {line.credit
-                          ? line.credit.toLocaleString("es-PE", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })
-                          : "-"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => openLineDetail(line)}
-                  >
-                    Ver detalle
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
+            </div>
 
-          <div className="flex items-center justify-between rounded-md border px-4 py-3 text-sm font-medium md:hidden">
-            <span>Totales</span>
-            <div className="space-x-4">
-              <span>Debe: {totals.debit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              <span>Haber: {totals.credit.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Vista de período */}
+              <Select
+                value={periodView}
+                onValueChange={(value) => setPeriodView(value as PeriodView)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Día</SelectItem>
+                  <SelectItem value="month">Mes</SelectItem>
+                  <SelectItem value="year">Año</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Selector de fecha */}
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-[180px]"
+              />
+
+              {/* Exportación PLE */}
+              <Select onValueChange={(value) => handleExportPLE(value as "5.1" | "6.1")}>
+                <SelectTrigger className="w-[160px]">
+                  <FileDown className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Exportar PLE" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5.1">PLE 5.1 - Diario</SelectItem>
+                  <SelectItem value="6.1">PLE 6.1 - Mayor</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button size="sm" onClick={() => setFormOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" /> Nuevo Asiento
+              </Button>
             </div>
           </div>
+        </CardHeader>
 
+        <CardContent className="space-y-4">
+          {/* Filtros adicionales */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select
+              value={(filters.sources && filters.sources.length > 0) ? filters.sources[0] : "all"}
+              onValueChange={(value) =>
+                setFilters({ ...filters, sources: value === "all" ? undefined : [value] })
+              }
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Origen" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="SALE">Ventas</SelectItem>
+                <SelectItem value="PURCHASE">Compras</SelectItem>
+                <SelectItem value="ADJUSTMENT">Ajustes</SelectItem>
+                <SelectItem value="MANUAL">Manuales</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={(filters.statuses && filters.statuses.length > 0) ? filters.statuses[0] : "all"}
+              onValueChange={(value) =>
+                setFilters({ ...filters, statuses: value === "all" ? undefined : [value as any] })
+              }
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="DRAFT">Borrador</SelectItem>
+                <SelectItem value="POSTED">Contabilizado</SelectItem>
+                <SelectItem value="VOID">Anulado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Indicador de balance */}
+          <div className="flex items-center justify-between rounded-md border p-3 bg-muted/20">
+            <div className="flex items-center gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Debe:</span>{" "}
+                <span className="font-medium">
+                  {totals.debit.toLocaleString("es-PE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Haber:</span>{" "}
+                <span className="font-medium">
+                  {totals.credit.toLocaleString("es-PE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            </div>
+            <Badge
+              variant={balanceOk ? "default" : "destructive"}
+              className="flex items-center gap-1"
+            >
+              {balanceOk ? (
+                <>
+                  <CheckCircle2 className="h-3 w-3" />
+                  Balanceado
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-3 w-3" />
+                  Desbalanceado
+                </>
+              )}
+            </Badge>
+          </div>
         </CardContent>
       </Card>
 
+      {/* Tabla de asientos */}
       <Card className="shadow-sm">
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Diarios del día</CardTitle>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Nuevo Diario
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-md border">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fecha y hora</TableHead>
-                  <TableHead>Cuenta</TableHead>
-                  <TableHead>Glosa</TableHead>
-                  <TableHead className="text-right">Debe</TableHead>
-                  <TableHead className="text-right">Haber</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead />
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead className="w-[120px]">Fecha</TableHead>
+                  <TableHead className="w-[100px]">Correlativo</TableHead>
+                  <TableHead className="w-[100px]">CUO</TableHead>
+                  <TableHead className="min-w-[200px]">Descripción</TableHead>
+                  <TableHead className="w-[100px]">Origen</TableHead>
+                  <TableHead className="w-[120px]">Estado</TableHead>
+                  <TableHead className="text-right w-[120px]">Debe</TableHead>
+                  <TableHead className="text-right w-[120px]">Haber</TableHead>
+                  <TableHead className="text-right w-[100px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {journals.map((j) => (
-                  <TableRow key={j.id}>
-                    <TableCell>{new Date(j.date).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" })}</TableCell>
-                    <TableCell className="text-muted-foreground">-</TableCell>
-                    <TableCell>{j.description}</TableCell>
-                    <TableCell className="text-right"></TableCell>
-                    <TableCell className="text-right"></TableCell>
-                    <TableCell className="text-right">
-                      {Number(j.amount ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditing(j)}
-                        aria-label="Editar"
-                        className="group relative cursor-pointer"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        <span
-                          className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-muted px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          Editar
-                        </span>
-                      </Button>
-                      <DeleteActionsGuard>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteTarget(j)}
-                          aria-label="Eliminar"
-                          className="group relative cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span
-                            className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                          >
-                            Eliminar
-                          </span>
-                        </Button>
-                      </DeleteActionsGuard>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-full" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : entries.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      No hay asientos contables para el período seleccionado
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  entries.map((entry) => {
+                    const isExpanded = expandedEntries.has(entry.id);
+                    const fullDescription = entry.description || "";
+
+                    return (
+                      <React.Fragment key={entry.id}>
+                        <TableRow
+                          className={cn(
+                            "cursor-pointer hover:bg-muted/50",
+                            entry.status === "VOID" && "opacity-50"
+                          )}
+                          onClick={() => toggleExpanded(entry.id)}
+                        >
+                          <TableCell>
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(entry.date).toLocaleDateString("es-PE")}
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-xs">{entry.correlativo}</code>
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-xs">{entry.cuo}</code>
+                          </TableCell>
+                          <TableCell>
+                            {fullDescription ? (
+                              <ModernTooltip content={fullDescription}>
+                                <div className="cursor-help">
+                                  <DescriptionTags description={fullDescription} />
+                                </div>
+                              </ModernTooltip>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {sourceLabels[entry.source]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                entry.status === "POSTED"
+                                  ? "default"
+                                  : entry.status === "VOID"
+                                  ? "destructive"
+                                  : "secondary"
+                              }
+                              className="flex items-center gap-1 w-fit"
+                            >
+                              {statusIcons[entry.status]}
+                              {statusLabels[entry.status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {entry.debitTotal.toLocaleString("es-PE", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {entry.creditTotal.toLocaleString("es-PE", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
+                              Editar
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Líneas expandidas */}
+                        {isExpanded && (
+                          <TableRow>
+                            <TableCell colSpan={10} className="bg-muted/20 p-0">
+                              <div className="px-4 py-3">
+                                <p className="text-sm font-medium mb-2">Detalle de líneas:</p>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="w-[120px]">Cuenta</TableHead>
+                                      <TableHead>Descripción</TableHead>
+                                      <TableHead className="text-right w-[120px]">Debe</TableHead>
+                                      <TableHead className="text-right w-[120px]">Haber</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {entry.lines.map((line, idx) => {
+                                      const descriptionText = line.description || "-";
+                                      const isLongDescription = descriptionText.length > 60;
+
+                                      return (
+                                        <TableRow key={idx} className="text-sm">
+                                          <TableCell>
+                                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                              {line.account?.code || "-"}
+                                            </code>
+                                          </TableCell>
+                                          <TableCell>
+                                            {isLongDescription ? (
+                                              <ModernTooltip content={descriptionText}>
+                                                <div className="max-w-md truncate cursor-help text-sm">
+                                                  {descriptionText}
+                                                </div>
+                                              </ModernTooltip>
+                                            ) : (
+                                              <div className="text-sm">{descriptionText}</div>
+                                            )}
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono">
+                                            {line.debit > 0
+                                              ? line.debit.toLocaleString("es-PE", {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                                })
+                                              : ""}
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono">
+                                            {line.credit > 0
+                                              ? line.credit.toLocaleString("es-PE", {
+                                                  minimumFractionDigits: 2,
+                                                  maximumFractionDigits: 2,
+                                                })
+                                              : ""}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                                {entry.sunatStatus && (
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Estado SUNAT: {entry.sunatStatus}
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      <DeleteActionsGuard>
-        <AlertDialog
-          open={!!deleteTarget}
-          onOpenChange={(open) => {
-            if (!open && !isDeleting) {
-              setDeleteTarget(null);
-            }
-          }}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Eliminar asiento</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta accion borrara el asiento seleccionado. Esta operacion no se puede deshacer.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting}>
-                {isDeleting ? "Eliminando..." : "Eliminar"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DeleteActionsGuard>
-      <JournalForm
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreate={handleCreate}
+      {/* Formulario de creación de asientos */}
+      <JournalEntryForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSuccess={() => {
+          loadEntries();
+          setFormOpen(false);
+        }}
       />
-      <JournalForm
-        open={!!editing}
-        onOpenChange={(open) => !open && setEditing(null)}
-        defaultValues={editing ?? undefined}
-        onUpdate={handleUpdate}
-      />
-
-      <Dialog open={!!selectedLine} onOpenChange={(open) => !open && setSelectedLine(null)}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Detalle de glosa</DialogTitle>
-            {(selectedLine?.description || selectedLine?.entryDescription) && (
-              <DialogDescription>
-                {selectedLine?.description ?? selectedLine?.entryDescription}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-          {selectedLine && (
-            <div className="space-y-6">
-              <div className="grid gap-4 text-sm sm:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Fecha y hora</p>
-                  <p className="font-medium">
-                    {new Date(selectedLine.date).toLocaleString("es-PE", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Cuenta</p>
-                  <p className="font-medium">{selectedLine.account}</p>
-                </div>
-                {selectedLine.documentType && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Tipo de comprobante</p>
-                    <p className="font-medium">{selectedLine.documentType}</p>
-                  </div>
-                )}
-                {selectedLine.voucher && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Comprobante</p>
-                    <p className="font-medium">{selectedLine.voucher}</p>
-                  </div>
-                )}
-                {(selectedLine.provider || selectedLine.sale?.customerName) && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      {selectedLine.provider ? "Proveedor" : "Cliente"}
-                    </p>
-                    <p className="font-medium">
-                      {selectedLine.provider ?? selectedLine.sale?.customerName}
-                    </p>
-                  </div>
-                )}
-                {selectedLine.quantity !== undefined && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Cantidad</p>
-                    <p className="font-medium">{selectedLine.quantity}</p>
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Debe</p>
-                  <p className="font-medium">
-                    {selectedLine.debit
-                      ? selectedLine.debit.toLocaleString("es-PE", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
-                      : "0.00"}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Haber</p>
-                  <p className="font-medium">
-                    {selectedLine.credit
-                      ? selectedLine.credit.toLocaleString("es-PE", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
-                      : "0.00"}
-                  </p>
-                </div>
-              </div>
-
-              {selectedLine.series && selectedLine.series.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Series asociadas</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedLine.series.map((serie) => (
-                      <span
-                        key={serie}
-                        className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs"
-                      >
-                        {serie}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedLine.sale && selectedLine.sale.items.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-sm font-semibold">Ítems del comprobante</p>
-                    {selectedLine.sale.total !== undefined && (
-                      <p className="text-xs text-muted-foreground">
-                        Total: {selectedLine.sale.total.toLocaleString("es-PE", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </p>
-                    )}
-                  </div>
-                  <div className="max-h-56 overflow-y-auto rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Producto</TableHead>
-                          <TableHead className="text-right">Cantidad</TableHead>
-                          <TableHead className="text-right">Precio unitario</TableHead>
-                          <TableHead className="text-right">Importe</TableHead>
-                          <TableHead>Series</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedLine.sale.items.map((item, index) => {
-                          const amount = Number(
-                            ((item.qty ?? 0) * (item.unitPrice ?? 0)).toFixed(2)
-                          );
-                          return (
-                            <TableRow key={`${item.productName}-${index}`}>
-                              <TableCell className="max-w-[180px] whitespace-normal">
-                                {item.productName}
-                              </TableCell>
-                              <TableCell className="text-right">{item.qty}</TableCell>
-                              <TableCell className="text-right">
-                                {item.unitPrice?.toLocaleString("es-PE", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {amount.toLocaleString("es-PE", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </TableCell>
-                              <TableCell className="max-w-[160px] whitespace-normal">
-                                {item.series && item.series.length > 0
-                                  ? item.series.join(", ")
-                                  : "-"}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              )}
-
-              {selectedLine.entryLines && selectedLine.entryLines.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold">Detalle contable</p>
-                  <div className="max-h-64 overflow-y-auto rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Cuenta</TableHead>
-                          <TableHead>Descripción</TableHead>
-                          <TableHead className="text-right">Debe</TableHead>
-                          <TableHead className="text-right">Haber</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedLine.entryLines.map((line, index) => (
-                          <TableRow key={`${line.account}-${index}`}>
-                            <TableCell>{line.account}</TableCell>
-                            <TableCell className="max-w-[220px] whitespace-normal">
-                              {line.description ?? "-"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {line.debit.toLocaleString("es-PE", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {line.credit.toLocaleString("es-PE", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {(selectedLine?.invoiceUrl || selectedLine?.voucher) && (
-            <DialogFooter>
-              {selectedLine?.invoiceUrl && (
-                <Button asChild variant="outline">
-                  <a
-                    href={selectedLine.invoiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Abrir comprobante
-                  </a>
-                </Button>
-              )}
-              {!selectedLine?.invoiceUrl && selectedLine?.voucher && (
-                <span className="text-xs text-muted-foreground">
-                  No se encontró un enlace de comprobante para {selectedLine.voucher}.
-                </span>
-              )}
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

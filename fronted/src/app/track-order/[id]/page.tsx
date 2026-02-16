@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { BACKEND_URL } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -96,11 +97,9 @@ export default function TrackOrderDetailsPage() {
           setProducts(list);
         }
 
-        const backendUrl =
-          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
         // Backend has a global '/api' prefix; include it here
         const res = await fetch(
-          `${backendUrl}/api/orders/${encodeURIComponent(id)}/tracking`
+          `${BACKEND_URL}/api/orders/${encodeURIComponent(id)}/tracking`
         );
         if (res.ok) {
           const trackingData = await res.json();

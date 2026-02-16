@@ -1,0 +1,14 @@
+{
+  "name": "skill-development",
+  "description": "Tools for creating, auditing, and maintaining Claude Code skills. Includes /create-skill for scaffolding, /review-skill for quality checks, and /audit commands for bulk verification. Use when: building new skills, maintaining skill quality, or forking claude-skills repo.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jeremy Dawes",
+    "email": "jeremy@jezweb.net"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/jezweb/claude-skills",
+  "keywords": [],
+  "commands": "./commands/",
+  "agents": "./agents/"
+}

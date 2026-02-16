@@ -1,16 +1,23 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, memo } from "react"
 import Image from "next/image"
-import { Send, Bot, User, Sparkles, BookOpen, BadgeCheck, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, ImageIcon, Download } from "lucide-react"
+import { Send, Bot, User, Sparkles, BookOpen, BadgeCheck, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, ImageIcon, Download, Loader2, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useHelpAssistant } from "@/context/help-assistant-context"
 import type { ChatMessage, HelpStep } from "@/data/help/types"
-import { LocationIndicator, LocationIndicatorCompact } from "./location-indicator"
+import { LocationIndicator } from "./location-indicator"
+import { getSectionDisplayName } from "@/data/help/route-detection"
 
 function StepsGuide({ steps }: { steps: HelpStep[] }) {
   const [expanded, setExpanded] = useState(false)
@@ -104,46 +111,6 @@ function SourceBadge({ source }: { source: ChatMessage["source"] }) {
   )
 }
 
-function FeedbackButtons({ msg }: { msg: ChatMessage }) {
-  const { sendFeedback } = useHelpAssistant()
-
-  if (msg.role !== "assistant") return null
-
-  const hasFeedback = msg.feedback != null
-
-  return (
-    <div className="mt-1 flex items-center gap-1">
-      <button
-        onClick={() => void sendFeedback(msg.id, "POSITIVE")}
-        disabled={hasFeedback}
-        className={`rounded p-0.5 transition-colors ${
-          msg.feedback === "POSITIVE"
-            ? "text-emerald-600 dark:text-emerald-400"
-            : hasFeedback
-              ? "text-slate-300 dark:text-slate-600"
-              : "text-slate-400 hover:text-emerald-600 dark:text-slate-500 dark:hover:text-emerald-400"
-        }`}
-        aria-label="Util"
-      >
-        <ThumbsUp className="h-3 w-3" />
-      </button>
-      <button
-        onClick={() => void sendFeedback(msg.id, "NEGATIVE")}
-        disabled={hasFeedback}
-        className={`rounded p-0.5 transition-colors ${
-          msg.feedback === "NEGATIVE"
-            ? "text-red-500 dark:text-red-400"
-            : hasFeedback
-              ? "text-slate-300 dark:text-slate-600"
-              : "text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
-        }`}
-        aria-label="No util"
-      >
-        <ThumbsDown className="h-3 w-3" />
-      </button>
-    </div>
-  )
-}
 
 function MessageContent({ content }: { content: string }) {
   // Detectar markdown links [text](url)
@@ -196,14 +163,152 @@ function MessageContent({ content }: { content: string }) {
   )
 }
 
+/**
+ * Memoized ChatMessage component to prevent unnecessary re-renders
+ * Only re-renders when message content, feedback, or steps change
+ */
+const ChatMessageItem = memo(({
+  message,
+  onFeedback
+}: {
+  message: ChatMessage;
+  onFeedback: (id: string, feedback: 'POSITIVE' | 'NEGATIVE') => void
+}) => {
+  // FIX #1: Render system messages differently (section separators)
+  if (message.isSystemMessage) {
+    return (
+      <div className="flex items-center justify-center py-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="h-px w-12 bg-border" />
+          <span className="whitespace-nowrap font-medium">{message.content}</span>
+          <div className="h-px w-12 bg-border" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`flex gap-2 ${message.role === "user" ? "flex-row-reverse" : ""}`}
+    >
+      <div
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+          message.role === "user"
+            ? "bg-primary text-primary-foreground"
+            : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+        }`}
+      >
+        {message.role === "user" ? (
+          <User className="h-3.5 w-3.5" />
+        ) : (
+          <Bot className="h-3.5 w-3.5" />
+        )}
+      </div>
+      <div
+        className={`max-w-[80%] rounded-lg px-3 py-2 text-xs ${
+          message.role === "user"
+            ? "bg-primary text-primary-foreground"
+            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        }`}
+      >
+        <div className="whitespace-pre-wrap">
+          <MessageContent content={message.content} />
+        </div>
+        {message.steps && message.steps.length > 0 && (
+          <StepsGuide steps={message.steps} />
+        )}
+        <SourceBadge source={message.source} />
+        <FeedbackButtonsMemoized message={message} onFeedback={onFeedback} />
+      </div>
+    </div>
+  )
+}, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if these properties changed
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.feedback === nextProps.message.feedback &&
+    prevProps.message.role === nextProps.message.role &&
+    prevProps.message.source === nextProps.message.source &&
+    prevProps.message.isSystemMessage === nextProps.message.isSystemMessage &&
+    // Compare steps array length (deep comparison would be expensive)
+    prevProps.message.steps?.length === nextProps.message.steps?.length
+  )
+})
+
+ChatMessageItem.displayName = 'ChatMessageItem'
+
+/**
+ * Memoized FeedbackButtons component
+ */
+const FeedbackButtonsMemoized = memo(({
+  message,
+  onFeedback
+}: {
+  message: ChatMessage;
+  onFeedback: (id: string, feedback: 'POSITIVE' | 'NEGATIVE') => void
+}) => {
+  if (message.role !== "assistant") return null
+
+  const hasFeedback = message.feedback != null
+
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      <button
+        onClick={() => onFeedback(message.id, "POSITIVE")}
+        disabled={hasFeedback}
+        className={`rounded p-0.5 transition-colors ${
+          message.feedback === "POSITIVE"
+            ? "text-emerald-600 dark:text-emerald-400"
+            : hasFeedback
+              ? "text-slate-300 dark:text-slate-600"
+              : "text-slate-400 hover:text-emerald-600 dark:text-slate-500 dark:hover:text-emerald-400"
+        }`}
+        aria-label="Util"
+      >
+        <ThumbsUp className="h-3 w-3" />
+      </button>
+      <button
+        onClick={() => onFeedback(message.id, "NEGATIVE")}
+        disabled={hasFeedback}
+        className={`rounded p-0.5 transition-colors ${
+          message.feedback === "NEGATIVE"
+            ? "text-red-500 dark:text-red-400"
+            : hasFeedback
+              ? "text-slate-300 dark:text-slate-600"
+              : "text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
+        }`}
+        aria-label="No util"
+      >
+        <ThumbsDown className="h-3 w-3" />
+      </button>
+    </div>
+  )
+}, (prevProps, nextProps) => {
+  // Only re-render if feedback changed
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.feedback === nextProps.message.feedback &&
+    prevProps.message.role === nextProps.message.role
+  )
+})
+
+FeedbackButtonsMemoized.displayName = 'FeedbackButtonsMemoized'
+
 export function HelpChatPanel() {
   const {
     isOpen,
+    setIsOpen,
     sectionMeta,
     routeContext, // DETECCIÓN AUTOMÁTICA: Contexto de ubicación
     messages,
     mascotState,
     sendMessage,
+    sendFeedback,
+    // MEDIUM-TERM OPTIMIZATION #2: Pagination
+    hasMoreMessages,
+    isLoadingMore,
+    loadOlderMessages,
   } = useHelpAssistant()
 
   const [input, setInput] = useState("")
@@ -266,8 +371,28 @@ export function HelpChatPanel() {
           </p>
         </div>
         <Badge variant="secondary" className="text-[10px]">
-          {sectionMeta?.label ?? "General"}
+          {getSectionDisplayName(routeContext.section)}
         </Badge>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="group relative flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-all hover:bg-slate-200 hover:text-slate-700 hover:scale-110 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                aria-label="Cerrar asistente"
+              >
+                <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="left"
+              className="animate-in fade-in-0 zoom-in-95 slide-in-from-right-2 duration-200 bg-slate-900 text-white border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-300"
+            >
+              <p className="text-xs font-medium">Cerrar asistente</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-600">Puedes volver a abrirlo desde el menú</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Messages area */}
@@ -311,41 +436,37 @@ export function HelpChatPanel() {
 
         {/* Chat messages */}
         <div className="space-y-3">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-            >
-              <div
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                }`}
+          {/* MEDIUM-TERM OPTIMIZATION #2: Load more button */}
+          {messages.length > 0 && hasMoreMessages && (
+            <div className="flex justify-center pb-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={loadOlderMessages}
+                disabled={isLoadingMore}
+                className="text-xs text-muted-foreground hover:text-primary"
               >
-                {msg.role === "user" ? (
-                  <User className="h-3.5 w-3.5" />
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    Cargando...
+                  </>
                 ) : (
-                  <Bot className="h-3.5 w-3.5" />
+                  <>
+                    <ChevronUp className="mr-2 h-3 w-3" />
+                    Cargar mensajes anteriores
+                  </>
                 )}
-              </div>
-              <div
-                className={`max-w-[80%] rounded-lg px-3 py-2 text-xs ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                }`}
-              >
-                <div className="whitespace-pre-wrap">
-                  <MessageContent content={msg.content} />
-                </div>
-                {msg.steps && msg.steps.length > 0 && (
-                  <StepsGuide steps={msg.steps} />
-                )}
-                <SourceBadge source={msg.source} />
-                <FeedbackButtons msg={msg} />
-              </div>
+              </Button>
             </div>
+          )}
+
+          {messages.map((msg) => (
+            <ChatMessageItem
+              key={msg.id}
+              message={msg}
+              onFeedback={sendFeedback}
+            />
           ))}
 
           {/* Thinking indicator */}

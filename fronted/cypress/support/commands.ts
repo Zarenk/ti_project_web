@@ -6,6 +6,9 @@ declare global {
     interface Chainable {
       loginViaApi(): Chainable<void>
       setTenantSelection(orgId: number | null, companyId: number | null): Chainable<void>
+      login(email: string, password: string): Chainable<void>
+      logout(): Chainable<void>
+      loginAsAdmin(): Chainable<void>
     }
   }
 }
@@ -73,6 +76,45 @@ Cypress.Commands.add("setTenantSelection", (orgId: number | null, companyId: num
       }),
     )
   })
+})
+
+// ==================== LEARNING SYSTEM COMMANDS ====================
+
+Cypress.Commands.add('login', (email: string, password: string) => {
+  cy.session(
+    [email, password],
+    () => {
+      cy.visit('/login')
+      cy.get('input[name="email"]').or('input[type="email"]').type(email)
+      cy.get('input[name="password"]').or('input[type="password"]').type(password)
+      cy.get('button[type="submit"]').click()
+
+      // Esperar a que redirija al dashboard
+      cy.url().should('include', '/dashboard', { timeout: 10000 })
+
+      // Verificar que el token esté en las cookies o localStorage
+      cy.getCookie('authToken').or(cy.getCookie('token')).should('exist')
+    },
+    {
+      validate() {
+        // Validar que la sesión sigue activa
+        cy.getCookie('authToken').or(cy.getCookie('token')).should('exist')
+      },
+    }
+  )
+})
+
+Cypress.Commands.add('logout', () => {
+  cy.clearCookies()
+  cy.clearLocalStorage()
+  cy.visit('/login')
+})
+
+Cypress.Commands.add('loginAsAdmin', () => {
+  // Usar credenciales de admin desde variables de entorno o valores por defecto
+  const adminEmail = Cypress.env('ADMIN_EMAIL') || 'superadmin@test.com'
+  const adminPassword = Cypress.env('ADMIN_PASSWORD') || 'admin123'
+  cy.login(adminEmail, adminPassword)
 })
 
 export {}

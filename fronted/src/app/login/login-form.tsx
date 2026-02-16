@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { loginUser } from '../dashboard/users/users.api';
+import { loginUser, requestPasswordRecovery } from '../dashboard/users/users.api';
 import { resendVerificationEmail } from '@/app/signup/api/verification';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { signIn } from 'next-auth/react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { getUserDataFromToken } from '@/lib/auth';
 import { getAuthToken } from '@/utils/auth-token';
@@ -88,10 +88,12 @@ const formatRemainingTime = (milliseconds: number) => {
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [attemptState, setAttemptState] = useState<AttemptState | null>(null);
   const [lockRemaining, setLockRemaining] = useState<number | null>(null);
   const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoverySubmitAttempted, setRecoverySubmitAttempted] = useState(false);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryStatus, setRecoveryStatus] = useState<{
     type: 'success' | 'error';
@@ -103,10 +105,131 @@ export default function LoginForm() {
   const [resendVerificationLoading, setResendVerificationLoading] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordAuthError, setPasswordAuthError] = useState(false);
   const router = useRouter();
   const { refreshUser } = useAuth();
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
+  const emailFormatRegex = useMemo(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/, []);
+
+  type FieldValidationState = {
+    tone: 'default' | 'error' | 'success';
+    message: string | null;
+    chipText: string;
+  };
+
+  const emailValidation = useMemo<FieldValidationState>(() => {
+    const value = email.trim();
+    if (!value) {
+      return {
+        tone: submitAttempted ? 'error' : 'default',
+        message: submitAttempted ? 'El correo es obligatorio.' : null,
+        chipText: submitAttempted ? 'Requerido' : 'Campo requerido',
+      };
+    }
+    if (!emailFormatRegex.test(value)) {
+      return {
+        tone: 'error',
+        message: 'Ingresa un correo valido (ejemplo@dominio.com).',
+        chipText: 'Formato invalido',
+      };
+    }
+    return { tone: 'success', message: 'Correo valido.', chipText: 'Listo' };
+  }, [email, emailFormatRegex, submitAttempted]);
+
+  const passwordValidation = useMemo<FieldValidationState>(() => {
+    const value = password.trim();
+    if (!value) {
+      return {
+        tone: submitAttempted ? 'error' : 'default',
+        message: submitAttempted ? 'La contrasena es obligatoria.' : null,
+        chipText: submitAttempted ? 'Requerido' : 'Campo requerido',
+      };
+    }
+    if (passwordAuthError) {
+      return {
+        tone: 'error',
+        message: 'Contrasena incorrecta.',
+        chipText: 'Error',
+      };
+    }
+    return {
+      tone: 'success',
+      message: 'Contrasena ingresada.',
+      chipText: 'Listo',
+    };
+  }, [password, submitAttempted, passwordAuthError]);
+
+  const emailInteracted = submitAttempted || email.length > 0;
+  const passwordInteracted = submitAttempted || password.length > 0;
+  const recoveryInteracted = recoverySubmitAttempted || recoveryEmail.length > 0;
+
+  const recoveryValidation = useMemo<FieldValidationState>(() => {
+    const value = recoveryEmail.trim();
+    if (!value) {
+      return {
+        tone: recoverySubmitAttempted ? 'error' : 'default',
+        message: recoverySubmitAttempted
+          ? 'El correo de recuperacion es obligatorio.'
+          : null,
+        chipText: recoverySubmitAttempted ? 'Requerido' : 'Campo requerido',
+      };
+    }
+    if (!emailFormatRegex.test(value)) {
+      return {
+        tone: 'error',
+        message: 'Ingresa un correo valido (ejemplo@dominio.com).',
+        chipText: 'Formato invalido',
+      };
+    }
+    return {
+      tone: 'success',
+      message: 'Correo valido para recuperacion.',
+      chipText: 'Listo',
+    };
+  }, [emailFormatRegex, recoveryEmail, recoverySubmitAttempted]);
+
+  const getInputToneClasses = (tone: FieldValidationState['tone']) => {
+    if (tone === 'error') {
+      return 'border-rose-400/70 bg-rose-50/80 focus-visible:ring-rose-400/40 dark:border-rose-500/60 dark:bg-rose-950/20';
+    }
+    if (tone === 'success') {
+      return 'border-emerald-400/70 bg-emerald-50/70 focus-visible:ring-emerald-400/40 dark:border-emerald-500/60 dark:bg-emerald-950/20';
+    }
+    return 'border-slate-300/80 bg-white/90 focus-visible:ring-blue-400/40 dark:border-slate-700 dark:bg-slate-950/40';
+  };
+
+  const FieldStateChip = ({
+    state,
+    visible,
+  }: {
+    state: FieldValidationState;
+    visible: boolean;
+  }) => {
+    if (!visible) return null;
+    if (state.tone === 'error') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-rose-200/80 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+          <AlertTriangle className="h-3 w-3" />
+          {state.chipText}
+        </span>
+      );
+    }
+    if (state.tone === 'success') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+          <CheckCircle2 className="h-3 w-3" />
+          {state.chipText}
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center rounded-full border border-slate-200/90 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+        {state.chipText}
+      </span>
+    );
+  };
 
   useEffect(() => {
     if (!normalizedEmail) {
@@ -179,6 +302,7 @@ export default function LoginForm() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+    setSubmitAttempted(true);
     if (!normalizedEmail) {
       toast.error('Debes ingresar un correo electronico valido.');
       return;
@@ -208,52 +332,54 @@ export default function LoginForm() {
       setPendingVerificationEmail(null);
       setResendVerificationStatus(null);
       setAttemptState(null);
+      setPasswordAuthError(false);
       persistAttemptState(normalizedEmail, null);
       toast.success('Inicio de sesion exitoso');
 
-      // Redireccion por returnTo si esta presente y es segura (misma app)
+      // Limpiar lastPath al cambiar de usuario para evitar redirigir
+      // a rutas protegidas de una sesion anterior
       if (typeof window !== 'undefined') {
+        try { window.sessionStorage.removeItem("ti.lastPath") } catch {}
+      }
+
+      // Determinar rol del usuario para decidir redireccion
+      let userRole: string | null = null
+      try {
+        const token = await getAuthToken();
+        if (token) {
+          const payload: { role?: string } = jwtDecode(token as string);
+          userRole = payload?.role ?? null;
+        }
+      } catch {}
+      if (!userRole) {
+        try {
+          const data = await getUserDataFromToken();
+          userRole = data?.role ?? null;
+        } catch {}
+      }
+
+      const dashboardRoles = ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE']
+      const bypassPermissionRoles = ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN']
+      const normalizedRole = userRole?.trim().toUpperCase() ?? ''
+
+      // Solo permitir returnTo para roles que pueden acceder a cualquier modulo
+      if (bypassPermissionRoles.includes(normalizedRole) && typeof window !== 'undefined') {
         try {
           const params = new URLSearchParams(window.location.search)
           const returnTo = params.get('returnTo')
-          if (returnTo && returnTo.startsWith('/')) {
+          if (returnTo && returnTo.startsWith('/') && returnTo !== '/unauthorized') {
             router.replace(returnTo)
-            setLoading(false)
-            return
-          }
-          const lastPath = window.sessionStorage.getItem("ti.lastPath")
-          if (lastPath && lastPath.startsWith('/') && !['/login', '/unauthorized'].includes(lastPath)) {
-            router.replace(lastPath)
             setLoading(false)
             return
           }
         } catch {}
       }
 
-      // Intentar evitar un segundo fetch usando el token local
-      try {
-        const token = await getAuthToken();
-        if (token) {
-          const payload: { role?: string } = jwtDecode(token as string);
-          const role = payload?.role;
-          if (role && ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(role)) {
-            router.replace('/dashboard');
-            setLoading(false);
-            return;
-          }
-          if (role) {
-            router.replace('/users');
-            setLoading(false);
-            return;
-          }
-        }
-      } catch {}
-      const data = await getUserDataFromToken();
-      if (data?.role && ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role)) {
+      if (dashboardRoles.includes(normalizedRole)) {
         router.replace('/dashboard');
         setLoading(false);
       } else {
-        router.replace('/users');
+        router.replace(userRole ? '/users' : '/dashboard');
         setLoading(false);
       }
     } catch (caughtError) {
@@ -270,6 +396,7 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
+      setPasswordAuthError(true);
       const nextCount = (attemptState?.count ?? 0) + 1;
       const nextState: AttemptState = {
         count: nextCount,
@@ -327,10 +454,10 @@ export default function LoginForm() {
   const handleRecoverySubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (recoveryLoading) return;
+    setRecoverySubmitAttempted(true);
     const trimmedEmail = recoveryEmail.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+    if (!trimmedEmail || !emailFormatRegex.test(trimmedEmail)) {
       setRecoveryStatus({ type: 'error', message: 'Ingresa un correo electronico valido para continuar.' });
       return;
     }
@@ -339,26 +466,18 @@ export default function LoginForm() {
     setRecoveryStatus(null);
 
     try {
-      const response = await fetch('/api/password-recovery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmedEmail }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const message = data?.message || 'No pudimos enviar el correo de recuperacion.';
-        setRecoveryStatus({ type: 'error', message });
-        toast.error(message);
-      } else {
-        const message =
-          data?.message || 'Te enviamos un correo electronico con los pasos para recuperar tu contraseña.';
-        setRecoveryStatus({ type: 'success', message });
-        toast.success(message);
-      }
-    } catch (error) {
+      const result = await requestPasswordRecovery(trimmedEmail);
+      setRecoveryStatus({ type: 'success', message: result.message });
+      toast.success(result.message);
+    } catch (error: unknown) {
       console.error('Error en la solicitud de recuperacion:', error);
-      const message = 'Ocurrio un problema al solicitar la recuperacion de la contraseña.';
+      const message =
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof (error as { message?: unknown }).message === 'string'
+          ? (error as { message: string }).message
+          : 'Ocurrio un problema al solicitar la recuperacion de la contraseña.';
       setRecoveryStatus({ type: 'error', message });
       toast.error(message);
     }
@@ -400,9 +519,12 @@ export default function LoginForm() {
     <div className="flex flex-col gap-6">
       <form onSubmit={handleLogin} className="flex flex-col gap-4" aria-busy={loading}>
         <div>
-          <Label htmlFor="email" className="block text-sm font-medium">
-            Correo Electronico
-          </Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="email" className="block text-sm font-medium">
+              Correo Electronico
+            </Label>
+            <FieldStateChip state={emailValidation} visible={emailInteracted} />
+          </div>
           <Input
             id="email"
             type="email"
@@ -410,36 +532,78 @@ export default function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="mt-1"
+            className={`mt-1 transition-colors ${getInputToneClasses(emailInteracted ? emailValidation.tone : 'default')}`}
             disabled={loading || isForcedReset}
             aria-describedby={lockMessage ? 'login-status-message' : undefined}
+            aria-invalid={emailInteracted && emailValidation.tone === 'error'}
           />
+          {emailInteracted && emailValidation.message && (
+            <p
+              className={`mt-1.5 text-xs font-medium ${
+                emailValidation.tone === 'error'
+                  ? 'text-rose-600 dark:text-rose-300'
+                  : 'text-emerald-700 dark:text-emerald-300'
+              }`}
+            >
+              {emailValidation.message}
+            </p>
+          )}
         </div>
 
         <div>
-          <Label htmlFor="password" className="block text-sm font-medium">
-            Contrasena
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Ingresa tu contrasena"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={handleCapsLockDetection}
-            onKeyUp={handleCapsLockDetection}
-            onFocus={(event) => {
-              setPasswordFocused(true);
-              setCapsLockOn(event.getModifierState?.('CapsLock') ?? false);
-            }}
-            onBlur={() => {
-              setPasswordFocused(false);
-              setCapsLockOn(false);
-            }}
-            required
-            className="mt-1"
-            disabled={loading}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="password" className="block text-sm font-medium">
+              Contrasena
+            </Label>
+            <FieldStateChip state={passwordValidation} visible={passwordInteracted} />
+          </div>
+          <div className="relative mt-1">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Ingresa tu contrasena"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (passwordAuthError) {
+                  setPasswordAuthError(false);
+                }
+              }}
+              onKeyDown={handleCapsLockDetection}
+              onKeyUp={handleCapsLockDetection}
+              onFocus={(event) => {
+                setPasswordFocused(true);
+                setCapsLockOn(event.getModifierState?.('CapsLock') ?? false);
+              }}
+              onBlur={() => {
+                setPasswordFocused(false);
+                setCapsLockOn(false);
+              }}
+              required
+              className={`pr-11 transition-colors ${getInputToneClasses(passwordInteracted ? passwordValidation.tone : 'default')}`}
+              disabled={loading}
+              aria-invalid={passwordInteracted && passwordValidation.tone === 'error'}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute right-2.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 transition hover:cursor-pointer hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {passwordInteracted && passwordValidation.message && (
+            <p
+              className={`mt-1.5 text-xs font-medium ${
+                passwordValidation.tone === 'error'
+                  ? 'text-rose-600 dark:text-rose-300'
+                  : 'text-emerald-700 dark:text-emerald-300'
+              }`}
+            >
+              {passwordValidation.message}
+            </p>
+          )}
           {passwordFocused && capsLockOn && (
             <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 via-amber-100 to-white px-3 py-2 text-sm font-medium text-amber-900 shadow-[0_10px_30px_rgba(245,158,11,0.25)] transition-all">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200/70 text-amber-900 shadow-inner">
@@ -453,13 +617,18 @@ export default function LoginForm() {
           )}
         </div>
         {lockMessage && (
-          <p
+          <div
             id="login-status-message"
             role="status"
-            className={`text-sm ${attemptState?.forcedReset ? 'text-amber-600' : 'text-red-600'}`}
+            className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${
+              attemptState?.forcedReset
+                ? 'border-amber-300/70 bg-amber-50/90 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200'
+                : 'border-rose-300/70 bg-rose-50/90 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200'
+            }`}
           >
-            {lockMessage}
-          </p>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{lockMessage}</span>
+          </div>
         )}
         <Button
           type="submit"
@@ -556,26 +725,54 @@ export default function LoginForm() {
           </p>
           <form onSubmit={handleRecoverySubmit} className="mt-3 flex flex-col gap-3">
             <div>
-              <Label htmlFor="recovery-email" className="text-sm font-medium">
-                Correo electronico de recuperacion
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="recovery-email" className="text-sm font-medium">
+                  Correo electronico de recuperacion
+                </Label>
+                <FieldStateChip state={recoveryValidation} visible={recoveryInteracted} />
+              </div>
               <Input
                 id="recovery-email"
                 type="email"
                 value={recoveryEmail}
                 onChange={(event) => setRecoveryEmail(event.target.value)}
+                onBlur={() => setRecoverySubmitAttempted((prev) => prev || recoveryEmail.length > 0)}
                 placeholder="correo@ejemplo.com"
                 required
                 disabled={recoveryLoading}
+                className={`mt-1 transition-colors ${getInputToneClasses(
+                  recoveryInteracted ? recoveryValidation.tone : 'default',
+                )}`}
+                aria-invalid={recoveryInteracted && recoveryValidation.tone === 'error'}
               />
+              {recoveryInteracted && recoveryValidation.message && (
+                <p
+                  className={`mt-1.5 text-xs font-medium ${
+                    recoveryValidation.tone === 'error'
+                      ? 'text-rose-600 dark:text-rose-300'
+                      : 'text-emerald-700 dark:text-emerald-300'
+                  }`}
+                >
+                  {recoveryValidation.message}
+                </p>
+              )}
             </div>
             {recoveryStatus && (
-              <p
+              <div
                 role={recoveryStatus.type === 'error' ? 'alert' : 'status'}
-                className={`text-sm ${recoveryStatus.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}
+                className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${
+                  recoveryStatus.type === 'error'
+                    ? 'border-rose-300/70 bg-rose-50/90 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200'
+                    : 'border-emerald-300/70 bg-emerald-50/90 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'
+                }`}
               >
-                {recoveryStatus.message}
-              </p>
+                {recoveryStatus.type === 'error' ? (
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                )}
+                <span>{recoveryStatus.message}</span>
+              </div>
             )}
             <Button
               type="submit"

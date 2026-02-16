@@ -1,17 +1,22 @@
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
+export type AccountType = "ACTIVO" | "PASIVO" | "PATRIMONIO" | "INGRESO" | "GASTO";
+
 export interface Account {
   id: string;
   code: string;
   name: string;
+  accountType?: AccountType;
   parentId?: string | null;
   children?: Account[];
+  balance?: number;
+  updatedAt?: string;
 }
 
 export async function fetchAccounts(): Promise<Account[]> {
   let res: Response;
   try {
-    res = await authFetch("/api/accounting/accounts", {
+    res = await authFetch("/accounting/accounts", {
       cache: "no-store",
     });
   } catch (error) {
@@ -28,7 +33,7 @@ export async function fetchAccounts(): Promise<Account[]> {
 
 export async function createAccount(data: Omit<Account, "id" | "children">) {
   try {
-    const res = await authFetch("/api/accounting/accounts", {
+    const res = await authFetch("/accounting/accounts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -49,7 +54,7 @@ export async function createAccount(data: Omit<Account, "id" | "children">) {
 
 export async function updateAccount(id: string, data: Omit<Account, "id" | "children">) {
   try {
-    const res = await authFetch(`/api/accounting/accounts/${id}`, {
+    const res = await authFetch(`/accounting/accounts/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",

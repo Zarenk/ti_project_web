@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { LayoutGrid, List } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,15 +13,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { getProducts } from "../products/products.api"
 import { ProductsTable } from "./products-table"
+import { ProductsGallery } from "./products-gallery"
 import type { Products } from "./columns"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { fetchCompanyVerticalInfo } from "@/app/dashboard/tenancy/tenancy.api"
 import { useDebounce } from "@/app/hooks/useDebounce"
 import { resolveImageUrl } from "@/lib/images"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { isProductActive } from "./status.utils"
+
+type ViewMode = "table" | "gallery"
+const VIEW_MODE_KEY = "products-view-mode"
 
 type MigrationFilter = "all" | "legacy" | "migrated"
 type CategoryFilter = "all" | string
@@ -35,6 +46,15 @@ export function ProductsClient() {
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all")
   const { selection } = useTenantSelection()
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "table"
+    return (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || "table"
+  })
+  const handleViewChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem(VIEW_MODE_KEY, mode)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -72,6 +92,21 @@ export function ProductsClient() {
       cancelled = true
     }
   }, [migrationStatus])
+
+  const reloadProducts = async () => {
+    try {
+      const products = await getProducts(
+        migrationStatus === "all" ? undefined : { migrationStatus },
+      )
+      const mapped = products.map((product: any) => ({
+        ...product,
+        category_name: product.category?.name || "Sin categoria",
+      }))
+      setRawProducts(mapped)
+    } catch {
+      // silent reload
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -192,7 +227,21 @@ export function ProductsClient() {
               </div>
             </div>
             {loading ? (
-              <div className="text-sm text-muted-foreground">Cargando platos...</div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="overflow-hidden rounded-2xl border border-white/5 bg-muted/20">
+                    <Skeleton className="h-44 w-full rounded-none" />
+                    <div className="space-y-3 p-4">
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="h-3 w-full" />
+                      <div className="flex items-center justify-between pt-2">
+                        <Skeleton className="h-6 w-20" />
+                        <Skeleton className="h-8 w-16 rounded-md" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : error ? (
               <div className="text-sm text-destructive">{error}</div>
             ) : filteredProducts.length === 0 ? (
@@ -265,6 +314,36 @@ export function ProductsClient() {
             <div className="flex flex-col gap-3 px-5 sm:flex-row sm:items-center sm:justify-between">
               <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Productos</h1>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {/* View toggle */}
+                <div className="flex rounded-lg border p-0.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={viewMode === "table" ? "secondary" : "ghost"}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleViewChange("table")}
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Vista de tabla</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={viewMode === "gallery" ? "secondary" : "ghost"}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleViewChange("gallery")}
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Vista de galería</TooltipContent>
+                  </Tooltip>
+                </div>
+
                 <Select value={migrationStatus} onValueChange={(value) => setMigrationStatus(value as MigrationFilter)}>
                   <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Migración" />
@@ -281,9 +360,30 @@ export function ProductsClient() {
               </div>
             </div>
             {loading ? (
-              <div className="px-5 text-sm text-muted-foreground">Cargando productos...</div>
+              <div className="space-y-4 px-5">
+                <div className="rounded-md border">
+                  <div className="flex items-center gap-4 border-b px-4 py-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} className={`h-4 ${["w-32", "w-40", "w-24", "w-28", "w-20"][i]}`} />
+                    ))}
+                  </div>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 border-b px-4 py-3 last:border-b-0">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : error ? (
               <div className="px-5 text-sm text-destructive">{error}</div>
+            ) : viewMode === "gallery" ? (
+              <div className="px-5">
+                <ProductsGallery data={data} onProductUpdated={reloadProducts} />
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <ProductsTable data={data} />

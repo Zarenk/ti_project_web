@@ -1,102 +1,210 @@
-import { BACKEND_URL } from "@/lib/utils";
-import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
+import { EntryStatus } from '@prisma/client';
+import { authFetch } from '@/utils/auth-fetch';
+import { BACKEND_URL } from '@/lib/utils';
 
-export interface Journal {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-  series?: string[];
+export interface JournalEntryLine {
+  id?: number;
+  accountId: number;
+  description?: string;
+  debit: number;
+  credit: number;
+  account?: {
+    id: number;
+    code: string;
+    name: string;
+  };
 }
 
-export async function fetchJournals(): Promise<Journal[]> {
-  try {
-    const res = await authFetch(`${BACKEND_URL}/api/accounting/journals`);
-    if (!res.ok) throw new Error("Error al obtener journals");
-    const data = (await res.json()) as Journal[];
-    return data.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) throw error;
-    throw error;
+export interface JournalEntry {
+  id: number;
+  date: Date | string;
+  description?: string;
+  status: EntryStatus;
+  debitTotal: number;
+  creditTotal: number;
+  correlativo: string;
+  cuo: string;
+  sunatStatus: string;
+  source: 'SALE' | 'PURCHASE' | 'ADJUSTMENT' | 'MANUAL';
+  moneda: 'PEN' | 'USD';
+  tipoCambio?: number;
+  lines: JournalEntryLine[];
+  period?: {
+    id: number;
+    startDate: Date | string;
+    endDate: Date | string;
+  };
+}
+
+export interface CreateJournalEntryDto {
+  date: Date | string;
+  description?: string;
+  source: 'SALE' | 'PURCHASE' | 'ADJUSTMENT' | 'MANUAL';
+  moneda?: 'PEN' | 'USD';
+  tipoCambio?: number;
+  lines: Omit<JournalEntryLine, 'id' | 'account'>[];
+}
+
+export interface UpdateJournalEntryDto {
+  date?: Date | string;
+  description?: string;
+  lines?: Omit<JournalEntryLine, 'id' | 'account'>[];
+}
+
+export interface JournalEntryFilters {
+  from?: Date | string;
+  to?: Date | string;
+  sources?: string[];
+  statuses?: EntryStatus[];
+  accountIds?: number[];
+  balanced?: boolean;
+  page?: number;
+  size?: number;
+}
+
+export async function getJournalEntries(
+  filters: JournalEntryFilters = {}
+): Promise<{ data: JournalEntry[]; total: number }> {
+  const params = new URLSearchParams();
+
+  if (filters.from) params.append('from', new Date(filters.from).toISOString());
+  if (filters.to) params.append('to', new Date(filters.to).toISOString());
+  if (filters.sources?.length) params.append('sources', filters.sources.join(','));
+  if (filters.statuses?.length) params.append('statuses', filters.statuses.join(','));
+  if (filters.accountIds?.length) params.append('accountIds', filters.accountIds.join(','));
+  if (filters.balanced !== undefined) params.append('balanced', String(filters.balanced));
+  if (filters.page) params.append('page', String(filters.page));
+  if (filters.size) params.append('size', String(filters.size));
+
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries?${params}`, {
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al obtener asientos');
   }
+
+  return res.json();
 }
 
-export async function createJournal(data: Omit<Journal, "id">) {
-  const res = await authFetch(`${BACKEND_URL}/api/accounting/journals`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+export async function getJournalEntry(id: number): Promise<JournalEntry> {
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries/${id}`, {
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al obtener asiento');
+  }
+
+  return res.json();
+}
+
+export async function createJournalEntry(
+  data: CreateJournalEntryDto
+): Promise<JournalEntry> {
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
-  if (res.status === 400) {
-    const body = await res.json();
-    throw body.errors as Record<string, string>;
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al crear asiento');
   }
-  if (!res.ok) throw new Error("Error al crear journal");
-  return (await res.json()) as Journal;
+
+  return res.json();
 }
 
-export async function updateJournal(id: string, data: Omit<Journal, "id">) {
-  const res = await authFetch(`${BACKEND_URL}/api/accounting/journals/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
+export async function updateJournalEntry(
+  id: number,
+  data: UpdateJournalEntryDto
+): Promise<JournalEntry> {
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
-  if (res.status === 400) {
-    const body = await res.json();
-    throw body.errors as Record<string, string>;
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al actualizar asiento');
   }
-  if (!res.ok) throw new Error("Error al actualizar journal");
-  return (await res.json()) as Journal;
+
+  return res.json();
 }
 
-export async function deleteJournal(id: string) {
-  const res = await authFetch(`${BACKEND_URL}/api/accounting/journals/${id}`, {
-    method: "DELETE",
+export async function postJournalEntry(id: number): Promise<JournalEntry> {
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries/${id}/post`, {
+    method: 'POST',
+    credentials: 'include',
   });
-  if (!res.ok) throw new Error("Error al eliminar journal");
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al registrar asiento');
+  }
+
+  return res.json();
 }
 
-export async function fetchAccountingEntries(
-  from: string,
-  to: string,
-  page = 1,
-  size = 500,
-): Promise<{ data: any[]; [key: string]: any }> {
-  try {
-    const params = new URLSearchParams({ from, to, page: String(page), size: String(size) });
-    const res = await authFetch(`${BACKEND_URL}/api/accounting/entries?${params.toString()}`);
-    if (!res.ok) return { data: [] };
-    return res.json();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) return { data: [] };
-    throw error;
+export async function voidJournalEntry(id: number): Promise<JournalEntry> {
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries/${id}/void`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al anular asiento');
+  }
+
+  return res.json();
+}
+
+export async function deleteJournalEntry(id: number): Promise<void> {
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/journal-entries/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || 'Error al eliminar asiento');
   }
 }
 
-export async function fetchSalesTransactions(
-  from: string,
-  to: string,
-): Promise<any[]> {
-  try {
-    const params = new URLSearchParams({ from, to });
-    const res = await authFetch(`${BACKEND_URL}/api/sales/transactions?${params.toString()}`);
-    if (!res.ok) return [];
-    return res.json();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) return [];
-    throw error;
-  }
-}
+export async function exportPLE(
+  from: Date | string,
+  to: Date | string,
+  format: '5.1' | '6.1'
+): Promise<void> {
+  const params = new URLSearchParams({
+    from: new Date(from).toISOString().split('T')[0],
+    to: new Date(to).toISOString().split('T')[0],
+    format,
+  });
 
-export async function fetchEntryById(entryId: number): Promise<any | null> {
-  try {
-    const res = await authFetch(`${BACKEND_URL}/api/entries/by-id/${entryId}`);
-    if (!res.ok) return null;
-    return res.json();
-  } catch (error) {
-    if (error instanceof UnauthenticatedError) return null;
-    throw error;
+  const res = await authFetch(`${BACKEND_URL}/api/accounting/export/ple?${params}`, {
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    throw new Error('Error al exportar PLE');
   }
+
+  // Descargar archivo
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `PLE_${format.replace('.', '')}_${new Date().getTime()}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }

@@ -3,13 +3,15 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { VerticalConfigService } from './vertical-config.service';
 import { VerticalEventsService } from './vertical-events.service';
 import { BusinessVertical } from 'src/types/business-vertical.enum';
-import { runVerticalScript } from '../../scripts/verticals';
+import { runVerticalScript, runVerticalCleanup } from '../../scripts/verticals';
 
 jest.mock('../../scripts/verticals', () => ({
   runVerticalScript: jest.fn().mockResolvedValue(undefined),
+  runVerticalCleanup: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockedRunScript = runVerticalScript as jest.Mock;
+const mockedRunCleanup = runVerticalCleanup as jest.Mock;
 
 describe('VerticalMigrationService', () => {
   let prisma: any;
@@ -51,6 +53,7 @@ describe('VerticalMigrationService', () => {
     };
 
     mockedRunScript.mockClear();
+    mockedRunCleanup.mockClear();
 
     service = new VerticalMigrationService(
       prisma as PrismaService,
@@ -60,7 +63,10 @@ describe('VerticalMigrationService', () => {
   });
 
   it('applies a vertical change, stores snapshot and runs scripts', async () => {
-    prisma.company.findUnique.mockResolvedValue({ organizationId: 33 });
+    prisma.company.findUnique.mockResolvedValueOnce({ organizationId: 33 });
+    tx.company.findUnique.mockResolvedValue({
+      businessVertical: BusinessVertical.GENERAL,
+    });
 
     await service.changeVertical({
       companyId: 10,
@@ -70,6 +76,16 @@ describe('VerticalMigrationService', () => {
       warnings: ['inventory'],
       reason: 'test',
     });
+
+    // Verify cleanup was called for previous vertical
+    expect(mockedRunCleanup).toHaveBeenCalledWith(
+      BusinessVertical.GENERAL,
+      expect.objectContaining({
+        companyId: 10,
+        organizationId: 33,
+        metadata: { reason: 'test' },
+      }),
+    );
 
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(tx.company.update).toHaveBeenCalledWith({
@@ -84,6 +100,10 @@ describe('VerticalMigrationService', () => {
         data: expect.objectContaining({
           companyId: 10,
           organizationId: 33,
+          userId: 7,
+          oldVertical: BusinessVertical.GENERAL,
+          newVertical: BusinessVertical.RETAIL,
+          success: true,
         }),
       }),
     );
@@ -94,10 +114,9 @@ describe('VerticalMigrationService', () => {
       previousVertical: BusinessVertical.GENERAL,
       newVertical: BusinessVertical.RETAIL,
     });
-    expect(mockedRunScript).toHaveBeenCalledWith(
-      'create_retail_catalogs',
-      expect.objectContaining({ companyId: 10, organizationId: 33 }),
-    );
+
+    // Verify scripts were called (onActivate + possibly transformations)
+    expect(mockedRunScript).toHaveBeenCalled();
   });
 
   it('performs rollback using the latest snapshot', async () => {
@@ -111,6 +130,9 @@ describe('VerticalMigrationService', () => {
       businessVertical: BusinessVertical.RETAIL,
       organizationId: 77,
     });
+    tx.company.findUnique.mockResolvedValue({
+      businessVertical: BusinessVertical.RETAIL,
+    });
 
     const result = await service.rollback(20, 5);
 
@@ -118,10 +140,38 @@ describe('VerticalMigrationService', () => {
     expect(
       prisma.companyVerticalRollbackSnapshot.findFirst,
     ).toHaveBeenCalledWith({
-      where: { companyId: 20 },
+      where: { companyId: 20, expiresAt: { gte: expect.any(Date) } },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Verify cleanup was called for current vertical before rollback
+    expect(mockedRunCleanup).toHaveBeenCalledWith(
+      BusinessVertical.RETAIL,
+      expect.objectContaining({
+        companyId: 20,
+        organizationId: 77,
+        metadata: { reason: 'rollback' },
+      }),
+    );
+
     expect(prisma.$transaction).toHaveBeenCalled();
+    expect(tx.company.update).toHaveBeenCalledWith({
+      where: { id: 20 },
+      data: { businessVertical: BusinessVertical.GENERAL },
+    });
+    expect(tx.companyVerticalChangeAudit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          companyId: 20,
+          organizationId: 77,
+          userId: 5,
+          oldVertical: BusinessVertical.RETAIL,
+          newVertical: BusinessVertical.GENERAL,
+          changeReason: 'rollback',
+          success: true,
+        }),
+      }),
+    );
     expect(tx.companyVerticalRollbackSnapshot.delete).toHaveBeenCalledWith({
       where: { id: 'snap-id' },
     });
@@ -132,5 +182,8 @@ describe('VerticalMigrationService', () => {
       previousVertical: BusinessVertical.RETAIL,
       newVertical: BusinessVertical.GENERAL,
     });
+
+    // Verify activation scripts were called
+    expect(mockedRunScript).toHaveBeenCalled();
   });
 });

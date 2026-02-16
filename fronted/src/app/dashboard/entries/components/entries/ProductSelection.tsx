@@ -1,5 +1,5 @@
 ﻿import { Barcode, Check, ChevronsUpDown, Plus, Save, ChevronDown, Info } from 'lucide-react'
-import { useMemo, useState, useLayoutEffect, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -83,25 +83,6 @@ export function ProductSelection({
   const [previousCategoryId, setPreviousCategoryId] = useState<number | null>(null)
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
-  const productTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const [productTriggerWidth, setProductTriggerWidth] = useState<number | undefined>(undefined)
-  const categoryTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const [categoryTriggerWidth, setCategoryTriggerWidth] = useState<number | undefined>(undefined)
-
-  useLayoutEffect(() => {
-    const updateWidth = () => {
-      setProductTriggerWidth(productTriggerRef.current?.offsetWidth)
-      setCategoryTriggerWidth(categoryTriggerRef.current?.offsetWidth)
-    }
-
-    if (typeof window !== 'undefined') {
-      updateWidth()
-      window.addEventListener('resize', updateWidth)
-      return () => window.removeEventListener('resize', updateWidth)
-    }
-
-    return undefined
-  }, [])
 
   const categoryField = register('category_name')
 
@@ -322,13 +303,12 @@ export function ProductSelection({
               role="combobox"
               aria-expanded={open}
               className="min-w-[150px] flex-1 cursor-pointer justify-between truncate text-xs transition-colors hover:border-primary/60 hover:bg-accent/40 sm:w-[300px] sm:text-sm"
-              ref={productTriggerRef}
             >
               {displayedProductName || 'Selecciona un producto...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="p-0" style={{ width: productTriggerWidth }}>
+          <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
             <Command>
               <CommandInput placeholder="Buscar producto..." />
               <CommandList>
@@ -506,13 +486,12 @@ export function ProductSelection({
               variant="outline"
               role="combobox"
               className="w-full cursor-pointer justify-between transition-colors hover:border-primary/60 hover:bg-accent/40"
-              ref={categoryTriggerRef}
             >
               {categoryValue || 'Selecciona una categoria...'}
               <ChevronsUpDown className="opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="p-0" style={{ width: categoryTriggerWidth }}>
+          <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
             <Command>
               <CommandInput placeholder="Buscar categoria..." />
               <CommandList>

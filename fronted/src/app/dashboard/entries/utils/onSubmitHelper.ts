@@ -143,16 +143,18 @@ export async function handleFormSubmission({
       const verifiedProduct = verifiedProducts.find((vp: any) => vp.name === product.name);
       if (!verifiedProduct) throw new Error(`No se encontro un ID para el producto con nombre: ${product.name}`);
 
-      // Calcular el precio en soles si la moneda es "USD"
+      // Calcular el precio en soles según la moneda
+      // Si es USD, convertir a soles con tipo de cambio
+      // Si es PEN/soles, usar el precio directamente
       const priceInSoles = tipoMoneda === "USD" && tipoCambioActual
         ? product.price * tipoCambioActual
-        : null;
+        : product.price; // Si ya está en soles, usar el mismo precio
 
       return {
         productId: verifiedProduct.id,
         quantity: product.quantity > 0 ? product.quantity : 1,
         price: product.price > 0 ? product.price : 1,
-        priceInSoles: priceInSoles, // Agregar el precio en soles si aplica
+        priceInSoles: priceInSoles, // Siempre envía un número
         series: product.series || [],
       };
     });

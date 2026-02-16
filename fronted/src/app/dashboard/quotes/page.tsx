@@ -1,511 +1,881 @@
-﻿"use client"
+﻿'use client';
 
-import { useEffect, useMemo, useState } from "react"
-import Image from "next/image"
-import { toast } from "sonner"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Separator } from "@/components/ui/separator"
-import { useVerticalConfig } from "@/hooks/use-vertical-config"
-import { useTenantSelection } from "@/context/tenant-selection-context"
-import { cn } from "@/lib/utils"
-import { AlertTriangle, Check, FileText, Printer, Send, Sparkles, User } from "lucide-react"
-import { pdf } from "@react-pdf/renderer"
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
+import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useVerticalConfig } from '@/hooks/use-vertical-config';
+import { useTenantSelection } from '@/context/tenant-selection-context';
+import { cn } from '@/lib/utils';
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Boxes,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  Cpu,
+  FileText,
+  HardDrive,
+  Info,
+  LayoutGrid,
+  MemoryStick,
+  Monitor,
+  Printer,
+  Signal,
+  Sparkles,
+  Tag,
+  User,
+  Weight,
+  Zap,
+  Battery,
+  MoreHorizontal,
+  Eye,
+  Send,
+  Mail,
+  History,
+  Save,
+  X,
+  Plus,
+  Minus,
+  Landmark,
+  Trash2,
+} from 'lucide-react';
+import { pdf } from '@react-pdf/renderer';
 import {
   getQuoteCatalog,
   getQuoteClients,
   getQuoteMeta,
+  getQuoteById,
+  createQuoteDraft,
+  updateQuoteDraft,
+  issueQuote,
   sendQuoteWhatsApp,
   type QuoteCatalog,
   type QuoteCategoryKey,
   type QuoteClient,
   type QuoteOption,
-} from "./quotes.api"
-import { getStores } from "@/app/dashboard/stores/stores.api"
-import { QuotePdfDocument } from "./QuotePdfDocument"
-import { updateCompany } from "@/app/dashboard/tenancy/tenancy.api"
-
-type StoreOption = { id: number; name: string }
-type CompatibilityMode = "soft" | "block" | "mixed"
-
-type QuoteDraft = {
-  version: 1
-  updatedAt: string
-  tab: QuoteCategoryKey
-  selection: SelectionMap
-  priceOverrides: Record<string, number>
-  quantities: Record<string, number>
-  clientName: string
-  contactName: string
-  whatsAppPhone: string
-  compatibilityMode: CompatibilityMode
-  limitByStock: boolean
-  validity: string
-  currency: string
-  conditions: string
-  storeId: number | null
-  marginRate: number
-  taxRate: number
-}
-
-type SelectionMap = Record<string, QuoteOption[]>
-
-const TAB_LABELS: Record<QuoteCategoryKey, string> = {
-  pc: "PC",
-  laptops: "Laptops",
-  hardware: "Otros",
-}
-
-type CompatibilityIssue = {
-  title: string
-  detail: string
-  severity: "critical" | "warning" | "missing"
-}
-
-function normalizeTag(tag: string) {
-  return tag.replace(/\s+/g, "").toUpperCase()
-}
-
-function findTag(item: QuoteOption | undefined, regex: RegExp) {
-  if (!item?.compatibility) return undefined
-  return item.compatibility.find((tag) => regex.test(tag))
-}
-
-function normalizeFormFactor(tag: string) {
-  const normalized = normalizeTag(tag)
-  if (normalized.includes("MICROATX") || normalized.includes("M-ATX") || normalized === "MATX") return "M-ATX"
-  if (normalized.includes("MINIITX") || normalized.includes("MINI-ITX")) return "MINI-ITX"
-  if (normalized.includes("EATX") || normalized.includes("E-ATX")) return "E-ATX"
-  if (normalized.includes("ATX")) return "ATX"
-  return normalized
-}
-
-function isQuantityEditable(item?: QuoteOption) {
-  if (!item) return false
-  return item.componentType !== "service" && item.componentType !== "warranty"
-}
-
-function getStockLimit(item?: QuoteOption, limitByStock?: boolean): number | null {
-  if (!limitByStock) return null
-  if (!item) return null
-  if (typeof item.stock !== "number") return null
-  return item.stock > 0 ? item.stock : 0
-}
+  type QuoteDraftPayload,
+  type QuoteDetail,
+  type QuoteItemPayload,
+  getBankAccounts,
+  saveBankAccounts,
+  type BankAccount,
+} from './quotes.api';
+import { getStores } from '@/app/dashboard/stores/stores.api';
+import { createClient } from '@/app/dashboard/clients/clients.api';
+import { QuotePdfDocument } from './QuotePdfDocument';
+import { QuoteActionButtons } from './components/quote-action-buttons';
+import { QuoteConfigurationPanel } from './components/quote-configuration-panel';
+import { QuoteContextBar } from './components/quote-context-bar';
+import { QuoteSummaryPanel } from './components/quote-summary-panel';
+import { QuoteProductCatalog } from './components/quote-product-catalog';
+import type {
+  StoreOption,
+  SelectionMap,
+  QuoteDraft,
+} from './types/quote-types';
+import {
+  isServiceOrWarranty,
+  isQuantityEditable,
+  getStockLimit,
+  normalizeFilterText,
+  TAB_LABELS,
+} from './types/quote-types';
 
 export default function QuotesPage() {
-  const { info: verticalInfo } = useVerticalConfig()
-  const { selection: tenantSelection } = useTenantSelection()
-  const [catalog, setCatalog] = useState<QuoteCatalog | null>(null)
-  const [tab, setTab] = useState<QuoteCategoryKey>("pc")
-  const [meta, setMeta] = useState<Awaited<ReturnType<typeof getQuoteMeta>> | null>(null)
-  const [selection, setSelection] = useState<SelectionMap>({})
-  const [clientName, setClientName] = useState("")
-  const [contactName, setContactName] = useState("")
-  const [whatsAppPhone, setWhatsAppPhone] = useState("")
-  const [clients, setClients] = useState<QuoteClient[]>([])
-  const [clientOpen, setClientOpen] = useState(false)
-  const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({})
-  const [quantities, setQuantities] = useState<Record<string, number>>({})
-  const [stores, setStores] = useState<StoreOption[]>([])
-  const [storeId, setStoreId] = useState<number | null>(null)
-  const [validity, setValidity] = useState("15 días")
-  const [currency, setCurrency] = useState("PEN")
-  const [conditions, setConditions] = useState("")
-  const [marginRate, setMarginRate] = useState(0.12)
-  const [taxRate, setTaxRate] = useState(0.18)
-  const [compatibilityMode, setCompatibilityMode] = useState<CompatibilityMode>("mixed")
-  const [limitByStock, setLimitByStock] = useState(true)
-  const [savingMargin, setSavingMargin] = useState(false)
-  const [sendingWhatsApp, setSendingWhatsApp] = useState(false)
+  const router = useRouter();
+  const { info: verticalInfo } = useVerticalConfig();
+  const { selection: tenantSelection } = useTenantSelection();
+  const [catalog, setCatalog] = useState<QuoteCatalog | null>(null);
+  const [tab, setTab] = useState<QuoteCategoryKey>('pc');
+  const [meta, setMeta] = useState<Awaited<
+    ReturnType<typeof getQuoteMeta>
+  > | null>(null);
+  const [selection, setSelection] = useState<SelectionMap>({});
+  const [clientName, setClientName] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [clientDocType, setClientDocType] = useState('');
+  const [clientDocNumber, setClientDocNumber] = useState('');
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');
+  const [clients, setClients] = useState<QuoteClient[]>([]);
+  const [clientOpen, setClientOpen] = useState(false);
+  const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>(
+    {},
+  );
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [stores, setStores] = useState<StoreOption[]>([]);
+  const [storeId, setStoreId] = useState<number | null>(null);
+  const [validity, setValidity] = useState('15 días');
+  const [currency, setCurrency] = useState('PEN');
+  const [conditions, setConditions] = useState('');
+  const [pcCategoryFilter, setPcCategoryFilter] = useState('all');
+  const [pcProductFilter, setPcProductFilter] = useState('');
+  const [hardwareCategoryFilter, setHardwareCategoryFilter] = useState('all');
+  const [hardwareProductFilter, setHardwareProductFilter] = useState('');
+  const deferredPcFilter = useDeferredValue(pcProductFilter);
+  const deferredHwFilter = useDeferredValue(hardwareProductFilter);
+  const [taxRate, setTaxRate] = useState(0.18);
+  const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
+  const [limitByStock, setLimitByStock] = useState(true);
+  const [showImagesInPdf, setShowImagesInPdf] = useState(false);
+  const [hideSpecsInPdf, setHideSpecsInPdf] = useState(true);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isIssuingQuote, setIsIssuingQuote] = useState(false);
+  const [serverQuoteId, setServerQuoteId] = useState<number | null>(null);
+  const [serverQuoteStatus, setServerQuoteStatus] = useState<
+    QuoteDetail['status'] | null
+  >(null);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [isSavingBankAccounts, setIsSavingBankAccounts] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientDocType, setNewClientDocType] = useState('DNI');
+  const [newClientDocNumber, setNewClientDocNumber] = useState('');
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const defaultsAppliedRef = useRef<Record<string, boolean>>({});
+  const loadedQuoteIdRef = useRef<number | null>(null);
+  const searchParams = useSearchParams();
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quoteIdParam = searchParams.get('quoteId');
+  const isReadOnlyQuote =
+    !!quoteIdParam &&
+    (serverQuoteStatus === 'ISSUED' || serverQuoteStatus === 'CANCELLED');
+  const [quoteNumber, setQuoteNumber] = useState(() => {
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const randomPart = Math.floor(100 + Math.random() * 900);
+    return `COT-${datePart}-${randomPart}`;
+  });
 
   const draftKey = useMemo(() => {
-    const companyKey = tenantSelection.companyId ?? "all"
-    return `quotes-draft:v1:${companyKey}`
-  }, [tenantSelection.companyId])
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-draft:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
+  const stockPreferenceKey = useMemo(() => {
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-pref-limit-by-stock:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
+  const advancedConfigPreferenceKey = useMemo(() => {
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-pref-advanced-config:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
+  const pdfImagesPreferenceKey = useMemo(() => {
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-pref-pdf-images:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
+  const validityPreferenceKey = useMemo(() => {
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-pref-validity:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
+  const currencyPreferenceKey = useMemo(() => {
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-pref-currency:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
+  const conditionsPreferenceKey = useMemo(() => {
+    const companyKey = tenantSelection.companyId ?? 'all';
+    return `quotes-pref-conditions:v1:${companyKey}`;
+  }, [tenantSelection.companyId]);
 
   useEffect(() => {
-    let active = true
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(stockPreferenceKey);
+    if (raw === '1') setLimitByStock(true);
+    if (raw === '0') setLimitByStock(false);
+  }, [stockPreferenceKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(advancedConfigPreferenceKey);
+    if (raw === '1') setShowAdvancedConfig(true);
+    if (raw === '0') setShowAdvancedConfig(false);
+  }, [advancedConfigPreferenceKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(pdfImagesPreferenceKey);
+    if (raw === '1') setShowImagesInPdf(true);
+    if (raw === '0') setShowImagesInPdf(false);
+  }, [pdfImagesPreferenceKey]);
+
+  useEffect(() => {
+    let active = true;
     async function load() {
       const [catalogData, metaData, clientData, storeData] = await Promise.all([
         getQuoteCatalog(storeId),
         getQuoteMeta(tenantSelection.companyId),
         getQuoteClients(),
         getStores(),
-      ])
-      if (!active) return
-      setCatalog(catalogData)
-      setMeta(metaData)
-      setClients(clientData)
+      ]);
+      if (!active) return;
+      setCatalog(catalogData);
+      setMeta(metaData);
+      setClients(clientData);
       const storeOptions = Array.isArray(storeData)
-        ? storeData.map((s: any) => ({ id: Number(s.id), name: String(s.name ?? "Tienda") }))
-        : []
-      setStores(storeOptions)
-      setConditions(metaData.defaultConditions)
-      setTaxRate(metaData.taxRate ?? 0.18)
-      setMarginRate(metaData.marginRate ?? 0.12)
+        ? storeData.map((s: any) => ({
+            id: Number(s.id),
+            name: String(s.name ?? 'Tienda'),
+          }))
+        : [];
+      setStores(storeOptions);
+      setConditions(metaData.defaultConditions);
+      setTaxRate(metaData.taxRate ?? 0.18);
       if (metaData.validityOptions[0]) {
-        setValidity(metaData.validityOptions[0])
+        setValidity(metaData.validityOptions[0]);
       }
       if (metaData.currencyOptions[0]) {
-        setCurrency(metaData.currencyOptions[0])
+        setCurrency(metaData.currencyOptions[0]);
       }
     }
-    load()
+    load();
     return () => {
-      active = false
-    }
-  }, [tenantSelection.companyId, storeId])
+      active = false;
+    };
+  }, [tenantSelection.companyId, storeId]);
+
+  // Load saved preferences for validity, currency, and conditions
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedValidity = window.localStorage.getItem(validityPreferenceKey);
+    if (savedValidity) setValidity(savedValidity);
+  }, [validityPreferenceKey]);
 
   useEffect(() => {
-    if (!catalog) return
-    const sections = catalog[tab] ?? []
-    const servicesSection = sections.find((section) => section.id === "services")
-    const warrantiesSection = sections.find((section) => section.id === "warranties")
-    const freeService = servicesSection?.options.find((option) => option.id === "service-assembly-free")
-    const freeWarranty = warrantiesSection?.options.find((option) => option.id === "warranty-12-free")
+    if (typeof window === 'undefined') return;
+    const savedCurrency = window.localStorage.getItem(currencyPreferenceKey);
+    if (savedCurrency) setCurrency(savedCurrency);
+  }, [currencyPreferenceKey]);
 
-    if (!freeService && !freeWarranty) return
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedConditions = window.localStorage.getItem(
+      conditionsPreferenceKey,
+    );
+    if (savedConditions) setConditions(savedConditions);
+  }, [conditionsPreferenceKey]);
+
+  // Periodic catalog refresh for real-time price sync (every 30 seconds)
+  useEffect(() => {
+    if (!catalog) return;
+    const intervalId = setInterval(async () => {
+      try {
+        const catalogData = await getQuoteCatalog(storeId);
+        setCatalog(catalogData);
+        // Note: priceOverrides state is preserved - custom prices won't be overwritten
+      } catch (error) {
+        console.error('Failed to refresh catalog:', error);
+      }
+    }, 30000); // 30 seconds
+    return () => clearInterval(intervalId);
+  }, [catalog, storeId]);
+
+  // Load bank accounts (backend + localStorage cache)
+  useEffect(() => {
+    const companyId = tenantSelection.companyId;
+    if (!companyId) return;
+    const cacheKey = `quotes-bank-accounts:v1:${companyId}`;
+    // Load from cache first
+    try {
+      const cached = window.localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) setBankAccounts(parsed);
+      }
+    } catch {}
+    // Then fetch from backend
+    getBankAccounts(companyId)
+      .then((accounts) => {
+        setBankAccounts(accounts);
+        try {
+          window.localStorage.setItem(cacheKey, JSON.stringify(accounts));
+        } catch {}
+      })
+      .catch(() => {});
+  }, [tenantSelection.companyId]);
+
+  const handleSaveBankAccounts = async (accounts: BankAccount[]) => {
+    const companyId = tenantSelection.companyId;
+    if (!companyId) return;
+    setIsSavingBankAccounts(true);
+    try {
+      const saved = await saveBankAccounts(companyId, accounts);
+      setBankAccounts(saved);
+      const cacheKey = `quotes-bank-accounts:v1:${companyId}`;
+      try {
+        window.localStorage.setItem(cacheKey, JSON.stringify(saved));
+      } catch {}
+      toast.success('Cuentas bancarias guardadas.');
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudieron guardar.');
+    } finally {
+      setIsSavingBankAccounts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!catalog) return;
+    const sections = catalog[tab] ?? [];
+    const servicesSection = sections.find(
+      (section) => section.id === 'services',
+    );
+    const warrantiesSection = sections.find(
+      (section) => section.id === 'warranties',
+    );
+    const freeService = servicesSection?.options.find(
+      (option) => option.id === 'service-assembly-free',
+    );
+    const freeWarranty = warrantiesSection?.options.find(
+      (option) => option.id === 'warranty-12-free',
+    );
+
+    if (!freeService && !freeWarranty) return;
 
     setSelection((prev) => {
-      const next = { ...prev }
-      const servicesKey = servicesSection?.id ?? "services"
-      const warrantiesKey = warrantiesSection?.id ?? "warranties"
-      const currentServices = next[servicesKey] ?? []
-      const currentWarranties = next[warrantiesKey] ?? []
-      if (freeService && currentServices.length === 0) {
-        next[servicesKey] = [freeService]
+      const next = { ...prev };
+      const servicesKey = servicesSection?.id ?? 'services';
+      const warrantiesKey = warrantiesSection?.id ?? 'warranties';
+      const servicesAppliedKey = `${tab}:${servicesKey}`;
+      const warrantiesAppliedKey = `${tab}:${warrantiesKey}`;
+      const currentServices = next[servicesKey] ?? [];
+      const currentWarranties = next[warrantiesKey] ?? [];
+      if (
+        freeService &&
+        currentServices.length === 0 &&
+        !defaultsAppliedRef.current[servicesAppliedKey]
+      ) {
+        next[servicesKey] = [freeService];
+        defaultsAppliedRef.current[servicesAppliedKey] = true;
       }
-      if (freeWarranty && currentWarranties.length === 0) {
-        next[warrantiesKey] = [freeWarranty]
+      if (
+        freeWarranty &&
+        currentWarranties.length === 0 &&
+        !defaultsAppliedRef.current[warrantiesAppliedKey]
+      ) {
+        next[warrantiesKey] = [freeWarranty];
+        defaultsAppliedRef.current[warrantiesAppliedKey] = true;
       }
-      return next
-    })
-  }, [catalog, tab])
+      return next;
+    });
+  }, [catalog, tab]);
 
   useEffect(() => {
     setQuantities((prev) => {
-      const next = { ...prev }
-      let changed = false
+      const next = { ...prev };
+      let changed = false;
       Object.values(selection).forEach((items) => {
         items.forEach((item) => {
-          if (!isQuantityEditable(item)) return
-          const minValue = 1
-          const limit = getStockLimit(item, limitByStock)
-          const current = next[item.id]
+          if (!isQuantityEditable(item)) return;
+          const minValue = 1;
+          const limit = getStockLimit(item, limitByStock);
+          const current = next[item.id];
           if (!current || current < minValue) {
-            next[item.id] = minValue
-            changed = true
+            next[item.id] = minValue;
+            changed = true;
           } else if (limit !== null && current > limit) {
-            next[item.id] = Math.max(minValue, limit)
-            changed = true
+            next[item.id] = Math.max(minValue, limit);
+            changed = true;
           }
-        })
-      })
-      return changed ? next : prev
-    })
-  }, [selection, limitByStock])
+        });
+      });
+      return changed ? next : prev;
+    });
+  }, [selection, limitByStock]);
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const raw = window.localStorage.getItem(draftKey)
-    if (!raw) return
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(draftKey);
+    if (!raw) return;
     try {
-      const draft = JSON.parse(raw) as QuoteDraft
-      if (draft?.version !== 1) return
-      setTab(draft.tab)
-      const normalizedSelection: SelectionMap = {}
-      const rawSelection = draft.selection ?? {}
+      const draft = JSON.parse(raw) as QuoteDraft;
+      if (draft?.version !== 1) return;
+      setTab(draft.tab);
+      if (draft.quoteNumber) setQuoteNumber(draft.quoteNumber);
+      if (typeof draft.serverQuoteId === 'number')
+        setServerQuoteId(draft.serverQuoteId);
+      if (draft.serverQuoteStatus)
+        setServerQuoteStatus(draft.serverQuoteStatus);
+      const normalizedSelection: SelectionMap = {};
+      const rawSelection = draft.selection ?? {};
       Object.entries(rawSelection).forEach(([key, value]) => {
         if (Array.isArray(value)) {
-          normalizedSelection[key] = value.filter(Boolean)
+          normalizedSelection[key] = value.filter(Boolean);
         } else if (value) {
-          normalizedSelection[key] = [value as QuoteOption]
+          normalizedSelection[key] = [value as QuoteOption];
         } else {
-          normalizedSelection[key] = []
+          normalizedSelection[key] = [];
         }
-      })
-      setSelection(normalizedSelection)
-      setPriceOverrides(draft.priceOverrides ?? {})
-      setQuantities(draft.quantities ?? {})
-      setClientName(draft.clientName ?? "")
-      setContactName(draft.contactName ?? "")
-      setWhatsAppPhone(draft.whatsAppPhone ?? "")
-      setValidity(draft.validity ?? "15 días")
-      setCurrency(draft.currency ?? "PEN")
-      setConditions(draft.conditions ?? "")
-      setStoreId(draft.storeId ?? null)
-      setMarginRate(typeof draft.marginRate === "number" ? draft.marginRate : 0.12)
-      setCompatibilityMode(draft.compatibilityMode ?? "mixed")
-      setLimitByStock(typeof draft.limitByStock === "boolean" ? draft.limitByStock : true)
-      setTaxRate(0.18)
+      });
+      setSelection(normalizedSelection);
+      setPriceOverrides(draft.priceOverrides ?? {});
+      setQuantities(draft.quantities ?? {});
+      setClientName(draft.clientName ?? '');
+      setContactName(draft.contactName ?? '');
+      setWhatsAppPhone(draft.whatsAppPhone ?? '');
+      setClientDocType(draft.clientDocType ?? '');
+      setClientDocNumber(draft.clientDocNumber ?? '');
+      setValidity(draft.validity ?? '15 días');
+      setCurrency(draft.currency ?? 'PEN');
+      setConditions(draft.conditions ?? '');
+      setStoreId(draft.storeId ?? null);
+      setLimitByStock(
+        typeof draft.limitByStock === 'boolean' ? draft.limitByStock : true,
+      );
+      setTaxRate(0.18);
     } catch {
       /* ignore */
     }
-  }, [draftKey])
+  }, [draftKey]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const payload: QuoteDraft = {
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      tab,
-      selection,
-      priceOverrides,
-      quantities,
-      clientName,
-      contactName,
-      whatsAppPhone,
-      validity,
-      currency,
-      conditions,
-      compatibilityMode,
-      limitByStock,
-      storeId,
-      marginRate,
-      taxRate,
-    }
-    window.localStorage.setItem(draftKey, JSON.stringify(payload))
+    if (typeof window === 'undefined') return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      const payload: QuoteDraft = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        tab,
+        quoteNumber,
+        serverQuoteId,
+        serverQuoteStatus,
+        selection,
+        priceOverrides,
+        quantities,
+        clientName,
+        contactName,
+        whatsAppPhone,
+        clientDocType,
+        clientDocNumber,
+        validity,
+        currency,
+        conditions,
+        limitByStock,
+        storeId,
+        taxRate,
+      };
+      window.localStorage.setItem(draftKey, JSON.stringify(payload));
+    }, 400);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
   }, [
     tab,
+    quoteNumber,
+    serverQuoteId,
+    serverQuoteStatus,
     selection,
     priceOverrides,
     quantities,
     clientName,
     contactName,
     whatsAppPhone,
+    clientDocType,
+    clientDocNumber,
     validity,
     currency,
     conditions,
-    compatibilityMode,
     limitByStock,
     storeId,
-    marginRate,
     taxRate,
     draftKey,
-  ])
+  ]);
 
-  const subtotal = useMemo(() => {
-    return Object.values(selection).flat().reduce((sum, item) => {
-      if (!item) return sum
-      const override = priceOverrides[item.id]
-      const qty = Math.max(1, quantities[item.id] ?? 1)
-      const unitPrice = typeof override === "number" ? override : item.price ?? 0
-      return sum + unitPrice * qty
-    }, 0)
-  }, [priceOverrides, quantities, selection])
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(stockPreferenceKey, limitByStock ? '1' : '0');
+  }, [limitByStock, stockPreferenceKey]);
 
-  const selectedItems = useMemo(() => Object.values(selection).flat(), [selection])
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(
+      advancedConfigPreferenceKey,
+      showAdvancedConfig ? '1' : '0',
+    );
+  }, [showAdvancedConfig, advancedConfigPreferenceKey]);
 
-  const marginAmount = useMemo(() => subtotal * (marginRate ?? 0), [marginRate, subtotal])
-  const taxAmount = useMemo(() => (subtotal + marginAmount) * (taxRate ?? 0), [marginRate, subtotal, taxRate])
-  const total = useMemo(() => subtotal + marginAmount + taxAmount, [subtotal, marginAmount, taxAmount])
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(
+      pdfImagesPreferenceKey,
+      showImagesInPdf ? '1' : '0',
+    );
+  }, [showImagesInPdf, pdfImagesPreferenceKey]);
 
+  // Save user preferences when they change (debounced to avoid blocking on each keystroke)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const timeoutId = setTimeout(() => {
+      window.localStorage.setItem(validityPreferenceKey, validity);
+      window.localStorage.setItem(currencyPreferenceKey, currency);
+      window.localStorage.setItem(conditionsPreferenceKey, conditions);
+    }, 500); // Wait 500ms after last change before saving
+    return () => clearTimeout(timeoutId);
+  }, [
+    validity,
+    validityPreferenceKey,
+    currency,
+    currencyPreferenceKey,
+    conditions,
+    conditionsPreferenceKey,
+  ]);
 
-  const evaluateCompatibility = (currentSelection: SelectionMap) => {
-    const items = Object.values(currentSelection).flat().filter(Boolean) as QuoteOption[]
-    const issues: CompatibilityIssue[] = []
-    const seen = new Set<string>()
-    const pushIssue = (issue: CompatibilityIssue) => {
-      const key = `${issue.title}:${issue.detail}:${issue.severity}`
-      if (seen.has(key)) return
-      seen.add(key)
-      issues.push(issue)
-    }
+  // OPTIMIZED: Combined calculation - single pass instead of multiple reduces
+  const { grossTotal, marginAmount, revenueTotal } = useMemo(() => {
+    let gross = 0;
+    let margin = 0;
+    let revenue = 0;
 
-    const cpuItems = items.filter((item) => item.componentType === "cpu")
-    const mbItems = items.filter((item) => item.componentType === "motherboard")
-    const ramItems = items.filter((item) => item.componentType === "ram")
-    const caseItems = items.filter((item) => item.componentType === "case")
-    const psuItems = items.filter((item) => item.componentType === "psu")
+    Object.values(selection)
+      .flat()
+      .forEach((item) => {
+        if (!item) return;
 
-    const cpuSockets = cpuItems
-      .map((item) => findTag(item, /AM4|AM5|LGA\s*\d{3,4}/i))
-      .filter(Boolean)
-      .map((tag) => normalizeTag(tag!))
-    const mbSockets = mbItems
-      .map((item) => findTag(item, /AM4|AM5|LGA\s*\d{3,4}/i))
-      .filter(Boolean)
-      .map((tag) => normalizeTag(tag!))
-    const cpuSocketSet = new Set(cpuSockets)
-    const mbSocketSet = new Set(mbSockets)
+        const override = priceOverrides[item.id];
+        const qty = Math.max(1, quantities[item.id] ?? 1);
+        const sellPrice =
+          typeof override === 'number' ? override : (item.price ?? 0);
 
-    if (cpuItems.length > 1 || mbItems.length > 1) {
-      pushIssue({
-        title: "Múltiples sockets seleccionados",
-        detail: "Se han seleccionado múltiples CPUs o placas madre.",
-        severity: "warning",
+        // Gross total (all items)
+        gross += sellPrice * qty;
+
+        // Margin and revenue (exclude services/warranties)
+        if (!isServiceOrWarranty(item)) {
+          const cost =
+            typeof item.costPrice === 'number' ? item.costPrice : null;
+          revenue += sellPrice * qty;
+          if (cost !== null) {
+            margin += (sellPrice - cost) * qty;
+          }
+        }
+      });
+
+    return { grossTotal: gross, marginAmount: margin, revenueTotal: revenue };
+  }, [priceOverrides, quantities, selection]);
+
+  const selectedItems = useMemo(
+    () => Object.values(selection).flat(),
+    [selection],
+  );
+  const summaryItems = useMemo(() => {
+    return selectedItems
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) => {
+        const weightA = isServiceOrWarranty(a.item) ? 1 : 0;
+        const weightB = isServiceOrWarranty(b.item) ? 1 : 0;
+        if (weightA !== weightB) return weightA - weightB;
+        return a.index - b.index;
       })
-    }
+      .map(({ item }) => item);
+  }, [selectedItems]);
+  const nonServiceItems = useMemo(
+    () => selectedItems.filter((item) => isQuantityEditable(item)),
+    [selectedItems],
+  );
+  const sectionChips = useMemo(() => {
+    const sections = catalog?.[tab] ?? [];
+    const labelMap = new Map(
+      sections.map((section) => [section.id, section.title]),
+    );
+    return Object.entries(selection)
+      .map(([key, items]) => ({
+        id: key,
+        label: labelMap.get(key) ?? key,
+        count: items.length,
+      }))
+      .filter(
+        (entry) =>
+          entry.count > 0 &&
+          entry.id !== 'services' &&
+          entry.id !== 'warranties',
+      );
+  }, [catalog, selection, tab]);
+  const pcCategoryOptions = useMemo(() => {
+    const categorySet = new Set<string>();
+    (catalog?.pc ?? []).forEach((section) => {
+      section.options.forEach((option) => {
+        if (option.categoryName?.trim()) {
+          categorySet.add(option.categoryName.trim());
+        }
+      });
+    });
+    return Array.from(categorySet).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [catalog]);
 
-    if (cpuSocketSet.size && mbSocketSet.size) {
-      const hasMatch = Array.from(cpuSocketSet).some((socket) => mbSocketSet.has(socket))
-      if (!hasMatch) {
-        pushIssue({
-          title: "Socket incompatible",
-          detail: `CPU ${Array.from(cpuSocketSet).join(", ")} vs placa ${Array.from(mbSocketSet).join(", ")}.`,
-          severity: "critical",
-        })
+  const hardwareCategoryOptions = useMemo(() => {
+    const categorySet = new Set<string>();
+    (catalog?.hardware ?? []).forEach((section) => {
+      const skipSection =
+        section.id === 'services' || section.id === 'warranties';
+      if (skipSection) return;
+      section.options.forEach((option) => {
+        const optionCategory = normalizeFilterText(option.categoryName);
+        if (optionCategory) {
+          categorySet.add(option.categoryName!.trim());
+          return;
+        }
+        if (section.title?.trim()) {
+          categorySet.add(section.title.trim());
+        }
+      });
+    });
+    return Array.from(categorySet).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [catalog]);
+
+  const taxAmount = useMemo(() => {
+    if (!grossTotal) return 0;
+    const rate = taxRate ?? 0;
+    if (!rate) return 0;
+    return grossTotal - grossTotal / (1 + rate);
+  }, [grossTotal, taxRate]);
+  const netSubtotal = useMemo(
+    () => grossTotal - taxAmount,
+    [grossTotal, taxAmount],
+  );
+
+  // marginAmount and revenueTotal now calculated above in combined reduce
+
+  const marginRate = useMemo(() => {
+    if (!revenueTotal) return 0;
+    return marginAmount / revenueTotal;
+  }, [marginAmount, revenueTotal]);
+  const total = useMemo(() => grossTotal, [grossTotal]);
+
+  const normalizeSpecs = (specs: any): string[] => {
+    if (Array.isArray(specs)) return specs.map((item) => String(item));
+    if (typeof specs === 'string') return [specs];
+    if (!specs) return [];
+    if (typeof specs === 'object') {
+      return Object.entries(specs).map(
+        ([key, value]) => `${key}: ${String(value)}`,
+      );
+    }
+    return [];
+  };
+
+  const mapQuoteToSelection = (
+    detail: QuoteDetail,
+    catalogData: QuoteCatalog,
+  ) => {
+    const preferredTab = detail.items.some((item) => item.category === 'LAPTOP')
+      ? 'laptops'
+      : detail.items.some((item) => item.category === 'PC')
+        ? 'pc'
+        : 'hardware';
+    setTab(preferredTab);
+
+    const sections = catalogData[preferredTab] ?? [];
+    const optionLookup = new Map<
+      string,
+      { sectionId: string; option: QuoteOption }
+    >();
+    sections.forEach((section) => {
+      section.options.forEach((option) => {
+        optionLookup.set(option.id, { sectionId: section.id, option });
+      });
+    });
+
+    const nextSelection: SelectionMap = {};
+    const nextOverrides: Record<string, number> = {};
+    const nextQuantities: Record<string, number> = {};
+
+    detail.items.forEach((item) => {
+      let resolved: QuoteOption | null = null;
+      let sectionId = 'imported';
+      if (item.productId) {
+        const optionId = `product-${item.productId}`;
+        const found = optionLookup.get(optionId);
+        if (found) {
+          resolved = found.option;
+          sectionId = found.sectionId;
+        }
       }
-    } else if (cpuItems.length || mbItems.length) {
-      pushIssue({
-        title: "Socket no verificado",
-        detail: "Completa los datos de socket en CPU y placa madre.",
-        severity: "missing",
+      if (!resolved) {
+        const componentType =
+          item.type === 'SERVICE'
+            ? 'service'
+            : item.type === 'WARRANTY'
+              ? 'warranty'
+              : 'other';
+        resolved = {
+          id: `quoteitem-${item.id}`,
+          name: item.name,
+          price: item.unitPrice,
+          costPrice: item.costPrice ?? undefined,
+          image: '/placeholder.svg?height=120&width=160',
+          specs: normalizeSpecs(item.specs),
+          description: item.description ?? undefined,
+          componentType,
+        };
+        sectionId =
+          item.type === 'SERVICE'
+            ? 'services'
+            : item.type === 'WARRANTY'
+              ? 'warranties'
+              : 'imported';
+      }
+      nextSelection[sectionId] = [
+        ...(nextSelection[sectionId] ?? []),
+        resolved,
+      ];
+      nextOverrides[resolved.id] = item.unitPrice;
+      nextQuantities[resolved.id] = item.quantity;
+    });
+
+    setSelection(nextSelection);
+    setPriceOverrides(nextOverrides);
+    setQuantities(nextQuantities);
+  };
+
+  useEffect(() => {
+    const idParam = quoteIdParam;
+    if (!idParam) {
+      loadedQuoteIdRef.current = null;
+      setServerQuoteStatus((prev) =>
+        prev === 'ISSUED' || prev === 'CANCELLED' ? null : prev,
+      );
+      return;
+    }
+    if (!catalog) return;
+    const quoteId = Number(idParam);
+    if (!quoteId || loadedQuoteIdRef.current === quoteId) return;
+    loadedQuoteIdRef.current = quoteId;
+    getQuoteById(quoteId)
+      .then((detail) => {
+        setServerQuoteId(detail.id);
+        setServerQuoteStatus(detail.status);
+        if (detail.quoteNumber) setQuoteNumber(detail.quoteNumber);
+        setClientName(detail.clientNameSnapshot || '');
+        setContactName(detail.contactSnapshot || '');
+
+        // Buscar cliente en la lista para obtener datos de documento
+        if (detail.clientNameSnapshot) {
+          const foundClient = clients.find(
+            (c) => c.name === detail.clientNameSnapshot,
+          );
+          if (foundClient) {
+            setClientDocType(foundClient.documentType || '');
+            setClientDocNumber(foundClient.documentNumber || '');
+          }
+        }
+
+        setCurrency(detail.currency || 'PEN');
+        setValidity(detail.validity || '15 días');
+        setConditions(detail.conditions || '');
+        setTaxRate(typeof detail.taxRate === 'number' ? detail.taxRate : 0.18);
+        mapQuoteToSelection(detail, catalog);
       })
-    }
+      .catch(() => {
+        loadedQuoteIdRef.current = null;
+      });
+  }, [catalog, quoteIdParam, clients]);
 
-    const ramTypes = ramItems
-      .map((item) => findTag(item, /DDR[3-5]/i))
-      .filter(Boolean)
-      .map((tag) => normalizeTag(tag!))
-    const mbRamTypes = mbItems
-      .map((item) => findTag(item, /DDR[3-5]/i))
-      .filter(Boolean)
-      .map((tag) => normalizeTag(tag!))
-    const ramSet = new Set(ramTypes)
-    const mbRamSet = new Set(mbRamTypes)
+  const buildQuoteItemsPayload = (): QuoteItemPayload[] => {
+    const items: QuoteItemPayload[] = [];
+    Object.entries(selection).forEach(([, options]) => {
+      options.forEach((item) => {
+        const qty = Math.max(1, quantities[item.id] ?? 1);
+        const unitPrice =
+          typeof priceOverrides[item.id] === 'number'
+            ? priceOverrides[item.id]
+            : (item.price ?? 0);
+        const type =
+          item.componentType === 'service'
+            ? 'SERVICE'
+            : item.componentType === 'warranty'
+              ? 'WARRANTY'
+              : 'PRODUCT';
+        const category =
+          type === 'SERVICE'
+            ? 'SERVICE'
+            : type === 'WARRANTY'
+              ? 'WARRANTY'
+              : tab === 'laptops'
+                ? 'LAPTOP'
+                : tab === 'pc'
+                  ? 'PC'
+                  : 'HARDWARE';
+        items.push({
+          productId: item.id.startsWith('product-')
+            ? Number(item.id.replace('product-', ''))
+            : null,
+          name: item.name,
+          description: item.description ?? null,
+          specs: item.specs ?? [],
+          unitPrice,
+          costPrice: typeof item.costPrice === 'number' ? item.costPrice : null,
+          quantity: qty,
+          type,
+          category,
+        });
+      });
+    });
+    return items;
+  };
 
-    if (ramItems.length > 1) {
-      pushIssue({
-        title: "Múltiples RAM seleccionadas",
-        detail: "Se han seleccionado múltiples memorias RAM.",
-        severity: "warning",
-      })
-    }
-
-    if (ramSet.size && mbRamSet.size) {
-      const hasMatch = Array.from(ramSet).some((ramType) => mbRamSet.has(ramType))
-      if (!hasMatch) {
-        pushIssue({
-          title: "RAM incompatible",
-          detail: `RAM ${Array.from(ramSet).join(", ")} vs placa ${Array.from(mbRamSet).join(", ")}.`,
-          severity: "critical",
-        })
-      }
-    } else if (ramItems.length || mbItems.length) {
-      pushIssue({
-        title: "RAM no verificada",
-        detail: "Faltan datos de tipo DDR para RAM o placa madre.",
-        severity: "missing",
-      })
-    }
-
-    const caseFormFactors = caseItems
-      .map((item) => findTag(item, /(E?ATX|MICRO\s*ATX|M-?ATX|MINI\s*ITX)/i))
-      .filter(Boolean)
-      .map((tag) => normalizeFormFactor(tag!))
-    const mbFormFactors = mbItems
-      .map((item) => findTag(item, /(E?ATX|MICRO\s*ATX|M-?ATX|MINI\s*ITX)/i))
-      .filter(Boolean)
-      .map((tag) => normalizeFormFactor(tag!))
-    const caseSet = new Set(caseFormFactors)
-    const mbFormSet = new Set(mbFormFactors)
-
-    if (caseSet.size && mbFormSet.size) {
-      const hasMatch = Array.from(caseSet).some((ff) => mbFormSet.has(ff))
-      if (!hasMatch) {
-        pushIssue({
-          title: "Form factor incompatible",
-          detail: `Case ${Array.from(caseSet).join(", ")} vs placa ${Array.from(mbFormSet).join(", ")}.`,
-          severity: "critical",
-        })
-      }
-    } else if (caseItems.length || mbItems.length) {
-      pushIssue({
-        title: "Form factor no verificado",
-        detail: "Completa el factor de forma en case y placa madre.",
-        severity: "missing",
-      })
-    }
-
-    const cpuChipsets = cpuItems
-      .map((item) => findTag(item, /(B|Z|H|X|A)\d{3,4}/i))
-      .filter(Boolean)
-      .map((tag) => normalizeTag(tag!))
-    const mbChipsets = mbItems
-      .map((item) => findTag(item, /(B|Z|H|X|A)\d{3,4}/i))
-      .filter(Boolean)
-      .map((tag) => normalizeTag(tag!))
-    const cpuChipsetSet = new Set(cpuChipsets)
-    const mbChipsetSet = new Set(mbChipsets)
-    if (cpuChipsetSet.size && mbChipsetSet.size) {
-      const hasMatch = Array.from(cpuChipsetSet).some((chip) => mbChipsetSet.has(chip))
-      if (!hasMatch) {
-        pushIssue({
-          title: "Chipset distinto",
-          detail: `CPU ${Array.from(cpuChipsetSet).join(", ")} vs placa ${Array.from(mbChipsetSet).join(", ")}.`,
-          severity: "warning",
-        })
-      }
-    } else if (cpuItems.length || mbItems.length) {
-      pushIssue({
-        title: "Chipset no verificado",
-        detail: "Faltan datos de chipset para validar compatibilidad.",
-        severity: "missing",
-      })
-    }
-
-    if (psuItems.length || items.some((item) => item.componentType === "monitor")) {
-      const voltageTags = items
-        .flatMap((item) => item.compatibility ?? [])
-        .filter((tag) => /(\d{2,3}\s*-\s*\d{2,3}\s*V|\d{2,3}\s*V)/i.test(tag))
-        .map((tag) => normalizeTag(tag))
-      const uniqueVoltages = Array.from(new Set(voltageTags))
-      if (uniqueVoltages.length > 1) {
-        pushIssue({
-          title: "Voltaje distinto",
-          detail: `Se detectaron voltajes ${uniqueVoltages.join(", ")}.`,
-          severity: "warning",
-        })
-      } else if (uniqueVoltages.length === 0) {
-        pushIssue({
-          title: "Voltaje no verificado",
-          detail: "No hay datos de voltaje para validar la fuente/monitor.",
-          severity: "missing",
-        })
-      }
-    }
-
-    const blocking = issues.filter((issue) => issue.severity === "critical")
-    const warnings = issues.filter((issue) => issue.severity !== "critical")
-
-    return { issues, blocking, warnings }
-  }
-
-  const compatibilityReport = useMemo(() => evaluateCompatibility(selection), [selection])
-  const compatibilityIssues = compatibilityReport.issues
-  const blockingIssues = compatibilityReport.blocking
-
-  const compatibilityStatus = useMemo(() => {
-    if (blockingIssues.length > 0) {
-      return {
-        label: `Incompatibilidades críticas (${blockingIssues.length})`,
-        className: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",
-        icon: AlertTriangle,
-      }
-    }
-    if (compatibilityIssues.length > 0) {
-      return {
-        label: `Compatibilidad con alertas (${compatibilityIssues.length})`,
-        className:
-          "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
-        icon: AlertTriangle,
-      }
-    }
-    return {
-      label: "Compatibilidad OK",
-      className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
-      icon: null,
-    }
-  }, [blockingIssues, compatibilityIssues])
-
-  const StatusIcon = compatibilityStatus.icon
   const buildPdfData = () => {
     const items = Object.values(selection)
       .flat()
@@ -514,742 +884,688 @@ export default function QuotesPage() {
         name: item!.name,
         price: priceOverrides[item!.id] ?? item!.price,
         quantity: Math.max(1, quantities[item!.id] ?? 1),
-      }))
+        description: item!.description,
+        ...(!hideSpecsInPdf && { specs: item!.specs }),
+        ...(showImagesInPdf && { image: item!.image }),
+      }));
     return {
-      companyName: meta?.company.name ?? "Empresa",
-      companyAddress: meta?.company.address ?? "",
-      companyPhone: meta?.company.phone ?? "",
+      companyName: meta?.company.name ?? 'Empresa',
+      companyLogoUrl: meta?.company.logoUrl,
+      companyAddress: meta?.company.address ?? '',
+      companyPhone: meta?.company.phone ?? '',
+      companyEmail: meta?.company.email ?? '',
       clientName,
       contactName,
+      clientDocType,
+      clientDocNumber,
       validity,
       currency,
       conditions,
+      issuedAt: new Date().toLocaleDateString('es-PE'),
+      quoteNumber,
       items,
-      subtotal,
+      subtotal: netSubtotal,
       margin: marginAmount,
       tax: taxAmount,
       total,
+      bankAccounts: bankAccounts.length > 0 ? bankAccounts : undefined,
+    };
+  };
+
+  const handleSaveDraft = async () => {
+    setIsSavingDraft(true);
+    try {
+      const payload: QuoteDraftPayload = {
+        clientNameSnapshot: clientName || null,
+        contactSnapshot: contactName || null,
+        currency,
+        validity,
+        conditions,
+        taxRate,
+        subtotal: netSubtotal,
+        taxAmount: taxAmount,
+        marginAmount,
+        total,
+        items: buildQuoteItemsPayload(),
+      };
+      const result = serverQuoteId
+        ? await updateQuoteDraft(serverQuoteId, payload)
+        : await createQuoteDraft(payload);
+      setServerQuoteId(result.id);
+      setServerQuoteStatus(result.status);
+      if (result.quoteNumber) setQuoteNumber(result.quoteNumber);
+      toast.success(
+        serverQuoteId ? 'Borrador actualizado.' : 'Borrador guardado.',
+      );
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudo guardar el borrador.');
+    } finally {
+      setIsSavingDraft(false);
     }
-  }
+  };
+
+  const handleIssueQuote = async () => {
+    setIsIssuingQuote(true);
+    try {
+      const itemsPayload = buildQuoteItemsPayload();
+      if (!itemsPayload.length) {
+        toast.error('Agrega al menos un ítem antes de emitir la cotización.');
+        return;
+      }
+
+      const payload: QuoteDraftPayload = {
+        clientNameSnapshot: clientName || null,
+        contactSnapshot: contactName || null,
+        currency,
+        validity,
+        conditions,
+        taxRate,
+        subtotal: netSubtotal,
+        taxAmount: taxAmount,
+        marginAmount,
+        total,
+        items: itemsPayload,
+      };
+
+      let draftId = serverQuoteStatus === 'DRAFT' ? serverQuoteId : null;
+      if (draftId) {
+        try {
+          const updatedDraft = await updateQuoteDraft(draftId, payload);
+          draftId = updatedDraft.id;
+          setServerQuoteId(updatedDraft.id);
+          setServerQuoteStatus(updatedDraft.status);
+        } catch (error: any) {
+          const message = String(error?.message ?? '');
+          const mustRecreateDraft =
+            /Solo se pueden editar borradores|no encontrada|not found/i.test(
+              message,
+            );
+          if (!mustRecreateDraft) throw error;
+          const recreatedDraft = await createQuoteDraft(payload);
+          draftId = recreatedDraft.id;
+          setServerQuoteId(recreatedDraft.id);
+          setServerQuoteStatus(recreatedDraft.status);
+        }
+      } else {
+        const draft = await createQuoteDraft(payload);
+        draftId = draft.id;
+        setServerQuoteId(draft.id);
+        setServerQuoteStatus(draft.status);
+      }
+
+      const issued = await issueQuote(draftId, {
+        stockValidationMode: limitByStock
+          ? storeId
+            ? 'STORE'
+            : 'GLOBAL'
+          : 'NONE',
+        storeId,
+      });
+      setServerQuoteStatus(issued.status);
+      if (issued.quoteNumber) setQuoteNumber(issued.quoteNumber);
+      toast.success(`Cotización emitida (${issued.quoteNumber}).`);
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(
+          'quotes:suppress-restore-toast-once',
+          '1',
+        );
+        window.localStorage.removeItem(draftKey);
+        router.replace('/dashboard/quotes');
+      }
+    } catch (error: any) {
+      if (
+        typeof error?.message === 'string' &&
+        /emitida|cancelada/i.test(error.message)
+      ) {
+        setServerQuoteId(null);
+        setServerQuoteStatus(null);
+      }
+      toast.error(error?.message || 'No se pudo emitir la cotización.');
+    } finally {
+      setIsIssuingQuote(false);
+    }
+  };
 
   const openPdfPreview = async () => {
-    const blob = await pdf(<QuotePdfDocument data={buildPdfData()} />).toBlob()
-    const url = URL.createObjectURL(blob)
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
+    const blob = await pdf(<QuotePdfDocument data={buildPdfData()} />).toBlob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   const openPdfPrint = async () => {
-    const blob = await pdf(<QuotePdfDocument data={buildPdfData()} />).toBlob()
-    const url = URL.createObjectURL(blob)
-    const printWindow = window.open(url, "_blank", "noopener,noreferrer")
+    const blob = await pdf(<QuotePdfDocument data={buildPdfData()} />).toBlob();
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
     if (printWindow) {
-      printWindow.addEventListener("load", () => {
-        printWindow.print()
-      })
+      printWindow.addEventListener('load', () => {
+        printWindow.print();
+      });
     }
-  }
+  };
   const handleSendWhatsApp = async () => {
     if (!whatsAppPhone.trim()) {
-      toast.error("Ingresa un número de WhatsApp.")
-      return
+      toast.error('Ingresa un número de WhatsApp.');
+      return;
     }
-    setSendingWhatsApp(true)
+    setSendingWhatsApp(true);
     try {
-      const blob = await pdf(<QuotePdfDocument data={buildPdfData()} />).toBlob()
-      const filename = `cotizacion-${Date.now()}.pdf`
-      await sendQuoteWhatsApp({ phone: whatsAppPhone, filename, file: blob })
-      toast.success("Cotización enviada por WhatsApp.")
+      const blob = await pdf(
+        <QuotePdfDocument data={buildPdfData()} />,
+      ).toBlob();
+      const filename = `cotizacion-${Date.now()}.pdf`;
+      await sendQuoteWhatsApp({ phone: whatsAppPhone, filename, file: blob });
+      toast.success('Cotización enviada por WhatsApp.');
     } catch (error: any) {
-      toast.error(error?.message || "No se pudo enviar por WhatsApp.")
+      toast.error(error?.message || 'No se pudo enviar por WhatsApp.');
     } finally {
-      setSendingWhatsApp(false)
+      setSendingWhatsApp(false);
     }
-  }
+  };
 
-  const handleSaveMargin = async () => {
-    const companyId = tenantSelection.companyId
-    if (!companyId) {
-      toast.error("Selecciona una empresa para guardar el margen.")
-      return
+  const handleCreateClient = async () => {
+    if (!newClientName.trim()) {
+      toast.error('Ingresa el nombre del cliente.');
+      return;
     }
-    setSavingMargin(true)
+    if (!newClientDocNumber.trim()) {
+      toast.error('Ingresa el número de documento.');
+      return;
+    }
+
+    setIsCreatingClient(true);
     try {
-      await updateCompany(companyId, { defaultQuoteMargin: marginRate })
-      toast.success("Margen guardado para la empresa.")
-    } catch (error: any) {
-      toast.error(error?.message || "No se pudo guardar el margen.")
-    } finally {
-      setSavingMargin(false)
-    }
-  }
+      const newClient = await createClient({
+        name: newClientName.trim(),
+        type: newClientDocType,
+        typeNumber: newClientDocNumber.trim(),
+      });
 
-  if (verticalInfo?.businessVertical && verticalInfo.businessVertical !== "COMPUTERS") {
+      toast.success('Cliente creado exitosamente.');
+
+      // Auto-populate client fields
+      setClientName(newClient.name);
+      setContactName(newClient.email || newClient.phone || '');
+      setWhatsAppPhone(newClient.phone || '');
+      setClientDocType(newClient.type || newClientDocType);
+      setClientDocNumber(newClient.typeNumber || newClientDocNumber);
+
+      // Refresh clients list
+      const refreshedClients = await getQuoteClients();
+      setClients(refreshedClients);
+
+      // Reset form and close dialog
+      setNewClientName('');
+      setNewClientDocType('DNI');
+      setNewClientDocNumber('');
+      setShowNewClientDialog(false);
+      setClientOpen(false);
+    } catch (error: any) {
+      const statusCode = error?.response?.status;
+      if (statusCode === 409) {
+        toast.error(
+          `El número de documento ${newClientDocNumber} ya está registrado.`,
+        );
+      } else {
+        toast.error(error?.message || 'No se pudo crear el cliente.');
+      }
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
+
+  // Component handlers
+  const handleClientSelect = useCallback((client: QuoteClient) => {
+    setClientName(client.name);
+    setContactName(client.email || client.phone || '');
+    setWhatsAppPhone(client.phone || '');
+    setClientDocType(client.documentType || '');
+    setClientDocNumber(client.documentNumber || '');
+    setClientOpen(false);
+  }, []);
+
+  const handleProductToggle = useCallback(
+    (option: QuoteOption) => {
+      setSelection((prev) => {
+        const sectionId =
+          Object.keys(prev).find((key) =>
+            prev[key]?.some((item) => item.id === option.id),
+          ) ||
+          Object.keys(catalog || {}).find((catKey) =>
+            (catalog?.[catKey as QuoteCategoryKey] || []).some((section) =>
+              section.options.some((opt) => opt.id === option.id),
+            ),
+          ) ||
+          'unknown';
+
+        const current = prev[sectionId] ?? [];
+        const exists = current.some((item) => item.id === option.id);
+        const nextItems = exists
+          ? current.filter((item) => item.id !== option.id)
+          : [...current, option];
+
+        if (exists) {
+          setQuantities((prevQuantities) => {
+            if (!(option.id in prevQuantities)) return prevQuantities;
+            const nextQuantities = { ...prevQuantities };
+            delete nextQuantities[option.id];
+            return nextQuantities;
+          });
+          setPriceOverrides((prevOverrides) => {
+            if (!(option.id in prevOverrides)) return prevOverrides;
+            const nextOverrides = { ...prevOverrides };
+            delete nextOverrides[option.id];
+            return nextOverrides;
+          });
+        }
+
+        return { ...prev, [sectionId]: nextItems };
+      });
+    },
+    [catalog],
+  );
+
+  const handleRemoveItem = useCallback((item: QuoteOption) => {
+    setSelection((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        const items = next[key] ?? [];
+        if (items.some((i) => i.id === item.id)) {
+          next[key] = items.filter((i) => i.id !== item.id);
+          break;
+        }
+      }
+      return next;
+    });
+    setQuantities((prev) => {
+      const n = { ...prev };
+      delete n[item.id];
+      return n;
+    });
+    setPriceOverrides((prev) => {
+      const n = { ...prev };
+      delete n[item.id];
+      return n;
+    });
+  }, []);
+
+  const handlePriceChange = useCallback((itemId: number, price: number) => {
+    setPriceOverrides((prev) => ({ ...prev, [itemId]: price }));
+  }, []);
+
+  const handleQuantityChange = useCallback(
+    (itemId: number, quantity: number) => {
+      setQuantities((prev) => ({ ...prev, [itemId]: quantity }));
+    },
+    [],
+  );
+
+  if (
+    verticalInfo?.businessVertical &&
+    verticalInfo.businessVertical !== 'COMPUTERS'
+  ) {
     return (
       <div className="p-6">
         <Card className="border border-muted/40">
           <CardHeader>
-            <CardTitle>Sección disponible solo para tiendas de computadoras</CardTitle>
+            <CardTitle>
+              Sección disponible solo para tiendas de computadoras
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            El módulo de cotizaciones está habilitado únicamente para el vertical COMPUTERS.
+            El módulo de cotizaciones está habilitado únicamente para el
+            vertical COMPUTERS.
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   return (
     <TooltipProvider delayDuration={120}>
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#F7FAFC_0%,_#F0F5FA_55%,_#E9EFF6_100%)] dark:bg-[radial-gradient(circle_at_top,_#0B1118_0%,_#0F1722_60%,_#0A0F14_100%)]">
         <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/85 backdrop-blur-lg dark:border-slate-800/60 dark:bg-slate-950/70">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-3">
             <div className="flex items-center gap-3">
               <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <FileText className="h-5 w-5 text-cyan-600 dark:text-cyan-300" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Cotizaciones</h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Cotiza PCs y laptops con configuración guiada.
-                </p>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    Cotizaciones
+                  </h1>
+                  <Badge variant="secondary" className="text-[11px]">
+                    {nonServiceItems.length} items
+                  </Badge>
+                  {serverQuoteStatus ? (
+                    <Badge
+                      className={cn(
+                        'text-[11px]',
+                        serverQuoteStatus === 'ISSUED'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                          : serverQuoteStatus === 'CANCELLED'
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
+                      )}
+                    >
+                      {serverQuoteStatus === 'ISSUED'
+                        ? 'Emitida'
+                        : serverQuoteStatus === 'CANCELLED'
+                          ? 'Cancelada'
+                          : 'Borrador'}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <Select
+                    value={String(storeId ?? 'all')}
+                    onValueChange={(value) =>
+                      setStoreId(value === 'all' ? null : Number(value))
+                    }
+                  >
+                    <SelectTrigger className="h-6 w-auto gap-1.5 border-none bg-transparent px-1 py-0 text-xs font-medium shadow-none focus:ring-0">
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Tienda:
+                      </span>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start" className="min-w-[140px]">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={String(store.id)}>
+                          {store.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
-                <span>Tienda:</span>
-                <select
-                  value={storeId ?? "all"}
-                  onChange={(event) => {
-                    const value = event.target.value
-                    setStoreId(value === "all" ? null : Number(value))
-                  }}
-                  className="bg-transparent text-xs font-medium outline-none"
-                >
-                  <option value="all">Todos</option>
-                  {stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Button
-                variant="outline"
-                className="rounded-full"
-                onClick={() => toast.success("Borrador guardado")}
-              >
-                Guardar borrador
-              </Button>
-              <Button
-                variant="secondary"
-                className="rounded-full"
-                onClick={openPdfPreview}
-              >
-                Previsualizar PDF
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full"
-                onClick={openPdfPrint}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Imprimir
-              </Button>
-              <Button
-                className="rounded-full bg-cyan-600 text-white hover:bg-cyan-700"
-                onClick={handleSendWhatsApp}
-                disabled={sendingWhatsApp}
-              >
-                <Send className="mr-2 h-4 w-4" />
-                {sendingWhatsApp ? "Enviando..." : "WhatsApp"}
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full border-cyan-200 text-cyan-700 hover:bg-cyan-50"
-                onClick={() => toast("Envío por Email (mock)")}
-              >
-                Email
-              </Button>
-            </div>
+
+            <QuoteActionButtons
+              quoteNumber={quoteNumber}
+              serverQuoteStatus={serverQuoteStatus}
+              hasProducts={Object.values(selection).flat().length > 0}
+              hasClient={clientName.trim().length > 0}
+              storeId={storeId}
+              isSavingDraft={isSavingDraft}
+              isIssuingQuote={isIssuingQuote}
+              sendingWhatsApp={sendingWhatsApp}
+              onClear={() => {
+                if (
+                  Object.keys(selection).some(
+                    (key) => selection[key]?.length > 0,
+                  )
+                ) {
+                  setShowClearDialog(true);
+                }
+              }}
+              onSaveDraft={handleSaveDraft}
+              onPreviewPdf={openPdfPreview}
+              onPrintPdf={openPdfPrint}
+              onSendWhatsApp={handleSendWhatsApp}
+              onIssueQuote={handleIssueQuote}
+              isReadOnly={isReadOnlyQuote}
+            />
           </div>
         </header>
 
-        <main className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[1.7fr_0.8fr]">
-          <section className="space-y-6">
-            <Card className="border border-slate-200/70 bg-white/90 shadow-sm dark:border-slate-800/60 dark:bg-slate-900/70">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base text-slate-900 dark:text-slate-100">
-                    Configuración de la cotización
-                  </CardTitle>
-                  <Badge className={compatibilityStatus.className}>
-                    {StatusIcon ? (
-                      <StatusIcon className="mr-1 h-3.5 w-3.5" />
-                    ) : null}
-                    {compatibilityStatus.label}
-                  </Badge>
-                </div>
-                {compatibilityIssues.length > 0 ? (
-                  <div className="mt-2 rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-200">
-                    <p className="font-semibold">Alertas de compatibilidad</p>
-                    <ul className="mt-1 space-y-1">
-                      {compatibilityIssues.map((issue) => (
-                        <li key={issue.title}>
-                          <span className="mr-1 rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                            {issue.severity === "critical"
-                              ? "Crítica"
-                              : issue.severity === "warning"
-                                ? "Advertencia"
-                                : "Sin datos"}
-                          </span>
-                          {issue.title}: {issue.detail}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </CardHeader>
-              <CardContent>
-                <Tabs value={tab} onValueChange={(value) => setTab(value as QuoteCategoryKey)}>
-                  <TabsList className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    {Object.entries(TAB_LABELS).map(([key, label]) => (
-                      <TabsTrigger
-                        key={key}
-                        value={key}
-                        className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-slate-900 dark:data-[state=active]:text-white"
-                      >
-                        {label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                  {catalog ? (
-                    Object.entries(catalog).map(([key, sections]) => (
-                      <TabsContent key={key} value={key} className="mt-6 space-y-6">
-                        {sections.map((section) => (
-                          <div key={section.id} className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                  {section.title}
-                                </h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                  {section.description}
-                                </p>
-                              </div>
-                              {selection[section.id]?.length ? (
-                                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                                  Seleccionados {selection[section.id]?.length}
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <div className="grid gap-4 md:grid-cols-2">
-                              {section.options.map((option) => {
-                                const isSelected = (selection[section.id] ?? []).some((item) => item.id === option.id)
-                                return (
-                                  <Tooltip key={option.id}>
-                                    <TooltipTrigger asChild>
-                                      <div
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() =>
-                                          setSelection((prev) => {
-                                            const current = prev[section.id] ?? []
-                                            const exists = current.some((item) => item.id === option.id)
-                                            const nextItems = exists
-                                              ? current.filter((item) => item.id !== option.id)
-                                              : [...current, option]
-                                            const nextSelection = {
-                                              ...prev,
-                                              [section.id]: nextItems,
-                                            }
-                                            if (exists) return nextSelection
-                                            const report = evaluateCompatibility(nextSelection)
-                                            const hasBlocking =
-                                              compatibilityMode === "block"
-                                                ? report.issues.some((issue) => issue.severity !== "missing")
-                                                : compatibilityMode === "mixed"
-                                                  ? report.blocking.length > 0
-                                                  : false
-                                            if (hasBlocking) {
-                                              const first = report.blocking[0] ?? report.issues[0]
-                                              toast.error(
-                                                first
-                                                  ? `${first.title}: ${first.detail}`
-                                                  : "Incompatibilidad detectada.",
-                                              )
-                                              return prev
-                                            }
-                                            if (report.issues.length > 0) {
-                                              const first = report.issues[0]
-                                              toast(
-                                                first
-                                                  ? `${first.title}: ${first.detail}`
-                                                  : "Compatibilidad a revisar.",
-                                              )
-                                            }
-                                            return nextSelection
-                                          })
-                                        }
-                                        onKeyDown={(event) => {
-                                          if (event.key === "Enter" || event.key === " ") {
-                                            event.preventDefault()
-                                            setSelection((prev) => {
-                                              const current = prev[section.id] ?? []
-                                              const exists = current.some((item) => item.id === option.id)
-                                              return {
-                                                ...prev,
-                                                [section.id]: exists
-                                                  ? current.filter((item) => item.id !== option.id)
-                                                  : [...current, option],
-                                              }
-                                            })
-                                          }
-                                        }}
-                                        className={cn(
-                                          "group relative flex gap-4 rounded-2xl border p-4 text-left transition-all",
-                                          "border-slate-200/70 bg-white/90 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-lg",
-                                          "dark:border-slate-800/70 dark:bg-slate-900/70 dark:hover:border-cyan-700/70",
-                                          isSelected && "border-cyan-400 bg-cyan-50/60 dark:border-cyan-500/60 dark:bg-cyan-950/30",
-                                          (option.id === "service-assembly-free" || option.id === "warranty-12-free") &&
-                                            "border-emerald-300/70 bg-emerald-50/40 dark:border-emerald-700/60 dark:bg-emerald-950/20",
-                                        )}
-                                      >
-                                        <div className="relative h-20 w-24 overflow-hidden rounded-xl border border-slate-200/70 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
-                                          <Image
-                                            alt={option.name}
-                                            src={option.image}
-                                            fill
-                                            sizes="(max-width: 768px) 40vw, 96px"
-                                            className="object-cover"
-                                          />
-                                          {option.highlight ? (
-                                            <span className="absolute left-2 top-2 rounded-full bg-cyan-600 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                                              Pro
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <div className="flex-1 space-y-2">
-                                          <div className="flex items-center justify-between">
-                                            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                              {option.name}
-                                            </h4>
-                                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                              {currency} {(priceOverrides[option.id] ?? option.price).toFixed(2)}
-                                            </span>
-                                          </div>
-                                          {option.id === "service-assembly-free" || option.id === "warranty-12-free" ? (
-                                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                                              Incluido
-                                            </span>
-                                          ) : null}
-                                          {isSelected && isQuantityEditable(option) ? (
-                                            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/80 px-2 py-1 text-[11px] text-slate-600 dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-200">
-                                              <span className="font-semibold">Cantidad</span>
-                                              <button
-                                                type="button"
-                                                onClick={(event) => {
-                                                  event.stopPropagation()
-                                                  setQuantities((prev) => {
-                                                    const current = prev[option.id] ?? 1
-                                                    return {
-                                                      ...prev,
-                                                      [option.id]: Math.max(1, current - 1),
-                                                    }
-                                                  })
-                                                }}
-                                                className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                                                aria-label="Disminuir cantidad"
-                                              >
-                                                -
-                                              </button>
-                                              <span className="min-w-[20px] text-center font-semibold text-slate-900 dark:text-slate-100">
-                                                {Math.max(1, quantities[option.id] ?? 1)}
-                                              </span>
-                                              <button
-                                                type="button"
-                                                onClick={(event) => {
-                                                  event.stopPropagation()
-                                                  setQuantities((prev) => {
-                                                    const current = prev[option.id] ?? 1
-                                                    const limit = getStockLimit(option, limitByStock)
-                                                    const next = current + 1
-                                                    if (limit !== null && next > limit) {
-                                                      toast.error(`Stock máximo disponible: ${limit}`)
-                                                      return prev
-                                                    }
-                                                    return {
-                                                      ...prev,
-                                                      [option.id]: next,
-                                                    }
-                                                  })
-                                                }}
-                                                className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                                                aria-label="Aumentar cantidad"
-                                              >
-                                                +
-                                              </button>
-                                              {getStockLimit(option, limitByStock) !== null ? (
-                                                <span className="ml-1 text-[10px] text-slate-500 dark:text-slate-400">
-                                                  Stock: {getStockLimit(option, limitByStock)}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                          ) : null}
-                                          {option.editablePrice ? (
-                                            <Input
-                                              type="number"
-                                              value={priceOverrides[option.id] ?? option.price}
-                                              onChange={(event) =>
-                                                setPriceOverrides((prev) => ({
-                                                  ...prev,
-                                                  [option.id]: Number(event.target.value || 0),
-                                                }))
-                                              }
-                                              className="h-8 text-xs"
-                                            />
-                                          ) : null}
-                                          <div className="flex flex-wrap gap-1">
-                                            {option.compatibility?.map((tag) => (
-                                              <Badge
-                                                key={tag}
-                                                variant="secondary"
-                                                className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                                              >
-                                                {tag}
-                                              </Badge>
-                                            ))}
-                                          </div>
-                                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                                            {option.specs[0]}
-                                          </p>
-                                          {typeof option.stock === "number" ? (
-                                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                              Stock: {option.stock}
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs">
-                                      <div className="space-y-2">
-                                        <p className="text-sm font-semibold text-slate-900">{option.name}</p>
-                                        <ul className="space-y-1 text-xs text-slate-600">
-                                          {option.specs.map((spec) => (
-                                            <li key={spec}>• {spec}</li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </TabsContent>
-                    ))
-                  ) : (
-                    <div className="py-8 text-sm text-muted-foreground">Cargando catálogo...</div>
-                  )}
-                </Tabs>
-              </CardContent>
-            </Card>
+        <main className="mx-auto grid max-w-7xl gap-6 px-6 py-6 pb-40 lg:grid-cols-[1.7fr_0.8fr]">
+          <section className="space-y-6 pb-8">
+            <QuoteProductCatalog
+              tab={tab}
+              catalog={catalog}
+              selection={selection}
+              pcCategoryFilter={pcCategoryFilter}
+              pcProductFilter={pcProductFilter}
+              hardwareCategoryFilter={hardwareCategoryFilter}
+              hardwareProductFilter={hardwareProductFilter}
+              deferredPcFilter={deferredPcFilter}
+              deferredHwFilter={deferredHwFilter}
+              limitByStock={limitByStock}
+              onTabChange={(value) => setTab(value)}
+              onPcCategoryFilterChange={setPcCategoryFilter}
+              onPcProductFilterChange={setPcProductFilter}
+              onHardwareCategoryFilterChange={setHardwareCategoryFilter}
+              onHardwareProductFilterChange={setHardwareProductFilter}
+              onProductToggle={handleProductToggle}
+              isReadOnly={isReadOnlyQuote}
+            />
           </section>
 
-          <aside className="space-y-4">
-            <Card className="sticky top-24 border border-slate-200/70 bg-white/90 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/70">
-              <CardHeader className="space-y-3 pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base text-slate-900 dark:text-slate-100">Resumen</CardTitle>
-                  <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    {TAB_LABELS[tab]}
-                  </Badge>
-                </div>
-                {meta ? (
-                  <div className="flex items-center gap-3 rounded-xl border border-slate-200/60 bg-slate-50/70 p-3 dark:border-slate-800/60 dark:bg-slate-900">
-                    <Image src={meta.company.logoUrl} alt={meta.company.name} width={40} height={40} />
-                    <div className="text-xs text-slate-600 dark:text-slate-300">
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">{meta.company.name}</p>
-                      <p>{meta.company.address}</p>
-                      <p>{meta.company.phone}</p>
-                    </div>
-                  </div>
-                ) : null}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Cliente (opcional)
-                  </label>
-                  <Popover open={clientOpen} onOpenChange={setClientOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-between"
-                        role="combobox"
-                        aria-expanded={clientOpen}
-                      >
-                        <span className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-slate-400" />
-                          {clientName || "Sin cliente"}
-                        </span>
-                        <span className="text-xs text-slate-400">Buscar</span>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[320px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Buscar cliente..." />
-                        <CommandList>
-                          <CommandEmpty>No hay clientes.</CommandEmpty>
-                          <CommandGroup heading="Clientes registrados">
-                            {clients.map((client) => (
-                              <CommandItem
-                                key={client.id}
-                                value={client.name}
-                                onSelect={() => {
-                                  setClientName(client.name)
-                                  setContactName(client.email || client.phone || "")
-                                  setWhatsAppPhone(client.phone || "")
-                                  setClientOpen(false)
-                                }}
-                              >
-                                <span className="flex-1">{client.name}</span>
-                                {clientName === client.name ? <Check className="h-4 w-4" /> : null}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                          <CommandGroup heading="Sin cliente">
-                            <CommandItem
-                              value="sin-cliente"
-                              onSelect={() => {
-                                setClientName("")
-                                setContactName("")
-                                setWhatsAppPhone("")
-                                setClientOpen(false)
-                              }}
-                            >
-                              Usar sin cliente
-                            </CommandItem>
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <Input
-                    value={contactName}
-                    onChange={(event) => setContactName(event.target.value)}
-                    placeholder="Contacto"
-                  />
-                  <Input
-                    value={whatsAppPhone}
-                    onChange={(event) => setWhatsAppPhone(event.target.value)}
-                    placeholder="WhatsApp para envío"
-                  />
-                </div>
+          <aside className="sticky top-4 space-y-3 self-start">
+            <QuoteContextBar
+              storeId={storeId}
+              stores={stores}
+              clients={clients}
+              clientName={clientName}
+              contactName={contactName}
+              whatsAppPhone={whatsAppPhone}
+              clientDocType={clientDocType}
+              clientDocNumber={clientDocNumber}
+              clientOpen={clientOpen}
+              onStoreChange={setStoreId}
+              onClientSelect={handleClientSelect}
+              onClientOpenChange={setClientOpen}
+              onClientNameChange={setClientName}
+              onContactNameChange={setContactName}
+              onWhatsAppPhoneChange={setWhatsAppPhone}
+              onClientDocTypeChange={setClientDocType}
+              onClientDocNumberChange={setClientDocNumber}
+              onNewClientClick={() => setShowNewClientDialog(true)}
+              isReadOnly={isReadOnlyQuote}
+            />
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Validez</label>
-                    <Input value={validity} onChange={(event) => setValidity(event.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Moneda</label>
-                    <Input value={currency} onChange={(event) => setCurrency(event.target.value)} />
-                  </div>
-                </div>
+            <QuoteConfigurationPanel
+              meta={meta}
+              marginRate={marginRate}
+              validity={validity}
+              currency={currency}
+              conditions={conditions}
+              taxRate={taxRate}
+              limitByStock={limitByStock}
+              showImagesInPdf={showImagesInPdf}
+              hideSpecsInPdf={hideSpecsInPdf}
+              showAdvancedConfig={showAdvancedConfig}
+              bankAccounts={bankAccounts}
+              isSavingBankAccounts={isSavingBankAccounts}
+              onValidityChange={setValidity}
+              onCurrencyChange={setCurrency}
+              onConditionsChange={setConditions}
+              onTaxRateChange={setTaxRate}
+              onLimitByStockChange={setLimitByStock}
+              onShowImagesInPdfChange={setShowImagesInPdf}
+              onHideSpecsInPdfChange={setHideSpecsInPdf}
+              onShowAdvancedConfigChange={setShowAdvancedConfig}
+              onBankAccountsChange={setBankAccounts}
+              onSaveBankAccounts={() => handleSaveBankAccounts(bankAccounts)}
+              isReadOnly={isReadOnlyQuote}
+            />
 
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Condiciones</label>
-                  <Textarea value={conditions} onChange={(event) => setConditions(event.target.value)} rows={3} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Margen %</label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        value={Math.round(marginRate * 100)}
-                        onChange={(event) => setMarginRate(Number(event.target.value || 0) / 100)}
-                      />
-                      <Button variant="outline" size="sm" onClick={handleSaveMargin} disabled={savingMargin}>
-                        {savingMargin ? "Guardando" : "Guardar"}
-                      </Button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Impuesto (18%)</label>
-                    <Input
-                      type="number"
-                      value={Math.round(taxRate * 100)}
-                      disabled
-                      readOnly
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Modo de compatibilidad
-                  </label>
-                  <select
-                    value={compatibilityMode}
-                    onChange={(event) => setCompatibilityMode(event.target.value as CompatibilityMode)}
-                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-cyan-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                  >
-                    <option value="soft">Suave (solo alertas)</option>
-                    <option value="block">Bloqueo (impide incompatibles)</option>
-                    <option value="mixed">Mixto (bloquea críticas)</option>
-                  </select>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Mixto bloquea incompatibilidades críticas y deja alertas para el resto.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 rounded-xl border border-slate-200/70 bg-white/80 p-3 text-xs text-slate-600 dark:border-slate-800/70 dark:bg-slate-950/40 dark:text-slate-300">
-                  <input
-                    id="limit-by-stock"
-                    type="checkbox"
-                    checked={limitByStock}
-                    onChange={(event) => setLimitByStock(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
-                  />
-                  <label htmlFor="limit-by-stock" className="space-y-1">
-                    <span className="font-semibold text-slate-700 dark:text-slate-200">
-                      Limitar cantidades por stock
-                    </span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                      Evita cotizar cantidades mayores al inventario disponible.
-                    </span>
-                  </label>
-                </div>
-
-                
-                {compatibilityIssues.length > 0 ? (
-                  <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-200">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <AlertTriangle className="h-4 w-4" />
-                      Compatibilidad a revisar
-                    </div>
-                    <ul className="mt-2 space-y-1">
-                      {compatibilityIssues.map((issue) => (
-                        <li key={issue.title}>
-                          <span className="mr-1 rounded-full bg-slate-200/70 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                            {issue.severity === "critical"
-                              ? "Crítica"
-                              : issue.severity === "warning"
-                                ? "Advertencia"
-                                : "Sin datos"}
-                          </span>
-                          {issue.title}: {issue.detail}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}<Separator />
-
-                <div className="space-y-2">
-                  {selectedItems.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                      Selecciona componentes para ver el resumen.
-                    </div>
-                  ) : (
-                    selectedItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300"
-                      >
-                        <span className="flex items-center gap-2 truncate">
-                          {item.name}
-                          {item.id === "service-assembly-free" || item.id === "warranty-12-free" ? (
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                              Incluido
-                            </span>
-                          ) : null}
-                          {isQuantityEditable(item) ? (
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                              x {Math.max(1, quantities[item.id] ?? 1)}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {currency}{" "}
-                          {(
-                            (priceOverrides[item.id] ?? item.price) *
-                            Math.max(1, quantities[item.id] ?? 1)
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-cyan-200/60 bg-cyan-50/60 p-4 dark:border-cyan-800/40 dark:bg-cyan-950/40">
-                  <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                    <div className="flex items-center justify-between">
-                      <span>Subtotal</span>
-                      <span>{currency} {subtotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Margen</span>
-                      <span>{currency} {marginAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Impuestos</span>
-                      <span>{currency} {taxAmount.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex items-center justify-between text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    <span>Total estimado</span>
-                    <span>
-                      {currency} {total.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-200">
-                    <Sparkles className="h-4 w-4" />
-                    Presupuesto actualizado al instante.
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <QuoteSummaryPanel
+              selection={selection}
+              priceOverrides={priceOverrides}
+              quantities={quantities}
+              currency={currency}
+              taxRate={taxRate}
+              limitByStock={limitByStock}
+              tab={tab}
+              sectionChips={sectionChips}
+              onPriceChange={handlePriceChange}
+              onQuantityChange={handleQuantityChange}
+              onRemoveItem={handleRemoveItem}
+              isReadOnly={isReadOnlyQuote}
+            />
           </aside>
         </main>
+
+        {/* ── Clear confirmation dialog ── */}
+        <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+          <AlertDialogContent className="border border-slate-200/70 bg-white dark:border-slate-800/70 dark:bg-slate-900">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-slate-900 dark:text-slate-100">
+                ¿Limpiar todos los productos?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-600 dark:text-slate-400">
+                Se eliminarán todos los productos seleccionados. La información
+                del cliente se mantendrá.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="cursor-pointer">
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="cursor-pointer bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={() => {
+                  setSelection({});
+                  setQuantities({});
+                  setPriceOverrides({});
+                  setShowClearDialog(false);
+                }}
+              >
+                Limpiar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={showNewClientDialog}
+          onOpenChange={setShowNewClientDialog}
+        >
+          <AlertDialogContent className="border border-slate-200/70 bg-white dark:border-slate-800/70 dark:bg-slate-900">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-slate-900 dark:text-slate-100">
+                Agregar nuevo cliente
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-600 dark:text-slate-400">
+                Completa los datos del cliente para agregarlo al sistema.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="new-client-name"
+                  className="text-sm font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  Nombre completo
+                </Label>
+                <Input
+                  id="new-client-name"
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                  placeholder="Ej. Juan Pérez"
+                  className="border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
+                  disabled={isCreatingClient}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="new-client-doc-type"
+                  className="text-sm font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  Tipo de documento
+                </Label>
+                <Select
+                  value={newClientDocType}
+                  onValueChange={setNewClientDocType}
+                  disabled={isCreatingClient}
+                >
+                  <SelectTrigger
+                    id="new-client-doc-type"
+                    className="border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DNI">DNI</SelectItem>
+                    <SelectItem value="RUC">RUC</SelectItem>
+                    <SelectItem value="CE">CE</SelectItem>
+                    <SelectItem value="Otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="new-client-doc-number"
+                  className="text-sm font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  Número de documento
+                </Label>
+                <Input
+                  id="new-client-doc-number"
+                  value={newClientDocNumber}
+                  onChange={(e) => setNewClientDocNumber(e.target.value)}
+                  placeholder="Ej. 12345678"
+                  className="border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
+                  disabled={isCreatingClient}
+                />
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                className="cursor-pointer"
+                disabled={isCreatingClient}
+                onClick={() => {
+                  setNewClientName('');
+                  setNewClientDocType('DNI');
+                  setNewClientDocNumber('');
+                }}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="cursor-pointer bg-cyan-600 hover:bg-cyan-700 text-white"
+                onClick={handleCreateClient}
+                disabled={isCreatingClient}
+              >
+                {isCreatingClient ? 'Creando...' : 'Crear cliente'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
-  )
+  );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+function specIcon(label: string) {
+  const key = label.toLowerCase();
+  if (key.includes('marca')) return Tag;
+  if (key.includes('categoría') || key.includes('categoria')) return LayoutGrid;
+  if (key.includes('procesador') || key.includes('cpu')) return Cpu;
+  if (key.includes('ram')) return MemoryStick;
+  if (
+    key.includes('storage') ||
+    key.includes('ssd') ||
+    key.includes('hdd') ||
+    key.includes('almacenamiento')
+  )
+    return HardDrive;
+  if (
+    key.includes('graphics') ||
+    key.includes('gráficos') ||
+    key.includes('grafica') ||
+    key.includes('gpu')
+  )
+    return Boxes;
+  if (
+    key.includes('screen') ||
+    key.includes('pantalla') ||
+    key.includes('resolución') ||
+    key.includes('resolucion')
+  )
+    return Monitor;
+  if (key.includes('refresh') || key.includes('hz')) return Zap;
+  if (
+    key.includes('conectividad') ||
+    key.includes('wifi') ||
+    key.includes('bluetooth')
+  )
+    return Signal;
+  if (key.includes('batería') || key.includes('bateria')) return Battery;
+  if (key.includes('peso')) return Weight;
+  if (key.includes('modelo')) return BadgeCheck;
+  return Info;
+}

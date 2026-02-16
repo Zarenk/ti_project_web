@@ -10,11 +10,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 
 import type { CompanyVerticalInfo } from './tenancy.api';
 import { fetchCompanyVerticalInfo } from './tenancy.api';
 import { VerticalManagementPanel } from './vertical-management-panel';
 import { VerticalStatusIndicator } from './vertical-status-indicator';
+import { SchemaEnforcementToggle } from './schema-enforcement-toggle';
 
 interface CompanyOption {
   id: number;
@@ -115,19 +117,33 @@ export function OrganizationVerticalCard({
       {selectedCompanyId && info && (
         <>
           {canManage ? (
-            <VerticalManagementPanel
-              organizationId={organizationId}
-              companyId={selectedCompanyId}
-              info={info}
-              disabled={loading}
-            />
+            <>
+              <VerticalManagementPanel
+                organizationId={organizationId}
+                companyId={selectedCompanyId}
+                info={info}
+                disabled={loading}
+              />
+              <Separator className="my-3" />
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Estado de migracion
+                </p>
+                <VerticalStatusIndicator info={info} />
+              </div>
+              <Separator className="my-3" />
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Esquema de productos
+                </p>
+                <SchemaEnforcementToggle
+                  companyId={selectedCompanyId}
+                  initialEnforced={info.productSchemaEnforced}
+                />
+              </div>
+            </>
           ) : (
-            <VerticalStatusIndicator
-              organizationId={organizationId}
-              companyId={selectedCompanyId}
-              info={info}
-              canToggle={false}
-            />
+            <VerticalStatusIndicator info={info} />
           )}
         </>
       )}

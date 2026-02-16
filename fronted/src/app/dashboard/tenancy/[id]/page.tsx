@@ -41,12 +41,18 @@ import { Progress } from "@/components/progress"
 import {
   assignOrganizationSuperAdmin,
   createCompany,
+  fetchCompanyVerticalInfo,
   getOrganization,
   searchUsers,
   type OrganizationResponse,
   type UserSummary,
   validateCompanyFields,
 } from "../tenancy.api"
+import { OrganizationVerticalCard } from "../organization-vertical-card"
+import { VerticalOverridesPanel } from "../vertical-overrides-panel"
+import { VerticalMigrationMetrics } from "../vertical-migration-metrics"
+import { VerticalHistoryPanel } from "../vertical-history-panel"
+import { VerticalNotificationsBanner } from "../vertical-notifications-banner"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 import type { SubscriptionSummary } from "@/types/subscription"
 import { useTenantSelection } from "@/context/tenant-selection-context"
@@ -618,9 +624,17 @@ export default function OrganizationDetailPage({
           </CardContent>
         </Card>
       ) : !isRedirecting && organization ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <section className="space-y-6">
-            <Card>
+        <>
+          {/* Notifications Banner */}
+          {organization.companies && organization.companies.length > 0 && (
+            <div className="mb-6">
+              <VerticalNotificationsBanner companyId={organization.companies[0].id} />
+            </div>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <section className="space-y-6">
+              <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
                   <Building2 className="size-5 text-sky-600 dark:text-slate-100" />
@@ -746,6 +760,63 @@ export default function OrganizationDetailPage({
                 )}
               </CardContent>
             </Card>
+
+            {organization.companies && organization.companies.length > 0 && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
+                      <Layers className="size-5 text-sky-600 dark:text-slate-100" />
+                      Configuracion del vertical
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <OrganizationVerticalCard
+                      organizationId={organizationId}
+                      companies={organization.companies.map((c) => ({
+                        id: c.id,
+                        name: c.name,
+                      }))}
+                      initialInfo={null}
+                      canManage={true}
+                    />
+                    {organization.companies.length > 0 && (
+                      <div className="pt-2">
+                        <VerticalOverridesPanel
+                          companyId={organization.companies[0].id}
+                          organizationId={organizationId}
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Migration Metrics Dashboard */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
+                      <Layers className="size-5 text-sky-600 dark:text-slate-100" />
+                      Métricas y Estadísticas
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <VerticalMigrationMetrics
+                      companyId={organization.companies[0].id}
+                      companyName={organization.companies[0].name}
+                      organizationName={organization.name}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Detailed History Panel */}
+                <VerticalHistoryPanel
+                  companyId={organization.companies[0].id}
+                  onRollbackClick={() => {
+                    toast.info("Función de rollback disponible desde la configuración del vertical")
+                  }}
+                />
+              </>
+            )}
 
             <Card>
               <CardHeader>
@@ -1060,7 +1131,8 @@ export default function OrganizationDetailPage({
               </Card>
             ) : null}
           </aside>
-        </div>
+          </div>
+        </>
       ) : null}
 
       <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>

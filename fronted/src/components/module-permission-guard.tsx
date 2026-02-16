@@ -22,7 +22,7 @@ export function ModulePermissionGate({
   module,
   children,
   moduleLabel,
-  redirectTo = "/unauthorized",
+  redirectTo = "/dashboard",
   showToast = true,
 }: ModulePermissionGateProps) {
   const router = useRouter()

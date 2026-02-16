@@ -41,6 +41,14 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: skipStrictChecks,
   },
+  webpack: (config, { isServer }) => {
+    // Support for Web Workers
+    if (!isServer) {
+      config.output = config.output || {}
+      config.output.publicPath = config.output.publicPath || '/_next/'
+    }
+    return config
+  },
   allowedDevOrigins: (() => {
     const origins = new Set<string>([])
     const isProd = process.env.NODE_ENV === "production"

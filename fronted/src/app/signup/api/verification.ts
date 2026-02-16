@@ -1,8 +1,6 @@
-const backendBase =
-  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, '') ||
-  'http://localhost:4000';
+import { BACKEND_URL } from '@/lib/utils';
 
-const publicSignupBase = `${backendBase}/api/public/signup`;
+const publicSignupBase = `${BACKEND_URL}/api/public/signup`;
 
 export async function resendVerificationEmail(email: string) {
   const response = await fetch(`${publicSignupBase}/resend-verification`, {

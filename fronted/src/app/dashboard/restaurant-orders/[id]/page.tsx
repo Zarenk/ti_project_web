@@ -238,7 +238,7 @@ export default function RestaurantOrderDetailPage() {
               Orden #{order.id}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {TYPE_LABELS[order.orderType]} {order.table?.name ? `· ${order.table.name}` : ""}
+              {TYPE_LABELS[order.orderType]} {order.table?.name ? `Â· ${order.table.name}` : ""}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

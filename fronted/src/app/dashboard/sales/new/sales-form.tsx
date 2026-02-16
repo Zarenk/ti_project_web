@@ -912,18 +912,22 @@ const getSaleReferenceId = () => {
 
   const isDraftMeaningful = useCallback((draft: SalesDraft | null) => {
     if (!draft) return false;
+    // Productos seleccionados = trabajo real del usuario
     if (draft.selectedProducts.length > 0) return true;
+    // Pagos registrados = trabajo real del usuario
     if (draft.payments.length > 0) return true;
-    if (draft.valueStore || draft.valueClient || draft.valueInvoice) return true;
+    // Datos del cliente ingresados manualmente = trabajo real del usuario
     const values = draft.values;
-    return Boolean(
+    const hasClientData = Boolean(
       values?.description ||
       values?.client_name ||
-      values?.client_typeNumber ||
-      values?.store_name ||
-      values?.tipoComprobante ||
-      values?.total_comprobante
+      values?.client_typeNumber
     );
+    if (hasClientData) return true;
+    // IMPORTANTE: valueStore, valueClient, valueInvoice se auto-rellenan por defaults
+    // No deben contar como "draft significativo" por sí solos
+    // Solo si hay productos, pagos, o datos de cliente ingresados manualmente
+    return false;
   }, []);
 
   const buildDraftSnapshot = useCallback((): SalesDraft | null => {
@@ -1234,9 +1238,30 @@ const getSaleReferenceId = () => {
         }
  
         saleReferenceIdRef.current = null;
-        persistSalesDraft(null);
+
+        // 🔒 Cancelar timer de draft pendiente (prevenir race condition)
+        if (draftSaveTimerRef.current) {
+          window.clearTimeout(draftSaveTimerRef.current);
+          draftSaveTimerRef.current = null;
+        }
+
+        // 🔒 Limpiar draft de forma sincrónica (prevenir modal al volver)
+        if (salesDraftKey && typeof window !== "undefined") {
+          try {
+            window.localStorage.removeItem(salesDraftKey);
+          } catch (e) {
+            console.warn("No se pudo limpiar el borrador de venta:", e);
+          }
+        }
+
+        // Marcar que ya no debe mostrar diálogos de borrador
+        draftAppliedRef.current = true;
+        // Cerrar cualquier diálogo abierto
+        setDraftPromptOpen(false);
+        setIsPriceAlertOpen(false);
+
         toast.success("Se registro la informacion correctamente."); // Notificaci??n de ?xito
- 
+
 
         if(data.tipoComprobante != "SIN COMPROBANTE"){
           // Llamar al endpoint para enviar la factura a la SUNAT
@@ -1359,6 +1384,11 @@ const getSaleReferenceId = () => {
     }
     finally {
       setIsSubmitting(false);
+      // 🔒 Red de seguridad: limpiar draft incluso si hay error
+      if (draftSaveTimerRef.current) {
+        window.clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
     }
   })    
   //
@@ -2010,8 +2040,11 @@ const getSaleReferenceId = () => {
       if (!value && recentProductIds.length > 0 && selectedStoreId) {
         const recentProducts = recentProductIds
           .map((id) => products.find((product) => product.id === id))
-          .filter(Boolean) as Array<{ id: number; stock?: number }>;
-        const availableProduct = recentProducts.find((product) => (product.stock ?? 0) > 0);
+          .filter(Boolean) as Array<{ id: number; stock?: number; price?: number }>;
+        // Buscar producto disponible con stock Y precio válido (no auto-seleccionar productos sin precio)
+        const availableProduct = recentProducts.find(
+          (product) => (product.stock ?? 0) > 0 && (product.price ?? 0) > 0
+        );
         if (availableProduct) {
           void selectProductForSale(availableProduct);
         } else if (!lastProductOutOfStockNoticeRef.current) {
@@ -3209,7 +3242,18 @@ const getSaleReferenceId = () => {
                         setOpenClient(false); // Cierra el combobox de clientes
                         setOpenStore(false); // Cierra el combobox de tiendas
                         setOpenInvoice(false); // Cierra el combobox de tipo de comprobantes
-                        persistSalesDraft(null);
+                        // Limpiar draft sincronicamente
+                        if (draftSaveTimerRef.current) {
+                          window.clearTimeout(draftSaveTimerRef.current);
+                          draftSaveTimerRef.current = null;
+                        }
+                        if (salesDraftKey && typeof window !== "undefined") {
+                          try {
+                            window.localStorage.removeItem(salesDraftKey);
+                          } catch (e) {
+                            console.warn("No se pudo limpiar el borrador:", e);
+                          }
+                        }
                     }}  // Restablece los campos del formulario
                           >
                             Limpiar 
@@ -3246,7 +3290,19 @@ const getSaleReferenceId = () => {
                             <AlertDialogCancel
                               className="cursor-pointer"
                               onClick={() => {
-                                persistSalesDraft(null);
+                                // Limpiar draft sincronicamente
+                                if (draftSaveTimerRef.current) {
+                                  window.clearTimeout(draftSaveTimerRef.current);
+                                  draftSaveTimerRef.current = null;
+                                }
+                                if (salesDraftKey && typeof window !== "undefined") {
+                                  try {
+                                    window.localStorage.removeItem(salesDraftKey);
+                                  } catch (e) {
+                                    console.warn("No se pudo limpiar el borrador:", e);
+                                  }
+                                }
+                                draftAppliedRef.current = true;
                                 setPendingDraft(null);
                                 setDraftPromptOpen(false);
                               }}

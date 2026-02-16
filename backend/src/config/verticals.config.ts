@@ -16,6 +16,9 @@ export interface VerticalFeatures {
   posIntegration: boolean;
   ecommerceIntegration: boolean;
   deliveryPlatforms: boolean;
+  accounting: boolean;
+  cashRegister: boolean;
+  quotes: boolean;
 }
 
 export interface VerticalUIConfig {
@@ -106,6 +109,9 @@ const BASE_FEATURES: VerticalFeatures = {
   posIntegration: true,
   ecommerceIntegration: true,
   deliveryPlatforms: true,
+  accounting: true,
+  cashRegister: true,
+  quotes: true,
 };
 
 const GENERAL_PRODUCT_SCHEMA: VerticalProductSchema = {
@@ -347,6 +353,9 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       posIntegration: true,
       ecommerceIntegration: true,
       deliveryPlatforms: false,
+      accounting: true,
+      cashRegister: true,
+      quotes: true,
     },
     ui: {
       theme: 'default',
@@ -390,6 +399,9 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       posIntegration: true,
       ecommerceIntegration: true,
       deliveryPlatforms: true,
+      accounting: true,
+      cashRegister: true,
+      quotes: true,
     },
     ui: {
       theme: 'retail',
@@ -444,6 +456,9 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       posIntegration: true,
       ecommerceIntegration: true,
       deliveryPlatforms: true,
+      accounting: true,
+      cashRegister: true,
+      quotes: true,
     },
     ui: {
       theme: 'restaurant',
@@ -501,6 +516,9 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       posIntegration: false,
       ecommerceIntegration: false,
       deliveryPlatforms: false,
+      accounting: true,
+      cashRegister: true,
+      quotes: true,
     },
     ui: {
       theme: 'services',
@@ -546,6 +564,9 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       posIntegration: false,
       ecommerceIntegration: true,
       deliveryPlatforms: false,
+      accounting: true,
+      cashRegister: true,
+      quotes: true,
     },
     ui: {
       theme: 'default',

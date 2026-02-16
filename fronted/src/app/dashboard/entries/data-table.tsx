@@ -36,7 +36,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { DateRange } from "react-day-picker"; // Asegúrate de que este tipo esté disponible
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
@@ -45,8 +45,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { EyeIcon, FileText, PrinterIcon, Store, User, Calendar, DollarSign, Package, CheckCircle, MapPin } from "lucide-react"
 
 import { toast } from "sonner"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
 import { deleteEntries, getPdfGuiaUrl, getPdfUrl } from "./entries.api"
@@ -580,12 +578,12 @@ details: { product_name: string; quantity: number; price: number; series?: strin
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead 
+                    <TableHead
                       key={header.id}
                       className="text-left text-xs md:text-sm lg:text-base font-medium"
                       style={{
-                        minWidth: header.id === "user_username" ? "150px" : header.id === "store_name" ? "120px" : "auto",
-                        maxWidth: header.id === "provider_name" ? "300px" : "auto",
+                        minWidth: header.id === "user_username" ? "130px" : header.id === "store_name" ? "110px" : "auto",
+                        maxWidth: header.id === "provider_name" ? "220px" : header.id === "store_name" ? "160px" : header.id === "user_username" ? "160px" : "auto",
                       }}
                       >
                       {header.isPlaceholder
@@ -610,11 +608,11 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                   onDoubleClick={() => handleRowDoubleClick(row.original)} // Evento de doble clic
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell 
+                    <TableCell
                     key={cell.id} className="text-xs md:text-sm lg:text-base"
                     style={{
-                      minWidth: cell.column.id === "user_username" ? "150px" : cell.column.id === "store_name" ? "120px" : "auto",
-                      maxWidth: cell.column.id === "provider_name" ? "300px" : "auto",
+                      minWidth: cell.column.id === "user_username" ? "130px" : cell.column.id === "store_name" ? "110px" : "auto",
+                      maxWidth: cell.column.id === "provider_name" ? "220px" : cell.column.id === "store_name" ? "160px" : cell.column.id === "user_username" ? "160px" : "auto",
                     }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -640,12 +638,12 @@ details: { product_name: string; quantity: number; price: number; series?: strin
               <AlertDialogHeader className="pb-6 border-b flex flex-row items-center justify-between">
                 <div className="flex-1">
                   <AlertDialogTitle className="text-2xl font-bold">Ingreso #ID {selectedRowData.id}</AlertDialogTitle>
-                  <p className="text-sm text-gray-500 mt-1">Control de Inventario: Ingresos</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Control de Inventario: Ingresos</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-sm font-medium text-green-700">Completado</span>
+                  <div className="flex items-center gap-2 bg-green-50 dark:bg-green-950/30 px-3 py-1 rounded-full border border-green-200 dark:border-green-900/40">
+                    <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-700 dark:text-green-300">Completado</span>
                   </div>
                   <button
                     onClick={() => setIsModalOpen(false)}
@@ -676,68 +674,43 @@ details: { product_name: string; quantity: number; price: number; series?: strin
               </AlertDialogDescription>
 
               <div className="space-y-6 py-4">
-                {/* KPI Cards - Summary */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
-                    <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider">Subtotal</p>
-                    <p className="text-2xl font-bold text-blue-900 mt-2">
-                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
-                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0)).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-lg border border-amber-200">
-                    <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider">IVA (18%)</p>
-                    <p className="text-2xl font-bold text-amber-900 mt-2">
-                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
-                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 0.18).toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
-                    <p className="text-xs text-green-600 font-semibold uppercase tracking-wider">Total</p>
-                    <p className="text-2xl font-bold text-green-900 mt-2">
-                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
-                      {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 1.18).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
                 {/* Information Grid - 2x2 Layout */}
                 <div className="grid grid-cols-2 gap-4">
                   {/* Tienda */}
-                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-2 mb-3">
-                      <Store className="w-4 h-4 text-slate-600" />
-                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Tienda</label>
+                      <Store className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Tienda</label>
                     </div>
-                    <p className="text-base font-semibold text-slate-900">{selectedRowData.store_name}</p>
+                    <p className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate" title={selectedRowData.store_name}>{selectedRowData.store_name}</p>
                   </div>
 
                   {/* Proveedor */}
-                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-2 mb-3">
-                      <MapPin className="w-4 h-4 text-slate-600" />
-                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Proveedor</label>
+                      <MapPin className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Proveedor</label>
                     </div>
-                    <p className="text-base font-semibold text-slate-900">{selectedRowData.provider_name}</p>
+                    <p className="text-base font-semibold text-slate-900 dark:text-slate-100 break-words" title={selectedRowData.provider_name}>{selectedRowData.provider_name}</p>
                   </div>
 
                   {/* Usuario */}
-                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-2 mb-3">
-                      <User className="w-4 h-4 text-slate-600" />
-                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Usuario Registrador</label>
+                      <User className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Usuario Registrador</label>
                     </div>
-                    <p className="text-base font-semibold text-slate-900">{selectedRowData.user_username}</p>
+                    <p className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate" title={selectedRowData.user_username}>{selectedRowData.user_username}</p>
                   </div>
 
                   {/* Moneda */}
-                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-2 mb-3">
-                      <DollarSign className="w-4 h-4 text-slate-600" />
-                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Moneda</label>
+                      <DollarSign className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Moneda</label>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="inline-block bg-slate-200 text-slate-800 px-3 py-1 rounded-full text-sm font-semibold">
+                      <span className="inline-block bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-3 py-1 rounded-full text-sm font-semibold">
                         {selectedRowData.tipoMoneda}
                       </span>
                     </div>
@@ -745,42 +718,42 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                 </div>
 
                 {/* Dates and Description */}
-                <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="space-y-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="w-4 h-4 text-slate-600" />
-                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha de Creación</label>
+                        <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Fecha de Creación</label>
                       </div>
-                      <p className="text-sm font-medium text-slate-900">{new Date(selectedRowData.createdAt).toLocaleDateString()}</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{new Date(selectedRowData.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="w-4 h-4 text-slate-600" />
-                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Fecha de Compra</label>
+                        <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Fecha de Compra</label>
                       </div>
-                      <p className="text-sm font-medium text-slate-900">{new Date(selectedRowData.date).toLocaleDateString()}</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{new Date(selectedRowData.date).toLocaleDateString()}</p>
                     </div>
                   </div>
                   {selectedRowData.description && (
                     <div>
-                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block mb-2">Observaciones</label>
-                      <p className="text-sm text-slate-700 bg-white p-2 rounded border border-slate-200">{selectedRowData.description}</p>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-2">Observaciones</label>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/50 p-2 rounded border border-slate-200 dark:border-slate-700">{selectedRowData.description}</p>
                     </div>
                   )}
                 </div>
 
                 {/* PDFs Section */}
                 {(selectedRowData.pdfUrl || selectedRowData.guiaUrl) && (
-                  <div className="space-y-2 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <label className="text-xs font-semibold text-blue-600 uppercase tracking-wider block mb-3">Documentos Adjuntos</label>
+                  <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900/40">
+                    <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider block mb-3">Documentos Adjuntos</label>
                     <div className="flex gap-3 flex-wrap">
                       {selectedRowData.pdfUrl && (
                         <a
                           href={getPdfUrl(selectedRowData.pdfUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 bg-white border border-blue-300 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                          className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
                           <FileText className="w-4 h-4" />
                           Ver Factura
@@ -791,7 +764,7 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                           href={getPdfGuiaUrl(selectedRowData.guiaUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 bg-white border border-blue-300 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                          className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                         >
                           <FileText className="w-4 h-4" />
                           Ver Guía de Remisión
@@ -806,14 +779,14 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                   <div className="flex items-center gap-2">
                     <Package className="w-5 h-5 text-slate-700 dark:text-slate-300" />
                     <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Detalles de Productos</h3>
-                    <span className="ml-auto text-xs bg-slate-200 text-slate-700 px-2 py-1 rounded-full font-semibold">
+                    <span className="ml-auto text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-1 rounded-full font-semibold">
                       {selectedRowData.details.length} producto{selectedRowData.details.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gradient-to-r from-slate-700 to-slate-600">
+                        <tr className="bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-600 dark:to-slate-500">
                           <th className="px-2 sm:px-4 py-3 text-left text-white font-semibold text-xs sm:text-sm">Producto</th>
                           <th className="px-2 sm:px-4 py-3 text-left text-white font-semibold text-xs sm:text-sm hidden sm:table-cell">Categoría</th>
                           <th className="px-2 sm:px-4 py-3 text-center text-white font-semibold text-xs sm:text-sm">Cant.</th>
@@ -822,29 +795,29 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                           <th className="px-2 sm:px-4 py-3 text-left text-white font-semibold text-xs sm:text-sm hidden lg:table-cell">Series</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                         {selectedRowData.details.map((detail: any, index) => (
-                          <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                            <td className="px-2 sm:px-4 py-3 font-medium text-slate-900 text-xs sm:text-sm">{detail.product_name}</td>
-                            <td className="px-2 sm:px-4 py-3 text-slate-700 text-xs sm:text-sm hidden sm:table-cell">{detail.category_name || <span className="text-gray-400">Sin cat.</span>}</td>
-                            <td className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-900 text-xs sm:text-sm">{detail.quantity}</td>
-                            <td className="px-2 sm:px-4 py-3 text-right text-slate-900 text-xs sm:text-sm">
+                          <tr key={index} className={index % 2 === 0 ? 'bg-white dark:bg-slate-900/30' : 'bg-slate-50 dark:bg-slate-800/30'}>
+                            <td className="px-2 sm:px-4 py-3 font-medium text-slate-900 dark:text-slate-100 text-xs sm:text-sm max-w-[200px] truncate" title={detail.product_name}>{detail.product_name}</td>
+                            <td className="px-2 sm:px-4 py-3 text-slate-700 dark:text-slate-300 text-xs sm:text-sm hidden sm:table-cell">{detail.category_name || <span className="text-gray-400 dark:text-gray-500">Sin cat.</span>}</td>
+                            <td className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">{detail.quantity}</td>
+                            <td className="px-2 sm:px-4 py-3 text-right text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
                               {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-right font-semibold text-blue-600 text-xs sm:text-sm">
+                            <td className="px-2 sm:px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">
                               {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {(detail.price * detail.quantity).toFixed(2)}
                             </td>
-                            <td className="px-2 sm:px-4 py-3 text-slate-700 text-xs hidden lg:table-cell">
+                            <td className="px-2 sm:px-4 py-3 text-slate-700 dark:text-slate-300 text-xs hidden lg:table-cell">
                               {detail.series && detail.series.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                   {detail.series.map((s: string, i: number) => (
-                                    <span key={i} className="bg-slate-200 text-slate-700 px-2 py-1 rounded text-xs">
+                                    <span key={i} className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-1 rounded text-xs">
                                       {s}
                                     </span>
                                   ))}
                                 </div>
                               ) : (
-                                <span className="text-gray-400 italic">-</span>
+                                <span className="text-gray-400 dark:text-gray-500 italic">-</span>
                               )}
                             </td>
                           </tr>
@@ -855,25 +828,25 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                 </div>
 
                 {/* Summary Row */}
-                <div className="bg-gradient-to-r from-slate-100 to-slate-50 p-4 rounded-lg border border-slate-300 space-y-2">
+                <div className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/50 p-4 rounded-lg border border-slate-300 dark:border-slate-600 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-700 font-medium">Subtotal:</span>
-                    <span className="text-lg font-semibold text-slate-900">
-                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">Subtotal:</span>
+                    <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"}
                       {selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-700 font-medium">IVA (18%):</span>
-                    <span className="text-lg font-semibold text-slate-900">
-                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">IVA (18%):</span>
+                    <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"}
                       {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 0.18).toFixed(2)}
                     </span>
                   </div>
-                  <div className="border-t border-slate-300 pt-2 flex justify-between items-center">
-                    <span className="text-slate-900 font-bold text-base">TOTAL:</span>
-                    <span className="text-2xl font-bold text-green-600">
-                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} 
+                  <div className="border-t border-slate-300 dark:border-slate-600 pt-2 flex justify-between items-center">
+                    <span className="text-slate-900 dark:text-slate-100 font-bold text-base">TOTAL:</span>
+                    <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"}
                       {(selectedRowData.details.reduce((sum, detail) => sum + detail.price * detail.quantity, 0) * 1.18).toFixed(2)}
                     </span>
                   </div>
@@ -903,36 +876,36 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                       const iva = subtotal * 0.18;
                       const total = subtotal * 1.18;
                       return (
-                      <div key={entryIndex} className="border border-slate-200 rounded-lg p-6 space-y-4">
+                      <div key={entryIndex} className="border border-slate-200 dark:border-slate-700 rounded-lg p-6 space-y-4">
                         {/* Header */}
-                        <div className="flex items-center justify-between pb-4 border-b">
-                          <div>
-                            <h4 className="text-lg font-bold text-slate-900">Ingreso #ID {entry.id}</h4>
-                            <p className="text-sm text-slate-500">{entry.store_name} • {entry.provider_name}</p>
+                        <div className="flex items-center justify-between pb-4 border-b dark:border-slate-700">
+                          <div className="min-w-0 flex-1 mr-3">
+                            <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">Ingreso #ID {entry.id}</h4>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 truncate" title={`${entry.store_name} • ${entry.provider_name}`}>{entry.store_name} &bull; {entry.provider_name}</p>
                           </div>
-                          <div className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-xs font-medium text-green-700">Completado</span>
+                          <div className="flex-shrink-0 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 px-3 py-1 rounded-full border border-green-200 dark:border-green-900/40">
+                            <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                            <span className="text-xs font-medium text-green-700 dark:text-green-300">Completado</span>
                           </div>
                         </div>
 
                         {/* KPI Mini Cards */}
                         <div className="grid grid-cols-3 gap-3">
-                          <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                            <p className="text-xs text-blue-600 font-semibold">Subtotal</p>
-                            <p className="text-xl font-bold text-blue-900 mt-1">
+                          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-900/40">
+                            <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold">Subtotal</p>
+                            <p className="text-xl font-bold text-blue-900 dark:text-blue-200 mt-1">
                               {entry.tipoMoneda === "PEN" ? "S/." : "$"} {subtotal.toFixed(2)}
                             </p>
                           </div>
-                          <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
-                            <p className="text-xs text-amber-600 font-semibold">IVA</p>
-                            <p className="text-xl font-bold text-amber-900 mt-1">
+                          <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200 dark:border-amber-900/40">
+                            <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold">IVA</p>
+                            <p className="text-xl font-bold text-amber-900 dark:text-amber-200 mt-1">
                               {entry.tipoMoneda === "PEN" ? "S/." : "$"} {iva.toFixed(2)}
                             </p>
                           </div>
-                          <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                            <p className="text-xs text-green-600 font-semibold">Total</p>
-                            <p className="text-xl font-bold text-green-900 mt-1">
+                          <div className="bg-green-50 dark:bg-green-950/30 p-3 rounded-lg border border-green-200 dark:border-green-900/40">
+                            <p className="text-xs text-green-600 dark:text-green-400 font-semibold">Total</p>
+                            <p className="text-xl font-bold text-green-900 dark:text-green-200 mt-1">
                               {entry.tipoMoneda === "PEN" ? "S/." : "$"} {total.toFixed(2)}
                             </p>
                           </div>
@@ -940,49 +913,49 @@ details: { product_name: string; quantity: number; price: number; series?: strin
 
                         {/* Info Grid */}
                         <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                            <p className="text-xs text-slate-600 font-semibold uppercase">Usuario</p>
-                            <p className="text-slate-900 font-medium mt-1">{entry.user_username}</p>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded border border-slate-200 dark:border-slate-700">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">Usuario</p>
+                            <p className="text-slate-900 dark:text-slate-100 font-medium mt-1 truncate" title={entry.user_username}>{entry.user_username}</p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                            <p className="text-xs text-slate-600 font-semibold uppercase">Moneda</p>
-                            <p className="text-slate-900 font-medium mt-1">{entry.tipoMoneda}</p>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded border border-slate-200 dark:border-slate-700">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">Moneda</p>
+                            <p className="text-slate-900 dark:text-slate-100 font-medium mt-1">{entry.tipoMoneda}</p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                            <p className="text-xs text-slate-600 font-semibold uppercase">Fecha Creación</p>
-                            <p className="text-slate-900 font-medium mt-1">{new Date(entry.createdAt).toLocaleDateString()}</p>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded border border-slate-200 dark:border-slate-700">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">Fecha Creación</p>
+                            <p className="text-slate-900 dark:text-slate-100 font-medium mt-1">{new Date(entry.createdAt).toLocaleDateString()}</p>
                           </div>
-                          <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                            <p className="text-xs text-slate-600 font-semibold uppercase">Fecha Compra</p>
-                            <p className="text-slate-900 font-medium mt-1">{new Date(entry.date).toLocaleDateString()}</p>
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded border border-slate-200 dark:border-slate-700">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">Fecha Compra</p>
+                            <p className="text-slate-900 dark:text-slate-100 font-medium mt-1">{new Date(entry.date).toLocaleDateString()}</p>
                           </div>
                         </div>
 
                         {/* Products Table - Compact */}
                         <div className="space-y-2">
-                          <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <Package className="w-4 h-4" />
                             Productos ({entry.details.length})
                           </p>
-                          <div className="overflow-x-auto rounded border border-slate-200">
+                          <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-700">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="bg-slate-100">
-                                  <th className="px-2 sm:px-3 py-2 text-left text-slate-700 font-semibold">Producto</th>
-                                  <th className="px-2 sm:px-3 py-2 text-center text-slate-700 font-semibold">Cant.</th>
-                                  <th className="px-2 sm:px-3 py-2 text-right text-slate-700 font-semibold">Precio</th>
-                                  <th className="px-2 sm:px-3 py-2 text-right text-slate-700 font-semibold">Subtotal</th>
+                                <tr className="bg-slate-100 dark:bg-slate-800">
+                                  <th className="px-2 sm:px-3 py-2 text-left text-slate-700 dark:text-slate-300 font-semibold">Producto</th>
+                                  <th className="px-2 sm:px-3 py-2 text-center text-slate-700 dark:text-slate-300 font-semibold">Cant.</th>
+                                  <th className="px-2 sm:px-3 py-2 text-right text-slate-700 dark:text-slate-300 font-semibold">Precio</th>
+                                  <th className="px-2 sm:px-3 py-2 text-right text-slate-700 dark:text-slate-300 font-semibold">Subtotal</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-slate-200">
+                              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                                 {entry.details.map((detail: any, detailIndex) => (
-                                  <tr key={detailIndex} className="hover:bg-slate-50">
-                                    <td className="px-2 sm:px-3 py-2 text-slate-900 font-medium">{detail.product_name}</td>
-                                    <td className="px-2 sm:px-3 py-2 text-center font-medium">{detail.quantity}</td>
-                                    <td className="px-2 sm:px-3 py-2 text-right text-slate-700">
+                                  <tr key={detailIndex} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                    <td className="px-2 sm:px-3 py-2 text-slate-900 dark:text-slate-100 font-medium max-w-[180px] truncate" title={detail.product_name}>{detail.product_name}</td>
+                                    <td className="px-2 sm:px-3 py-2 text-center font-medium dark:text-slate-200">{detail.quantity}</td>
+                                    <td className="px-2 sm:px-3 py-2 text-right text-slate-700 dark:text-slate-300">
                                       {entry.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}
                                     </td>
-                                    <td className="px-2 sm:px-3 py-2 text-right font-semibold text-blue-600">
+                                    <td className="px-2 sm:px-3 py-2 text-right font-semibold text-blue-600 dark:text-blue-400">
                                       {entry.tipoMoneda === "PEN" ? "S/." : "$"} {(detail.price * detail.quantity).toFixed(2)}
                                     </td>
                                   </tr>

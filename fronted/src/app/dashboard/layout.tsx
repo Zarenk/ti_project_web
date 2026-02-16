@@ -23,6 +23,7 @@ import { OnboardingWizardBanner } from "@/components/onboarding-wizard-banner";
 import { HelpAssistantProvider } from "@/context/help-assistant-context";
 import { HelpAssistant } from "@/components/help/HelpAssistant";
 import { AccountingModeProvider } from "@/context/accounting-mode-context";
+import { VerticalCSSProvider } from "@/components/vertical-css-provider";
 
 export const revalidate = 0;
 
@@ -47,6 +48,7 @@ export default async function Page({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <TenantSelectionProvider>
+        <VerticalCSSProvider />
         <TenantFeaturesProvider>
           <AccountingModeProvider>
             <HelpAssistantProvider>

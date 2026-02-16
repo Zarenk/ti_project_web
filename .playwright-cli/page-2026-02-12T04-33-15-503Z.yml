@@ -1,0 +1,47 @@
+- generic [active] [ref=e1]:
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=e52]:
+        - img [ref=e54]
+        - generic [ref=e57]: Credenciales inválidas. Te quedan 3 intento(s) antes de un bloqueo temporal.. Te quedan 2 intentos antes de un bloqueo temporal.
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: Bienvenido
+      - generic [ref=e7]: Inicia sesion para acceder a tu cuenta
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: Correo Electronico
+          - textbox "Correo Electronico" [ref=e13]:
+            - /placeholder: Ingresa tu correo
+            - text: jdzare@gmail.com
+        - generic [ref=e14]:
+          - generic [ref=e15]: Contrasena
+          - textbox "Contrasena" [ref=e16]:
+            - /placeholder: Ingresa tu contrasena
+            - text: chuscasas19911991
+        - button "Iniciar Sesion" [ref=e17] [cursor=pointer]
+      - generic [ref=e20]: o inicia sesion con
+      - button "Iniciar con Google" [ref=e21]:
+        - img
+        - text: Iniciar con Google
+      - button "Olvidaste tu contrasena?" [ref=e22]
+    - generic [ref=e23]:
+      - paragraph [ref=e24]:
+        - text: Aun no tienes una cuenta?
+        - link "Registrate aqui" [ref=e25] [cursor=pointer]:
+          - /url: /register
+      - link "Volver al inicio" [ref=e26] [cursor=pointer]:
+        - /url: /
+  - generic [ref=e31] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e32]:
+      - img [ref=e33]
+    - generic [ref=e58]:
+      - button "Open issues overlay" [ref=e59]:
+        - generic [ref=e60]:
+          - generic [ref=e61]: "0"
+          - generic [ref=e62]: "1"
+        - generic [ref=e63]: Issue
+      - button "Collapse issues badge" [ref=e64]:
+        - img [ref=e65]
+  - alert [ref=e36]

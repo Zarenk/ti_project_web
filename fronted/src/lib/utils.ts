@@ -2,6 +2,7 @@ import { io } from "socket.io-client";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { getAuthHeaders } from "@/utils/auth-token";
+import { TENANT_SELECTION_EVENT } from "@/utils/tenant-preferences";
 
 const DEFAULT_DEV_BACKEND = "http://localhost:4000";
 
@@ -32,6 +33,8 @@ if (!resolvedSocketUrl && process.env.NODE_ENV === "production") {
 }
 
 export const SOCKET_URL = resolvedSocketUrl ?? DEFAULT_DEV_BACKEND;
+const CHAT_GUEST_TOKEN_KEY = "chatGuestToken";
+const CHAT_GUEST_TOKEN_EXPIRES_KEY = "chatGuestTokenExpires";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -62,13 +65,6 @@ export async function uploadPdfToServer({
   serie: string;
   correlativo: string;
 }) {
-  console.log("Enviando PDF al servidor con datos:");
-  console.log({
-    tipoComprobante,
-    serie,
-    correlativo,
-    ruc,
-  });
   const formData = new FormData();
 
   const filename = `${ruc}-${tipoComprobante === "boleta" ? "03" : "01"}-${
@@ -77,10 +73,6 @@ export async function uploadPdfToServer({
 
   formData.append("pdf", blob, filename);
   formData.append("tipo", tipoComprobante === "invoice" ? "factura" : "boleta");
-
-  formData.forEach((value, key) => {
-    console.log(`FormData -> ${key}:`, value);
-  });
 
   const authHeaders = await getAuthHeaders();
   if (!authHeaders.Authorization) {
@@ -119,7 +111,39 @@ export function normalizeOptionValue(value: unknown): string {
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket"],
+  auth: async (cb) => {
+    try {
+      const headers = await getAuthHeaders();
+      const authorization = headers.Authorization ?? headers.authorization ?? "";
+      let token = authorization.startsWith("Bearer ")
+        ? authorization.slice(7).trim()
+        : authorization.trim();
+      if (!token && typeof window !== "undefined") {
+        const guestToken = localStorage.getItem(CHAT_GUEST_TOKEN_KEY);
+        const guestExpiresAt = Number(
+          localStorage.getItem(CHAT_GUEST_TOKEN_EXPIRES_KEY) ?? "0",
+        );
+        if (guestToken && guestExpiresAt > Date.now()) {
+          token = guestToken;
+        }
+      }
+      cb({
+        token: token || undefined,
+        orgId: headers["x-org-id"] ?? undefined,
+        companyId: headers["x-company-id"] ?? undefined,
+      });
+    } catch {
+      cb({});
+    }
+  },
 });
+
+if (typeof window !== "undefined") {
+  window.addEventListener(TENANT_SELECTION_EVENT, () => {
+    socket.disconnect();
+    socket.connect();
+  });
+}
 
 export default socket;
 

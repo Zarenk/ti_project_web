@@ -1,6 +1,5 @@
+import { BACKEND_URL } from "@/lib/utils";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 export async function getOrders(params: { status?: string; from?: string; to?: string; clientId?: string; code?: string } = {}) {
   const qs = new URLSearchParams();
@@ -122,7 +121,7 @@ export async function updateOrderSeries(
   id: number | string,
   items: { productId: number; series: string[] }[],
 ) {
-  const res = await fetch(
+  const res = await authFetch(
     `${BACKEND_URL}/api/web-sales/order/${id}/series`,
     {
       method: "PATCH",

@@ -83,7 +83,7 @@ export default function TrialBalancePage() {
 
   async function fetchAccountsMap(): Promise<Record<string, string>> {
     try {
-      const res = await authFetch("/api/accounting/accounts", {
+      const res = await authFetch("/accounting/accounts", {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed accounts");
@@ -108,7 +108,7 @@ export default function TrialBalancePage() {
     params.set("size", "10000");
     params.set("page", "1");
     const res = await authFetch(
-      `/api/accounting/reports/ledger?${params.toString()}`,
+      `/accounting/reports/ledger?${params.toString()}`,
       { cache: "no-store" },
     );
     if (!res.ok) throw new Error("Failed ledger");

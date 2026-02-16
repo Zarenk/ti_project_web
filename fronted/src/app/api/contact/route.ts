@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+import { BACKEND_URL } from '@/lib/utils'
 
 export async function POST(request: Request) {
   const formData = await request.json()

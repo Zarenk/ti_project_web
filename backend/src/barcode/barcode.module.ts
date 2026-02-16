@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
 import { BarcodeGateway } from './barcode.gateway';
-import { ProductsModule } from 'src/products/products.module';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
-  imports: [ProductsModule],
-  providers: [BarcodeGateway, PrismaService],
+  imports: [PrismaModule],
+  providers: [BarcodeGateway],
 })
 export class BarcodeModule {}

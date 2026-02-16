@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -7,6 +8,7 @@ import {
 import { AuditAction } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import { handlePrismaError } from 'src/common/errors/prisma-error.handler';
 
 type QuoteWhatsAppPayload = {
@@ -56,7 +58,23 @@ export class QuotesService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly verticalConfig: VerticalConfigService,
   ) {}
+
+  private async ensureQuotesFeatureEnabled(
+    companyId?: number | null,
+  ): Promise<void> {
+    if (companyId == null) {
+      return;
+    }
+
+    const config = await this.verticalConfig.getConfig(companyId);
+    if (config.features.quotes === false) {
+      throw new ForbiddenException(
+        'El modulo de cotizaciones no esta habilitado para esta empresa.',
+      );
+    }
+  }
 
   private normalizePhone(phone: string): string {
     const cleaned = phone.replace(/[^\d]/g, '');
@@ -279,6 +297,10 @@ export class QuotesService {
       if (!input.companyId) {
         throw new BadRequestException('Empresa requerida.');
       }
+
+      // Validate quotes feature is enabled
+      await this.ensureQuotesFeatureEnabled(input.companyId);
+
       const items = input.items ?? [];
       this.validateQuoteItems(items);
       const quote = await this.prisma.quote.create({
@@ -414,6 +436,9 @@ export class QuotesService {
       actorId?: number | null;
     },
   ) {
+    // Validate quotes feature is enabled
+    await this.ensureQuotesFeatureEnabled(companyId);
+
     const mode =
       options?.stockValidationMode === 'STORE'
         ? 'STORE'
@@ -530,6 +555,9 @@ export class QuotesService {
 
   async cancelQuote(id: number, companyId: number) {
     try {
+      // Validate quotes feature is enabled
+      await this.ensureQuotesFeatureEnabled(companyId);
+
       const quote = await this.prisma.quote.findFirst({
         where: { id, companyId },
       });
@@ -549,6 +577,9 @@ export class QuotesService {
 
   async findAll(companyId: number, filters: { status?: QuoteStatus; q?: string; from?: string; to?: string }) {
     try {
+      // Validate quotes feature is enabled
+      await this.ensureQuotesFeatureEnabled(companyId);
+
       const where: any = { companyId };
       if (filters.status) where.status = filters.status;
       if (filters.q) {
@@ -635,6 +666,9 @@ export class QuotesService {
 
   async findOne(id: number, companyId: number) {
     try {
+      // Validate quotes feature is enabled
+      await this.ensureQuotesFeatureEnabled(companyId);
+
       const quote = await this.prisma.quote.findFirst({
         where: { id, companyId },
         include: { items: true },
@@ -652,6 +686,8 @@ export class QuotesService {
     organizationId?: number | null,
   ) {
     try {
+      // Validate quotes feature is enabled
+      await this.ensureQuotesFeatureEnabled(companyId);
       const quote = await this.prisma.quote.findFirst({
         where: { id, companyId },
         select: { id: true, organizationId: true },

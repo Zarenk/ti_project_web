@@ -1,39 +1,5 @@
-import { getAuthHeaders } from "@/utils/auth-token";
+import { BACKEND_URL } from "@/lib/utils";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
-
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://192.168.1.40:4000";
-
-async function authorizedFetch(
-  url: string,
-  init: RequestInit = {},
-): Promise<Response> {
-  let auth: Record<string, string> = {};
-  try {
-    auth = await getAuthHeaders();
-  } catch (error: any) {
-    if (
-      error instanceof UnauthenticatedError ||
-      error?.message?.includes("No se encontro un token")
-    ) {
-      throw new UnauthenticatedError();
-    }
-    throw error;
-  }
-  const headers = new Headers(init.headers ?? {});
-
-  for (const [key, value] of Object.entries(auth)) {
-    if (value != null && value !== "") {
-      headers.set(key, value);
-    }
-  }
-
-  return fetch(url, {
-    ...init,
-    headers,
-    credentials: init.credentials ?? "include",
-  });
-}
 
 export async function exportCatalog(
   format: "pdf" | "excel",
@@ -47,7 +13,7 @@ export async function exportCatalog(
     }
   }
 
-  const res = await authorizedFetch(
+  const res = await authFetch(
     `${BACKEND_URL}/api/catalog/export?${qs.toString()}`,
   );
 

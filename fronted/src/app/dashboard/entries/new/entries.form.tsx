@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import React from 'react'
 import { getProducts } from '../../products/products.api'
 import { getCategories } from '../../categories/categories.api'
-import { getProviders } from '../../providers/providers.api'
+import { getProviders, createProvider } from '../../providers/providers.api'
 import {jwtDecode} from 'jwt-decode';
 import { getAuthToken } from "@/utils/auth-token";
 import { getStores } from '../../stores/stores.api'
@@ -29,7 +29,9 @@ import {
   processExtractedText,
   processDeltronGuideText,
   processGuideText,
+  processIngramInvoiceText,
   processInvoiceText,
+  processNexsysInvoiceText,
 } from '../utils/pdfExtractor'
 import { numeroALetrasCustom } from '../../sales/components/utils/numeros-a-letras'
 import {
@@ -230,6 +232,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // ALERT DIALOG PARA AGREGAR PROVEEDORES
   const [isDialogOpenProvider, setIsDialogOpenProvider] = useState(false); // Estado para controlar el AlertDialog
+  const [isProviderNotFoundOpen, setIsProviderNotFoundOpen] = useState(false);
+  const [pendingProviderData, setPendingProviderData] = useState<{ name: string; ruc: string; address: string } | null>(null);
+  const [isCreatingProvider, setIsCreatingProvider] = useState(false);
   //
 
   // ALERT DIALOG PARA AGREGAR TIENDAS
@@ -361,8 +366,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   //
 
   // COMBOBOX DE Proveedores
-  const [providers, setProviders] = useState<{ id: number; 
-  name: string, description: string, adress: string }[]>([]); // Estado para los proveedores
+  const [providers, setProviders] = useState<{ id: number;
+  name: string, description: string, document: string, documentNumber: string, adress: string }[]>([]); // Estado para los proveedores
   const [openProvider, setOpenProvider] = React.useState(false)
   const [valueProvider, setValueProvider] = React.useState("")
   // Estado para rastrear si el combobox de proveedores ha sido tocado
@@ -449,7 +454,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
     const currencyLabels: Record<string, { singular: string; plural: string }> = {
       PEN: { singular: 'SOL', plural: 'SOLES' },
-      USD: { singular: 'DÃ“LAR AMERICANO', plural: 'DÃ“LARES AMERICANOS' },
+      USD: { singular: 'DÓLAR AMERICANO', plural: 'DÓLARES AMERICANOS' },
       EUR: { singular: 'EURO', plural: 'EUROS' }
     };
 
@@ -848,6 +853,50 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   };
   //
 
+  const handleProviderLookup = (ruc: string, name: string, address: string) => {
+    if (!ruc) return;
+    const found = providers.find((p) => p.documentNumber === ruc);
+    if (found) {
+      setValueProvider(found.name);
+      form.setValue("provider_name", found.name);
+      form.setValue("provider_adress", found.adress || "");
+      form.setValue("provider_documentNumber", found.documentNumber || "");
+      toast.success(`Proveedor "${found.name}" detectado automáticamente.`);
+    } else {
+      setPendingProviderData({ name, ruc, address });
+      setIsProviderNotFoundOpen(true);
+    }
+  };
+
+  const handleCreatePendingProvider = async () => {
+    if (!pendingProviderData) return;
+    setIsCreatingProvider(true);
+    try {
+      const created = await createProvider({
+        name: pendingProviderData.name,
+        description: pendingProviderData.name,
+        document: "RUC",
+        documentNumber: pendingProviderData.ruc,
+        adress: pendingProviderData.address,
+      });
+      if (created && created.id) {
+        setProviders((prev) => [...prev, created]);
+        setValueProvider(created.name);
+        form.setValue("provider_name", created.name);
+        form.setValue("provider_adress", created.adress || "");
+        form.setValue("provider_documentNumber", created.documentNumber || "");
+        toast.success(`Proveedor "${created.name}" creado y seleccionado.`);
+      }
+    } catch (error: any) {
+      console.error("Error al crear proveedor:", error);
+      toast.error(error?.message || "Error al crear el proveedor.");
+    } finally {
+      setIsCreatingProvider(false);
+      setIsProviderNotFoundOpen(false);
+      setPendingProviderData(null);
+    }
+  };
+
   const handlePDFUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     
@@ -874,6 +923,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
         if (provider === "deltron") {
           processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else if (provider === "ingram") {
+          processIngramInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+        } else if (provider === "nexsys") {
+          processNexsysInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
         } else {
           processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
           if (provider === "unknown") {
@@ -884,6 +937,14 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         setShowInvoiceFields(true);
         setShowGuideFields(false);
         toast.success("Factura subida correctamente.");
+
+        // Auto-detectar proveedor por RUC
+        const ruc = form.getValues("provider_documentNumber") || "";
+        const provName = form.getValues("provider_name") || "";
+        const provAddress = form.getValues("provider_adress") || "";
+        if (ruc) {
+          handleProviderLookup(ruc, provName, provAddress);
+        }
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
@@ -934,6 +995,14 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         setShowGuideFields(true);
         setShowInvoiceFields(false);
         toast.success("Guia de remision procesada correctamente.");
+
+        // Auto-detectar proveedor por RUC
+        const ruc = form.getValues("provider_documentNumber") || "";
+        const provName = form.getValues("provider_name") || "";
+        const provAddress = form.getValues("provider_adress") || "";
+        if (ruc) {
+          handleProviderLookup(ruc, provName, provAddress);
+        }
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
@@ -1744,6 +1813,43 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           </AlertDialogFooter>
         </AlertDialogContent>
         </AlertDialog>
+
+        <AlertDialog
+          open={isProviderNotFoundOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsProviderNotFoundOpen(false);
+              setPendingProviderData(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Proveedor no registrado</AlertDialogTitle>
+              <AlertDialogDescription>
+                El proveedor <span className="font-semibold">{pendingProviderData?.name}</span> (RUC: {pendingProviderData?.ruc}) no está registrado en el sistema. ¿Desea crearlo?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsProviderNotFoundOpen(false);
+                  setPendingProviderData(null);
+                }}
+                disabled={isCreatingProvider}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleCreatePendingProvider}
+                disabled={isCreatingProvider}
+              >
+                {isCreatingProvider ? 'Creando...' : 'Crear Proveedor'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {isSubmitting && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/40">
             <svg className="w-6 h-6 animate-spin text-gray-800 dark:text-white" viewBox="0 0 24 24">

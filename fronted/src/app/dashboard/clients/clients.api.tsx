@@ -1,7 +1,5 @@
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
 export async function getClients(){
   try {
     const data = await authFetch(`/clients`, {

@@ -5,11 +5,12 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UnauthorizedException, Injectable } from '@nestjs/common';
-import { ProductsService } from '../products/products.service';
+import { Logger, UnauthorizedException } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { isAllowedOrigin } from 'src/common/cors/allowed-origins';
 import * as jwt from 'jsonwebtoken';
@@ -23,7 +24,6 @@ interface SocketTenantContext {
   allowedCompanyIds: number[];
 }
 
-@Injectable()
 @WebSocketGateway({
   namespace: '/barcode',
   cors: {
@@ -37,59 +37,36 @@ interface SocketTenantContext {
     credentials: true,
   },
 })
-export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server!: Server;
 
   private logger = new Logger('BarcodeGateway');
+  private prisma!: PrismaService;
 
-  constructor(
-    private readonly productsService: ProductsService,
-    private readonly prisma: PrismaService,
-  ) {
-    console.log('🔧 ============================================');
-    console.log('🔧 [CONSTRUCTOR] BarcodeGateway instantiated');
-    console.log('🔧 [CONSTRUCTOR] PrismaService:', !!this.prisma);
-    console.log('🔧 [CONSTRUCTOR] ProductsService:', !!this.productsService);
-    console.log('🔧 ============================================');
-
+  constructor(private readonly moduleRef: ModuleRef) {
     this.logger.log('BarcodeGateway constructor called');
-    this.logger.log(`✅ PrismaService injected: ${!!this.prisma}`);
-    this.logger.log(`✅ ProductsService injected: ${!!this.productsService}`);
-    if (this.prisma) {
-      this.logger.log(`✅ PrismaService has user method: ${typeof this.prisma.user}`);
-    } else {
-      this.logger.error('❌ PrismaService is UNDEFINED in constructor!');
+  }
+
+  afterInit() {
+    try {
+      this.prisma = this.moduleRef.get(PrismaService, { strict: false });
+      this.logger.log('PrismaService resolved successfully');
+    } catch (error) {
+      this.logger.error(`Failed to resolve PrismaService: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   async handleConnection(client: Socket) {
-    console.log('🚨 ================================================');
-    console.log('🚨 [HANDLECONNECTION] Called!');
-    console.log('🚨 Socket ID:', client?.id);
-    console.log('🚨 this.prisma:', !!this.prisma);
-    console.log('🚨 this.productsService:', !!this.productsService);
-    console.log('🚨 ================================================');
-
-    // Ensure logger is initialized
     const logger = this.logger || new Logger('BarcodeGateway');
-
     logger.log(`Connection attempt from socket ${client.id}`);
-    logger.log(`Auth token present: ${!!client.handshake.auth?.token}`);
-    logger.log(`Headers - orgId: ${client.handshake.headers?.['x-org-id']}, companyId: ${client.handshake.headers?.['x-company-id']}`);
 
     try {
-      logger.log(`Resolving tenant context for socket ${client.id}...`);
       const context = await this.resolveSocketTenantContext(client);
-      logger.log(`Context resolved - userId: ${context.userId}, orgId: ${context.organizationId}`);
       (client.data as { barcodeContext?: SocketTenantContext }).barcodeContext = context;
       logger.log(`Socket ${client.id} connected successfully`);
     } catch (error) {
-      logger.error(`Connection REJECTED for socket ${client.id}`);
-      logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      if (error instanceof Error && error.stack) {
-        logger.error(error.stack);
-      }
+      logger.error(`Connection rejected for socket ${client.id}: ${error instanceof Error ? error.message : String(error)}`);
 
       const errorMessage = error instanceof Error ? error.message : 'No autorizado.';
       client.emit('barcode:error', { message: errorMessage });
@@ -123,16 +100,10 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
         const parsed = JSON.parse(rawCode);
         if (parsed && typeof parsed === 'object') {
           if (parsed.productId) {
-            product = await this.productsService.findOneForBarcode(
-              Number(parsed.productId),
-              orgId,
-            );
+            product = await this.findProductById(Number(parsed.productId), orgId);
           }
           if (!product && parsed.code) {
-            product = await this.productsService.findByBarcode(
-              String(parsed.code),
-              orgId,
-            );
+            product = await this.findProductByBarcode(String(parsed.code), orgId);
           }
         }
       } catch {
@@ -141,7 +112,7 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
       // Fallback: search as plain barcode/qrCode string
       if (!product) {
-        product = await this.productsService.findByBarcode(rawCode, orgId);
+        product = await this.findProductByBarcode(rawCode, orgId);
       }
 
       client.emit(
@@ -151,7 +122,6 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
           : { error: 'Producto no encontrado' },
       );
     } catch (error) {
-      // Use local reference to logger to avoid 'this' binding issues
       if (logger) {
         logger.error(
           `Barcode scan error for socket ${client.id}: ${
@@ -166,6 +136,37 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
             : 'Error al buscar producto.',
       });
     }
+  }
+
+  // ── Product Query Methods ──────────────────────────────────
+
+  private async findProductById(productId: number, orgId: number | null) {
+    return await this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        ...(orgId !== null && { organizationId: orgId }),
+      },
+      include: {
+        brand: true,
+        category: true,
+      },
+    });
+  }
+
+  private async findProductByBarcode(code: string, orgId: number | null) {
+    return await this.prisma.product.findFirst({
+      where: {
+        OR: [
+          { barcode: code },
+          { qrCode: code },
+        ],
+        ...(orgId !== null && { organizationId: orgId }),
+      },
+      include: {
+        brand: true,
+        category: true,
+      },
+    });
   }
 
   // ── Helpers ──────────────────────────────────────────────
@@ -231,25 +232,19 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private async resolveSocketTenantContext(
     client: Socket,
   ): Promise<SocketTenantContext> {
-    console.log(`[BarcodeGateway] 🔍 Starting tenant context resolution for socket ${client.id}`);
     const authPayload =
       (client.handshake.auth as Record<string, unknown> | undefined) ?? {};
-    console.log(`[BarcodeGateway] Auth payload keys:`, Object.keys(authPayload));
 
     const token = this.resolveToken(client);
-    console.log(`[BarcodeGateway] Token resolved:`, token ? `✅ ${token.substring(0, 20)}...` : '❌ No token');
     if (!token) {
       throw new UnauthorizedException('Token requerido.');
     }
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      console.error(`[BarcodeGateway] ❌ JWT_SECRET not configured in environment`);
       throw new UnauthorizedException('JWT secret no configurado.');
     }
-    console.log(`[BarcodeGateway] JWT_SECRET configured: ✅`);
 
-    console.log(`[BarcodeGateway] 🔐 Verifying JWT token...`);
     let payload: {
       sub?: number;
       role?: string;
@@ -264,26 +259,14 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
     try {
       payload = jwt.verify(token, secret) as any;
     } catch (err) {
-      console.error(`[BarcodeGateway] ❌ JWT verification failed:`, err);
       throw new UnauthorizedException('Token inválido o expirado.');
     }
 
-    console.log(`[BarcodeGateway] ✅ JWT verified. Payload:`, {
-      sub: payload?.sub,
-      role: payload?.role,
-      tokenVersion: payload?.tokenVersion,
-      defaultOrganizationId: payload?.defaultOrganizationId,
-      defaultCompanyId: payload?.defaultCompanyId,
-    });
-
     const userId = this.parseNumeric(payload?.sub);
-    console.log(`[BarcodeGateway] Parsed userId from token:`, userId);
     if (!userId) {
-      console.error(`[BarcodeGateway] ❌ Invalid userId in token`);
       throw new UnauthorizedException('Token inválido.');
     }
 
-    console.log(`[BarcodeGateway] 🔍 Looking up user ${userId} in database...`);
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -295,38 +278,20 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
         lastCompanyId: true,
       },
     });
-    console.log(`[BarcodeGateway] User found:`, user ? `✅ User ${user.id}` : '❌ Not found');
+
     if (!user) {
-      console.error(`[BarcodeGateway] ❌ User ${userId} not found in database`);
       throw new UnauthorizedException('Token revocado.');
     }
-    console.log(`[BarcodeGateway] Token version check:`, {
-      userVersion: user.tokenVersion,
-      payloadVersion: payload.tokenVersion,
-      match: user.tokenVersion === payload.tokenVersion,
-    });
+
     if (user.tokenVersion !== payload.tokenVersion) {
-      console.error(`[BarcodeGateway] ❌ Token version mismatch for user ${userId}`);
       throw new UnauthorizedException('Token revocado.');
     }
-    console.log(`[BarcodeGateway] ✅ User validated:`, {
-      id: user.id,
-      role: user.role,
-      organizationId: user.organizationId,
-      lastOrgId: user.lastOrgId,
-      lastCompanyId: user.lastCompanyId,
-    });
 
     const normalizedRole = this.normalizeRole(payload.role ?? user.role);
     const isGlobalSuperAdmin =
       normalizedRole === 'SUPER_ADMIN_GLOBAL' ||
       normalizedRole === 'SUPER_ADMIN';
-    console.log(`[BarcodeGateway] Role check:`, {
-      normalizedRole,
-      isGlobalSuperAdmin,
-    });
 
-    console.log(`[BarcodeGateway] 🔍 Looking up organization memberships for user ${userId}...`);
     const memberships = await this.prisma.organizationMembership.findMany({
       where: { userId },
       select: { organizationId: true },
@@ -337,7 +302,6 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
         ...(user.organizationId ? [user.organizationId] : []),
       ]),
     );
-    console.log(`[BarcodeGateway] Allowed organization IDs:`, allowedOrganizationIds);
 
     const handshakeOrgId = this.parseNumeric(
       authPayload.orgId ?? client.handshake.headers?.['x-org-id'],
@@ -345,10 +309,6 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
     const handshakeCompanyId = this.parseNumeric(
       authPayload.companyId ?? client.handshake.headers?.['x-company-id'],
     );
-    console.log(`[BarcodeGateway] Handshake values:`, {
-      orgId: handshakeOrgId,
-      companyId: handshakeCompanyId,
-    });
 
     let organizationId =
       handshakeOrgId ??
@@ -362,60 +322,44 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
       this.parseNumeric(payload.defaultCompanyId) ??
       user.lastCompanyId ??
       null;
-    console.log(`[BarcodeGateway] Resolved tenant context (before company check):`, {
-      organizationId,
-      companyId,
-    });
 
     if (companyId !== null) {
-      console.log(`[BarcodeGateway] 🔍 Validating company ${companyId}...`);
       const company = await this.prisma.company.findUnique({
         where: { id: companyId },
         select: { id: true, organizationId: true },
       });
-      console.log(`[BarcodeGateway] Company found:`, company ? `✅ Company ${company.id}, Org ${company.organizationId}` : '❌ Not found');
+
       if (!company) {
-        console.error(`[BarcodeGateway] ❌ Company ${companyId} not found`);
         throw new UnauthorizedException('Compañía inválida.');
       }
+
       if (
         organizationId !== null &&
         organizationId !== company.organizationId
       ) {
-        console.error(`[BarcodeGateway] ❌ Company ${companyId} belongs to org ${company.organizationId}, but user selected org ${organizationId}`);
         throw new UnauthorizedException(
           'La compañía no pertenece a la organización.',
         );
       }
       organizationId = company.organizationId;
-      console.log(`[BarcodeGateway] ✅ Company validated. Using org ${organizationId}`);
     }
-
-    console.log(`[BarcodeGateway] 🔒 Final authorization check...`);
-    console.log(`[BarcodeGateway] isGlobalSuperAdmin:`, isGlobalSuperAdmin);
-    console.log(`[BarcodeGateway] organizationId:`, organizationId);
-    console.log(`[BarcodeGateway] allowedOrganizationIds:`, allowedOrganizationIds);
 
     if (!isGlobalSuperAdmin) {
       if (
         organizationId === null ||
         !allowedOrganizationIds.includes(organizationId)
       ) {
-        console.error(`[BarcodeGateway] ❌ Authorization failed. Org ${organizationId} not in allowed list:`, allowedOrganizationIds);
         throw new UnauthorizedException(
           'No autorizado para la organización seleccionada.',
         );
       }
-      console.log(`[BarcodeGateway] ✅ Authorization passed`);
-    } else {
-      console.log(`[BarcodeGateway] ✅ Authorization bypassed (global super admin)`);
     }
 
     const allowedCompanyIds = (payload.companies ?? payload.companyIds ?? [])
       .map((id) => this.parseNumeric(id))
       .filter((id): id is number => id !== null);
 
-    const finalContext = {
+    return {
       userId,
       organizationId,
       companyId,
@@ -423,8 +367,5 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect 
       allowedOrganizationIds,
       allowedCompanyIds,
     };
-    console.log(`[BarcodeGateway] ✅ Final context:`, finalContext);
-
-    return finalContext;
   }
 }
