@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -48,15 +47,6 @@ const nextConfig: NextConfig = {
       config.output = config.output || {}
       config.output.publicPath = config.output.publicPath || '/_next/'
     }
-
-    // Explicit alias so webpack always finds @zxing/library even when
-    // npm --legacy-peer-deps alters the node_modules tree on Railway.
-    config.resolve = config.resolve || {}
-    config.resolve.alias = {
-      ...(config.resolve.alias || {}),
-      '@zxing/library': path.resolve(process.cwd(), 'node_modules/@zxing/library'),
-    }
-
     return config
   },
   allowedDevOrigins: (() => {
