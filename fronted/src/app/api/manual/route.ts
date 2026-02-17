@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import { UserManualDocument } from './UserManualDocument'
-import { HELP_SECTIONS } from '@/data/help'
+import type { HelpSection } from '@/data/help/types'
 import fs from 'fs'
 import path from 'path'
 
@@ -13,17 +13,84 @@ const CACHE_FILE = path.join(CACHE_DIR, 'user-manual.pdf')
 const CACHE_DURATION = 1000 * 60 * 60 * 24 // 24 horas
 
 /**
+ * IDs de todas las secciones de ayuda (orden de aparición en el manual).
+ * Se importan directamente desde los módulos para evitar el sistema de lazy-loading
+ * del browser que no funciona en el contexto server-side de Next.js API routes.
+ */
+const SECTION_IMPORTS: Record<string, () => Promise<HelpSection>> = {
+  general: () => import('@/data/help/sections/general').then(m => m.generalSection),
+  overviews: () => import('@/data/help/sections/overviews').then(m => m.overviewsSection),
+  inventory: () => import('@/data/help/sections/inventory').then(m => m.inventorySection),
+  products: () => import('@/data/help/sections/products').then(m => m.productsSection),
+  sales: () => import('@/data/help/sections/sales').then(m => m.salesSection),
+  entries: () => import('@/data/help/sections/entries').then(m => m.entriesSection),
+  categories: () => import('@/data/help/sections/categories').then(m => m.categoriesSection),
+  providers: () => import('@/data/help/sections/providers').then(m => m.providersSection),
+  users: () => import('@/data/help/sections/users').then(m => m.usersSection),
+  stores: () => import('@/data/help/sections/stores').then(m => m.storesSection),
+  tenancy: () => import('@/data/help/sections/tenancy').then(m => m.tenancySection),
+  accounting: () => import('@/data/help/sections/accounting').then(m => m.accountingSection),
+  cashregister: () => import('@/data/help/sections/cashregister').then(m => m.cashregisterSection),
+  quotes: () => import('@/data/help/sections/quotes').then(m => m.quotesSection),
+  exchange: () => import('@/data/help/sections/exchange').then(m => m.exchangeSection),
+  messages: () => import('@/data/help/sections/messages').then(m => m.messagesSection),
+  orders: () => import('@/data/help/sections/orders').then(m => m.ordersSection),
+  reports: () => import('@/data/help/sections/reports').then(m => m.reportsSection),
+  catalog: () => import('@/data/help/sections/catalog').then(m => m.catalogSection),
+  settings: () => import('@/data/help/sections/settings').then(m => m.settingsSection),
+  hardware: () => import('@/data/help/sections/hardware').then(m => m.hardwareSection),
+  'api-integrations': () => import('@/data/help/sections/api-integrations').then(m => m.apiIntegrationsSection),
+  'public-store': () => import('@/data/help/sections/public-store').then(m => m.publicStoreSection),
+  brands: () => import('@/data/help/sections/brands').then(m => m.brandsSection),
+  history: () => import('@/data/help/sections/history').then(m => m.historySection),
+  barcode: () => import('@/data/help/sections/barcode').then(m => m.barcodeSection),
+  troubleshooting: () => import('@/data/help/sections/troubleshooting').then(m => m.troubleshootingSection),
+}
+
+/**
+ * Carga todas las secciones de ayuda directamente (server-side compatible).
+ * No depende del sistema de lazy-loading del browser.
+ */
+async function loadAllSections(): Promise<HelpSection[]> {
+  const entries = Object.entries(SECTION_IMPORTS)
+  const sections: HelpSection[] = []
+
+  for (const [id, loader] of entries) {
+    try {
+      const section = await loader()
+      if (section && section.entries.length > 0) {
+        sections.push(section)
+      }
+    } catch (err) {
+      console.warn(`No se pudo cargar sección "${id}":`, err)
+    }
+  }
+
+  return sections
+}
+
+/**
+ * Convierte un archivo de imagen a base64 data URL para @react-pdf/renderer v4
+ * (v4 usa fetch() internamente, así que no puede leer rutas del filesystem directamente)
+ */
+function fileToDataUrl(filePath: string): string | null {
+  try {
+    const ext = path.extname(filePath).toLowerCase()
+    const mime = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png'
+    const buffer = fs.readFileSync(filePath)
+    return `data:${mime};base64,${buffer.toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
+/**
  * Carga recursivamente todos los screenshots del directorio /public/help
+ * Retorna un mapa de ruta relativa → base64 data URL
  */
 function loadScreenshots(): Record<string, string> {
   const helpDir = path.join(process.cwd(), 'public', 'help')
   const screenshots: Record<string, string> = {}
-
-  // Agregar placeholder por defecto
-  screenshots['/help/placeholder-screenshot.png'] = path.join(
-    helpDir,
-    'placeholder-screenshot.png'
-  )
 
   function scanDir(dir: string, prefix = '') {
     try {
@@ -34,16 +101,17 @@ function loadScreenshots(): Record<string, string> {
         const stat = fs.statSync(fullPath)
 
         if (stat.isDirectory()) {
-          // Escanear subdirectorio
           scanDir(fullPath, `${prefix}${file}/`)
         } else if (
           file.endsWith('.png') ||
           file.endsWith('.jpg') ||
           file.endsWith('.jpeg')
         ) {
-          // Agregar imagen al mapa
           const key = `/help/${prefix}${file}`
-          screenshots[key] = fullPath
+          const dataUrl = fileToDataUrl(fullPath)
+          if (dataUrl) {
+            screenshots[key] = dataUrl
+          }
         }
       })
     } catch (error) {
@@ -105,27 +173,38 @@ function readFromCache(): Buffer | null {
  * Genera el manual PDF
  */
 async function generateManual(): Promise<Buffer> {
-  console.log('📝 Generando manual PDF...')
+  console.log('Generando manual PDF...')
   const startTime = Date.now()
 
-  // Cargar screenshots
+  // Cargar screenshots (mapa de ruta relativa → filesystem path)
   const screenshots = loadScreenshots()
-  console.log(`📷 Screenshots cargados: ${Object.keys(screenshots).length}`)
+  console.log(`Screenshots cargados: ${Object.keys(screenshots).length}`)
 
-  // Filtrar secciones (excluir courtesy)
-  const sections = HELP_SECTIONS.filter(
-    (s) => s.id !== 'courtesy' && s.entries.length > 0
+  // Cargar TODAS las secciones directamente (server-side)
+  const allSections = await loadAllSections()
+
+  // Filtrar secciones no deseadas (courtesy es solo para el chatbot)
+  const sections = allSections.filter(
+    (s) => s.id !== 'courtesy' && s.id !== 'troubleshooting'
   )
 
-  console.log(`📚 Secciones incluidas: ${sections.length}`)
+  console.log(`Secciones incluidas: ${sections.length}`)
   console.log(
-    `📄 Total de entries: ${sections.reduce((acc, s) => acc + s.entries.length, 0)}`
+    `Total de entries: ${sections.reduce((acc, s) => acc + s.entries.length, 0)}`
   )
+
+  // Convertir placeholder y logo a base64 data URLs
+  const placeholderFilePath = path.join(process.cwd(), 'public', 'help', 'placeholder-screenshot.png')
+  const placeholderPath = fileToDataUrl(placeholderFilePath) ?? ''
+
+  const logoFilePath = path.join(process.cwd(), 'public', 'ti_logo_final_2024.png')
+  const companyLogo = fileToDataUrl(logoFilePath) ?? undefined
 
   // Preparar data del manual
   const manualData = {
     sections,
     screenshots,
+    placeholderPath,
     metadata: {
       generatedAt: new Date().toLocaleDateString('es-PE', {
         year: 'numeric',
@@ -133,17 +212,20 @@ async function generateManual(): Promise<Buffer> {
         day: 'numeric',
       }),
       version: '1.0.0',
-      companyLogo: path.join(process.cwd(), 'public', 'ti_logo_final_2024.png'),
+      companyLogo,
     },
   }
 
+  const totalEntries = sections.reduce((acc, s) => acc + s.entries.length, 0)
+  console.log(`Secciones: ${sections.length}, Entries: ${totalEntries}, Screenshots: ${Object.keys(screenshots).length}`)
+
   // Renderizar PDF
   const pdfBuffer = await renderToBuffer(
-    React.createElement(UserManualDocument, { data: manualData })
+    React.createElement(UserManualDocument, { data: manualData }) as any
   )
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2)
-  console.log(`✅ Manual generado en ${duration}s`)
+  console.log(`Manual generado en ${duration}s, tamaño: ${(pdfBuffer.length / 1024).toFixed(0)}KB`)
 
   // Guardar en caché
   saveToCache(pdfBuffer)
@@ -160,24 +242,21 @@ export async function GET(req: NextRequest) {
     let pdfBuffer: Buffer
     let fromCache = false
 
-    // Verificar caché
+    // Verificar caché (24h TTL)
     if (isCacheValid()) {
-      console.log('⚡ Usando manual desde caché')
       const cached = readFromCache()
       if (cached) {
         pdfBuffer = cached
         fromCache = true
       } else {
-        // Caché corrupto, regenerar
         pdfBuffer = await generateManual()
       }
     } else {
-      // Caché expirado o no existe, generar nuevo
       pdfBuffer = await generateManual()
     }
 
-    // Retornar PDF
-    return new NextResponse(pdfBuffer, {
+    // Retornar PDF (convert Buffer to Uint8Array for NextResponse compatibility)
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

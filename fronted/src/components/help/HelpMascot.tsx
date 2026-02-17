@@ -123,7 +123,7 @@ export function HelpMascot() {
   /* ─── Minimized: small tab flush with right edge ─── */
   if (isMinimized) {
     return (
-      <div className="fixed bottom-6 right-0 z-50">
+      <div className="fixed bottom-6 right-0 z-50 print:hidden">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -144,7 +144,7 @@ export function HelpMascot() {
 
   /* ─── Full mascot button ─── */
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 print:hidden">
       {/* Proactive tip tooltip — always mounted, CSS transitions */}
       <div
         className={`mb-1 max-w-[260px] rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg transition-all duration-200 dark:border-slate-700 dark:bg-slate-900 ${

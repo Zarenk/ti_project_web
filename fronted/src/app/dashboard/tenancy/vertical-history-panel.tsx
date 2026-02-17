@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   AlertCircle,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
   downloadFile,
   type VerticalHistoryResponse,
 } from "./tenancy.api"
+import { VERTICAL_CONFIG_INVALIDATE_EVENT } from "@/hooks/use-vertical-config"
 
 interface VerticalHistoryPanelProps {
   companyId: number
@@ -69,7 +70,7 @@ export function VerticalHistoryPanel({ companyId, onRollbackClick }: VerticalHis
   const [exporting, setExporting] = useState(false)
   const { toast } = useToast()
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -81,7 +82,7 @@ export function VerticalHistoryPanel({ companyId, onRollbackClick }: VerticalHis
     } finally {
       setLoading(false)
     }
-  }
+  }, [companyId])
 
   const handleExportCSV = async () => {
     setExporting(true)
@@ -108,7 +109,16 @@ export function VerticalHistoryPanel({ companyId, onRollbackClick }: VerticalHis
 
   useEffect(() => {
     void loadHistory()
-  }, [companyId])
+  }, [loadHistory])
+
+  // Re-fetch history when vertical changes
+  useEffect(() => {
+    const handler = () => {
+      void loadHistory()
+    }
+    window.addEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+    return () => window.removeEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+  }, [loadHistory])
 
   if (loading) {
     return (

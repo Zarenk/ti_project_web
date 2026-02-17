@@ -834,7 +834,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
                     <Button
                       variant="outline"
                       role="combobox"
-                      className="w-[180px] cursor-pointer justify-between"
+                      className="w-full max-w-[180px] cursor-pointer justify-between sm:w-[180px]"
                     >
                       <span className="truncate">
                         {selectedCategory
@@ -846,7 +846,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
                       <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[200px] p-0">
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[180px] p-0">
                     <Command>
                       <CommandInput placeholder="Buscar..." />
                       <CommandList>
@@ -1003,7 +1003,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
 
               {/* Pagination controls */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-2">
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1011,7 +1011,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    Anterior
+                    <span className="hidden sm:inline">Anterior</span>
                   </Button>
 
                   <div className="flex items-center gap-1">
@@ -1032,7 +1032,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
                           key={pageNum}
                           variant={currentPage === pageNum ? "default" : "outline"}
                           size="sm"
-                          className="h-9 w-9"
+                          className="h-8 w-8 sm:h-9 sm:w-9"
                           onClick={() => setCurrentPage(pageNum)}
                         >
                           {pageNum}
@@ -1047,7 +1047,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Siguiente
+                    <span className="hidden sm:inline">Siguiente</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

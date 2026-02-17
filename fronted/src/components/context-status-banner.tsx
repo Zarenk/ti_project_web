@@ -15,7 +15,7 @@ export function ContextStatusBanner() {
 
   if (status.state === "restoring") {
     return (
-      <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full border border-slate-100 bg-white/90 px-4 py-2 text-sm text-slate-700 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-100">
+      <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full border border-slate-100 bg-white/90 px-4 py-2 text-sm text-slate-700 shadow-lg backdrop-blur print:hidden dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-100">
         <Loader2 className="size-4 animate-spin text-sky-600 dark:text-sky-400" />
         <span>{status.message ?? "Restaurando tu espacio de trabajo..."}</span>
       </div>
@@ -33,7 +33,7 @@ export function ContextStatusBanner() {
   return (
     <div
       className={cn(
-        "fixed bottom-6 left-1/2 z-40 flex w-[min(90vw,480px)] -translate-x-1/2 items-start gap-3 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur",
+        "fixed bottom-6 left-1/2 z-40 flex w-[min(90vw,480px)] -translate-x-1/2 items-start gap-3 rounded-2xl border px-4 py-3 shadow-xl backdrop-blur print:hidden",
         isOffline
           ? "border-amber-200 bg-amber-50/90 text-amber-900 dark:border-amber-400/40 dark:bg-amber-950/60 dark:text-amber-100"
           : "border-rose-200 bg-rose-50/90 text-rose-900 dark:border-rose-400/40 dark:bg-rose-950/60 dark:text-rose-100",

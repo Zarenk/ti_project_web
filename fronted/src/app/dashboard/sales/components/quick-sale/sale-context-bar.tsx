@@ -62,7 +62,7 @@ function ComboboxField({
   const selected = options.find((o) => o.id === value)
 
   return (
-    <div className="flex-1 min-w-[180px] space-y-1">
+    <div className="min-w-0 flex-1 basis-[140px] space-y-1">
       <Label className="text-xs">{label}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -135,7 +135,7 @@ function ClientComboboxField({
     : selected?.name ?? "Publico General"
 
   return (
-    <div className="flex-1 min-w-[180px] space-y-1">
+    <div className="min-w-0 flex-1 basis-[140px] space-y-1">
       <Label className="text-xs">Cliente</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -253,7 +253,7 @@ export function SaleContextBar({
         onClientChange={onClientChange}
       />
 
-      <div className="w-[160px] space-y-1">
+      <div className="w-full min-w-0 sm:w-[160px] space-y-1">
         <Label className="text-xs">Fecha</Label>
         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
           <PopoverTrigger asChild>

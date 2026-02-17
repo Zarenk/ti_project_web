@@ -76,6 +76,12 @@ export function OrganizationVerticalCard({
     void loadInfo(selectedCompanyId);
   }, [selectedCompanyId, initialInfo, loadInfo]);
 
+  const handleVerticalChanged = useCallback(() => {
+    if (selectedCompanyId) {
+      void loadInfo(selectedCompanyId);
+    }
+  }, [selectedCompanyId, loadInfo]);
+
   if (!options.length) {
     return (
       <Alert variant="destructive">
@@ -123,6 +129,7 @@ export function OrganizationVerticalCard({
                 companyId={selectedCompanyId}
                 info={info}
                 disabled={loading}
+                onVerticalChanged={handleVerticalChanged}
               />
               <Separator className="my-3" />
               <div className="space-y-2">

@@ -639,13 +639,15 @@ export default function SalesDashboard() {
       )}
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="overflow-x-auto whitespace-nowrap scrollbar-hide flex w-full gap-1 px-1">
-        <TabsTrigger value="overview" className="flex-shrink-0 text-sm sm:text-base">Desc. Gral.</TabsTrigger>
-        <TabsTrigger value="products" className="flex-shrink-0 text-sm sm:text-base">Productos</TabsTrigger>
-        <TabsTrigger value="customers" className="flex-shrink-0 text-sm sm:text-base">Clientes</TabsTrigger>
-        <TabsTrigger value="transactions" className="flex-shrink-0 text-sm sm:text-base">Transacc.</TabsTrigger>
-        <TabsTrigger value="profits" className="flex-shrink-0 text-sm sm:text-base">Utilidades</TabsTrigger>
-      </TabsList>
+        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+          <TabsList className="inline-flex w-full min-w-max gap-1 bg-muted/60 p-1 rounded-lg">
+            <TabsTrigger value="overview" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">General</TabsTrigger>
+            <TabsTrigger value="products" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Productos</TabsTrigger>
+            <TabsTrigger value="customers" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Clientes</TabsTrigger>
+            <TabsTrigger value="transactions" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Transacciones</TabsTrigger>
+            <TabsTrigger value="profits" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Utilidades</TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
             <Card className="lg:col-span-4">
@@ -837,14 +839,12 @@ export default function SalesDashboard() {
           </Card>
         </TabsContent>
         <TabsContent value="profits" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <div className="lg:col-span-4">
-              <ProfitProductsTable dateRange={dateRange} />
-            </div>
-            <div className="lg:col-span-3">
-              <DailyProfitChart dateRange={dateRange} />
-            </div>
+          <div className="rounded-xl border bg-card shadow-md p-4">
+            <h2 className="text-lg font-semibold">Utilidad Diaria</h2>
+            <p className="text-sm text-muted-foreground mb-2">Evolución de las utilidades en el período seleccionado</p>
+            <DailyProfitChart dateRange={dateRange} />
           </div>
+          <ProfitProductsTable dateRange={dateRange} />
         </TabsContent>
       </Tabs>
     </div>

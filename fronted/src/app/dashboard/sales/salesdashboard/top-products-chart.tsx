@@ -11,10 +11,21 @@ interface Props {
   dateRange: DateRange
 }
 
+/** Trunca un texto por palabras completas, sin cortar a mitad de palabra */
+function truncateByWords(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text
+  const words = text.split(" ")
+  let result = ""
+  for (const word of words) {
+    const next = result ? `${result} ${word}` : word
+    if (next.length > maxLen) break
+    result = next
+  }
+  return result ? `${result}...` : `${text.slice(0, maxLen)}...`
+}
+
 export function TopProductsChart({ dateRange }: Props) {
   const [data, setData] = useState<{ name: string; sales: number }[]>([])
-  const [yAxisWidth, setYAxisWidth] = useState<number>(120)
-  const [yAxisFontSize, setYAxisFontSize] = useState<number>(12);
   const { theme } = useTheme()
   const textColor = theme === "dark" ? "#FFFFFF" : "#000000"
   const { selection, version } = useTenantSelection()
@@ -22,19 +33,6 @@ export function TopProductsChart({ dateRange }: Props) {
     () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
     [selection.orgId, selection.companyId, version],
   )
-
-  useEffect(() => {
-    // Solo se ejecuta en cliente
-    const handleResize = () => {
-      if (typeof window !== "undefined") {
-        setYAxisWidth(window.innerWidth < 640 ? 80 : 120)
-      }
-    }
-
-    handleResize() // inicial
-    window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
-  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,105 +56,71 @@ export function TopProductsChart({ dateRange }: Props) {
     fetchData()
   }, [dateRange, selectionKey])
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (typeof window !== "undefined") {
-        const isMobile = window.innerWidth < 640;
-        setYAxisWidth(isMobile ? 80 : 120);
-        setYAxisFontSize(isMobile ? 10 : 12); // Aquí reduces el tamaño en móviles
-      }
-    };
-  
-    handleResize(); // Ejecuta al cargar
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  // Altura dinámica: 40px por producto, mínimo 300px, máximo 800px
+  const chartHeight = Math.min(800, Math.max(300, data.length * 40))
 
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <BarChart
-        data={data}
-        layout="vertical"
-        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-        barCategoryGap={20} // 👈 Aquí separas más verticalmente las barras
-      >
-        <XAxis
-          type="number"
-          tickLine={false}
-          axisLine={false}
-          style={{ fontSize: "12px" }}
-        />
-        <YAxis
-          dataKey="name"
-          type="category"
-          tickLine={false}
-          axisLine={false}
-          width={yAxisWidth}
-          tick={({ x, y, payload }) => {
-            const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-            const text = payload.value;
-          
-            if (isMobile) {
-              // En móviles, truncamos
-              const displayText = text.length > 12 ? text.slice(0, 10) + "..." : text;
+    <div
+      className="w-full overflow-y-auto"
+      style={{ maxHeight: 500 }}
+    >
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+          barCategoryGap="20%"
+        >
+          <XAxis
+            type="number"
+            tickLine={false}
+            axisLine={false}
+            style={{ fontSize: "12px" }}
+            tick={{ fill: textColor }}
+          />
+          <YAxis
+            dataKey="name"
+            type="category"
+            tickLine={false}
+            axisLine={false}
+            width={130}
+            tick={({ x, y, payload }) => {
+              const maxChars = typeof window !== "undefined" && window.innerWidth < 640 ? 14 : 20
+              const displayText = truncateByWords(payload.value, maxChars)
               return (
                 <text
                   x={x}
-                  y={y + 4}
+                  y={y}
                   fill={textColor}
-                  fontSize={yAxisFontSize}
+                  fontSize={11}
                   textAnchor="end"
+                  dominantBaseline="middle"
                 >
                   {displayText}
                 </text>
-              );
-            } else {
-              // En pantallas grandes, dividimos en líneas cada 14 caracteres aprox.
-              const words = text.match(/.{1,14}/g) || [];
-          
-              return (
-                <text
-                  x={x}
-                  y={y - (words.length - 1) * 6} // ajustar vertical según cantidad de líneas
-                  fill={textColor}
-                  fontSize={yAxisFontSize}
-                  textAnchor="end"
-                >
-                  {words.map((line:any, index:any) => (
-                    <tspan key={index} x={x} dy={index === 0 ? "1em" : "1.1em"}>
-                      {line}
-                    </tspan>
-                  ))}
-                </text>
-              );
-            }
-          }}
-        />
-        <Tooltip
-          content={({ active, payload, label }) => {
-            if (active && payload && payload.length) {
-              return (
-                <div className="rounded-lg border bg-background p-2 shadow-sm">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col">
-                      <span className="text-[0.70rem] uppercase text-muted-foreground">Producto</span>
-                      <span className="font-bold text-muted-foreground">{label}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[0.70rem] uppercase text-muted-foreground">Unidades</span>
-                      <span className="font-bold">{payload[0].value}</span>
+              )
+            }}
+          />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (active && payload && payload.length) {
+                return (
+                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs uppercase text-muted-foreground">Producto</span>
+                      <span className="text-sm font-bold text-muted-foreground">{label}</span>
+                      <span className="text-xs uppercase text-muted-foreground mt-1">Unidades vendidas</span>
+                      <span className="text-sm font-bold">{payload[0].value}</span>
                     </div>
                   </div>
-                </div>
-              )
-            }
-            return null
-          }}
-        />
-        <Bar dataKey="sales" radius={[4, 4, 4, 4]} fill="#4FC3F7" barSize={20} />
-      </BarChart>
-    </ResponsiveContainer>
+                )
+              }
+              return null
+            }}
+          />
+          <Bar dataKey="sales" radius={[4, 4, 4, 4]} fill="#4FC3F7" barSize={18} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
-
-

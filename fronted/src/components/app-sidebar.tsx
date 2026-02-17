@@ -376,6 +376,20 @@ const NAV_FEATURE_REQUIREMENTS: Record<string, keyof VerticalFeatures> = {
   Catalogo: "ecommerceIntegration",
 }
 
+// Nav items hidden for restaurant verticals (replaced by custom menu items)
+const RESTAURANT_HIDDEN_NAV = new Set([
+  "Almacen",           // replaced by "Insumos" custom item
+  "Categorias",        // menu sections managed from "Platos"
+  "Productos",         // replaced by "Platos" custom item
+  "Tipo de Cambio",    // single currency operation
+  "Tiendas/Sucursales", // not applicable to restaurants
+])
+
+const RESTAURANT_HIDDEN_PROJECTS = new Set([
+  "Escaner QR",  // not needed in restaurant workflow
+  "Pagina Web",  // ecommerce disabled for restaurants
+])
+
 const CUSTOM_MENU_ICONS: Record<string, LucideIcon> = {
   table: Table2,
   kitchen: Utensils,
@@ -423,6 +437,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const normalizedRoleValue = role?.toString().trim().toUpperCase() ?? ""
   const verticalFeatures = verticalInfo?.config?.features
   const isComputerVertical = verticalInfo?.businessVertical === "COMPUTERS"
+  const isRestaurantVertical = verticalInfo?.businessVertical === "RESTAURANTS"
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC([
@@ -447,6 +462,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const filteredNav = data.navMain
     .filter((item) => {
+      if (isRestaurantVertical && RESTAURANT_HIDDEN_NAV.has(item.title)) {
+        return false
+      }
       if (verticalFeatures) {
         const feature = NAV_FEATURE_REQUIREMENTS[item.title]
         if (feature && verticalFeatures[feature] === false) {
@@ -501,9 +519,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     })
     .filter((item) => !item.items || item.items.length > 0)
 
-  const filteredProjects = data.projects.filter((project) =>
-    checkPermission(project.permission)
-  )
+  const filteredProjects = data.projects.filter((project) => {
+    if (isRestaurantVertical && RESTAURANT_HIDDEN_PROJECTS.has(project.name)) {
+      return false
+    }
+    return checkPermission(project.permission)
+  })
 
   const navMain = React.useMemo(() => {
     const items = filteredNav.map((item) => {

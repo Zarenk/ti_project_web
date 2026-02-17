@@ -3,14 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
+  Briefcase,
   Building2,
   CheckCircle2,
   ClipboardList,
+  Factory,
   Info,
+  Laptop,
   Layers,
   Plus,
   ShieldCheck,
+  ShoppingBag,
   Trash2,
+  Utensils,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -58,6 +63,60 @@ const STATUS_OPTIONS = [
   { value: "INACTIVE", label: "Inactiva" },
 ]
 
+const VERTICAL_OPTIONS = [
+  {
+    value: "GENERAL",
+    label: "General",
+    description: "Configuracion estandar para todo tipo de negocio",
+    icon: Building2,
+    color: "sky",
+  },
+  {
+    value: "COMPUTERS",
+    label: "Computadoras / Laptops",
+    description: "Catalogo con especificaciones tecnicas y cotizaciones",
+    icon: Laptop,
+    color: "blue",
+  },
+  {
+    value: "RESTAURANTS",
+    label: "Restaurantes",
+    description: "Menu, mesas, cocina y delivery integrado",
+    icon: Utensils,
+    color: "orange",
+  },
+  {
+    value: "RETAIL",
+    label: "Comercio Minorista",
+    description: "Variantes por talla/color, POS y e-commerce",
+    icon: ShoppingBag,
+    color: "emerald",
+  },
+  {
+    value: "SERVICES",
+    label: "Servicios Profesionales",
+    description: "Citas, proyectos y facturacion por horas",
+    icon: Briefcase,
+    color: "violet",
+  },
+  {
+    value: "MANUFACTURING",
+    label: "Manufactura",
+    description: "Ordenes de trabajo, BOM y produccion",
+    icon: Factory,
+    color: "amber",
+  },
+] as const
+
+const VERTICAL_COLOR_MAP: Record<string, { border: string; bg: string; text: string; ring: string }> = {
+  sky:     { border: "border-sky-400 dark:border-sky-500",     bg: "bg-sky-50 dark:bg-sky-950/40",     text: "text-sky-700 dark:text-sky-300",     ring: "ring-sky-300 dark:ring-sky-600" },
+  blue:    { border: "border-blue-400 dark:border-blue-500",   bg: "bg-blue-50 dark:bg-blue-950/40",   text: "text-blue-700 dark:text-blue-300",   ring: "ring-blue-300 dark:ring-blue-600" },
+  orange:  { border: "border-orange-400 dark:border-orange-500", bg: "bg-orange-50 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-300", ring: "ring-orange-300 dark:ring-orange-600" },
+  emerald: { border: "border-emerald-400 dark:border-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300", ring: "ring-emerald-300 dark:ring-emerald-600" },
+  violet:  { border: "border-violet-400 dark:border-violet-500", bg: "bg-violet-50 dark:bg-violet-950/40", text: "text-violet-700 dark:text-violet-300", ring: "ring-violet-300 dark:ring-violet-600" },
+  amber:   { border: "border-amber-400 dark:border-amber-500", bg: "bg-amber-50 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300", ring: "ring-amber-300 dark:ring-amber-600" },
+}
+
 function generateUnitKey() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID()
@@ -91,6 +150,7 @@ export default function NewOrganizationPage() {
     code: "",
     status: STATUS_OPTIONS[0]?.value ?? "ACTIVE",
   })
+  const [selectedVertical, setSelectedVertical] = useState("GENERAL")
   const [units, setUnits] = useState<MutableUnit[]>([createUnit({ name: "General" })])
   const [companies, setCompanies] = useState<MutableCompany[]>([createCompanyDraft()])
   const [submitting, setSubmitting] = useState(false)
@@ -415,6 +475,7 @@ export default function NewOrganizationPage() {
         legalName: company.legalName.trim() || null,
         taxId: company.taxId.replace(/\D/g, "") || null,
         status: company.status.trim() || undefined,
+        businessVertical: selectedVertical,
       }))
       .filter((company) => company.name.length > 0),
   })
@@ -625,6 +686,95 @@ export default function NewOrganizationPage() {
             <CardFooter className="text-xs text-slate-500 dark:text-slate-400">
               Los cambios sobre el estado impactan el acceso global del tenant. Puedes modificarlos
               en cualquier momento.
+            </CardFooter>
+          </Card>
+
+          {/* Selector de vertical */}
+          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+            <CardHeader className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
+                <Layers className="size-5 text-sky-600 dark:text-slate-100" />
+                Tipo de negocio
+                <Badge
+                  variant="secondary"
+                  className="ml-auto rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  Aplica a todas las empresas
+                </Badge>
+              </CardTitle>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Selecciona la vertical que mejor describe tu actividad. Esto configura automaticamente
+                los modulos, campos y flujos disponibles para las empresas de esta organizacion.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {VERTICAL_OPTIONS.map((vertical) => {
+                  const isSelected = selectedVertical === vertical.value
+                  const colors = VERTICAL_COLOR_MAP[vertical.color]
+                  const Icon = vertical.icon
+                  return (
+                    <button
+                      key={vertical.value}
+                      type="button"
+                      onClick={() => setSelectedVertical(vertical.value)}
+                      className={cn(
+                        "group relative flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all duration-200",
+                        "hover:shadow-md focus-visible:outline-none focus-visible:ring-2",
+                        isSelected
+                          ? cn(colors.border, colors.bg, "shadow-sm ring-1", colors.ring)
+                          : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-slate-600",
+                      )}
+                    >
+                      {/* Indicador de seleccion */}
+                      <div
+                        className={cn(
+                          "absolute right-3 top-3 flex size-5 items-center justify-center rounded-full border-2 transition-all duration-200",
+                          isSelected
+                            ? cn(colors.border, colors.bg)
+                            : "border-slate-300 dark:border-slate-600",
+                        )}
+                      >
+                        {isSelected && (
+                          <CheckCircle2
+                            className={cn("size-5", colors.text)}
+                          />
+                        )}
+                      </div>
+
+                      <div
+                        className={cn(
+                          "flex size-10 items-center justify-center rounded-lg transition-colors duration-200",
+                          isSelected
+                            ? cn(colors.bg, colors.text)
+                            : "bg-slate-100 text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700",
+                        )}
+                      >
+                        <Icon className="size-5" />
+                      </div>
+
+                      <div className="space-y-0.5 pr-6">
+                        <p
+                          className={cn(
+                            "text-sm font-semibold transition-colors",
+                            isSelected
+                              ? colors.text
+                              : "text-slate-800 dark:text-slate-100",
+                          )}
+                        >
+                          {vertical.label}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                          {vertical.description}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardContent>
+            <CardFooter className="text-xs text-slate-500 dark:text-slate-400">
+              Puedes cambiar la vertical de cada empresa despues desde la configuracion avanzada.
             </CardFooter>
           </Card>
 
@@ -867,16 +1017,27 @@ export default function NewOrganizationPage() {
             </CardFooter>
           </Card>
 
-          <Card className="border-sky-100 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="border-dashed border-sky-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-600 dark:bg-slate-900/60">
             <CardHeader className="space-y-1">
               <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
                 <Layers className="size-5 text-sky-600 dark:text-slate-100" />
                 Unidades organizativas
+                <Badge
+                  variant="outline"
+                  className="ml-2 rounded-full border-amber-300 bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                >
+                  Opcional
+                </Badge>
               </CardTitle>
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Define áreas o sucursales que se crearán junto con la organización. Puedes agregar
-                más unidades luego desde la consola administrativa.
+                Define areas o sucursales que se crearan junto con la organizacion. Puedes agregar
+                mas unidades luego desde la consola administrativa.
               </p>
+              <div className="flex items-center gap-2 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300">
+                <Info className="size-4 flex-shrink-0 text-amber-500" />
+                Si no necesitas unidades adicionales, la unidad &quot;General&quot; se creara por defecto.
+                Puedes configurar mas unidades en cualquier momento.
+              </div>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4">
@@ -1015,13 +1176,40 @@ export default function NewOrganizationPage() {
 
               <Separator className="bg-sky-100 dark:bg-slate-700" />
 
+              {(() => {
+                const verticalOption = VERTICAL_OPTIONS.find((v) => v.value === selectedVertical)
+                if (!verticalOption) return null
+                const colors = VERTICAL_COLOR_MAP[verticalOption.color]
+                const Icon = verticalOption.icon
+                return (
+                  <div className="rounded-lg border border-sky-100 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                    <div className="space-y-2">
+                      <p className="font-medium text-slate-800 dark:text-slate-100">
+                        Vertical de negocio
+                      </p>
+                      <div className={cn("flex items-center gap-2 rounded-lg p-2", colors.bg)}>
+                        <Icon className={cn("size-4 flex-shrink-0", colors.text)} />
+                        <span className={cn("text-sm font-semibold", colors.text)}>
+                          {verticalOption.label}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {verticalOption.description}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <Separator className="bg-sky-100 dark:bg-slate-700" />
+
               <div className="rounded-lg border border-sky-100 bg-sky-50/60 p-3 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <CheckCircle2 className="size-4 text-sky-600 dark:text-slate-100" />
                   Unidades activas
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {activeUnits} de {units.length} unidades se crearán como disponibles desde el día
+                  {activeUnits} de {units.length} unidades se crearan como disponibles desde el dia
                   uno. Puedes designar unidades adicionales cuando el equipo lo requiera.
                 </p>
               </div>

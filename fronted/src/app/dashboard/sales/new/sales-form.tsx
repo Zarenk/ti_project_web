@@ -2108,7 +2108,7 @@ const getSaleReferenceId = () => {
   ]);
 
   return (
-    <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl">
+    <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl overflow-hidden">
       {isSubmitting && (
         <div
           aria-live="assertive"
@@ -2124,8 +2124,8 @@ const getSaleReferenceId = () => {
       <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
         <TooltipProvider delayDuration={150}>
           <fieldset disabled={isSubmitting} className="contents">                  
-                  <div className="flex flex-wrap gap-4">
-                    <div className="flex-1 flex-col border rounded-md p-2">                  
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="min-w-0 flex-col border rounded-md p-2">                  
                         <Label className="text-sm font-medium mb-2">
                           <div className="flex items-center">
                             <span>Tipo de Comprobante</span>
@@ -2139,7 +2139,7 @@ const getSaleReferenceId = () => {
                               variant="outline"
                               role="combobox"
                               aria-expanded={openInvoice}
-                              className="w-[260px] justify-between text-xs cursor-pointer"
+                              className="w-full justify-between text-xs cursor-pointer"
                             >
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2154,7 +2154,7 @@ const getSaleReferenceId = () => {
                               </Tooltip>
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[260px] p-0">
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                             <Command>
                               <CommandInput placeholder="Buscar tipo de comprobante..." />
                               <CommandList>
@@ -2201,7 +2201,7 @@ const getSaleReferenceId = () => {
                                 <Button
                                   variant={"outline"}
                                   className={cn(
-                                    "w-[260px] justify-start text-left font-normal cursor-pointer",
+                                    "w-full justify-start text-left font-normal cursor-pointer",
                                     !selectedDate && "text-muted-foreground"
                                   )}
                                 >
@@ -2214,7 +2214,7 @@ const getSaleReferenceId = () => {
                               <TooltipContent side="top">Define la fecha de emisión del comprobante</TooltipContent>
                             </Tooltip>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[260px] p-0">
+                          <PopoverContent className="w-auto p-0">
                             <Calendar
                               mode="single"
                               selected={selectedDate || undefined}
@@ -2235,7 +2235,7 @@ const getSaleReferenceId = () => {
                           </PopoverContent>
                         </Popover>
                         </div>
-                        <div className="flex justify-between gap-1">
+                        <div className="flex flex-wrap gap-1">
                           <div className="flex flex-col">
                             <Label className="text-sm font-medium py-2">Moneda</Label>
                             <Select
@@ -2368,14 +2368,14 @@ const getSaleReferenceId = () => {
                         </div>
                     </div>
        
-                    <div className="flex-1 flex flex-col border rounded-md p-2">
+                    <div className="min-w-0 flex flex-col border rounded-md p-2">
                         <Label htmlFor="provider-combobox" className="text-sm font-medium mb-2">
                           <div className="flex items-center">
                             <span>Ingrese un Cliente:</span>
                             {renderStatusChip(Boolean(form.getValues("client_name")), true)}
                           </div>
                         </Label>
-                        <div className="flex justify-between gap-1">
+                        <div className="flex flex-wrap gap-1">
                           <Popover open={openClient} onOpenChange={setOpenClient}>
                               <PopoverTrigger asChild>
                                 <Button
@@ -2383,7 +2383,7 @@ const getSaleReferenceId = () => {
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openClient}
-                                  className="w-[260px] justify-between cursor-pointer"
+                                  className="min-w-0 flex-1 justify-between cursor-pointer"
                                   disabled={isClientDisabled}
                                 >
                                   <Tooltip>
@@ -2397,7 +2397,7 @@ const getSaleReferenceId = () => {
                                   </Tooltip>
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-[260px] p-0">
+                              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                                 <Command>
                                   <CommandInput 
                                   placeholder="Buscar cliente..."/>
@@ -2589,14 +2589,14 @@ const getSaleReferenceId = () => {
                           </div>
                         </div>
                                  
-                        <div className="flex-1 flex flex-col border border-gray-600 rounded-md p-2">
+                        <div className="min-w-0 flex flex-col border border-gray-600 rounded-md p-2">
                         <Label htmlFor="store-combobox" className="text-sm font-medium mb-2">
                           <div className="flex items-center">
                             <span>Ingrese una Tienda:</span>
                             {renderStatusChip(Boolean(form.getValues("store_name")))}
                           </div>
                         </Label>   
-                        <div className="flex justify-between gap-1">
+                        <div className="flex flex-wrap gap-1">
                           <Popover open={openStore} onOpenChange={setOpenStore}>
                               <PopoverTrigger asChild>
                                 <Button
@@ -2604,7 +2604,7 @@ const getSaleReferenceId = () => {
                                   variant="outline"
                                   role="combobox"
                                   aria-expanded={openStore}
-                                  className="w-[260px] justify-between cursor-pointer"
+                                  className="min-w-0 flex-1 justify-between cursor-pointer"
                                 >
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -2617,7 +2617,7 @@ const getSaleReferenceId = () => {
                                   </Tooltip>
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-[260px] p-0">
+                              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                                 <Command>
                                   <CommandInput 
                                   placeholder="Buscar tienda..."/>
@@ -2675,7 +2675,7 @@ const getSaleReferenceId = () => {
                           <Label className="text-sm font-medium py-2">Direccion de la tienda</Label>
                           <Input {...register("store_adress")} readOnly></Input>        
                         </div>
-                        <div className='flex-1 flex-col border border-gray-600 rounded-md p-2'> 
+                        <div className='min-w-0 flex-col overflow-hidden border border-gray-600 rounded-md p-2 md:col-span-2'>
                           <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
                             <div className="flex items-center">
                               <span>Ingrese un producto:</span>
@@ -2683,7 +2683,7 @@ const getSaleReferenceId = () => {
                             </div>
                           </Label>
                           <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
+                            <div className="min-w-0 flex-1 overflow-hidden">
                               <Popover open={open} onOpenChange={setOpen}>
                                 <PopoverTrigger asChild>
                                   <Button
@@ -2695,9 +2695,9 @@ const getSaleReferenceId = () => {
                                   >
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <span className="flex w-full items-center justify-between">
-                                          {value || "Selecciona un producto..."}
-                                          <ChevronsUpDown className="opacity-50" />
+                                        <span className="flex min-w-0 w-full items-center justify-between">
+                                          <span className="truncate">{value || "Selecciona un producto..."}</span>
+                                          <ChevronsUpDown className="ml-1 shrink-0 opacity-50" />
                                         </span>
                                       </TooltipTrigger>
                                       <TooltipContent side="top">Selecciona el producto para la venta</TooltipContent>
@@ -2881,41 +2881,38 @@ const getSaleReferenceId = () => {
                           </Input>
                           <Label className="text-sm font-medium py-2">Descripcion</Label>
                           <Input {...register("description")} readOnly></Input>
-                          <div className="flex justify-start gap-1">
+                          <div className="grid grid-cols-[1fr_auto] gap-3">
                             <div className="flex flex-col">
-                            <Label className="text-sm font-medium py-2">Cantidad</Label>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="text" // Usamos "text" para tener control total sobre la validaci?n
-                                placeholder="Cantidad"
-                                className="h-9 flex-1 text-sm"
-                                value={quantity.toString()} // Convertimos el valor a string para mostrarlo correctamente
-                                maxLength={10} // Limitar a 10 caracteres
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  // Permitir solo n?meros y un ?nico punto decimal
-                                  if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
-                                    setQuantity(Number(value)); // Actualizamos el estado con el valor ingresado
-                                  }
-                                }}
-                                onBlur={() => {
-                                  // Validar y convertir el valor a n?mero al salir del campo
-                                  const numericValue = parseFloat(String(quantity));
-                                  if (!isNaN(numericValue) && numericValue > 0) {
-                                    setQuantity(numericValue); // Asegurarnos de que el valor sea un n?mero v?lido
-                                  } else {
-                                    setQuantity(1); // Restablecer a 1 si el valor no es v?lido
-                                  }
-                                }}
-                              />
-                              <div className="flex items-center gap-1">
+                              <Label className="text-sm font-medium py-2">Cantidad</Label>
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  type="text"
+                                  placeholder="Cantidad"
+                                  className="h-9 min-w-0 flex-1 text-sm"
+                                  value={quantity.toString()}
+                                  maxLength={10}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (/^\d*\.?\d*$/.test(value) && value.length <= 10) {
+                                      setQuantity(Number(value));
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    const numericValue = parseFloat(String(quantity));
+                                    if (!isNaN(numericValue) && numericValue > 0) {
+                                      setQuantity(numericValue);
+                                    } else {
+                                      setQuantity(1);
+                                    }
+                                  }}
+                                />
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="icon"
-                                      className="h-9 w-9 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
+                                      className="h-9 w-9 shrink-0 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
                                       aria-label="Disminuir cantidad"
                                       onClick={() => {
                                         setQuantity((prev) => {
@@ -2937,7 +2934,7 @@ const getSaleReferenceId = () => {
                                       type="button"
                                       variant="outline"
                                       size="icon"
-                                      className="h-9 w-9 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
+                                      className="h-9 w-9 shrink-0 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
                                       aria-label="Aumentar cantidad"
                                       onClick={() => {
                                         setQuantity((prev) => {
@@ -2955,15 +2952,15 @@ const getSaleReferenceId = () => {
                                 </Tooltip>
                               </div>
                             </div>
-                            </div>
-                            <div className="flex flex-col">
-                            <Label className="text-sm font-medium py-2">Stock</Label>
-                            <Input
-                              type="text" // Usamos "text" para tener control total sobre la validación
-                              placeholder="Stock"
-                              value={stock !== undefined ? stock.toString() : "0"} // Convertimos el valor a string para mostrarlo correctamente
-                              readOnly // Hace que el campo sea de solo lectura
-                            />   
+                            <div className="flex w-20 flex-col">
+                              <Label className="text-sm font-medium py-2">Stock</Label>
+                              <Input
+                                type="text"
+                                placeholder="Stock"
+                                className="h-9 text-center"
+                                value={stock !== undefined ? stock.toString() : "0"}
+                                readOnly
+                              />
                             </div>
                           </div>                     
                         </div>

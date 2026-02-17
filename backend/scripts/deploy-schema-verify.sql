@@ -122,7 +122,52 @@ BEGIN
 END $$;
 
 -- =====================================================
--- 5. ÍNDICES Y CONSTRAINTS
+-- 5. TABLA USER - Columnas de contexto, demo y verificación
+-- =====================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Verificando columnas en tabla User...';
+
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastCompanyId" INTEGER;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastContextHash" TEXT;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastContextUpdatedAt" TIMESTAMP(3);
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastOrgId" INTEGER;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isDemo" BOOLEAN DEFAULT false;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailVerificationToken" TEXT;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailVerifiedAt" TIMESTAMP(3);
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isPublicSignup" BOOLEAN DEFAULT false;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastActiveAt" TIMESTAMP(3);
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "accountingMode" TEXT DEFAULT 'simple';
+
+    RAISE NOTICE 'Verificando tablas de contexto de usuario...';
+
+    -- Crear tabla UserContextPreference si no existe
+    CREATE TABLE IF NOT EXISTS "UserContextPreference" (
+        "id" SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "orgId" INTEGER NOT NULL,
+        "companyId" INTEGER,
+        "totalSelections" INTEGER NOT NULL DEFAULT 1,
+        "lastSelectedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "UserContextPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    );
+
+    -- Crear tabla UserContextHistory si no existe
+    CREATE TABLE IF NOT EXISTS "UserContextHistory" (
+        "id" SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "orgId" INTEGER NOT NULL,
+        "companyId" INTEGER,
+        "device" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "UserContextHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    );
+
+    RAISE NOTICE '✓ Columnas de User verificadas';
+END $$;
+
+-- =====================================================
+-- 6. ÍNDICES Y CONSTRAINTS
 -- =====================================================
 DO $$
 BEGIN
@@ -137,11 +182,24 @@ BEGIN
     CREATE INDEX IF NOT EXISTS "Account_companyId_idx" ON "Account"("companyId");
     CREATE INDEX IF NOT EXISTS "Account_accountType_idx" ON "Account"("accountType");
 
+    -- User índices
+    CREATE INDEX IF NOT EXISTS "User_lastOrgId_idx" ON "User"("lastOrgId");
+    CREATE INDEX IF NOT EXISTS "User_lastCompanyId_idx" ON "User"("lastCompanyId");
+    CREATE INDEX IF NOT EXISTS "User_lastActiveAt_idx" ON "User"("lastActiveAt");
+    CREATE UNIQUE INDEX IF NOT EXISTS "User_emailVerificationToken_key" ON "User"("emailVerificationToken");
+
+    -- UserContextPreference índices
+    CREATE UNIQUE INDEX IF NOT EXISTS "user_context_preference_unique" ON "UserContextPreference"("userId", "orgId", "companyId");
+    CREATE INDEX IF NOT EXISTS "UserContextPreference_userId_lastSelectedAt_idx" ON "UserContextPreference"("userId", "lastSelectedAt");
+
+    -- UserContextHistory índices
+    CREATE INDEX IF NOT EXISTS "UserContextHistory_userId_createdAt_idx" ON "UserContextHistory"("userId", "createdAt");
+
     RAISE NOTICE '✓ Índices verificados';
 END $$;
 
 -- =====================================================
--- 6. FOREIGN KEYS
+-- 7. FOREIGN KEYS
 -- =====================================================
 DO $$
 BEGIN
@@ -186,7 +244,171 @@ BEGIN
         RAISE NOTICE '✓ FK Brand_organizationId_fkey ya existe';
     END IF;
 
+    -- User -> Company (lastCompanyId)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'User_lastCompanyId_fkey'
+    ) THEN
+        ALTER TABLE "User"
+        ADD CONSTRAINT "User_lastCompanyId_fkey"
+        FOREIGN KEY ("lastCompanyId") REFERENCES "Company"("id")
+        ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE '✓ FK User_lastCompanyId_fkey creada';
+    ELSE
+        RAISE NOTICE '✓ FK User_lastCompanyId_fkey ya existe';
+    END IF;
+
+    -- User -> Organization (lastOrgId)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'User_lastOrgId_fkey'
+    ) THEN
+        ALTER TABLE "User"
+        ADD CONSTRAINT "User_lastOrgId_fkey"
+        FOREIGN KEY ("lastOrgId") REFERENCES "Organization"("id")
+        ON DELETE SET NULL ON UPDATE CASCADE;
+        RAISE NOTICE '✓ FK User_lastOrgId_fkey creada';
+    ELSE
+        RAISE NOTICE '✓ FK User_lastOrgId_fkey ya existe';
+    END IF;
+
     RAISE NOTICE '✓ Foreign keys verificadas';
+END $$;
+
+-- =====================================================
+-- 8. TABLAS FALTANTES - Invoice, Help
+-- =====================================================
+DO $$
+BEGIN
+    RAISE NOTICE 'Verificando tablas faltantes...';
+
+    -- Crear enums de Help si no existen
+    BEGIN CREATE TYPE "HelpMessageRole" AS ENUM ('USER', 'ASSISTANT');
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN CREATE TYPE "HelpMessageSource" AS ENUM ('STATIC', 'AI', 'PROMOTED');
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN CREATE TYPE "HelpFeedback" AS ENUM ('POSITIVE', 'NEGATIVE');
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+    BEGIN CREATE TYPE "HelpCandidateStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
+    -- InvoiceTemplate (parent de InvoiceSample)
+    CREATE TABLE IF NOT EXISTS "InvoiceTemplate" (
+        "id" SERIAL PRIMARY KEY,
+        "organizationId" INTEGER,
+        "companyId" INTEGER,
+        "providerId" INTEGER,
+        "providerName" TEXT,
+        "documentType" TEXT NOT NULL,
+        "version" INTEGER NOT NULL DEFAULT 1,
+        "priority" INTEGER NOT NULL DEFAULT 100,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "checksum" TEXT,
+        "regexRules" JSONB,
+        "fieldMappings" JSONB,
+        "extractionHints" JSONB,
+        "sampleFilename" TEXT,
+        "notes" TEXT,
+        "createdById" INTEGER,
+        "updatedById" INTEGER,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- InvoiceSample (parent de InvoiceExtractionLog)
+    CREATE TABLE IF NOT EXISTS "InvoiceSample" (
+        "id" SERIAL PRIMARY KEY,
+        "organizationId" INTEGER,
+        "companyId" INTEGER,
+        "entryId" INTEGER,
+        "invoiceTemplateId" INTEGER,
+        "originalFilename" TEXT NOT NULL,
+        "storagePath" TEXT NOT NULL,
+        "mimeType" TEXT,
+        "fileSize" BIGINT,
+        "sha256" TEXT NOT NULL,
+        "extractionStatus" TEXT NOT NULL DEFAULT 'PENDING',
+        "extractionResult" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS "InvoiceSample_hash_org_unique" ON "InvoiceSample"("sha256", "organizationId");
+    CREATE INDEX IF NOT EXISTS "InvoiceSample_organizationId_companyId_idx" ON "InvoiceSample"("organizationId", "companyId");
+    CREATE INDEX IF NOT EXISTS "InvoiceSample_entryId_idx" ON "InvoiceSample"("entryId");
+    CREATE INDEX IF NOT EXISTS "InvoiceSample_invoiceTemplateId_idx" ON "InvoiceSample"("invoiceTemplateId");
+
+    -- InvoiceExtractionLog
+    CREATE TABLE IF NOT EXISTS "InvoiceExtractionLog" (
+        "id" SERIAL PRIMARY KEY,
+        "sampleId" INTEGER NOT NULL,
+        "level" TEXT NOT NULL DEFAULT 'INFO',
+        "message" TEXT NOT NULL,
+        "context" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "InvoiceExtractionLog_sampleId_fkey" FOREIGN KEY ("sampleId") REFERENCES "InvoiceSample"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS "InvoiceExtractionLog_sampleId_level_idx" ON "InvoiceExtractionLog"("sampleId", "level");
+
+    -- HelpConversation
+    CREATE TABLE IF NOT EXISTS "HelpConversation" (
+        "id" SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lastMessageAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "HelpConversation_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS "HelpConversation_userId_idx" ON "HelpConversation"("userId");
+
+    -- HelpMessage
+    CREATE TABLE IF NOT EXISTS "HelpMessage" (
+        "id" SERIAL PRIMARY KEY,
+        "conversationId" INTEGER NOT NULL,
+        "role" "HelpMessageRole" NOT NULL,
+        "content" TEXT NOT NULL,
+        "source" "HelpMessageSource",
+        "section" TEXT,
+        "route" TEXT,
+        "score" DOUBLE PRECISION,
+        "feedback" "HelpFeedback",
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "HelpMessage_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "HelpConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS "HelpMessage_conversationId_idx" ON "HelpMessage"("conversationId");
+    CREATE INDEX IF NOT EXISTS "HelpMessage_feedback_idx" ON "HelpMessage"("feedback");
+
+    -- HelpKBCandidate
+    CREATE TABLE IF NOT EXISTS "HelpKBCandidate" (
+        "id" SERIAL PRIMARY KEY,
+        "question" TEXT NOT NULL,
+        "questionNorm" TEXT NOT NULL,
+        "answer" TEXT NOT NULL,
+        "section" TEXT NOT NULL,
+        "positiveVotes" INTEGER NOT NULL DEFAULT 0,
+        "negativeVotes" INTEGER NOT NULL DEFAULT 0,
+        "status" "HelpCandidateStatus" NOT NULL DEFAULT 'PENDING',
+        "approvedById" INTEGER,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "reviewedAt" TIMESTAMP(3),
+        CONSTRAINT "HelpKBCandidate_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS "HelpKBCandidate_questionNorm_section_key" ON "HelpKBCandidate"("questionNorm", "section");
+    CREATE INDEX IF NOT EXISTS "HelpKBCandidate_status_idx" ON "HelpKBCandidate"("status");
+    CREATE INDEX IF NOT EXISTS "HelpKBCandidate_section_idx" ON "HelpKBCandidate"("section");
+
+    -- HelpEmbedding
+    CREATE TABLE IF NOT EXISTS "HelpEmbedding" (
+        "id" SERIAL PRIMARY KEY,
+        "sourceType" TEXT NOT NULL,
+        "sourceId" TEXT NOT NULL,
+        "section" TEXT NOT NULL,
+        "question" TEXT NOT NULL,
+        "answer" TEXT NOT NULL,
+        "embedding" DOUBLE PRECISION[] NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS "HelpEmbedding_sourceType_sourceId_key" ON "HelpEmbedding"("sourceType", "sourceId");
+    CREATE INDEX IF NOT EXISTS "HelpEmbedding_section_idx" ON "HelpEmbedding"("section");
+
+    RAISE NOTICE '✓ Tablas faltantes verificadas';
 END $$;
 
 -- =====================================================

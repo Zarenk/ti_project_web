@@ -62,8 +62,8 @@ export class AccountingSummaryService {
       profitData,
       sparklineData,
     ] = await Promise.all([
-      this.calculateCash(orgId, companyId, currentMonthStart, currentMonthEnd, previousMonthStart, previousMonthEnd),
-      this.calculateInventory(orgId, companyId, currentMonthStart, currentMonthEnd, previousMonthStart, previousMonthEnd),
+      this.calculateCash(orgId, companyId, currentMonthEnd, previousMonthEnd),
+      this.calculateInventory(orgId, companyId, currentMonthEnd, previousMonthEnd),
       this.calculateTaxes(orgId, companyId, currentMonthStart, currentMonthEnd),
       this.calculateProfit(orgId, companyId, currentMonthStart, currentMonthEnd, previousMonthStart, previousMonthEnd),
       this.calculateSparklines(orgId, companyId, 30),
@@ -81,19 +81,18 @@ export class AccountingSummaryService {
   private async calculateCash(
     orgId: number | null,
     companyId: number | null,
-    currentStart: Date,
     currentEnd: Date,
-    prevStart: Date,
     prevEnd: Date,
   ) {
-    // Obtener balance de cuentas 1011 (Caja) y 1041 (Bancos)
-    const currentCash = await this.getAccountBalance('1011', orgId, companyId, currentEnd);
-    const currentBank = await this.getAccountBalance('1041', orgId, companyId, currentEnd);
-    const cashAvailable = currentCash + currentBank;
+    // Obtener balance de cuentas que inician con 101 (Caja) y 104 (Bancos)
+    const [currentCash, currentBank, prevCash, prevBank] = await Promise.all([
+      this.getAccountBalance('101', orgId, companyId, currentEnd),
+      this.getAccountBalance('104', orgId, companyId, currentEnd),
+      this.getAccountBalance('101', orgId, companyId, prevEnd),
+      this.getAccountBalance('104', orgId, companyId, prevEnd),
+    ]);
 
-    // Balance del mes anterior para calcular crecimiento
-    const prevCash = await this.getAccountBalance('1011', orgId, companyId, prevEnd);
-    const prevBank = await this.getAccountBalance('1041', orgId, companyId, prevEnd);
+    const cashAvailable = currentCash + currentBank;
     const prevCashAvailable = prevCash + prevBank;
 
     const cashGrowth = prevCashAvailable > 0
@@ -113,23 +112,18 @@ export class AccountingSummaryService {
   private async calculateInventory(
     orgId: number | null,
     companyId: number | null,
-    currentStart: Date,
     currentEnd: Date,
-    prevStart: Date,
     prevEnd: Date,
   ) {
-    // Balance cuenta 2011 (Mercaderías)
-    const inventoryValue = await this.getAccountBalance('2011', orgId, companyId, currentEnd);
+    // Balance cuentas que inician con 201 (Mercaderías)
+    const [inventoryValue, prevInventoryValue, productsInStock] = await Promise.all([
+      this.getAccountBalance('201', orgId, companyId, currentEnd),
+      this.getAccountBalance('201', orgId, companyId, prevEnd),
+      this.prisma.inventory.count({
+        where: { organizationId: orgId ?? undefined },
+      }),
+    ]);
 
-    // Contar productos en stock
-    const productsInStock = await this.prisma.inventory.count({
-      where: {
-        organizationId: orgId,
-        // Inventory doesn't have companyId filter
-      },
-    });
-
-    const prevInventoryValue = await this.getAccountBalance('2011', orgId, companyId, prevEnd);
     const inventoryGrowth = prevInventoryValue > 0
       ? ((inventoryValue - prevInventoryValue) / prevInventoryValue) * 100
       : null;
@@ -150,16 +144,16 @@ export class AccountingSummaryService {
     currentStart: Date,
     currentEnd: Date,
   ) {
-    // Balance cuenta 4011 (IGV por pagar)
-    const igvBalance = await this.getAccountBalance('4011', orgId, companyId, currentEnd);
-
     // Desglosar IGV de ventas vs compras del mes actual
-    const igvMovements = await this.prisma.accEntryLine.aggregate({
+    const igvMovements = await this.prisma.journalLine.aggregate({
       where: {
-        account: '4011',
+        account: {
+          code: { startsWith: '401' },
+          organizationId: orgId ?? undefined,
+        },
         entry: {
-          organizationId: orgId,
-          companyId,
+          organizationId: orgId ?? undefined,
+          ...(companyId ? { companyId } : {}),
           date: { gte: currentStart, lte: currentEnd },
           status: 'POSTED',
         },
@@ -167,8 +161,8 @@ export class AccountingSummaryService {
       _sum: { debit: true, credit: true },
     });
 
-    const igvPurchases = Number((igvMovements._sum?.debit || 0));
-    const igvSales = Number((igvMovements._sum?.credit || 0));
+    const igvPurchases = Number(igvMovements._sum?.debit || 0);
+    const igvSales = Number(igvMovements._sum?.credit || 0);
     const netIgv = igvSales - igvPurchases;
 
     // Fecha de vencimiento: día 18 del mes siguiente
@@ -197,20 +191,18 @@ export class AccountingSummaryService {
     prevStart: Date,
     prevEnd: Date,
   ) {
-    // Ingresos (cuenta 7011 - Ventas)
-    const revenue = await this.getAccountMovements('7011', orgId, companyId, currentStart, currentEnd, 'credit');
-
-    // Costo de ventas (cuenta 6911)
-    const costOfSales = await this.getAccountMovements('6911', orgId, companyId, currentStart, currentEnd, 'debit');
+    // Ingresos (cuentas 701 - Ventas) y Costo de ventas (cuentas 691)
+    const [revenue, costOfSales, prevRevenue, prevCostOfSales] = await Promise.all([
+      this.getAccountMovements('701', orgId, companyId, currentStart, currentEnd, 'credit'),
+      this.getAccountMovements('691', orgId, companyId, currentStart, currentEnd, 'debit'),
+      this.getAccountMovements('701', orgId, companyId, prevStart, prevEnd, 'credit'),
+      this.getAccountMovements('691', orgId, companyId, prevStart, prevEnd, 'debit'),
+    ]);
 
     const grossProfit = revenue - costOfSales;
     const profitMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
 
-    // Calcular ganancia del mes anterior
-    const prevRevenue = await this.getAccountMovements('7011', orgId, companyId, prevStart, prevEnd, 'credit');
-    const prevCostOfSales = await this.getAccountMovements('6911', orgId, companyId, prevStart, prevEnd, 'debit');
     const prevGrossProfit = prevRevenue - prevCostOfSales;
-
     const profitGrowth = prevGrossProfit > 0
       ? ((grossProfit - prevGrossProfit) / Math.abs(prevGrossProfit)) * 100
       : null;
@@ -232,45 +224,164 @@ export class AccountingSummaryService {
     companyId: number | null,
     days: number,
   ) {
-    const points: any = { cash: [], inventory: [], taxes: [], profit: [] };
     const now = new Date();
+    const sparklineStart = new Date(now);
+    sparklineStart.setDate(sparklineStart.getDate() - days);
 
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
+    // Obtener balances iniciales (un día antes del período de sparkline)
+    const dayBeforeStart = new Date(sparklineStart);
+    dayBeforeStart.setDate(dayBeforeStart.getDate() - 1);
+
+    const [initialCash, initialBank, initialInventory, initialIgv] = await Promise.all([
+      this.getAccountBalance('101', orgId, companyId, dayBeforeStart),
+      this.getAccountBalance('104', orgId, companyId, dayBeforeStart),
+      this.getAccountBalance('201', orgId, companyId, dayBeforeStart),
+      this.getAccountBalance('401', orgId, companyId, dayBeforeStart),
+    ]);
+
+    // Obtener todos los movimientos diarios en el período en una sola consulta
+    const accountPrefixes = ['101', '104', '201', '401', '691', '701'];
+    const dailyMovements = await this.prisma.journalLine.findMany({
+      where: {
+        OR: accountPrefixes.map((prefix) => ({
+          account: {
+            code: { startsWith: prefix },
+            organizationId: orgId ?? undefined,
+          },
+        })),
+        entry: {
+          organizationId: orgId ?? undefined,
+          ...(companyId ? { companyId } : {}),
+          date: { gte: sparklineStart, lte: now },
+          status: 'POSTED',
+        },
+      },
+      select: {
+        debit: true,
+        credit: true,
+        account: { select: { code: true } },
+        entry: { select: { date: true } },
+      },
+    });
+
+    // Agrupar movimientos por fecha y prefijo de cuenta
+    const dailyMap = new Map<string, {
+      cash: { debit: number; credit: number };
+      bank: { debit: number; credit: number };
+      inventory: { debit: number; credit: number };
+      igv: { debit: number; credit: number };
+      revenue: { debit: number; credit: number };
+      cost: { debit: number; credit: number };
+    }>();
+
+    for (const line of dailyMovements) {
+      const dateStr = format(new Date(line.entry.date), 'yyyy-MM-dd');
+      const code = line.account.code;
+
+      if (!dailyMap.has(dateStr)) {
+        dailyMap.set(dateStr, {
+          cash: { debit: 0, credit: 0 },
+          bank: { debit: 0, credit: 0 },
+          inventory: { debit: 0, credit: 0 },
+          igv: { debit: 0, credit: 0 },
+          revenue: { debit: 0, credit: 0 },
+          cost: { debit: 0, credit: 0 },
+        });
+      }
+
+      const day = dailyMap.get(dateStr)!;
+      const debit = Number(line.debit);
+      const credit = Number(line.credit);
+
+      if (code.startsWith('101')) {
+        day.cash.debit += debit;
+        day.cash.credit += credit;
+      } else if (code.startsWith('104')) {
+        day.bank.debit += debit;
+        day.bank.credit += credit;
+      } else if (code.startsWith('201')) {
+        day.inventory.debit += debit;
+        day.inventory.credit += credit;
+      } else if (code.startsWith('401')) {
+        day.igv.debit += debit;
+        day.igv.credit += credit;
+      } else if (code.startsWith('701')) {
+        day.revenue.debit += debit;
+        day.revenue.credit += credit;
+      } else if (code.startsWith('691')) {
+        day.cost.debit += debit;
+        day.cost.credit += credit;
+      }
+    }
+
+    // Construir sparklines acumulativas
+    const points: {
+      cash: SparklinePoint[];
+      inventory: SparklinePoint[];
+      taxes: SparklinePoint[];
+      profit: SparklinePoint[];
+    } = { cash: [], inventory: [], taxes: [], profit: [] };
+
+    let runCash = initialCash;
+    let runBank = initialBank;
+    let runInventory = initialInventory;
+    let runIgv = initialIgv;
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date(sparklineStart);
+      date.setDate(date.getDate() + i);
       const dateStr = format(date, 'yyyy-MM-dd');
 
-      const [cash, bank, inventory, igv, revenue, cost] = await Promise.all([
-        this.getAccountBalance('1011', orgId, companyId, date),
-        this.getAccountBalance('1041', orgId, companyId, date),
-        this.getAccountBalance('2011', orgId, companyId, date),
-        this.getAccountBalance('4011', orgId, companyId, date),
-        this.getAccountMovements('7011', orgId, companyId, startOfMonth(date), date, 'credit'),
-        this.getAccountMovements('6911', orgId, companyId, startOfMonth(date), date, 'debit'),
-      ]);
+      const dayData = dailyMap.get(dateStr);
+      if (dayData) {
+        // Activo: debit - credit
+        runCash += dayData.cash.debit - dayData.cash.credit;
+        runBank += dayData.bank.debit - dayData.bank.credit;
+        runInventory += dayData.inventory.debit - dayData.inventory.credit;
+        // Pasivo/ingreso: credit - debit
+        runIgv += dayData.igv.credit - dayData.igv.debit;
+      }
 
-      points.cash.push({ date: dateStr, value: Number((cash + bank).toFixed(2)) });
-      points.inventory.push({ date: dateStr, value: Number(inventory.toFixed(2)) });
-      points.taxes.push({ date: dateStr, value: Number(Math.max(0, igv).toFixed(2)) });
-      points.profit.push({ date: dateStr, value: Number((revenue - cost).toFixed(2)) });
+      points.cash.push({ date: dateStr, value: Number((runCash + runBank).toFixed(2)) });
+      points.inventory.push({ date: dateStr, value: Number(runInventory.toFixed(2)) });
+      points.taxes.push({ date: dateStr, value: Number(Math.max(0, runIgv).toFixed(2)) });
+
+      // Para profit usamos MTD (month-to-date) del mes correspondiente a esta fecha
+      const monthStart = startOfMonth(date);
+      const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+
+      // Acumular revenue y cost desde inicio del mes
+      let monthRevenue = 0;
+      let monthCost = 0;
+      for (const [dStr, dData] of dailyMap.entries()) {
+        if (dStr >= monthStartStr && dStr <= dateStr) {
+          monthRevenue += dData.revenue.credit;
+          monthCost += dData.cost.debit;
+        }
+      }
+
+      points.profit.push({ date: dateStr, value: Number((monthRevenue - monthCost).toFixed(2)) });
     }
 
     return points;
   }
 
-  // Helper: Obtener balance de cuenta a una fecha específica
+  // Helper: Obtener balance de cuenta a una fecha específica (usa JournalLine)
   private async getAccountBalance(
-    account: string,
+    accountCodePrefix: string,
     orgId: number | null,
     companyId: number | null,
     asOfDate: Date,
   ): Promise<number> {
-    const result = await this.prisma.accEntryLine.aggregate({
+    const result = await this.prisma.journalLine.aggregate({
       where: {
-        account,
+        account: {
+          code: { startsWith: accountCodePrefix },
+          organizationId: orgId ?? undefined,
+        },
         entry: {
-          organizationId: orgId,
-          companyId,
+          organizationId: orgId ?? undefined,
+          ...(companyId ? { companyId } : {}),
           date: { lte: asOfDate },
           status: 'POSTED',
         },
@@ -284,28 +395,31 @@ export class AccountingSummaryService {
     // Cuentas de activo (1xxx, 2xxx): debit - credit
     // Cuentas de pasivo/ingreso (4xxx, 7xxx): credit - debit
     // Cuentas de gasto (6xxx): debit - credit
-    if (account.startsWith('1') || account.startsWith('2') || account.startsWith('6')) {
+    if (accountCodePrefix.startsWith('1') || accountCodePrefix.startsWith('2') || accountCodePrefix.startsWith('6')) {
       return debit - credit;
     } else {
       return credit - debit;
     }
   }
 
-  // Helper: Obtener movimientos de cuenta en período
+  // Helper: Obtener movimientos de cuenta en período (usa JournalLine)
   private async getAccountMovements(
-    account: string,
+    accountCodePrefix: string,
     orgId: number | null,
     companyId: number | null,
     from: Date,
     to: Date,
     side: 'debit' | 'credit',
   ): Promise<number> {
-    const result = await this.prisma.accEntryLine.aggregate({
+    const result = await this.prisma.journalLine.aggregate({
       where: {
-        account,
+        account: {
+          code: { startsWith: accountCodePrefix },
+          organizationId: orgId ?? undefined,
+        },
         entry: {
-          organizationId: orgId,
-          companyId,
+          organizationId: orgId ?? undefined,
+          ...(companyId ? { companyId } : {}),
           date: { gte: from, lte: to },
           status: 'POSTED',
         },

@@ -926,7 +926,7 @@ export default function ProductsByStorePage() {
                   <div>
                     <p className="font-semibold text-slate-800 dark:text-slate-100">{entry.productName}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {entry.categoryName ?? "Sin categor?a"}
+                      {entry.categoryName ?? "Sin categoria"}
                     </p>
                   </div>
                   {!entry.isLegacy && (
@@ -960,7 +960,7 @@ export default function ProductsByStorePage() {
                 </div>
                 {entry.isLegacy && (
                   <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    Completa los atributos desde el asistente de migraci?n para este producto.
+                    Completa los atributos desde el asistente de migracion para este producto.
                   </p>
                 )}
               </Card>
@@ -995,7 +995,7 @@ export default function ProductsByStorePage() {
                       onClick={() => handleSort("category")}
                       className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
                     >
-                      Categor?a
+                      Categoria
                       {renderSortIcon("category")}
                     </button>
                   </TableHead>
@@ -1047,7 +1047,7 @@ export default function ProductsByStorePage() {
                       onClick={() => handleSort("lastSaleAt")}
                       className="flex w-full items-center gap-1 text-left font-medium focus:outline-none"
                     >
-                      ?ltima salida
+                      Ultima salida
                       {renderSortIcon("lastSaleAt")}
                     </button>
                   </TableHead>
@@ -1084,7 +1084,7 @@ export default function ProductsByStorePage() {
                       {hasSizeField && <TableCell className="text-sm">{sizeValue}</TableCell>}
                       {hasColorField && <TableCell className="text-sm">{colorValue}</TableCell>}
                       <TableCell className="text-sm">
-                        {product.category?.name || "Sin categor?a"}
+                        {product.category?.name || "Sin categoria"}
                       </TableCell>
                       {showPurchaseCost && (
                         <TableCell className="text-sm">{product.price}</TableCell>
@@ -1103,7 +1103,7 @@ export default function ProductsByStorePage() {
           </div>
           <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center space-x-2">
-              <span className="text-sm">Resultados por p?gina:</span>
+              <span className="text-sm">Resultados por pagina:</span>
               <Select
                 onValueChange={(value) => {
                   setLimit(Number(value))
@@ -1132,7 +1132,7 @@ export default function ProductsByStorePage() {
                 Anterior
               </Button>
               <span className="text-sm">
-                P?gina <strong>{currentPage}</strong> de {" "}
+                Pagina <strong>{currentPage}</strong> de {" "}
                 <strong>{Math.max(Math.ceil(totalItems / limit), 1)}</strong>
               </span>
               <Button

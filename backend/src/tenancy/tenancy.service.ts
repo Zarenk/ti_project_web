@@ -1620,12 +1620,14 @@ export class TenancyService {
         company.sunatKeyPathProd,
       );
 
+      const businessVertical = company.businessVertical ?? 'GENERAL';
       const created = await prisma.company.create({
         data: {
           organizationId,
           name: trimmedName,
           legalName,
           taxId,
+          businessVertical,
           status: company.status ?? 'ACTIVE',
           sunatEnvironment,
           sunatRuc: sunatRuc ?? null,

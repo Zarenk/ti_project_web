@@ -1,6 +1,6 @@
 "use client"
 
-import { lazy, Suspense, useEffect, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useState } from "react"
 import { AlertCircle, CheckCircle2, Clock, Download, FileText, History, TrendingUp, XCircle, BarChart3, Grid3x3 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,6 +17,7 @@ import {
   downloadFile,
   type VerticalMetricsResponse,
 } from "./tenancy.api"
+import { VERTICAL_CONFIG_INVALIDATE_EVENT } from "@/hooks/use-vertical-config"
 
 // Lazy load heavy components for better initial bundle size
 const VerticalCharts = lazy(() =>
@@ -72,23 +73,32 @@ export function VerticalMigrationMetrics({ companyId, companyName, organizationN
   const [exporting, setExporting] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
-    const loadMetrics = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const data = await fetchCompanyVerticalMetrics(companyId)
-        setMetrics(data)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Error al cargar métricas"
-        setError(message)
-      } finally {
-        setLoading(false)
-      }
+  const loadMetrics = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await fetchCompanyVerticalMetrics(companyId)
+      setMetrics(data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al cargar métricas"
+      setError(message)
+    } finally {
+      setLoading(false)
     }
-
-    void loadMetrics()
   }, [companyId])
+
+  useEffect(() => {
+    void loadMetrics()
+  }, [loadMetrics])
+
+  // Re-fetch metrics when vertical changes
+  useEffect(() => {
+    const handler = () => {
+      void loadMetrics()
+    }
+    window.addEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+    return () => window.removeEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+  }, [loadMetrics])
 
   const handleExportPDF = async () => {
     if (!metrics) return

@@ -20,6 +20,7 @@ import { AssignSuperAdminDto } from './dto/assign-super-admin.dto';
 import { ValidateOrganizationNameDto } from './dto/validate-organization-name.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantContextService } from './tenant-context.service';
+import { ContextEventsGateway } from 'src/users/context-events.gateway';
 import type { Request } from 'express';
 import type { TenantContext } from './tenant-context.interface';
 
@@ -28,6 +29,7 @@ export class TenancyController {
   constructor(
     private readonly tenancyService: TenancyService,
     private readonly tenantContextService: TenantContextService,
+    private readonly contextEventsGateway: ContextEventsGateway,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -83,10 +85,28 @@ export class TenancyController {
     }
   }
 
-  @UseGuards(GlobalSuperAdminGuard)
+  @UseGuards(JwtAuthGuard, GlobalSuperAdminGuard)
   @Post()
-  create(@Body() createTenancyDto: CreateTenancyDto): Promise<TenancySnapshot> {
-    return this.tenancyService.create(createTenancyDto);
+  async create(
+    @Body() createTenancyDto: CreateTenancyDto,
+    @Req() req: Request,
+  ): Promise<TenancySnapshot> {
+    const result = await this.tenancyService.create(createTenancyDto);
+
+    const userId =
+      (req as any).user?.userId ??
+      (req as any).user?.sub ??
+      (req as any).user?.id;
+    if (typeof userId === 'number' && result.id) {
+      const primaryCompany = result.companies?.[0] ?? null;
+      this.contextEventsGateway.emitContextChanged(userId, {
+        orgId: result.id,
+        companyId: primaryCompany?.id ?? null,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return result;
   }
 
   @UseGuards(GlobalSuperAdminGuard)

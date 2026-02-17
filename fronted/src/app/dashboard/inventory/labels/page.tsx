@@ -22,6 +22,17 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import CatalogPagination from "@/components/catalog-pagination";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 
 import { getCategories } from "../../categories/categories.api";
 import { getInventoryWithCurrency } from "../inventory.api";
@@ -137,9 +148,8 @@ function buildCode39Segments(value: string): Code39BarSegment[] {
   return segments;
 }
 
-function Code39Barcode({ value }: { value: string }): ReactElement {
+function Code39Barcode({ value, height = 50 }: { value: string; height?: number }): ReactElement {
   const moduleWidth = 2;
-  const height = 80;
   const segments = buildCode39Segments(value);
   const totalUnits = segments.reduce((total, segment) => total + segment.width, 0);
   let offset = 0;
@@ -244,10 +254,12 @@ export default function InventoryLabelsPage(): ReactElement {
   const [products, setProducts] = useState<AggregatedProduct[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [productSearch, setProductSearch] = useState("");
-  const [categorySearch, setCategorySearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<Record<number, ProductSelection>>({});
   const [codeType, setCodeType] = useState<"qr" | "barcode">("qr");
   const [showLatestOnly, setShowLatestOnly] = useState(false);
+  const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(12);
 
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = () => {
@@ -256,7 +268,12 @@ export default function InventoryLabelsPage(): ReactElement {
       return;
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+    const type = codeType === "qr" ? "QR" : "Barcode";
+    const originalTitle = document.title;
+    document.title = `Etiquetas_${type}_${selectedLabelCount}uds_${today}`;
     window.print();
+    document.title = originalTitle;
   };
 
   useEffect(() => {
@@ -321,13 +338,6 @@ export default function InventoryLabelsPage(): ReactElement {
     return map;
   }, [products]);
 
-  const filteredCategories = useMemo(() => {
-    if (!categorySearch.trim()) {
-      return categories;
-    }
-    const query = categorySearch.trim().toLowerCase();
-    return categories.filter((category) => category.name.toLowerCase().includes(query));
-  }, [categories, categorySearch]);
 
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase();
@@ -356,6 +366,18 @@ export default function InventoryLabelsPage(): ReactElement {
       return a.name.localeCompare(b.name, "es");
     });
   }, [products, productSearch, selectedCategories, showLatestOnly]);
+
+  // Pagination for products
+  const productTotalPages = Math.ceil(filteredProducts.length / productPageSize) || 1;
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * productPageSize;
+    return filteredProducts.slice(start, start + productPageSize);
+  }, [filteredProducts, productPage, productPageSize]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setProductPage(1);
+  }, [productSearch, selectedCategories, showLatestOnly]);
 
   useEffect(() => {
     if (selectedCategories.length === 0) {
@@ -515,16 +537,102 @@ export default function InventoryLabelsPage(): ReactElement {
         }
 
         @media print {
-          body {
-            background: #fff;
+          @page {
+            margin: 8mm;
+            size: A4;
+          }
+
+          /* Force light theme for printing */
+          html, body {
+            background: #fff !important;
+            color: #000 !important;
+            color-scheme: light !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          /* Override dark mode variables */
+          :root, .dark, [data-theme="dark"] {
+            --background: 0 0% 100% !important;
+            --foreground: 0 0% 0% !important;
+            --card: 0 0% 100% !important;
+            --card-foreground: 0 0% 0% !important;
+            --muted-foreground: 0 0% 30% !important;
           }
 
           .labels-print-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 1.25rem !important;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 0.35rem !important;
           }
 
-          .no-print {
+          .labels-print-grid .label-card {
+            padding: 0.25rem !important;
+            border-width: 1px !important;
+            border-color: #d1d5db !important;
+            border-radius: 4px !important;
+            box-shadow: none !important;
+            background: #fff !important;
+          }
+
+          .labels-print-grid .label-card .qr-code-container canvas {
+            width: 56px !important;
+            height: 56px !important;
+          }
+
+          .labels-print-grid .label-card .barcode-container svg {
+            height: 36px !important;
+          }
+
+          .labels-print-grid .label-card .label-product-name {
+            font-size: 6.5pt !important;
+            line-height: 1.15 !important;
+            color: #000 !important;
+            overflow: visible !important;
+            white-space: normal !important;
+            text-overflow: unset !important;
+            word-break: break-word !important;
+          }
+
+          .labels-print-grid .label-card .label-serial-badge {
+            font-size: 6pt !important;
+            padding: 0 3px !important;
+          }
+
+          .labels-print-grid .label-card .label-code {
+            font-size: 6pt !important;
+            line-height: 1.15 !important;
+            color: #000 !important;
+            overflow: visible !important;
+            white-space: normal !important;
+            text-overflow: unset !important;
+          }
+
+          .labels-print-grid .label-card .label-category {
+            font-size: 5.5pt !important;
+            line-height: 1.15 !important;
+            color: #444 !important;
+            overflow: visible !important;
+            white-space: normal !important;
+            text-overflow: unset !important;
+          }
+
+          .no-print,
+          [data-sidebar="sidebar"],
+          [data-sidebar="rail"],
+          [data-sidebar="trigger"] {
+            display: none !important;
+          }
+
+          /* Remove sidebar inset margin/padding */
+          [data-sidebar="inset"] {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Hide banners/overlays */
+          .context-status-banner,
+          .trial-status-banner,
+          .onboarding-banner {
             display: none !important;
           }
         }
@@ -532,7 +640,7 @@ export default function InventoryLabelsPage(): ReactElement {
 
       <section className="py-6">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="no-print flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold sm:text-3xl">Generar etiquetas</h1>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -540,7 +648,7 @@ export default function InventoryLabelsPage(): ReactElement {
                 Puedes personalizar que series incluir para cada item antes de generar la version imprimible.
               </p>
             </div>
-            <div className="no-print flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" asChild>
                 <Link href="/dashboard/inventory">Volver al inventario</Link>
               </Button>
@@ -550,61 +658,90 @@ export default function InventoryLabelsPage(): ReactElement {
             </div>
           </div>
 
-          <Separator className="my-6" />
+          <Separator className="no-print my-6" />
 
           <div className="grid gap-6">
             <Card className="no-print">
               <CardHeader>
                 <CardTitle>Categorias</CardTitle>
                 <CardDescription>
-                  Define las categorias cuya mercaderia deseas listar. Puedes seleccionar todas o filtrar por nombre.
+                  Filtra por categorias para listar solo los productos que necesitas.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
+                  <Popover open={categoryPopoverOpen} onOpenChange={setCategoryPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={categoryPopoverOpen}
+                        className="w-full max-w-sm justify-between"
+                      >
+                        {selectedCategories.length > 0
+                          ? `${selectedCategories.length} categoria${selectedCategories.length === 1 ? '' : 's'} seleccionada${selectedCategories.length === 1 ? '' : 's'}`
+                          : "Seleccionar categorias..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar categoria..." />
+                        <CommandList>
+                          <CommandEmpty>No se encontraron categorias.</CommandEmpty>
+                          <CommandGroup>
+                            {categories.map((category) => {
+                              const isSelected = selectedCategories.includes(category.id);
+                              return (
+                                <CommandItem
+                                  key={category.id}
+                                  value={category.name}
+                                  onSelect={() => handleToggleCategory(category.id)}
+                                >
+                                  <Check
+                                    className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                                  />
+                                  {category.name}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleSelectAllCategories}
                     disabled={categories.length === 0}
                   >
-                    Seleccionar todas
+                    Todas
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={handleClearCategories}>
+                  <Button variant="ghost" size="sm" onClick={handleClearCategories} disabled={selectedCategories.length === 0}>
                     Limpiar
                   </Button>
-                  <Badge variant="secondary">
-                    {selectedCategories.length > 0 ? `${selectedCategories.length} seleccionadas` : 'Sin filtro'}
-                  </Badge>
                 </div>
-                <Input
-                  placeholder="Buscar categoria"
-                  value={categorySearch}
-                  onChange={(event) => setCategorySearch(event.target.value)}
-                  className="max-w-sm"
-                />
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {filteredCategories.map((category) => {
-                    const isSelected = selectedCategories.includes(category.id);
-                    return (
-                      <label
-                        key={category.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-md border p-3 transition hover:bg-muted"
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleToggleCategory(category.id)}
-                        />
-                        <span className="text-sm font-medium">{category.name}</span>
-                      </label>
-                    );
-                  })}
-                  {filteredCategories.length === 0 && (
-                    <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                      No se encontraron categorias para el criterio de busqueda.
-                    </div>
-                  )}
-                </div>
+
+                {selectedCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedCategories.map((catId) => {
+                      const cat = categories.find((c) => c.id === catId);
+                      if (!cat) return null;
+                      return (
+                        <Badge
+                          key={catId}
+                          variant="secondary"
+                          className="cursor-pointer gap-1 pr-1 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => handleToggleCategory(catId)}
+                        >
+                          {cat.name}
+                          <X className="h-3 w-3" />
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -637,8 +774,12 @@ export default function InventoryLabelsPage(): ReactElement {
                   </Badge>
                 </div>
 
+                <p className="text-xs text-muted-foreground">
+                  Mostrando {paginatedProducts.length} de {filteredProducts.length} productos
+                </p>
+
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {filteredProducts.map((product) => {
+                  {paginatedProducts.map((product) => {
                     const isSelected = Boolean(selectedProducts[product.id]);
                     const selectedSerials = selectedProducts[product.id]?.serials ?? [];
                     const hasSerials = product.serialNumbers.length > 0;
@@ -724,6 +865,19 @@ export default function InventoryLabelsPage(): ReactElement {
                     </div>
                   )}
                 </div>
+
+                {filteredProducts.length > productPageSize && (
+                  <CatalogPagination
+                    currentPage={productPage}
+                    totalPages={productTotalPages}
+                    pageSize={productPageSize}
+                    onPageChange={setProductPage}
+                    onPageSizeChange={(size) => {
+                      setProductPageSize(size);
+                      setProductPage(1);
+                    }}
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -757,14 +911,14 @@ export default function InventoryLabelsPage(): ReactElement {
             </Card>
           </div>
 
-          <Separator className="my-6" />
+          <Separator className="no-print my-6" />
 
           <div
             ref={printRef}
-            className="labels-print-grid grid gap-6 sm:grid-cols-2 xl:grid-cols-3"
+            className="labels-print-grid grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"
           >
             {labels.length === 0 && (
-              <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+              <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-muted-foreground">
                 Selecciona al menos un producto para visualizar las etiquetas.
               </div>
             )}
@@ -780,24 +934,32 @@ export default function InventoryLabelsPage(): ReactElement {
               return (
                 <div
                   key={`${product.id}-${serial ?? "all"}-${codeType}`}
-                  className="label-card flex flex-col items-center gap-3 rounded-lg border p-4 transition-shadow hover:shadow"
+                  className="label-card flex flex-col items-center gap-1.5 rounded-md border p-2 transition-shadow hover:shadow"
                 >
                   {codeType === "qr" ? (
-                    <QRCodeCanvas value={qrValue} size={128} />
+                    <div className="qr-code-container">
+                      <QRCodeCanvas value={qrValue} size={72} />
+                    </div>
                   ) : (
-                    <Code39Barcode value={humanReadableCode} />
+                    <div className="barcode-container w-full">
+                      <Code39Barcode value={humanReadableCode} />
+                    </div>
                   )}
-                  <div className="text-center space-y-1.5 w-full">
-                    <p className="text-base font-bold leading-tight text-foreground">{product.name}</p>
+                  <div className="text-center space-y-0.5 w-full min-w-0">
+                    <p className="label-product-name text-[11px] font-bold leading-tight text-foreground break-words">
+                      {product.name}
+                    </p>
                     {serial && (
-                      <Badge variant="default" className="font-semibold">
-                        Serie: {serial}
+                      <Badge variant="default" className="label-serial-badge text-[10px] px-1.5 py-0 font-semibold">
+                        {serial}
                       </Badge>
                     )}
-                    <p className="text-sm font-medium leading-tight text-foreground">
-                      Codigo: {product.code}
+                    <p className="label-code text-[10px] font-medium leading-tight text-foreground">
+                      {product.code}
                     </p>
-                    <p className="text-xs text-muted-foreground leading-tight">{product.categoryName}</p>
+                    <p className="label-category text-[9px] text-muted-foreground leading-tight">
+                      {product.categoryName}
+                    </p>
                   </div>
                 </div>
               );

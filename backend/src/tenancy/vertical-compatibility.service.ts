@@ -212,8 +212,8 @@ export class VerticalCompatibilityService {
       affectedModules.add('sales');
     }
     if (openCashRegisters > 0) {
-      errors.push(
-        `Se encontraron ${openCashRegisters} cajas activas. Debes cerrarlas antes de cambiar de vertical.`,
+      warnings.push(
+        `Se encontraron ${openCashRegisters} cajas activas. Seran cerradas automaticamente durante la migracion.`,
       );
       affectedModules.add('cashregister');
     }

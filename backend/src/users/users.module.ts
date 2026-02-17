@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod, forwardRef } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -22,7 +22,7 @@ import { ContextMetricsController } from './context-metrics.controller';
 @Module({
   imports: [
     ActivityModule,
-    TenancyModule,
+    forwardRef(() => TenancyModule),
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -45,7 +45,7 @@ import { ContextMetricsController } from './context-metrics.controller';
     ContextEventsGateway,
     SubscriptionQuotaService,
   ],
-  exports: [JwtAuthGuard],
+  exports: [JwtAuthGuard, ContextEventsGateway],
 })
 export class UsersModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

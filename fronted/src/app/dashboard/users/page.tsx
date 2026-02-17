@@ -121,12 +121,14 @@ export default function UsersPage(): React.ReactElement {
 
         {isGlobalSuperAdmin ? (
           <Tabs defaultValue="users">
-            <TabsList>
-              <TabsTrigger value="users">Usuarios</TabsTrigger>
-              <TabsTrigger value="help-assistant">Asistente</TabsTrigger>
-              <TabsTrigger value="help-learning">🧠 Auto-Aprendizaje</TabsTrigger>
-              <TabsTrigger value="testing">🧪 Testing</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+              <TabsList className="inline-flex w-full min-w-max">
+                <TabsTrigger value="users" className="flex-shrink-0 text-xs sm:text-sm">Usuarios</TabsTrigger>
+                <TabsTrigger value="help-assistant" className="flex-shrink-0 text-xs sm:text-sm">Asistente</TabsTrigger>
+                <TabsTrigger value="help-learning" className="flex-shrink-0 text-xs sm:text-sm">Auto-Aprendizaje</TabsTrigger>
+                <TabsTrigger value="testing" className="flex-shrink-0 text-xs sm:text-sm">Testing</TabsTrigger>
+              </TabsList>
+            </div>
             <TabsContent value="users">{usersTable}</TabsContent>
             <TabsContent value="help-assistant">
               <HelpAdminTab />
