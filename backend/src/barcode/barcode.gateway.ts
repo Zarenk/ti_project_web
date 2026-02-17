@@ -140,16 +140,25 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect,
 
   // ── Product Query Methods ──────────────────────────────────
 
+  private readonly productInclude = {
+    brand: true,
+    category: true,
+    inventory: {
+      include: {
+        storeOnInventory: {
+          include: { store: { select: { id: true, name: true } } },
+        },
+      },
+    },
+  } as const;
+
   private async findProductById(productId: number, orgId: number | null) {
     return await this.prisma.product.findFirst({
       where: {
         id: productId,
         ...(orgId !== null && { organizationId: orgId }),
       },
-      include: {
-        brand: true,
-        category: true,
-      },
+      include: this.productInclude,
     });
   }
 
@@ -162,16 +171,30 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect,
         ],
         ...(orgId !== null && { organizationId: orgId }),
       },
-      include: {
-        brand: true,
-        category: true,
-      },
+      include: this.productInclude,
     });
   }
 
   // ── Helpers ──────────────────────────────────────────────
 
   private mapProductResponse(product: any) {
+    // Calcular stock por tienda desde inventory → storeOnInventory
+    const stockByStore: { storeId: number; storeName: string; stock: number }[] = [];
+    let totalStock = 0;
+
+    if (product.inventory) {
+      for (const inv of product.inventory) {
+        for (const soi of inv.storeOnInventory ?? []) {
+          stockByStore.push({
+            storeId: soi.store?.id ?? soi.storeId,
+            storeName: soi.store?.name ?? 'Tienda',
+            stock: soi.stock ?? 0,
+          });
+          totalStock += soi.stock ?? 0;
+        }
+      }
+    }
+
     return {
       id: product.id,
       name: product.name,
@@ -187,6 +210,8 @@ export class BarcodeGateway implements OnGatewayConnection, OnGatewayDisconnect,
       categoryName: product.category?.name ?? null,
       status: product.status,
       code: product.code ?? null,
+      stockByStore,
+      totalStock,
     };
   }
 

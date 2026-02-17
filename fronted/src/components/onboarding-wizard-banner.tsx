@@ -53,7 +53,7 @@ export function OnboardingWizardBanner() {
   }
 
   return (
-    <div className="mx-4 mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-indigo-900 shadow-sm dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-100">
+    <div className="no-print mx-4 mb-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-indigo-900 shadow-sm dark:border-indigo-800/70 dark:bg-indigo-950/40 dark:text-indigo-100">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
           <div className="rounded-full bg-white/90 p-2 text-indigo-600 shadow dark:bg-indigo-900/60 dark:text-indigo-200">

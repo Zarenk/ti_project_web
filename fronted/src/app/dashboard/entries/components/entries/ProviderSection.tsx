@@ -64,7 +64,7 @@ export function ProviderSection({
   };
 
   return (
-    <div className="flex flex-1 flex-col rounded-md border p-2">
+    <div className="flex min-w-0 flex-col rounded-md border p-2">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center">
           <Label htmlFor="provider-combobox" className="text-sm font-medium">

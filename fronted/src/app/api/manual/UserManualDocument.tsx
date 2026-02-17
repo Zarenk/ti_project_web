@@ -6,13 +6,13 @@ import {
   View,
   Image,
   StyleSheet,
-  Link,
 } from '@react-pdf/renderer'
-import type { HelpSection, HelpEntry } from '@/data/help/types'
+import type { HelpSection } from '@/data/help/types'
 
 interface ManualData {
   sections: HelpSection[]
   screenshots: Record<string, string>
+  placeholderPath: string
   metadata: {
     generatedAt: string
     version: string
@@ -20,11 +20,15 @@ interface ManualData {
   }
 }
 
-// Estilos del documento
+const BRAND_PRIMARY = '#1e3a5f'
+const BRAND_ACCENT = '#2563EB'
+const TEXT_MAIN = '#1f2937'
+const TEXT_MUTED = '#4b5563'
+const BORDER_LIGHT = '#e5e7eb'
+
 const styles = StyleSheet.create({
-  // Portada
   coverPage: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: BRAND_PRIMARY,
     padding: 60,
     flexDirection: 'column',
     justifyContent: 'center',
@@ -48,66 +52,82 @@ const styles = StyleSheet.create({
     marginBottom: 60,
     textAlign: 'center',
   },
-  date: {
+  coverDate: {
     fontSize: 14,
     color: '#cbd5e1',
-    position: 'absolute',
-    bottom: 40,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  coverVersion: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 4,
   },
 
-  // Páginas normales
   page: {
-    padding: 50,
+    paddingTop: 50,
+    paddingBottom: 60,
+    paddingHorizontal: 50,
     fontSize: 11,
     fontFamily: 'Helvetica',
-    color: '#1f2937',
+    color: TEXT_MAIN,
   },
 
-  // Encabezados de sección
+  sectionCoverPage: {
+    paddingTop: 120,
+    paddingBottom: 60,
+    paddingHorizontal: 60,
+    fontSize: 11,
+    fontFamily: 'Helvetica',
+    color: TEXT_MAIN,
+  },
+
   sectionTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1e3a5f',
+    color: BRAND_PRIMARY,
     marginBottom: 16,
-    borderBottom: '3px solid #2563EB',
+    borderBottomWidth: 3,
+    borderBottomColor: BRAND_ACCENT,
     paddingBottom: 8,
   },
   sectionDescription: {
     fontSize: 13,
-    color: '#4b5563',
+    color: TEXT_MUTED,
     marginBottom: 20,
     lineHeight: 1.6,
   },
 
-  // Índice
   tocItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginBottom: 4,
-    borderBottom: '1px solid #e5e7eb',
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
   },
   tocText: {
     fontSize: 12,
     color: '#374151',
   },
-  tocPage: {
-    fontSize: 11,
-    color: '#6b7280',
+  tocEntryCount: {
+    fontSize: 10,
+    color: '#9ca3af',
   },
 
-  // Entry (pregunta/respuesta)
   entryHeader: {
     backgroundColor: '#f8fafc',
     padding: 12,
     marginBottom: 16,
-    borderLeft: '4px solid #2563EB',
+    borderLeftWidth: 4,
+    borderLeftColor: BRAND_ACCENT,
   },
   entryQuestion: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    color: '#1e3a5f',
+    color: BRAND_PRIMARY,
   },
   entryAnswer: {
     marginBottom: 20,
@@ -116,9 +136,20 @@ const styles = StyleSheet.create({
   answerText: {
     fontSize: 11,
     color: '#374151',
+    lineHeight: 1.7,
+  },
+  answerBold: {
+    fontSize: 11,
+    color: '#111827',
+    fontWeight: 'bold',
+  },
+  answerBullet: {
+    fontSize: 11,
+    color: '#374151',
+    marginLeft: 16,
+    marginBottom: 4,
   },
 
-  // Pasos
   stepsContainer: {
     marginTop: 16,
     marginBottom: 20,
@@ -126,7 +157,7 @@ const styles = StyleSheet.create({
   stepsTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#1e3a5f',
+    color: BRAND_PRIMARY,
     marginBottom: 12,
   },
   step: {
@@ -136,20 +167,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   stepImage: {
-    width: '100%',
-    maxWidth: 450,
-    height: 'auto',
+    width: 450,
+    height: 260,
     marginBottom: 8,
     borderRadius: 4,
-    border: '1px solid #e5e7eb',
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    objectFit: 'contain' as any,
   },
   stepText: {
     fontSize: 11,
-    color: '#4b5563',
+    color: TEXT_MUTED,
     lineHeight: 1.6,
   },
 
-  // Acciones relacionadas
   relatedActions: {
     marginTop: 16,
     padding: 12,
@@ -168,7 +199,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Footer
   pageNumber: {
     position: 'absolute',
     fontSize: 10,
@@ -179,24 +209,81 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
   },
 
-  // Utilidades
   separator: {
     height: 1,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: BORDER_LIGHT,
     marginVertical: 16,
   },
 })
 
-export function UserManualDocument({ data }: { data: ManualData }) {
-  const { sections, screenshots, metadata } = data
+/**
+ * Renderizar texto con markdown básico (negritas, viñetas, enlaces)
+ * Limpia emojis y tokens markdown para el PDF
+ */
+function renderAnswerText(text: string): React.ReactNode[] {
+  const lines = text.split('\n')
+  const nodes: React.ReactNode[] = []
 
-  // Helper para resolver screenshots (usa placeholder si no existe)
-  const resolveScreenshot = (imagePath?: string): string => {
-    if (!imagePath) return '/help/placeholder-screenshot.png'
-    return screenshots[imagePath] || '/help/placeholder-screenshot.png'
+  lines.forEach((line, lineIdx) => {
+    const trimmed = line.trim()
+
+    // Línea vacía
+    if (!trimmed) {
+      nodes.push(<Text key={`empty-${lineIdx}`}>{'\n'}</Text>)
+      return
+    }
+
+    // Limpiar emojis comunes y markdown links
+    let cleanLine = trimmed
+      .replace(/\[.*?\]\(.*?\)/g, '') // Remover links markdown
+      .replace(/[📥✅📘📋🔗📧📞💬]/g, '') // Remover emojis
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Remover negritas markdown (texto plano)
+      .trim()
+
+    if (!cleanLine) return
+
+    // Viñetas
+    if (cleanLine.startsWith('- ') || cleanLine.startsWith('* ') || cleanLine.startsWith('• ')) {
+      nodes.push(
+        <Text key={lineIdx} style={styles.answerBullet}>
+          {'  • '}{cleanLine.slice(2)}
+        </Text>
+      )
+      return
+    }
+
+    // Texto normal
+    nodes.push(
+      <Text key={lineIdx} style={styles.answerText}>
+        {cleanLine}
+      </Text>
+    )
+  })
+
+  return nodes
+}
+
+/**
+ * Obtener el label de una sección de forma segura.
+ * Algunas secciones usan 'title' en vez de 'label' (reports, hardware, api-integrations).
+ */
+function getSectionLabel(section: HelpSection): string {
+  return section.label || (section as any).title || section.id
+}
+
+export function UserManualDocument({ data }: { data: ManualData }) {
+  const { sections, screenshots, placeholderPath, metadata } = data
+
+  // Resolver screenshot: retorna base64 data URL para @react-pdf/renderer v4
+  const resolveScreenshot = (imagePath?: string): string | null => {
+    if (!imagePath) return null
+    const resolved = screenshots[imagePath]
+    if (resolved) return resolved
+    // Fallback al placeholder
+    return placeholderPath || null
   }
 
-  // Helper para buscar título de entry relacionada
+  // Buscar título de entry relacionada
   const getRelatedTitle = (actionId: string): string => {
     for (const section of sections) {
       const entry = section.entries.find((e) => e.id === actionId)
@@ -205,23 +292,11 @@ export function UserManualDocument({ data }: { data: ManualData }) {
     return actionId
   }
 
-  // Renderizar texto con saltos de línea preservados
-  const renderText = (text: string) => {
-    const lines = text.split('\n')
-    return lines.map((line, idx) => (
-      <Text key={idx} style={styles.answerText}>
-        {line}
-        {'\n'}
-      </Text>
-    ))
-  }
-
   return (
     <Document
       title="Manual de Usuario - ADSLab"
-      author="ADSLab Sistema de Gestión"
-      subject="Documentación completa del sistema"
-      keywords="manual, usuario, documentación, ADSLab"
+      author="ADSLab Sistema de Gestion"
+      subject="Documentacion completa del sistema"
     >
       {/* PORTADA */}
       <Page size="A4" style={styles.coverPage}>
@@ -229,53 +304,71 @@ export function UserManualDocument({ data }: { data: ManualData }) {
           <Image
             src={metadata.companyLogo}
             style={styles.coverLogo}
-            cache={false}
           />
         )}
         <Text style={styles.title}>Manual de Usuario</Text>
-        <Text style={styles.subtitle}>Sistema de Gestión ADSLab</Text>
-        <Text style={styles.date}>Generado el {metadata.generatedAt}</Text>
-        <Text style={styles.date}>Versión {metadata.version}</Text>
+        <Text style={styles.subtitle}>Sistema de Gestion ADSLab</Text>
+        <View style={{ marginTop: 40 }}>
+          <Text style={styles.coverDate}>Generado el {metadata.generatedAt}</Text>
+          <Text style={styles.coverVersion}>Version {metadata.version}</Text>
+        </View>
       </Page>
 
       {/* ÍNDICE */}
       <Page size="A4" style={styles.page}>
-        <Text style={styles.sectionTitle}>Índice</Text>
+        <Text style={styles.sectionTitle}>Indice</Text>
         <View style={{ marginTop: 20 }}>
           {sections.map((section, idx) => (
             <View key={section.id} style={styles.tocItem}>
               <Text style={styles.tocText}>
-                {idx + 1}. {section.label} ({section.entries.length} temas)
+                {idx + 1}. {getSectionLabel(section)}
+              </Text>
+              <Text style={styles.tocEntryCount}>
+                {section.entries.length} temas
               </Text>
             </View>
           ))}
         </View>
-        <View style={{ marginTop: 40, padding: 16, backgroundColor: '#f0f9ff' }}>
-          <Text style={{ fontSize: 10, color: '#0369a1', marginBottom: 8 }}>
-            📘 Cómo usar este manual:
+        <View style={{ marginTop: 40, padding: 16, backgroundColor: '#f0f9ff', borderRadius: 4 }}>
+          <Text style={{ fontSize: 11, color: '#0369a1', marginBottom: 8, fontWeight: 'bold' }}>
+            Como usar este manual:
           </Text>
-          <Text style={{ fontSize: 9, color: '#075985', lineHeight: 1.6 }}>
-            • Navega por el índice para encontrar la sección que necesitas{'\n'}
-            • Cada tema incluye una pregunta, respuesta detallada y pasos ilustrados{'\n'}
-            • Los screenshots te guiarán visualmente en cada proceso{'\n'}
-            • Al final de cada tema encontrarás acciones relacionadas para profundizar
+          <Text style={{ fontSize: 10, color: '#075985', lineHeight: 1.6 }}>
+            {'  • Navega por el indice para encontrar la seccion que necesitas\n'}
+            {'  • Cada tema incluye una pregunta, respuesta detallada y pasos ilustrados\n'}
+            {'  • Los screenshots te guiaran visualmente en cada proceso\n'}
+            {'  • Al final de cada tema encontraras acciones relacionadas para profundizar'}
           </Text>
         </View>
+        <Text
+          style={styles.pageNumber}
+          render={({ pageNumber, totalPages }) =>
+            `Pagina ${pageNumber} de ${totalPages}`
+          }
+          fixed
+        />
       </Page>
 
       {/* SECCIONES Y CONTENIDO */}
       {sections.map((section) => (
         <React.Fragment key={section.id}>
           {/* Portada de Sección */}
-          <Page size="A4" style={styles.page}>
-            <Text style={styles.sectionTitle}>{section.label}</Text>
+          <Page size="A4" style={styles.sectionCoverPage}>
+            <Text style={styles.sectionTitle}>{getSectionLabel(section)}</Text>
             <Text style={styles.sectionDescription}>
               {section.description}
             </Text>
             <View style={styles.separator} />
             <Text style={{ fontSize: 10, color: '#6b7280', marginTop: 16 }}>
-              Esta sección contiene {section.entries.length} temas relacionados con {section.label.toLowerCase()}.
+              Esta seccion contiene {section.entries.length} temas relacionados con {getSectionLabel(section).toLowerCase()}.
             </Text>
+            <Text
+              style={styles.pageNumber}
+              render={({ pageNumber, totalPages }) =>
+                `Pagina ${pageNumber} de ${totalPages}`
+              }
+              fixed
+            />
           </Page>
 
           {/* Entries de la sección */}
@@ -288,29 +381,31 @@ export function UserManualDocument({ data }: { data: ManualData }) {
 
               {/* Respuesta */}
               <View style={styles.entryAnswer}>
-                {renderText(entry.answer)}
+                {renderAnswerText(entry.answer)}
               </View>
 
               {/* Pasos (si existen) */}
               {entry.steps && entry.steps.length > 0 && (
-                <View style={styles.stepsContainer} wrap={false}>
+                <View style={styles.stepsContainer}>
                   <Text style={styles.stepsTitle}>
-                    📋 Pasos a seguir:
+                    Pasos a seguir:
                   </Text>
-                  {entry.steps.map((step, idx) => (
-                    <View key={idx} style={styles.step} wrap={false}>
-                      {step.image && (
-                        <Image
-                          src={resolveScreenshot(step.image)}
-                          style={styles.stepImage}
-                          cache={false}
-                        />
-                      )}
-                      <Text style={styles.stepText}>
-                        {idx + 1}. {step.text}
-                      </Text>
-                    </View>
-                  ))}
+                  {entry.steps.map((step, idx) => {
+                    const imgSrc = resolveScreenshot(step.image)
+                    return (
+                      <View key={idx} style={styles.step} wrap={false}>
+                        <Text style={styles.stepText}>
+                          {idx + 1}. {step.text}
+                        </Text>
+                        {imgSrc && (
+                          <Image
+                            src={imgSrc}
+                            style={styles.stepImage}
+                          />
+                        )}
+                      </View>
+                    )
+                  })}
                 </View>
               )}
 
@@ -318,11 +413,11 @@ export function UserManualDocument({ data }: { data: ManualData }) {
               {entry.relatedActions && entry.relatedActions.length > 0 && (
                 <View style={styles.relatedActions} wrap={false}>
                   <Text style={styles.relatedTitle}>
-                    🔗 Ver también:
+                    Ver tambien:
                   </Text>
                   {entry.relatedActions.map((actionId) => (
                     <Text key={actionId} style={styles.relatedItem}>
-                      → {getRelatedTitle(actionId)}
+                      {'-> '}{getRelatedTitle(actionId)}
                     </Text>
                   ))}
                 </View>
@@ -332,7 +427,7 @@ export function UserManualDocument({ data }: { data: ManualData }) {
               <Text
                 style={styles.pageNumber}
                 render={({ pageNumber, totalPages }) =>
-                  `Página ${pageNumber} de ${totalPages}`
+                  `Pagina ${pageNumber} de ${totalPages}`
                 }
                 fixed
               />
@@ -346,26 +441,30 @@ export function UserManualDocument({ data }: { data: ManualData }) {
         <Text style={styles.sectionTitle}>Soporte y Contacto</Text>
         <View style={{ marginTop: 20 }}>
           <Text style={{ fontSize: 12, marginBottom: 12, fontWeight: 'bold' }}>
-            ¿Necesitas ayuda adicional?
+            Necesitas ayuda adicional?
           </Text>
           <Text style={{ fontSize: 10, lineHeight: 1.8, marginBottom: 16 }}>
-            Si no encontraste respuesta a tu pregunta en este manual, nuestro equipo de soporte está disponible para ayudarte.
+            Si no encontraste respuesta a tu pregunta en este manual, nuestro equipo de soporte esta disponible para ayudarte.
           </Text>
           <View style={{ backgroundColor: '#f0f9ff', padding: 16, borderRadius: 4 }}>
             <Text style={{ fontSize: 11, color: '#0369a1', marginBottom: 8 }}>
-              📧 Correo de soporte: soporte@adslab.pe
+              Correo de soporte: soporte@adslab.pe
             </Text>
             <Text style={{ fontSize: 11, color: '#0369a1', marginBottom: 8 }}>
-              📞 Teléfono: +51 XXX XXX XXX
-            </Text>
-            <Text style={{ fontSize: 11, color: '#0369a1', marginBottom: 8 }}>
-              💬 Chat en vivo: Disponible en el asistente de ayuda dentro del sistema
+              Chat en vivo: Disponible en el asistente de ayuda dentro del sistema
             </Text>
           </View>
           <Text style={{ fontSize: 9, color: '#6b7280', marginTop: 20 }}>
-            Este manual fue generado automáticamente el {metadata.generatedAt} y siempre refleja la última versión del sistema.
+            Este manual fue generado automaticamente el {metadata.generatedAt} y siempre refleja la ultima version del sistema.
           </Text>
         </View>
+        <Text
+          style={styles.pageNumber}
+          render={({ pageNumber, totalPages }) =>
+            `Pagina ${pageNumber} de ${totalPages}`
+          }
+          fixed
+        />
       </Page>
     </Document>
   )

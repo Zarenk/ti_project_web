@@ -498,4 +498,265 @@ export class JournalEntryService {
       where: { id },
     });
   }
+
+  /**
+   * Libro Mayor - Obtiene movimientos agrupados por cuenta desde JournalLine
+   * Solo incluye asientos POSTED para reflejar el estado real contable
+   */
+  async getLedger(
+    params: {
+      accountId?: number;
+      from?: string;
+      to?: string;
+    },
+    tenant: TenantContext | null,
+  ): Promise<{
+    accounts: LedgerAccountData[];
+    totals: { debit: number; credit: number };
+  }> {
+    if (!tenant?.organizationId) {
+      throw new BadRequestException('Se requiere un tenant válido');
+    }
+
+    const { accountId, from, to } = params;
+
+    // Build where clause for JournalLine
+    const entryWhere: Prisma.JournalEntryWhereInput = {
+      organizationId: tenant.organizationId,
+      status: 'POSTED', // Solo asientos contabilizados
+    };
+
+    if (from || to) {
+      entryWhere.date = {};
+      if (from) entryWhere.date.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        entryWhere.date.lte = toDate;
+      }
+    }
+
+    const lineWhere: Prisma.JournalLineWhereInput = {
+      entry: entryWhere,
+    };
+
+    if (accountId) {
+      lineWhere.accountId = accountId;
+    }
+
+    // Fetch all matching lines with account and entry info
+    const lines = await this.prisma.journalLine.findMany({
+      where: lineWhere,
+      include: {
+        account: { select: { id: true, code: true, name: true, accountType: true } },
+        entry: {
+          select: {
+            id: true,
+            date: true,
+            description: true,
+            correlativo: true,
+            source: true,
+            moneda: true,
+          },
+        },
+      },
+      orderBy: [
+        { account: { code: 'asc' } },
+        { entry: { date: 'asc' } },
+        { id: 'asc' },
+      ],
+    });
+
+    // Group lines by account and calculate running balance per account
+    const accountMap = new Map<number, LedgerAccountData>();
+    let grandDebit = 0;
+    let grandCredit = 0;
+
+    for (const line of lines) {
+      const acctId = line.accountId;
+      const debit = Number(line.debit) || 0;
+      const credit = Number(line.credit) || 0;
+
+      if (!accountMap.has(acctId)) {
+        accountMap.set(acctId, {
+          accountId: acctId,
+          accountCode: line.account.code,
+          accountName: line.account.name,
+          accountType: line.account.accountType,
+          movements: [],
+          totalDebit: 0,
+          totalCredit: 0,
+          balance: 0,
+        });
+      }
+
+      const acctData = accountMap.get(acctId)!;
+      acctData.totalDebit += debit;
+      acctData.totalCredit += credit;
+      acctData.balance += debit - credit;
+
+      grandDebit += debit;
+      grandCredit += credit;
+
+      acctData.movements.push({
+        id: line.id,
+        journalEntryId: line.entry.id,
+        date: line.entry.date.toISOString(),
+        description: line.description || line.entry.description || '',
+        correlativo: line.entry.correlativo,
+        source: line.entry.source || 'MANUAL',
+        moneda: line.entry.moneda || 'PEN',
+        debit,
+        credit,
+        runningBalance: acctData.balance,
+      });
+    }
+
+    // Sort accounts by code
+    const accounts = Array.from(accountMap.values()).sort((a, b) =>
+      a.accountCode.localeCompare(b.accountCode),
+    );
+
+    return {
+      accounts,
+      totals: { debit: grandDebit, credit: grandCredit },
+    };
+  }
+
+  /**
+   * Balance de Comprobación - Sumas y saldos por cuenta desde JournalLine
+   * Solo incluye asientos POSTED
+   */
+  async getTrialBalance(
+    params: { from?: string; to?: string },
+    tenant: TenantContext | null,
+  ): Promise<{
+    rows: TrialBalanceRow[];
+    totals: { debit: number; credit: number; debitBalance: number; creditBalance: number };
+  }> {
+    if (!tenant?.organizationId) {
+      throw new BadRequestException('Se requiere un tenant válido');
+    }
+
+    const { from, to } = params;
+
+    const entryWhere: Prisma.JournalEntryWhereInput = {
+      organizationId: tenant.organizationId,
+      status: 'POSTED',
+    };
+
+    if (from || to) {
+      entryWhere.date = {};
+      if (from) entryWhere.date.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        entryWhere.date.lte = toDate;
+      }
+    }
+
+    const lines = await this.prisma.journalLine.findMany({
+      where: { entry: entryWhere },
+      include: {
+        account: { select: { id: true, code: true, name: true, accountType: true } },
+      },
+    });
+
+    // Aggregate by account in a single pass
+    const accountMap = new Map<number, TrialBalanceRow>();
+
+    for (const line of lines) {
+      const acctId = line.accountId;
+      const debit = Number(line.debit) || 0;
+      const credit = Number(line.credit) || 0;
+
+      if (!accountMap.has(acctId)) {
+        accountMap.set(acctId, {
+          accountId: acctId,
+          accountCode: line.account.code,
+          accountName: line.account.name,
+          accountType: line.account.accountType,
+          debit: 0,
+          credit: 0,
+          debitBalance: 0,
+          creditBalance: 0,
+        });
+      }
+
+      const row = accountMap.get(acctId)!;
+      row.debit += debit;
+      row.credit += credit;
+    }
+
+    // Calculate balances per account
+    let totalDebit = 0;
+    let totalCredit = 0;
+    let totalDebitBalance = 0;
+    let totalCreditBalance = 0;
+
+    for (const row of accountMap.values()) {
+      totalDebit += row.debit;
+      totalCredit += row.credit;
+
+      const net = row.debit - row.credit;
+      if (net >= 0) {
+        row.debitBalance = net;
+        row.creditBalance = 0;
+      } else {
+        row.debitBalance = 0;
+        row.creditBalance = Math.abs(net);
+      }
+      totalDebitBalance += row.debitBalance;
+      totalCreditBalance += row.creditBalance;
+    }
+
+    const rows = Array.from(accountMap.values()).sort((a, b) =>
+      a.accountCode.localeCompare(b.accountCode),
+    );
+
+    return {
+      rows,
+      totals: {
+        debit: totalDebit,
+        credit: totalCredit,
+        debitBalance: totalDebitBalance,
+        creditBalance: totalCreditBalance,
+      },
+    };
+  }
+}
+
+export interface LedgerAccountData {
+  accountId: number;
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  movements: LedgerMovement[];
+  totalDebit: number;
+  totalCredit: number;
+  balance: number;
+}
+
+export interface LedgerMovement {
+  id: number;
+  journalEntryId: number;
+  date: string;
+  description: string;
+  correlativo: string;
+  source: string;
+  moneda: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+}
+
+export interface TrialBalanceRow {
+  accountId: number;
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  debit: number;
+  credit: number;
+  debitBalance: number;
+  creditBalance: number;
 }

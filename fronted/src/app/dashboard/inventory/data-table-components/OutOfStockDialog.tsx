@@ -121,7 +121,7 @@ export default function OutOfStockDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-5xl max-h-[85vh] overflow-hidden">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-5xl max-h-[85vh] overflow-hidden sm:w-full">
         <DialogHeader>
           <DialogTitle>Productos Sin Stock</DialogTitle>
           <DialogDescription>
@@ -147,80 +147,144 @@ export default function OutOfStockDialog({
           <div className="w-full flex-1 overflow-hidden">
             <div className="max-h-[50vh] w-full overflow-auto rounded-md border">
               {hasProducts ? (
-                <table className="w-full table-fixed border-collapse text-sm">
-                  <colgroup>
-                    <col className="w-[24%]" />
-                    <col className="w-[18%]" />
-                    <col className="w-[16%]" />
-                    <col className="w-[30%]" />
-                    <col className="w-[12%]" />
-                  </colgroup>
-                  <thead>
-                    <tr className="bg-gray-900 text-white uppercase tracking-wide">
-                      <th className="border-b px-4 py-3 text-left">Nombre</th>
-                      <th className="border-b px-4 py-3 text-left">Categoría</th>
-                      <th className="border-b px-4 py-3 text-left">Stock General</th>
-                      <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
-                      <th className="border-b px-4 py-3 text-left">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedProducts.map((product, index) => (
-                      <tr
-                        key={`${product.id}-${index}`}
-                        className="border-b transition hover:bg-gray-100 dark:hover:bg-gray-800"
-                      >
-                        <td className="whitespace-normal break-words px-4 py-3">
-                          {product.name || "Sin nombre"}
-                        </td>
-                        <td className="whitespace-normal break-words px-4 py-3">
-                          {typeof product.category === "string"
-                            ? product.category
-                            : product.category?.name || "Sin categoría"}
-                        </td>
-                        <td
-                          className={`px-4 py-3 font-semibold whitespace-nowrap ${
-                            product.totalStock === 0 ? "text-red-600" : "text-foreground"
-                          }`}
+                <>
+                  {/* ─── Desktop: table layout ─── */}
+                  <table className="hidden w-full table-fixed border-collapse text-sm md:table">
+                    <colgroup>
+                      <col className="w-[24%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[30%]" />
+                      <col className="w-[12%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-gray-900 text-white uppercase tracking-wide">
+                        <th className="border-b px-4 py-3 text-left">Nombre</th>
+                        <th className="border-b px-4 py-3 text-left">Categoría</th>
+                        <th className="border-b px-4 py-3 text-left">Stock General</th>
+                        <th className="border-b px-4 py-3 text-left">Stock por Tienda</th>
+                        <th className="border-b px-4 py-3 text-left">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedProducts.map((product, index) => (
+                        <tr
+                          key={`${product.id}-${index}`}
+                          className="border-b transition hover:bg-gray-100 dark:hover:bg-gray-800"
                         >
-                          {product.totalStock} u.
-                        </td>
-                        <td className="whitespace-normal break-words px-4 py-3">
-                          <ul className="space-y-1 text-sm">
+                          <td className="whitespace-normal break-words px-4 py-3">
+                            {product.name || "Sin nombre"}
+                          </td>
+                          <td className="whitespace-normal break-words px-4 py-3">
+                            {typeof product.category === "string"
+                              ? product.category
+                              : product.category?.name || "Sin categoría"}
+                          </td>
+                          <td
+                            className={`px-4 py-3 font-semibold whitespace-nowrap ${
+                              product.totalStock === 0 ? "text-red-600" : "text-foreground"
+                            }`}
+                          >
+                            {product.totalStock} u.
+                          </td>
+                          <td className="whitespace-normal break-words px-4 py-3">
+                            <ul className="space-y-1 text-sm">
+                              {product.storeOnInventory.map((storeItem: any) => (
+                                <li key={storeItem.storeId} className="flex flex-col">
+                                  <span className="font-medium">
+                                    {storeItem.store?.name || "Tienda desconocida"}
+                                  </span>
+                                  <span
+                                    className={`text-xs font-semibold ${
+                                      storeItem.stock === 0 ? "text-red-600" : "text-foreground"
+                                    }`}
+                                  >
+                                    {storeItem.stock} u.
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Button
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
+                              onClick={() => {
+                                window.location.href = `/dashboard/inventory/product-details/${product.id}`;
+                              }}
+                            >
+                              Ver información
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* ─── Mobile: card layout ─── */}
+                  <div className="divide-y md:hidden">
+                    {paginatedProducts.map((product, index) => (
+                      <div
+                        key={`${product.id}-${index}`}
+                        className="flex flex-col gap-2 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold leading-tight">
+                              {product.name || "Sin nombre"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {typeof product.category === "string"
+                                ? product.category
+                                : product.category?.name || "Sin categoría"}
+                            </p>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${
+                              product.totalStock === 0
+                                ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                                : "bg-muted text-foreground"
+                            }`}
+                          >
+                            {product.totalStock} u.
+                          </span>
+                        </div>
+
+                        {product.storeOnInventory.length > 0 && (
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                             {product.storeOnInventory.map((storeItem: any) => (
-                              <li key={storeItem.storeId} className="flex flex-col">
-                                <span className="font-medium">
-                                  {storeItem.store?.name || "Tienda desconocida"}
+                              <span key={storeItem.storeId} className="flex items-center gap-1">
+                                <span className="text-muted-foreground">
+                                  {storeItem.store?.name || "Tienda"}:
                                 </span>
                                 <span
-                                  className={`text-xs font-semibold ${
+                                  className={`font-semibold ${
                                     storeItem.stock === 0 ? "text-red-600" : "text-foreground"
                                   }`}
                                 >
                                   {storeItem.stock} u.
                                 </span>
-                              </li>
+                              </span>
                             ))}
-                          </ul>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
-                            onClick={() => {
-                              window.location.href = `/dashboard/inventory/product-details/${product.id}`;
-                            }}
-                          >
-                            Ver información
-                          </Button>
-                        </td>
-                      </tr>
+                          </div>
+                        )}
+
+                        <Button
+                          size="sm"
+                          className="w-full bg-blue-600 text-xs hover:bg-blue-700"
+                          onClick={() => {
+                            window.location.href = `/dashboard/inventory/product-details/${product.id}`;
+                          }}
+                        >
+                          Ver información
+                        </Button>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </>
               ) : (
                 <p className="text-muted-foreground text-sm py-4">No hay productos sin stock.</p>
               )}
-            </div>  
+            </div>
           </div>
 
           {hasProducts && (

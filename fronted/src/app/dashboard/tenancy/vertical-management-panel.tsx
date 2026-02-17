@@ -95,9 +95,10 @@ type Props = {
   companyId: number
   info: OrganizationVerticalInfo
   disabled?: boolean
+  onVerticalChanged?: () => void
 }
 
-export function VerticalManagementPanel({ organizationId, companyId, info }: Props) {
+export function VerticalManagementPanel({ organizationId, companyId, info, onVerticalChanged }: Props) {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(0)
   const [selectedVertical, setSelectedVertical] = useState<VerticalName | null>(null)
@@ -174,6 +175,7 @@ export function VerticalManagementPanel({ organizationId, companyId, info }: Pro
         setCurrentStep(0)
         setSelectedVertical(null)
         setCompatibilityResult(null)
+        onVerticalChanged?.()
         router.refresh()
       } catch (error) {
         const message =

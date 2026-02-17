@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { AccEntryStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { zonedTimeToUtc } from 'date-fns-tz';
@@ -6,6 +6,8 @@ import { endOfDay, startOfDay, parse, endOfMonth, format } from 'date-fns';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
+import { JournalEntryService } from './services/journal-entry.service';
+import { AccountBootstrapService } from './services/account-bootstrap.service';
 
 export interface AccountNode {
   id: number;
@@ -58,9 +60,13 @@ const formatInventoryQuantity = (value: unknown): string => {
 
 @Injectable()
 export class AccountingService {
+  private readonly logger = new Logger(AccountingService.name);
+
   constructor(
     private prisma: PrismaService,
     private readonly verticalConfig: VerticalConfigService,
+    private readonly journalEntryService: JournalEntryService,
+    private readonly accountBootstrap: AccountBootstrapService,
   ) {}
 
   private async ensureAccountingFeatureEnabled(
@@ -728,5 +734,190 @@ export class AccountingService {
         },
       });
     });
+
+    // Crear también JournalEntry para que aparezca en la sección unificada de asientos
+    await this.createJournalEntryForPurchase(entryId, tenantContext);
+  }
+
+  /**
+   * Crea un JournalEntry a partir de una compra/entrada de inventario.
+   * Se ejecuta DESPUÉS del AccEntry para no romper el flujo existente.
+   * Fallos aquí se loguean pero NO bloquean la operación principal.
+   */
+  private async createJournalEntryForPurchase(
+    entryId: number,
+    tenantContext?: TenantContext | null,
+  ) {
+    try {
+      // Verificar si ya existe un JournalEntry para esta compra
+      const existing = await this.prisma.journalEntry.findFirst({
+        where: {
+          source: 'PURCHASE',
+          description: { contains: `[entry:${entryId}]` },
+        },
+      });
+      if (existing) return;
+
+      const entry = await this.prisma.entry.findUnique({
+        where: { id: entryId },
+        include: {
+          details: { include: { product: true, series: true } },
+          invoice: true,
+          provider: true,
+          store: { select: { companyId: true, organizationId: true } },
+        },
+      });
+      if (!entry) return;
+
+      const entryOrganizationId =
+        (entry as any).organizationId ??
+        (entry.store as any)?.organizationId ??
+        null;
+      const entryCompanyId = (entry.store as any)?.companyId ?? null;
+
+      if (!entryOrganizationId) {
+        this.logger.warn(
+          `Skipping JournalEntry for entry ${entryId}: no organizationId`,
+        );
+        return;
+      }
+
+      // Asegurar que existan las cuentas PCGE por defecto
+      await this.accountBootstrap.ensureDefaults(entryOrganizationId);
+
+      // Calcular montos (misma lógica que AccEntry)
+      const igvRate = toNum((entry as any).igvRate, 0.18);
+      let totalGross = toNum((entry as any).totalGross, 0);
+      if (totalGross <= 0) {
+        totalGross = entry.details.reduce((s: number, d: any) => {
+          const pu = toNum(d.priceInSoles, NaN);
+          const unit = Number.isFinite(pu) ? pu : toNum(d.price, 0);
+          return s + unit * toNum(d.quantity, 0);
+        }, 0);
+      }
+      if (totalGross <= 0 && entry.invoice?.total != null) {
+        totalGross = toNum(entry.invoice.total, 0);
+      }
+      const amount = r2(totalGross);
+      if (amount <= 0) return;
+
+      const net = r2(amount / (1 + igvRate));
+      const igv = r2(amount - net);
+
+      const invoiceSerie = (entry as any).serie ?? entry.invoice?.serie ?? null;
+      const invoiceCorr =
+        (entry as any).correlativo ?? entry.invoice?.nroCorrelativo ?? null;
+      const invoiceCode =
+        invoiceSerie && invoiceCorr ? `${invoiceSerie}-${invoiceCorr}` : '';
+
+      // Cuenta crédito según forma de pago
+      let creditAccountCode = '1011';
+      if ((entry as any).paymentTerm === 'CREDIT') {
+        creditAccountCode = '4211';
+      } else if (
+        /transfer|yape|plin/i.test((entry as any).paymentMethod ?? '')
+      ) {
+        creditAccountCode = '1041';
+      }
+
+      // Construir líneas con códigos de cuenta
+      type CodeLine = { code: string; desc: string; debit: number; credit: number };
+      const codeLines: CodeLine[] = [];
+
+      const providerName = entry.provider?.name || 'Sin proveedor';
+      const detailSummaries = entry.details
+        .map((d: any) => {
+          const name = d?.product?.name ?? '';
+          const q = formatInventoryQuantity(d?.quantity);
+          return q && name ? `${q}x ${name}` : name;
+        })
+        .filter((s: any): s is string => typeof s === 'string' && s.length > 0);
+      const summary = detailSummaries.length > 0 ? detailSummaries.join(', ') : 'Productos';
+
+      if (invoiceSerie && invoiceCorr) {
+        codeLines.push(
+          { code: '2011', desc: `Inventario – ${summary}`, debit: net, credit: 0 },
+          { code: '4011', desc: `IGV compra ${invoiceCode}`, debit: igv, credit: 0 },
+          { code: creditAccountCode, desc: `Pago compra ${invoiceCode}`, debit: 0, credit: amount },
+        );
+      } else if (REQUIRE_INVOICE_TO_RECOGNIZE_TAX) {
+        codeLines.push(
+          { code: '2011', desc: `Inventario – ${summary} (sin comprobante)`, debit: amount, credit: 0 },
+          { code: creditAccountCode, desc: `Pago compra (sin comprobante)`, debit: 0, credit: amount },
+        );
+      } else {
+        codeLines.push(
+          { code: '2011', desc: `Inventario – ${summary} (sin comprobante)`, debit: net, credit: 0 },
+          { code: IGV_SUSPENSE_ACCOUNT, desc: `IGV por sustentar`, debit: igv, credit: 0 },
+          { code: creditAccountCode, desc: `Pago compra (sin comprobante)`, debit: 0, credit: amount },
+        );
+      }
+
+      // Resolver códigos de cuenta → IDs
+      const uniqueCodes = [...new Set(codeLines.map((l) => l.code))];
+      const accounts = await this.prisma.account.findMany({
+        where: {
+          code: { in: uniqueCodes },
+          organizationId: entryOrganizationId,
+        },
+        select: { id: true, code: true },
+      });
+
+      const codeToId = new Map(accounts.map((a) => [a.code, a.id]));
+      const missing = uniqueCodes.filter((c) => !codeToId.has(c));
+      if (missing.length > 0) {
+        this.logger.warn(
+          `Skipping JournalEntry for entry ${entryId}: missing accounts ${missing.join(', ')}`,
+        );
+        return;
+      }
+
+      const journalLines = codeLines.map(({ code, desc, debit, credit }) => ({
+        accountId: codeToId.get(code)!,
+        description: desc,
+        debit,
+        credit,
+      }));
+
+      // Descripción con tag de trazabilidad
+      const paymentMethod = (entry as any).paymentTerm === 'CREDIT' ? 'Crédito' : 'Contado';
+      const description = `Compra -${invoiceCode || entryId} | ${providerName} | ${paymentMethod} [entry:${entryId}]`;
+
+      const effectiveTenant: TenantContext = {
+        organizationId: entryOrganizationId,
+        companyId: entryCompanyId,
+        organizationUnitId: null,
+        userId: tenantContext?.userId ?? null,
+        isGlobalSuperAdmin: tenantContext?.isGlobalSuperAdmin ?? false,
+        isOrganizationSuperAdmin: tenantContext?.isOrganizationSuperAdmin ?? false,
+        isSuperAdmin: tenantContext?.isSuperAdmin ?? false,
+        allowedOrganizationIds: tenantContext?.allowedOrganizationIds?.length
+          ? tenantContext.allowedOrganizationIds
+          : [entryOrganizationId],
+        allowedCompanyIds: tenantContext?.allowedCompanyIds ?? [],
+        allowedOrganizationUnitIds: tenantContext?.allowedOrganizationUnitIds ?? [],
+      };
+
+      const journalEntry = await this.journalEntryService.create(
+        {
+          date: new Date(entry.date),
+          description,
+          source: 'PURCHASE',
+          moneda: 'PEN',
+          tipoCambio: undefined,
+          lines: journalLines,
+        },
+        effectiveTenant,
+      );
+
+      this.logger.log(
+        `JournalEntry ${journalEntry.id} created for entry ${entryId} (source=PURCHASE)`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to create JournalEntry for entry ${entryId}, AccEntry was created successfully`,
+        (err as Error).message,
+      );
+    }
   }
 }

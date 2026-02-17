@@ -16,6 +16,15 @@ import {
 const COMPANY_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
 const SUNAT_ENVIRONMENTS = ['BETA', 'PROD'] as const;
 
+const BUSINESS_VERTICALS = [
+  'GENERAL',
+  'COMPUTERS',
+  'RESTAURANTS',
+  'RETAIL',
+  'SERVICES',
+  'MANUFACTURING',
+] as const;
+
 export class CompanyInputDto {
   @IsOptional()
   @IsInt()
@@ -32,6 +41,10 @@ export class CompanyInputDto {
   @IsOptional()
   @IsString()
   taxId?: string | null;
+
+  @IsOptional()
+  @IsIn(BUSINESS_VERTICALS)
+  businessVertical?: (typeof BUSINESS_VERTICALS)[number];
 
   @IsOptional()
   @IsIn(COMPANY_STATUSES)

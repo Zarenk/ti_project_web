@@ -21,8 +21,14 @@ export default function ZxingScanner({
 }: ZxingScannerProps) {
   const containerId = useId().replace(/:/g, "_");
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const onScanSuccessRef = useRef(onScanSuccess);
+  const onScanErrorRef = useRef(onScanError);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep callback refs current without re-triggering the scanner effect
+  onScanSuccessRef.current = onScanSuccess;
+  onScanErrorRef.current = onScanError;
 
   useEffect(() => {
     let isActive = true;
@@ -59,13 +65,13 @@ export default function ZxingScanner({
             if (!isActive) return;
             const format = result?.result?.format?.formatName ?? "UNKNOWN";
             console.log(`[Scanner] Scanned: ${decodedText} (${format})`);
-            onScanSuccess(decodedText, format);
+            onScanSuccessRef.current(decodedText, format);
           },
           // errorMessage callback (called on every frame without a code - ignore)
           () => {}
         );
 
-        setIsLoading(false);
+        if (isActive) setIsLoading(false);
       } catch (err) {
         if (!isActive) return;
         console.error("[Scanner] Initialization error:", err);
@@ -73,7 +79,7 @@ export default function ZxingScanner({
           err instanceof Error ? err.message : "Error al iniciar el escáner";
         setError(errorMessage);
         setIsLoading(false);
-        onScanError?.(err instanceof Error ? err : new Error(errorMessage));
+        onScanErrorRef.current?.(err instanceof Error ? err : new Error(errorMessage));
       }
     };
 
@@ -81,18 +87,20 @@ export default function ZxingScanner({
 
     return () => {
       isActive = false;
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .catch((e: unknown) =>
-            console.warn("[Scanner] Error stopping:", e)
-          )
-          .finally(() => {
-            scannerRef.current = null;
-          });
+      const scanner = scannerRef.current;
+      if (scanner) {
+        try {
+          // html5-qrcode throws synchronously (not a rejected promise) if the
+          // scanner hasn't started yet.  Wrap in try/catch to prevent the
+          // uncaught error from propagating to the React error boundary.
+          scanner.stop().catch(() => {});
+        } catch {
+          // Scanner was not in a stoppable state (NOT_STARTED) – safe to ignore
+        }
+        scannerRef.current = null;
       }
     };
-  }, [containerId, onScanSuccess, onScanError]);
+  }, [containerId]);
 
   if (error) {
     return (

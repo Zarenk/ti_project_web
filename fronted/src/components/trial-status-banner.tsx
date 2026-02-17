@@ -351,7 +351,7 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
     return null
   }
 
-  const containerClass = className ? `${className} space-y-3` : "mx-4 mb-4 space-y-3"
+  const containerClass = className ? `${className} space-y-3 no-print` : "mx-4 mb-4 space-y-3 no-print"
 
   return (
     <div className={containerClass}>

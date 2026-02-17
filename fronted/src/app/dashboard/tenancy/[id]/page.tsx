@@ -61,6 +61,7 @@ import {
   setManualTenantSelection,
   type TenantSelectionChangeDetail,
 } from "@/utils/tenant-preferences"
+import { VERTICAL_CONFIG_INVALIDATE_EVENT } from "@/hooks/use-vertical-config"
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleString(undefined, {
@@ -222,6 +223,15 @@ export default function OrganizationDetailPage({
 
   useEffect(() => {
     void loadOrganization()
+  }, [loadOrganization])
+
+  // Re-fetch organization data when vertical changes so company cards update
+  useEffect(() => {
+    const handler = () => {
+      void loadOrganization()
+    }
+    window.addEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+    return () => window.removeEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
   }, [loadOrganization])
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -35,6 +36,7 @@ const skipStrictChecks = Boolean(
 );
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.join(__dirname, ".."),
   eslint: {
     ignoreDuringBuilds: skipStrictChecks,
   },

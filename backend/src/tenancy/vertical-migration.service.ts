@@ -1,10 +1,11 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { addDays } from 'date-fns';
-import { Prisma } from '@prisma/client';
+import { CashRegisterStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -38,6 +39,8 @@ interface SnapshotPayload {
 
 @Injectable()
 export class VerticalMigrationService {
+  private readonly logger = new Logger(VerticalMigrationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: VerticalConfigService,
@@ -143,6 +146,20 @@ export class VerticalMigrationService {
       if (!current || current.businessVertical !== previousVertical) {
         throw new BadRequestException(
           'El vertical fue modificado por otro usuario. Recarga la pagina e intenta nuevamente.',
+        );
+      }
+
+      // Auto-close active cash registers before migration
+      const closedCashRegisters = await tx.cashRegister.updateMany({
+        where: {
+          store: { companyId },
+          status: CashRegisterStatus.ACTIVE,
+        },
+        data: { status: CashRegisterStatus.CLOSED },
+      });
+      if (closedCashRegisters.count > 0) {
+        this.logger.log(
+          `Vertical migration: auto-closed ${closedCashRegisters.count} active cash register(s) for company ${companyId}`,
         );
       }
 

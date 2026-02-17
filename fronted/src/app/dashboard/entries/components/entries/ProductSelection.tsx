@@ -249,7 +249,7 @@ export function ProductSelection({
   }
 
   return (
-    <div className="flex-1 flex-col border border-gray-600 rounded-md p-2">
+    <div className="min-w-0 flex-col overflow-hidden border border-gray-600 rounded-md p-2 md:col-span-2">
       <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-1">
           <Label htmlFor="product-combobox" className="text-sm font-medium">
@@ -296,16 +296,17 @@ export function ProductSelection({
       {!isCollapsed && (
         <>
           <div className="flex flex-wrap gap-1">
+        <div className="min-w-0 flex-1">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
           <Button
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="min-w-[150px] flex-1 cursor-pointer justify-between truncate text-xs transition-colors hover:border-primary/60 hover:bg-accent/40 sm:w-[300px] sm:text-sm"
+              className="w-full cursor-pointer justify-between text-xs transition-colors hover:border-primary/60 hover:bg-accent/40 sm:text-sm"
             >
-              {displayedProductName || 'Selecciona un producto...'}
-              <ChevronsUpDown className="opacity-50" />
+              <span className="truncate">{displayedProductName || 'Selecciona un producto...'}</span>
+              <ChevronsUpDown className="ml-1 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="p-0" style={{ width: "var(--radix-popover-trigger-width)" }}>
@@ -377,11 +378,12 @@ export function ProductSelection({
             </Command>
           </PopoverContent>
         </Popover>
+        </div>
 
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              className="sm:w-auto sm:ml-2 ml-0 cursor-pointer bg-green-700 text-white transition-colors hover:bg-green-800"
+              className="shrink-0 sm:w-auto sm:ml-2 ml-0 cursor-pointer bg-green-700 text-white transition-colors hover:bg-green-800"
               type="button"
               onClick={addProduct}
             >
@@ -544,14 +546,14 @@ export function ProductSelection({
         {...register("description")}
         readOnly
       />
-      <div className="flex justify-between gap-1">
-            <div className="flex flex-col flex-grow">
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+            <div className="flex flex-col">
               <Label className="text-sm font-medium py-2">Cantidad</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <Input
                   type="text"
                   placeholder="Cantidad"
-                  className="h-9 flex-1 text-sm"
+                  className="h-9 min-w-0 flex-1 text-sm"
                   value={quantity.toString()}
                   maxLength={10}
                   onChange={(e) => {
@@ -570,53 +572,52 @@ export function ProductSelection({
                     }
                   }}
                 />
-                <div className="flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
-                        aria-label="Disminuir cantidad"
-                        onClick={() => {
-                          setQuantity((prev: number) => {
-                            const current = Number(prev) || 0;
-                            return Math.max(1, current - 1);
-                          });
-                        }}
-                      >
-                        -
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Disminuir cantidad</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
-                        aria-label="Aumentar cantidad"
-                        onClick={() => {
-                          setQuantity((prev: number) => {
-                            const current = Number(prev) || 0;
-                            return Math.max(1, current + 1);
-                          });
-                        }}
-                      >
-                        +
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Aumentar cantidad</TooltipContent>
-                  </Tooltip>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 cursor-pointer border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950 dark:hover:border-rose-300 dark:hover:bg-rose-300"
+                      aria-label="Disminuir cantidad"
+                      onClick={() => {
+                        setQuantity((prev: number) => {
+                          const current = Number(prev) || 0;
+                          return Math.max(1, current - 1);
+                        });
+                      }}
+                    >
+                      -
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Disminuir cantidad</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 cursor-pointer border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700 dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:border-emerald-300 dark:hover:bg-emerald-300"
+                      aria-label="Aumentar cantidad"
+                      onClick={() => {
+                        setQuantity((prev: number) => {
+                          const current = Number(prev) || 0;
+                          return Math.max(1, current + 1);
+                        });
+                      }}
+                    >
+                      +
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Aumentar cantidad</TooltipContent>
+                </Tooltip>
               </div>
             </div>
-            <div className="flex flex-col flex-grow">
-              <Label className="text-sm font-medium py-2">Precio Total Unitario</Label>
+            <div className="flex w-24 flex-col">
+              <Label className="text-sm font-medium py-2">Precio Unitario</Label>
               <Input
+                className="h-9 text-center"
                 value={totalPurchasePrice}
                 readOnly
               />

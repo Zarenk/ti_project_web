@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TenancyController } from './tenancy.controller';
 import { TenancyService } from './tenancy.service';
@@ -14,8 +14,10 @@ import { VerticalEventsService } from './vertical-events.service';
 import { VerticalSnapshotCleanupService } from './vertical-snapshot-cleanup.service';
 import { VerticalNotificationsService } from './vertical-notifications.service';
 import { VerticalWebhooksService } from './vertical-webhooks.service';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
+  imports: [forwardRef(() => UsersModule)],
   controllers: [TenancyController, CompaniesController, CompanyVerticalController],
   providers: [
     TenancyService,

@@ -454,11 +454,11 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
       workOrders: false,
       projectTracking: false,
       posIntegration: true,
-      ecommerceIntegration: true,
+      ecommerceIntegration: false,
       deliveryPlatforms: true,
       accounting: true,
       cashRegister: true,
-      quotes: true,
+      quotes: false,
     },
     ui: {
       theme: 'restaurant',

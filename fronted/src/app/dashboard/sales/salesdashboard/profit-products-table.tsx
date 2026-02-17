@@ -63,27 +63,31 @@ export function ProfitProductsTable({ dateRange }: Props) {
 
   return (
     <div className="rounded-xl border bg-card shadow-md overflow-hidden">
-      <div className="p-4 border-b flex items-center justify-between gap-4">
-        <div>
+      <div className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Utilidades por Producto</h2>
           <p className="text-sm text-muted-foreground">Compara precio de compra vs venta y calcula utilidad</p>
         </div>
-          <div className="flex items-center gap-2">
-          <Input placeholder="Buscar producto, SKU..." onChange={(e) => setSearchTerm(e.target.value)} />
-          <Button variant="outline" size="sm">Exportar</Button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Input
+            className="w-full sm:w-52"
+            placeholder="Buscar producto, SKU..."
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button variant="outline" size="sm" className="flex-shrink-0">Exportar</Button>
         </div>
       </div>
       <div className="overflow-x-auto">
         <Table className="w-full text-sm">
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead className="text-right">Unidades</TableHead>
-              <TableHead className="text-right">Precio compra</TableHead>
-              <TableHead className="text-right">Precio venta</TableHead>
-              <TableHead className="text-right">Ingresos</TableHead>
-              <TableHead className="text-right">Costo</TableHead>
-              <TableHead className="text-right">Utilidad</TableHead>
+              <TableHead className="min-w-[200px]">Producto</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Unidades</TableHead>
+              <TableHead className="text-right whitespace-nowrap">P. compra</TableHead>
+              <TableHead className="text-right whitespace-nowrap">P. venta</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Ingresos</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Costo</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Utilidad</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

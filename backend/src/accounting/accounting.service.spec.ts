@@ -36,10 +36,24 @@ describe('AccountingService.createJournalForInventoryEntry', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 1 }),
         create: jest.fn(),
       },
+      journalEntry: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      account: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 10, code: '2011' },
+          { id: 20, code: '4011' },
+          { id: 30, code: '1011' },
+          { id: 31, code: '1041' },
+          { id: 32, code: '4211' },
+        ]),
+      },
     } as any;
 
     const verticalConfig = { isFeatureEnabled: jest.fn().mockResolvedValue(true) } as any;
-    return { service: new AccountingService(prisma, verticalConfig), prisma };
+    const journalEntryService = { create: jest.fn().mockResolvedValue({ id: 99, status: 'POSTED' }) } as any;
+    const accountBootstrap = { ensureDefaults: jest.fn().mockResolvedValue(undefined) } as any;
+    return { service: new AccountingService(prisma, verticalConfig, journalEntryService, accountBootstrap), prisma, journalEntryService };
   };
 
   it('handles cash payments', async () => {

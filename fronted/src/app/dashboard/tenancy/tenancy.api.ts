@@ -19,6 +19,7 @@ export interface CreateOrganizationPayload {
     legalName?: string | null
     taxId?: string | null
     status?: string
+    businessVertical?: string
   }>
 }
 

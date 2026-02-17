@@ -1644,7 +1644,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                     />
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     <ProviderSection
                       valueProvider={valueProvider}
                       setValueProvider={setValueProvider}

@@ -108,6 +108,32 @@ export class AccountingController {
 
   // ==================== JOURNAL ENTRIES ====================
 
+  @Get('journal-entries/trial-balance')
+  async getJournalTrialBalance(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @CurrentTenant() tenant: TenantContext | null = null,
+  ) {
+    return this.journalEntryService.getTrialBalance({ from, to }, tenant);
+  }
+
+  @Get('journal-entries/ledger')
+  async getJournalLedger(
+    @Query('accountId') accountId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @CurrentTenant() tenant: TenantContext | null = null,
+  ) {
+    return this.journalEntryService.getLedger(
+      {
+        accountId: accountId ? Number(accountId) : undefined,
+        from,
+        to,
+      },
+      tenant,
+    );
+  }
+
   @Post('journal-entries')
   async createJournalEntry(
     @Body() dto: CreateJournalEntryDto,

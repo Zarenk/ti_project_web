@@ -445,10 +445,10 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
       {/* Main split layout */}
       <div className="flex gap-4">
         {/* Left panel - Product grid */}
-        <div className="flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-4">
           {/* Search + category filters */}
           <div className="space-y-3">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -469,7 +469,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                     <Button
                       variant="outline"
                       role="combobox"
-                      className="w-[200px] cursor-pointer justify-between"
+                      className="w-full cursor-pointer justify-between sm:w-[200px]"
                     >
                       <span className="truncate">
                         {selectedCategoryName || "Todas las categorias"}
@@ -479,7 +479,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                   </PopoverTrigger>
                   <PopoverContent
                     className="p-0"
-                    style={{ width: "var(--radix-popover-trigger-width)" }}
+                    style={{ width: "var(--radix-popover-trigger-width)", minWidth: "180px" }}
                   >
                     <Command>
                       <CommandInput placeholder="Buscar categoria..." />
@@ -614,7 +614,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
 
               {/* Pagination controls */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-2">
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -622,7 +622,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    Anterior
+                    <span className="hidden sm:inline">Anterior</span>
                   </Button>
 
                   <div className="flex items-center gap-1">
@@ -643,7 +643,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                           key={pageNum}
                           variant={currentPage === pageNum ? "default" : "outline"}
                           size="sm"
-                          className="h-9 w-9"
+                          className="h-8 w-8 sm:h-9 sm:w-9"
                           onClick={() => setCurrentPage(pageNum)}
                         >
                           {pageNum}
@@ -658,7 +658,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Siguiente
+                    <span className="hidden sm:inline">Siguiente</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

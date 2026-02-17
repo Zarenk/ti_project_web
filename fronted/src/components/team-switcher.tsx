@@ -62,6 +62,7 @@ import {
   setOrganizationsCache,
 } from "@/utils/tenant-organizations-cache"
 import { getAuthToken } from "@/utils/auth-token"
+import { VERTICAL_CONFIG_INVALIDATE_EVENT } from "@/hooks/use-vertical-config"
 
 type ExtendedOrganization = OrganizationResponse & {
   companies: CompanyResponse[]
@@ -275,6 +276,29 @@ export function TeamSwitcher(): React.ReactElement | null {
       }
     }
   }, [fetchOrganizations, showGlobalSwitcher])
+
+  // Re-fetch sidebar data when vertical changes
+  useEffect(() => {
+    const handler = () => {
+      if (showGlobalSwitcher) {
+        void fetchOrganizations()
+      } else {
+        // Non-super admin: re-fetch tenant summary to get updated vertical
+        ;(async () => {
+          try {
+            const token = await getAuthToken()
+            if (!token || userId == null) return
+            const summary = await getCurrentTenant()
+            setTenantSummary(summary)
+          } catch {
+            // Silently ignore - sidebar will show stale data until next navigation
+          }
+        })()
+      }
+    }
+    window.addEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+    return () => window.removeEventListener(VERTICAL_CONFIG_INVALIDATE_EVENT, handler)
+  }, [fetchOrganizations, showGlobalSwitcher, userId])
 
   useEffect(() => {
     if (showGlobalSwitcher || role === null) return
