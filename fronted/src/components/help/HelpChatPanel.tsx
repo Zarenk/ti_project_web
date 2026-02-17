@@ -376,6 +376,23 @@ export function HelpChatPanel() {
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
+              <a
+                href="/api/manual"
+                download="Manual_Usuario_ADSLab.pdf"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-all hover:bg-blue-100 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                title="Descargar Manual PDF"
+              >
+                <BookOpen className="h-4 w-4" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-slate-900 text-white border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-300">
+              <p className="text-xs font-medium">Descargar Manual PDF</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <button
                 onClick={() => setIsOpen(false)}
                 className="group relative flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-all hover:bg-slate-200 hover:text-slate-700 hover:scale-110 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
