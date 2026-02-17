@@ -24,6 +24,7 @@ import { PleExportService } from './services/ple-export.service';
 import { AccountingAnalyticsService } from './services/accounting-analytics.service';
 import { JournalEntryService } from './services/journal-entry.service';
 import { AccountMappingService } from './services/account-mapping.service';
+import { AccountBootstrapService } from './services/account-bootstrap.service';
 
 @Module({
   imports: [PrismaModule, TenancyModule],
@@ -51,6 +52,7 @@ import { AccountMappingService } from './services/account-mapping.service';
     AccountingAnalyticsService,
     JournalEntryService,
     AccountMappingService,
+    AccountBootstrapService,
     PleExportService,
     {
       provide: 'CreditNoteAccountingService',
