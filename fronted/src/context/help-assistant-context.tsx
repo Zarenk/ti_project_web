@@ -390,7 +390,7 @@ function matchLocalEnhanced(
   }
 
   // Fallback to enhanced matcher with expanded vocabulary
-  let results = findMatchingEntries(text, allHelpEntries, 0.6)
+  let results = findMatchingEntries(text, allHelpEntries, 0.6, currentSection)
 
   if (results.length === 0) {
     setCachedResult(text, currentSection, null);

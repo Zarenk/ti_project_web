@@ -73,15 +73,15 @@ function calculateSimilarity(a: string, b: string): number {
 function getAdaptiveThreshold(matchType: MatchResult["matchType"]): number {
   const thresholds: Record<MatchResult["matchType"], number> = {
     exact: 0.95,      // Matches exactos deben ser muy precisos
-    alias: 0.90,      // Aliases también muy precisos
-    autocorrect: 0.85, // Autocorrección debe ser confiable
-    synonym: 0.80,    // Sinónimos buenos pero no perfectos
-    keyword: 0.75,    // Keywords permiten más flexibilidad
-    intent: 0.70,     // Intención puede ser más amplia
-    fuzzy: 0.65,      // Fuzzy matching más permisivo
+    alias: 0.85,      // Aliases con buena confianza
+    autocorrect: 0.80, // Autocorrección confiable
+    synonym: 0.75,    // Sinónimos buenos pero no perfectos
+    keyword: 0.60,    // Keywords permiten más flexibilidad
+    intent: 0.55,     // Intención puede ser amplia (el section boost la refina)
+    fuzzy: 0.55,      // Fuzzy matching más permisivo
   }
 
-  return thresholds[matchType] ?? 0.65
+  return thresholds[matchType] ?? 0.55
 }
 
 /**
@@ -93,7 +93,8 @@ function getAdaptiveThreshold(matchType: MatchResult["matchType"]): number {
 export function findMatchingEntries(
   query: string,
   entries: HelpEntry[],
-  minScore: number = 0.65 // Threshold base para fuzzy matching
+  minScore: number = 0.65, // Threshold base para fuzzy matching
+  currentSection?: string // Sección actual para boost contextual
 ): MatchResult[] {
   const results: MatchResult[] = [];
 
@@ -164,7 +165,8 @@ export function findMatchingEntries(
         );
 
         if (matchingKeywords.length > 0) {
-          const score = 0.7 + (matchingKeywords.length / keywords.length) * 0.1;
+          const ratio = matchingKeywords.length / Math.min(keywords.length, 8);
+          const score = 0.60 + Math.min(ratio, 1) * 0.20;
           if (score > bestScore) {
             bestScore = score;
             bestMatchType = "keyword";
@@ -176,12 +178,14 @@ export function findMatchingEntries(
     // 4. Coincidencia por intención
     if (bestScore < 0.7 && intents.length > 0) {
       const entryId = entry.id.toLowerCase();
+      const entryQuestion = normalizeText(entry.question);
       const matchingIntentKeywords = intentKeywords.filter(keyword =>
-        entryId.includes(keyword)
+        entryId.includes(keyword) || entryQuestion.includes(keyword)
       );
 
       if (matchingIntentKeywords.length > 0) {
-        const score = 0.6 + (matchingIntentKeywords.length / intentKeywords.length) * 0.1;
+        const ratio = matchingIntentKeywords.length / intentKeywords.length;
+        const score = 0.55 + ratio * 0.20;
         if (score > bestScore) {
           bestScore = score;
           bestMatchType = "intent";
@@ -212,6 +216,12 @@ export function findMatchingEntries(
     if (wasAutoCorrected && bestScore > 0.5) {
       bestScore = Math.min(bestScore * 1.1, 1.0); // Bonus del 10%
       bestMatchType = "autocorrect" as MatchResult["matchType"];
+    }
+
+    // 7. Section context boost: entries de la sección actual obtienen +0.15
+    // Esto permite que matches marginales en la sección correcta pasen el threshold
+    if (currentSection && bestScore > 0.3 && entry.id.startsWith(currentSection + "-")) {
+      bestScore = Math.min(bestScore + 0.15, 1.0);
     }
 
     // Obtener threshold adaptativo para este tipo de match

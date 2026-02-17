@@ -169,24 +169,26 @@ export function HelpLearningDashboard() {
 
       {/* Detailed Analysis */}
       <Tabs defaultValue="failed-queries" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="failed-queries">
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Queries Fallidas
-          </TabsTrigger>
-          <TabsTrigger value="suggested-aliases">
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Aliases Sugeridos ({suggestedAliases.length})
-          </TabsTrigger>
-          <TabsTrigger value="suggested-entries">
-            <Lightbulb className="h-4 w-4 mr-2" />
-            Nuevas Entradas ({suggestedEntries.length})
-          </TabsTrigger>
-          <TabsTrigger value="promoted-answers">
-            <ThumbsUp className="h-4 w-4 mr-2" />
-            Respuestas Promovidas ({promotedAnswers.length})
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+          <TabsList className="inline-flex w-full min-w-max">
+            <TabsTrigger value="failed-queries" className="flex-shrink-0 text-xs sm:text-sm">
+              <AlertCircle className="h-4 w-4 mr-1.5" />
+              Queries Fallidas
+            </TabsTrigger>
+            <TabsTrigger value="suggested-aliases" className="flex-shrink-0 text-xs sm:text-sm">
+              <CheckCircle className="h-4 w-4 mr-1.5" />
+              Aliases ({suggestedAliases.length})
+            </TabsTrigger>
+            <TabsTrigger value="suggested-entries" className="flex-shrink-0 text-xs sm:text-sm">
+              <Lightbulb className="h-4 w-4 mr-1.5" />
+              Entradas ({suggestedEntries.length})
+            </TabsTrigger>
+            <TabsTrigger value="promoted-answers" className="flex-shrink-0 text-xs sm:text-sm">
+              <ThumbsUp className="h-4 w-4 mr-1.5" />
+              Promovidas ({promotedAnswers.length})
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Failed Queries */}
         <TabsContent value="failed-queries" className="space-y-4">
