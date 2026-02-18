@@ -48,6 +48,8 @@ export class RestaurantTablesService {
         code: dto.code,
         capacity: dto.capacity,
         area: dto.area,
+        positionX: dto.positionX,
+        positionY: dto.positionY,
         status: dto.status,
         organizationId: resolvedOrganizationId ?? null,
         companyId: resolvedCompanyId ?? null,
@@ -104,6 +106,8 @@ export class RestaurantTablesService {
         code: dto.code,
         capacity: dto.capacity,
         area: dto.area,
+        positionX: dto.positionX,
+        positionY: dto.positionY,
         status: dto.status,
       },
     });

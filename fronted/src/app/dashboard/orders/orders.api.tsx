@@ -251,3 +251,43 @@ export async function updateRestaurantOrder(
 
   return res.json()
 }
+
+export type CheckoutPayment = {
+  paymentMethodId: number
+  amount: number
+  currency?: string
+  transactionId?: string
+}
+
+export type CheckoutRestaurantOrderPayload = {
+  storeId: number
+  clientId?: number | null
+  tipoComprobante?: string
+  tipoMoneda?: string
+  serviceChargePercent?: number
+  tip?: number
+  payments: CheckoutPayment[]
+}
+
+export async function checkoutRestaurantOrder(
+  id: number | string,
+  payload: CheckoutRestaurantOrderPayload,
+) {
+  const res = await authFetch(`/restaurant-orders/${id}/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    let message = "Error al procesar el pago de la orden"
+    try {
+      message = await res.text()
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message)
+  }
+
+  return res.json()
+}

@@ -6,8 +6,9 @@ export type RestaurantTable = {
   code: string
   status: "AVAILABLE" | "OCCUPIED" | "RESERVED" | "DISABLED"
   capacity: number | null
-  location?: string | null
-  notes?: string | null
+  area?: string | null
+  positionX?: number | null
+  positionY?: number | null
   currentOrderId?: number | null
   createdAt: string
   updatedAt: string
@@ -18,8 +19,9 @@ type CreateRestaurantTablePayload = {
   code: string
   status?: RestaurantTable["status"]
   capacity?: number | null
-  location?: string | null
-  notes?: string | null
+  area?: string | null
+  positionX?: number
+  positionY?: number
 }
 
 type UpdateRestaurantTablePayload = Partial<CreateRestaurantTablePayload>

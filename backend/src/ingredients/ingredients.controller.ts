@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
@@ -97,6 +98,26 @@ export class IngredientsController {
       numericId,
       organizationId === undefined ? undefined : organizationId,
       companyId === undefined ? undefined : companyId,
+    );
+  }
+
+  @Get(':id/movements')
+  @ApiOperation({ summary: 'List ingredient movements' })
+  findMovements(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+    @Query('type') type?: string,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (Number.isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un numero valido.');
+    }
+    return this.service.findMovements(
+      numericId,
+      organizationId === undefined ? undefined : organizationId,
+      companyId === undefined ? undefined : companyId,
+      type?.toUpperCase() as any,
     );
   }
 }

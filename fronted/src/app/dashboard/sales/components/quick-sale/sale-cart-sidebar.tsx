@@ -178,11 +178,21 @@ export function SaleCartSidebar({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium leading-tight">
+                    <p className="line-clamp-2 text-sm font-medium leading-tight">
                       {item.product.name}
                     </p>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-muted-foreground/60">
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {item.product.brand && (
+                        <span className="text-[11px] font-medium text-muted-foreground/80">
+                          {typeof item.product.brand === "string"
+                            ? item.product.brand
+                            : item.product.brand.name || ""}
+                        </span>
+                      )}
+                      {item.product.brand && item.product.category_name && (
+                        <span className="text-[9px] text-muted-foreground/40">·</span>
+                      )}
+                      <span className="text-[11px] text-muted-foreground/60 truncate">
                         {item.product.category_name || "Sin categoria"}
                       </span>
                       {serialsEnabled && onSerialClick && (

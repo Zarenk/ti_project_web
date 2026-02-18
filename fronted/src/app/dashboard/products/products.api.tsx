@@ -141,6 +141,47 @@ export async function getProduct(id: string) {
   return formattedProduct
 }
 
+export async function createProductWithStock(
+  productData: any,
+  stockData: {
+    storeId: number;
+    userId: number;
+    providerId: number;
+    quantity: number;
+    price: number;
+    priceInSoles: number;
+    tipoMoneda?: string;
+    referenceId?: string;
+  },
+) {
+  const res = await authFetch(`${BACKEND_URL}/api/products/create-with-stock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ product: productData, stock: stockData }),
+  })
+
+  if (!res.ok) {
+    let errorData: any = null
+    try {
+      errorData = await res.json()
+    } catch {
+      /* ignore */
+    }
+    const message = errorData?.message || 'Error al crear el producto con stock'
+    throw { message, response: { status: res.status, data: errorData } }
+  }
+
+  const data = await res.json()
+  return {
+    product: {
+      ...data.product,
+      status: normalizeProductStatus(data.product?.status ?? null),
+    },
+    entry: data.entry,
+    stockCreated: data.stockCreated,
+  }
+}
+
 export async function createProduct(productData: any) {
   const res = await authFetch(`${BACKEND_URL}/api/products`, {
     method: 'POST',

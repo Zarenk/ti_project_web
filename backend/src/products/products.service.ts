@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -20,6 +21,7 @@ import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import { BusinessVertical } from 'src/types/business-vertical.enum';
 import { VerticalProductSchema } from 'src/config/verticals.config';
 import { handlePrismaError } from 'src/common/errors/prisma-error.handler';
+import { EntriesService } from 'src/entries/entries.service';
 
 interface VerticalSchemaState {
   vertical: BusinessVertical;
@@ -34,12 +36,15 @@ interface SchemaResolution {
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     private prismaService: PrismaService,
     private categoryService: CategoryService,
     private brandsService: BrandsService,
     private tenantContext: TenantContextService,
     private verticalConfigService: VerticalConfigService,
+    private entriesService: EntriesService,
   ) {}
 
   private async ensureProductsFeatureEnabled(
@@ -228,6 +233,67 @@ export class ProductsService {
     }
   }
 
+  /**
+   * Atomically creates a product and registers initial stock via an entry.
+   * If the entry creation fails, the product is rolled back (deleted).
+   */
+  async createWithInitialStock(
+    createProductDto: CreateProductDto,
+    stockData: {
+      storeId: number;
+      userId: number;
+      providerId: number;
+      quantity: number;
+      price: number;
+      priceInSoles: number;
+      tipoMoneda?: string;
+      referenceId?: string;
+    },
+    organizationIdFromContext?: number | null,
+  ) {
+    const product = await this.create(createProductDto);
+    try {
+      const entry = await this.entriesService.createEntry(
+        {
+          storeId: stockData.storeId,
+          userId: stockData.userId,
+          providerId: stockData.providerId,
+          date: new Date(),
+          description: 'Stock inicial',
+          tipoMoneda: stockData.tipoMoneda ?? 'PEN',
+          details: [
+            {
+              productId: product.id,
+              quantity: stockData.quantity,
+              price: stockData.price,
+              priceInSoles: stockData.priceInSoles,
+            },
+          ],
+          referenceId:
+            stockData.referenceId ??
+            `initial-stock:${product.id}:${Date.now()}`,
+        },
+        organizationIdFromContext,
+      );
+      return { product, entry, stockCreated: true };
+    } catch (error) {
+      this.logger.warn(
+        `Entry creation failed for product ${product.id}, rolling back product.`,
+      );
+      try {
+        await this.prismaService.product.delete({
+          where: { id: product.id },
+        });
+      } catch (deleteError) {
+        this.logger.error(
+          `Failed to rollback product ${product.id}: ${deleteError}`,
+        );
+      }
+      if (error instanceof HttpException) throw error;
+      handlePrismaError(error);
+    }
+  }
+
   async verifyOrCreateProducts(
     products: {
       name: string;
@@ -293,8 +359,13 @@ export class ProductsService {
       const ctx = this.tenantContext.getContext();
       await this.ensureProductsFeatureEnabled(ctx.companyId);
 
+      const orgId = ctx.organizationId ?? null;
+      if (orgId === null) {
+        return [];
+      }
+
       const where: Prisma.ProductWhereInput = {
-        ...this.orgFilter(),
+        organizationId: orgId,
       };
 
       if (filters?.migrationStatus === 'legacy') {
@@ -311,7 +382,6 @@ export class ProductsService {
 
       const products = await this.prismaService.product.findMany({
         where,
-        take: 500,
         include: {
           specification: true,
           features: true,
@@ -553,7 +623,7 @@ export class ProductsService {
         existing.isVerticalMigrated,
       );
 
-      return this.prismaService.product.update({
+      const updated = await this.prismaService.product.update({
         where: { id },
         data: {
           extraAttributes:
@@ -563,8 +633,105 @@ export class ProductsService {
           isVerticalMigrated: markMigrated || resolution.isVerticalMigrated,
         },
       });
+
+      // Sync recipe ingredients from extraAttributes JSON → RecipeItem table
+      await this.syncRecipeItems(
+        id,
+        extraAttributes,
+        ctx.organizationId ?? null,
+        ctx.companyId ?? null,
+      );
+
+      return updated;
     } catch (error) {
       handlePrismaError(error);
+    }
+  }
+
+  /**
+   * Sync recipe ingredients from extraAttributes JSON to the RecipeItem table.
+   * For each ingredient in the JSON, find-or-create the Ingredient record,
+   * then upsert the RecipeItem linking productId → ingredientId.
+   */
+  private async syncRecipeItems(
+    productId: number,
+    attrs: Record<string, unknown>,
+    organizationId: number | null,
+    companyId: number | null,
+  ): Promise<void> {
+    const ingredients = attrs?.ingredients;
+    if (!Array.isArray(ingredients) || ingredients.length === 0) return;
+
+    try {
+      for (const raw of ingredients) {
+        const name = typeof raw?.name === 'string' ? raw.name.trim() : '';
+        const quantity = typeof raw?.quantity === 'number' ? raw.quantity : 0;
+        const unit = typeof raw?.unit === 'string' ? raw.unit.trim() : 'unidad';
+
+        if (!name) continue;
+
+        // Find or create the Ingredient by name within the same company
+        let ingredient = await this.prismaService.ingredient.findFirst({
+          where: {
+            name: { equals: name, mode: 'insensitive' },
+            ...(companyId ? { companyId } : { organizationId }),
+          },
+        });
+
+        if (!ingredient) {
+          ingredient = await this.prismaService.ingredient.create({
+            data: {
+              name,
+              unit,
+              stock: 0,
+              minStock: 0,
+              status: 'ACTIVE',
+              organizationId,
+              companyId,
+            },
+          });
+          this.logger.log(`Auto-created ingredient "${name}" (id=${ingredient.id})`);
+        }
+
+        // Upsert RecipeItem (unique on productId+ingredientId)
+        await this.prismaService.recipeItem.upsert({
+          where: {
+            productId_ingredientId: {
+              productId,
+              ingredientId: ingredient.id,
+            },
+          },
+          update: { quantity, unit },
+          create: {
+            productId,
+            ingredientId: ingredient.id,
+            quantity,
+            unit,
+            organizationId,
+            companyId,
+          },
+        });
+      }
+
+      // Remove RecipeItems that are no longer in the JSON recipe
+      const validNames = ingredients
+        .map((r: any) => (typeof r?.name === 'string' ? r.name.trim().toLowerCase() : ''))
+        .filter(Boolean);
+
+      const existingItems = await this.prismaService.recipeItem.findMany({
+        where: { productId },
+        include: { ingredient: true },
+      });
+
+      for (const item of existingItems) {
+        if (!validNames.includes(item.ingredient.name.toLowerCase())) {
+          await this.prismaService.recipeItem.delete({
+            where: { id: item.id },
+          });
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to sync recipe items for product ${productId}: ${err}`);
     }
   }
 

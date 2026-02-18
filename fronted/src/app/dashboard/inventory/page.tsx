@@ -237,50 +237,54 @@ export default function InventoryPage() {
 
         const groupedData = Object.values(
           inventoryData.reduce((acc: any, item: any) => {
-            const productName = item.product.name;
+            const productName = item.product?.name;
+            if (!productName) return acc;
 
             if (!acc[productName]) {
               acc[productName] = {
                 id: item.product.id,
                 product: {
                   ...item.product,
-                  category: item.product.category.name,
+                  category: item.product.category?.name ?? 'Sin categoría',
                 },
                 stock: 0,
-                stockByCurrency: { USD: 0, PEN: 0 }, // Desglose por moneda
+                stockByCurrency: { USD: 0, PEN: 0 },
                 createdAt: item.createdAt,
                 updateAt: item.updatedAt,
                 storeOnInventory: [],
                 serialNumbers: [],
-                highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0, // Precio mas alto
-                lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0, // Precio mas bajo
+                highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0,
+                lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0,
               };
             }
 
-            acc[productName].stock += item.storeOnInventory.reduce(
-              (total: number, store: any) => total + store.stock,
+            const stores = Array.isArray(item.storeOnInventory) ? item.storeOnInventory : [];
+
+            acc[productName].stock += stores.reduce(
+              (total: number, store: any) => total + (store.stock ?? 0),
               0
             );
 
-            item.stockByStore.forEach((store: any) => {
-              acc[productName].stockByCurrency.USD += store.stockByCurrency.USD;
-              acc[productName].stockByCurrency.PEN += store.stockByCurrency.PEN;
+            (Array.isArray(item.stockByStore) ? item.stockByStore : []).forEach((store: any) => {
+              acc[productName].stockByCurrency.USD += store.stockByCurrency?.USD ?? 0;
+              acc[productName].stockByCurrency.PEN += store.stockByCurrency?.PEN ?? 0;
             });
 
-            acc[productName].storeOnInventory.push(...item.storeOnInventory);
+            acc[productName].storeOnInventory.push(...stores);
 
             item.entryDetails?.forEach((detail: any) => {
               const series = detail.series?.map((s: any) => s.serial) || [];
               acc[productName].serialNumbers.push(...series);
             });
 
-            const latestUpdateAt = item.storeOnInventory.reduce(
-              (latest: Date, store: any) =>
-                new Date(store.updatedAt) > new Date(latest) ? new Date(store.updatedAt) : latest,
-              new Date(acc[productName].updateAt)
-            );
-
-            acc[productName].updateAt = latestUpdateAt;
+            if (stores.length > 0) {
+              const latestUpdateAt = stores.reduce(
+                (latest: Date, store: any) =>
+                  new Date(store.updatedAt) > new Date(latest) ? new Date(store.updatedAt) : latest,
+                new Date(acc[productName].updateAt)
+              );
+              acc[productName].updateAt = latestUpdateAt;
+            }
 
             return acc;
           }, {})

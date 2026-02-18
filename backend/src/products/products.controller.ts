@@ -30,6 +30,7 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
 @ModulePermission(['inventory', 'catalog'])
@@ -63,6 +64,48 @@ export class ProductsController {
       req,
     );
     return product;
+  }
+
+  @Post('create-with-stock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @ApiOperation({ summary: 'Create a product with initial stock atomically' })
+  async createWithStock(
+    @Body()
+    body: {
+      product: CreateProductDto;
+      stock: {
+        storeId: number;
+        userId: number;
+        providerId: number;
+        quantity: number;
+        price: number;
+        priceInSoles: number;
+        tipoMoneda?: string;
+        referenceId?: string;
+      };
+    },
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
+    @Req() req: Request,
+  ) {
+    const result = await this.productsService.createWithInitialStock(
+      body.product,
+      body.stock,
+      organizationId === undefined ? undefined : organizationId,
+    );
+    await this.activityService.log(
+      {
+        actorId: (req as any)?.user?.userId,
+        actorEmail: (req as any)?.user?.username,
+        entityType: 'Product',
+        entityId: result.product.id.toString(),
+        action: AuditAction.CREATED,
+        summary: `Producto ${result.product.name} creado con stock inicial (${body.stock.quantity} uds)`,
+        diff: { after: result.product } as any,
+      },
+      req,
+    );
+    return result;
   }
 
   @Post('verify-or-create-products')

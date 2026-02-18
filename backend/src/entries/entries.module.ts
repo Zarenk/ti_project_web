@@ -27,5 +27,6 @@ import { InvoiceExtractionModule } from 'src/invoice-extraction/invoice-extracti
     JournalEntryService,
     AccountBootstrapService,
   ],
+  exports: [EntriesService],
 })
 export class EntriesModule {}

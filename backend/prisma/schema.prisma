@@ -1090,6 +1090,8 @@ model RestaurantTable {
   code           String?
   capacity       Int?
   area           String?
+  positionX      Float?
+  positionY      Float?
   status         RestaurantTableStatus @default(AVAILABLE)
   currentOrderId Int?                  @unique
   createdAt      DateTime              @default(now())

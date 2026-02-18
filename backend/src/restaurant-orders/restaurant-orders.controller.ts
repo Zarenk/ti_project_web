@@ -18,6 +18,7 @@ import { RestaurantOrdersService } from './restaurant-orders.service';
 import { CreateRestaurantOrderDto } from './dto/create-restaurant-order.dto';
 import { UpdateRestaurantOrderDto } from './dto/update-restaurant-order.dto';
 import { UpdateRestaurantOrderItemDto } from './dto/update-restaurant-order-item.dto';
+import { CheckoutRestaurantOrderDto } from './dto/checkout-restaurant-order.dto';
 
 @Controller('restaurant-orders')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
@@ -71,6 +72,28 @@ export class RestaurantOrdersController {
       organizationId === undefined ? undefined : organizationId,
       companyId === undefined ? undefined : companyId,
       parsedStationId,
+    );
+  }
+
+  @Post(':id/checkout')
+  @ApiOperation({ summary: 'Checkout restaurant order (create sale + payment)' })
+  checkout(
+    @Param('id') id: string,
+    @Body() dto: CheckoutRestaurantOrderDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+    @Request() req: { user?: { userId?: number } },
+  ) {
+    const numericId = parseInt(id, 10);
+    if (Number.isNaN(numericId)) {
+      throw new BadRequestException('El ID debe ser un numero valido.');
+    }
+    return this.service.checkout(
+      numericId,
+      dto,
+      organizationId === undefined ? undefined : organizationId,
+      companyId === undefined ? undefined : companyId,
+      req.user?.userId ?? null,
     );
   }
 

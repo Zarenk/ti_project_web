@@ -14,14 +14,15 @@ import { useVerticalConfig } from "@/hooks/use-vertical-config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Bath, CircleCheck, Flame, Snowflake, Trash2 } from "lucide-react"
+import { Bath, CircleCheck, Flame, LayoutGrid, Map, Pencil, Snowflake, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { TableFloorPlan } from "./table-floor-plan"
+import { useKitchenSocket } from "@/hooks/use-kitchen-socket"
 
 const TABLE_STATUS_OPTIONS: RestaurantTable["status"][] = [
   "AVAILABLE",
@@ -64,11 +65,12 @@ export default function RestaurantTablesPage() {
     code: "",
     status: "AVAILABLE" as RestaurantTable["status"],
     capacity: "",
-    location: "",
-    notes: "",
+    area: "",
   })
 
   const isRestaurant = verticalName === "RESTAURANTS"
+  const [viewMode, setViewMode] = useState<"cards" | "floorplan">("cards")
+  const [floorEditMode, setFloorEditMode] = useState(false)
 
   const loadTables = useCallback(async () => {
     if (!isRestaurant) return
@@ -89,6 +91,17 @@ export default function RestaurantTablesPage() {
     loadTables()
   }, [loadTables])
 
+  // Real-time table status updates via WebSocket
+  useKitchenSocket({
+    enabled: isRestaurant,
+    onTableUpdate: useCallback(() => {
+      void loadTables()
+    }, [loadTables]),
+    onOrderUpdate: useCallback(() => {
+      void loadTables()
+    }, [loadTables]),
+  })
+
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.code.trim()) {
       toast.error("Completa el nombre y el codigo de la mesa.")
@@ -100,8 +113,7 @@ export default function RestaurantTablesPage() {
         code: form.code.trim(),
         status: form.status,
         capacity: form.capacity ? Number(form.capacity) : undefined,
-        location: form.location.trim() || undefined,
-        notes: form.notes.trim() || undefined,
+        area: form.area.trim() || undefined,
       })
       toast.success("Mesa creada correctamente.")
       setForm({
@@ -109,8 +121,7 @@ export default function RestaurantTablesPage() {
         code: "",
         status: "AVAILABLE",
         capacity: "",
-        location: "",
-        notes: "",
+        area: "",
       })
       await loadTables()
     } catch (error) {
@@ -154,7 +165,7 @@ export default function RestaurantTablesPage() {
       return (
         table.name?.toLowerCase().includes(query) ||
         table.code?.toLowerCase().includes(query) ||
-        table.location?.toLowerCase().includes(query)
+        table.area?.toLowerCase().includes(query)
       )
     })
   }, [tables, searchTerm, statusFilter])
@@ -200,9 +211,29 @@ export default function RestaurantTablesPage() {
               Organiza el plano del salón y controla disponibilidad en tiempo real.
             </p>
           </div>
-          <Badge variant="outline" className="border-primary/30 text-primary">
-            Vertical Restaurantes
-          </Badge>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-white/10 p-0.5">
+              <Button
+                variant={viewMode === "cards" ? "default" : "ghost"}
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => setViewMode("cards")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Tarjetas
+              </Button>
+              <Button
+                variant={viewMode === "floorplan" ? "default" : "ghost"}
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => setViewMode("floorplan")}
+              >
+                <Map className="h-3.5 w-3.5" /> Plano
+              </Button>
+            </div>
+            <Badge variant="outline" className="border-primary/30 text-primary">
+              Vertical Restaurantes
+            </Badge>
+          </div>
         </header>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -224,7 +255,36 @@ export default function RestaurantTablesPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        {viewMode === "floorplan" && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base font-semibold">Plano del salon</CardTitle>
+              <Button
+                variant={floorEditMode ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setFloorEditMode((v) => !v)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {floorEditMode ? "Listo" : "Editar plano"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <TableFloorPlan
+                tables={tables}
+                editMode={floorEditMode}
+                onPositionSaved={loadTables}
+                onTableClick={(table) => {
+                  if (table.currentOrderId) {
+                    window.open(`/dashboard/restaurant-orders/${table.currentOrderId}`, "_blank")
+                  }
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        <div className={cn("grid gap-6", viewMode === "cards" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]" : "lg:grid-cols-1")} style={{ display: viewMode === "floorplan" ? "none" : undefined }}>
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">Nueva mesa</CardTitle>
@@ -289,28 +349,15 @@ export default function RestaurantTablesPage() {
                   />
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Ubicacion</Label>
-                  <Input
-                    value={form.location}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, location: event.target.value }))
-                    }
-                    placeholder="Salon principal"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Notas</Label>
-                  <Textarea
-                    value={form.notes}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, notes: event.target.value }))
-                    }
-                    placeholder="Observaciones del ambiente"
-                    className="min-h-[80px]"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label>Ubicacion / Area</Label>
+                <Input
+                  value={form.area}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, area: event.target.value }))
+                  }
+                  placeholder="Salon principal"
+                />
               </div>
               <Button className="w-full cursor-pointer" onClick={handleSubmit}>
                 Guardar mesa
@@ -420,14 +467,9 @@ export default function RestaurantTablesPage() {
                             Capacidad {table.capacity ?? "-"}
                           </span>
                           <span className="rounded-full border border-white/10 px-2 py-1">
-                            {table.location ?? "General"}
+                            {table.area ?? "General"}
                           </span>
                         </div>
-                        {table.notes ? (
-                          <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                            {table.notes}
-                          </p>
-                        ) : null}
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <TooltipProvider delayDuration={200}>
                             <div className="flex flex-wrap gap-2">

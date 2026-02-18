@@ -199,7 +199,7 @@ export default function NewRestaurantOrderPage() {
     const loadProducts = async () => {
       setProductsLoading(true);
       try {
-        const data = await getProductsByStore(String(storeId));
+        const data = await getProductsByStore(Number(storeId));
         if (!active) return;
         const list = Array.isArray(data) ? data : [];
         setProducts(list);
@@ -224,7 +224,7 @@ export default function NewRestaurantOrderPage() {
         return;
       }
       try {
-        const data = await getStockByProductAndStore(String(selectedProductId), String(storeId));
+        const data = await getStockByProductAndStore(Number(storeId), Number(selectedProductId));
         if (!active) return;
         const stock = typeof data?.stock === "number" ? data.stock : data?.quantity ?? null;
         setSelectedStock(stock);

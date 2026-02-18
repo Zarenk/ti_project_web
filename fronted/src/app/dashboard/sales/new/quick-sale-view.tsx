@@ -1084,20 +1084,23 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
 
       {/* Mobile bottom bar */}
       {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background p-3 shadow-lg lg:hidden">
-          <Button
-            className="w-full cursor-pointer gap-2"
+        <div className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 lg:hidden">
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-background/80 px-4 py-3.5 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] backdrop-blur-xl transition-all duration-200 active:scale-[0.98] dark:border-white/[0.06] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]"
             onClick={() => setMobileCartOpen(true)}
           >
-            <ShoppingCart className="h-4 w-4" />
-            Ver carrito
-            <Badge variant="secondary" className="ml-auto">
-              {cartCount}
-            </Badge>
-            <span className="tabular-nums font-semibold">
+            <div className="relative">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                {cartCount}
+              </span>
+            </div>
+            <span className="text-sm font-medium">Ver carrito</span>
+            <span className="ml-auto rounded-xl bg-primary px-3 py-1.5 text-sm font-bold tabular-nums text-primary-foreground">
               S/. {cartTotal.toFixed(2)}
             </span>
-          </Button>
+          </button>
         </div>
       )}
 

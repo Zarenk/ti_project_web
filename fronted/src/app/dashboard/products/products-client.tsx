@@ -107,7 +107,7 @@ export function ProductsClient() {
     return () => {
       cancelled = true
     }
-  }, [migrationStatus])
+  }, [migrationStatus, selection])
 
   const reloadProducts = async () => {
     try {

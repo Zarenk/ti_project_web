@@ -391,6 +391,17 @@ npx cypress open        # Tests E2E
 - Confirmar que tipos TypeScript son correctos
 - Probar en desarrollo antes de confirmar
 
+## Reglas Críticas - NO VIOLAR
+
+### Queries de Productos
+1. **NUNCA agregar `take: 500` ni límites hardcoded** en `products.service.ts findAll()`. Las organizaciones pueden tener 500+ productos y un límite silenciosamente oculta productos antiguos de todas las búsquedas (entries, sales, products page). Bug descubierto 2026-02-17.
+2. **Siempre verificar `organizationId !== null`** antes de queries. `WHERE organizationId = NULL` devuelve 0 resultados.
+3. **useEffect que carga productos** en el frontend DEBE depender del `selection` (contexto de tenant), no solo de filtros locales.
+
+### Sistema Contable
+4. **AccountingSummaryService usa `journalLine`** (NO `accEntryLine`). Migrado 2026-02-17.
+5. **Nunca cambiar** el servicio de summary para usar `accEntryLine` - ese es el sistema antiguo vacío.
+
 ## Recursos del Proyecto
 
 - Documentación en `/docs`
@@ -400,7 +411,7 @@ npx cypress open        # Tests E2E
 
 ---
 
-**Última actualización:** 2026-02-15
-**Versión:** 1.1
+**Última actualización:** 2026-02-17
+**Versión:** 1.2
 
 Este archivo debe actualizarse cuando cambien convenciones, patrones o reglas importantes del proyecto.
