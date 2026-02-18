@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { io, Socket } from "socket.io-client";
+import { useRouter } from "next/navigation";
 import {
   Loader2,
   ScanBarcode,
@@ -22,6 +23,7 @@ import {
   RefreshCw,
   Upload,
   X,
+  ArrowLeft,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -149,6 +151,7 @@ export default function BarcodeScannerPage() {
   const [imageScanning, setImageScanning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastScanRef = useRef<{ code: string; time: number }>({
@@ -523,6 +526,7 @@ export default function BarcodeScannerPage() {
               />
             </div>
           )}
+
         </>
       )}
 
@@ -823,6 +827,23 @@ export default function BarcodeScannerPage() {
           Sin conexion al servidor. Verifica tu sesion.
         </p>
       )}
+
+      {/* Spacer for fixed bottom button */}
+      <div className="pb-20" />
+
+      {/* Fixed back button */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/80 backdrop-blur-lg px-4 py-3 safe-area-pb">
+        <div className="mx-auto max-w-md">
+          <Button
+            variant="outline"
+            className="w-full cursor-pointer gap-2 rounded-xl border-primary/20 bg-primary/5 py-5 text-sm font-semibold text-primary shadow-sm transition-all active:scale-[0.98] hover:bg-primary/10 hover:border-primary/40"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

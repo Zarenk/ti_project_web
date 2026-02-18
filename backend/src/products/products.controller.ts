@@ -83,6 +83,7 @@ export class ProductsController {
         priceInSoles: number;
         tipoMoneda?: string;
         referenceId?: string;
+        series?: string[];
       };
     },
     @CurrentTenant('organizationId') organizationId: number | null | undefined,

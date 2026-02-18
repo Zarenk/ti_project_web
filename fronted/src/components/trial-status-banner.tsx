@@ -347,9 +347,7 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
       </div>
     ) : null
 
-  if (!migrationBanner && !verticalNoticeBanner && !trialBanner) {
-    return null
-  }
+  const hasBanners = !!(migrationBanner || verticalNoticeBanner || trialBanner)
 
   const containerClass = className ? `${className} space-y-3 no-print` : "mx-4 mb-4 space-y-3 no-print"
 
@@ -363,8 +361,7 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
           </div>
           <div className="flex-1">{migrationBanner}</div>
         </div>
-      ) : null}
-      {!migrationBanner && (
+      ) : (
         <div className="flex flex-wrap items-center gap-3">
           {leading ? <div className="flex items-center gap-2">{leading}</div> : null}
           <div className="text-sm font-semibold text-foreground">

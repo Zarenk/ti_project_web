@@ -28,7 +28,7 @@ import { ContextMetricsController } from './context-metrics.controller';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'), // Obtén la clave secreta del archivo .env
-        signOptions: { expiresIn: '1h' },
+        signOptions: { expiresIn: '2h' },
       }),
     }),
   ],

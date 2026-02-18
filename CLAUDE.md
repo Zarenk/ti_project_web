@@ -402,6 +402,118 @@ npx cypress open        # Tests E2E
 4. **AccountingSummaryService usa `journalLine`** (NO `accEntryLine`). Migrado 2026-02-17.
 5. **Nunca cambiar** el servicio de summary para usar `accEntryLine` - ese es el sistema antiguo vacío.
 
+## Flujo Crítico: Entradas y Salidas de Inventario
+
+> **PRECAUCIÓN MÁXIMA**: Los módulos de Entradas (compras) y Ventas (salidas) son el corazón transaccional del sistema. Un error aquí corrompe inventario, contabilidad y datos SUNAT simultáneamente. **SIEMPRE leer los archivos involucrados antes de tocar cualquier cosa.**
+
+### Arquitectura del Flujo
+
+```
+ENTRADAS (Compras)                          SALIDAS (Ventas)
+─────────────────                          ────────────────
+Entry                                      Sales
+ ├─ EntryDetail (líneas)                    ├─ SalesDetail (líneas)
+ │   ├─ EntryDetailSeries (series S/N)     │   ├─ entryDetailId → EntryDetail
+ │   └─ inventoryId → Inventory            │   ├─ storeOnInventoryId → StoreOnInventory
+ ├─ Invoice (factura proveedor)            │   └─ series: String[] (series vendidas)
+ └─ Journal (asiento contable)             ├─ SalePayment → CashTransaction → CashRegister
+                                           ├─ InvoiceSales (comprobante SUNAT)
+    Inventory                              └─ SunatTransmission
+     └─ StoreOnInventory
+         ├─ stock: Int (STOCK REAL)        JournalEntry (contabilidad)
+         └─ InventoryHistory (auditoría)    └─ JournalLine (debe/haber)
+```
+
+### Archivos Clave — Leer ANTES de Modificar
+
+| Archivo | Responsabilidad | Riesgo |
+|---------|----------------|--------|
+| `backend/src/entries/entries.service.ts` | `createEntry()` — transacción principal de compras | CRÍTICO: stock, series, contabilidad |
+| `backend/src/sales/sales.service.ts` | `createSale()`, `deleteSale()` — ventas completas | CRÍTICO: stock, pagos, SUNAT |
+| `backend/src/utils/sales-helper.ts` | `executeSale()` — transacción atómica de venta | CRÍTICO: reduce stock, registra pagos |
+| `backend/src/products/products.service.ts` | `createWithInitialStock()` — producto + entrada | ALTO: llama a `createEntry()` |
+| `backend/src/inventory/inventory.service.ts` | Excel import, consultas de stock, transferencias | ALTO: crea entries en bulk |
+| `backend/src/accounting/hooks/sale-posted.controller.ts` | Hook async: genera asiento contable de venta | MEDIO: contabilidad post-venta |
+| `backend/src/accounting/hooks/purchase-posted.controller.ts` | Hook async: genera asiento contable de compra | MEDIO: contabilidad post-compra |
+| `backend/src/accounting/services/journal-entry.service.ts` | `create()` — crea JournalEntry + JournalLines | MEDIO: correlativo, CUO, período |
+| `backend/src/accounting/accounting.service.ts` | `createJournalForInventoryEntry()` | MEDIO: asientos de compras |
+
+### Reglas de Seguridad del Flujo
+
+#### 1. NUNCA romper la transacción atómica
+- `createEntry()` usa una **transacción Prisma** que crea Entry + Details + Series + actualiza Stock + InventoryHistory **todo junto**
+- `executeSale()` usa una **transacción Prisma** que crea Sale + Details + reduce Stock + marca Series + registra Pagos + CashRegister **todo junto**
+- **Si agregas un paso nuevo, DEBE estar DENTRO de la transacción existente** (no después)
+- Si el paso nuevo puede fallar independientemente (como contabilidad), va FUERA de la transacción como post-operación no-bloqueante
+
+#### 2. Stock: StoreOnInventory es la fuente de verdad
+- `StoreOnInventory.stock` es el **único campo** que contiene el stock real
+- Entradas: `stock: { increment: quantity }` (atómico)
+- Ventas: `stock: storeInventory.stock - detail.quantity` (dentro de transacción)
+- **NUNCA** hacer `stock = X` directo — siempre usar increment/decrement o calcular desde el valor leído dentro de la misma transacción
+- `@@unique([productId, storeId])` en Inventory — un registro por producto por tienda
+
+#### 3. Series (Números de Serie) son únicos por organización
+- Constraint: `@@unique([organizationId, serial])` en `EntryDetailSeries`
+- Al crear entrada: status = `"active"`
+- Al vender: status = `"inactive"` (y serial va al array `SalesDetail.series`)
+- Al eliminar venta: status vuelve a `"active"`
+- **NUNCA** eliminar registros de EntryDetailSeries — solo cambiar status
+- Endpoint de validación: `POST /api/series/check`
+
+#### 4. Eliminación de ventas requiere reversión completa
+- `deleteSale()` revierte TODO: stock, series, pagos, CashRegister, contabilidad
+- **Ventas transmitidas a SUNAT NO se pueden eliminar** — requieren nota de crédito
+- Verificación: `SunatTransmission` con status `'ACCEPTED'`
+
+#### 5. Contabilidad es post-transaccional y no-bloqueante
+- Los hooks de contabilidad (`postSale`, `postPurchase`) se ejecutan DESPUÉS de la transacción principal
+- Usan 3 reintentos con backoff exponencial
+- **Si fallan, la venta/entrada YA se creó** — la contabilidad se puede regenerar
+- Cuentas PCGE usadas:
+  - Ventas: 1041/1011 (cobro), 7011 (ingreso), 4011 (IGV), 6911 (costo venta), 2011 (inventario)
+  - Compras: 2011 (inventario), 4011 (IGV), 1011/4211 (pago/cuenta por pagar)
+
+#### 6. Validaciones que NO debes eliminar
+- Stock suficiente antes de vender (`BadRequestException` si `stock < quantity`)
+- Serie no duplicada antes de crear (`checkSeries` endpoint)
+- Balance contable cuadrado (`debitTotal === creditTotal`) antes de crear JournalEntry
+- `referenceId` único en Entry y Sales (evita duplicados por retry)
+
+### Qué Verificar al Modificar Estos Módulos
+
+**Antes de tocar entradas (`entries.service.ts`):**
+- [ ] ¿El cambio está DENTRO o FUERA de la transacción? ¿Dónde debe estar?
+- [ ] ¿Afecta la creación de `StoreOnInventory`? Verificar que el increment sea correcto
+- [ ] ¿Toca `EntryDetailSeries`? Respetar el constraint unique por organización
+- [ ] ¿El `InventoryHistory` refleja el cambio correctamente?
+- [ ] ¿La contabilidad post-transacción sigue recibiendo los datos correctos?
+
+**Antes de tocar ventas (`sales.service.ts`, `sales-helper.ts`):**
+- [ ] ¿El cambio está DENTRO del `executeSale()` transaction block?
+- [ ] ¿Afecta la reducción de stock? Verificar que sea consistente
+- [ ] ¿Toca pagos/CashRegister? El balance debe ser correcto
+- [ ] ¿`deleteSale()` puede revertir tu cambio correctamente?
+- [ ] ¿Afecta InvoiceSales o CompanyDocumentSequence? Los correlativos son irrecuperables
+
+**Antes de tocar contabilidad (`accounting/hooks/`, `journal-entry.service.ts`):**
+- [ ] ¿Las cuentas PCGE son correctas para el tipo de operación?
+- [ ] ¿El asiento cuadra (debe = haber)?
+- [ ] ¿El `correlativo` se genera correctamente por organización y período?
+- [ ] ¿Hay duplicados? Verificar detección de entries existentes
+
+### Tablas Afectadas por Operación
+
+| Operación | Tablas modificadas (en orden) |
+|-----------|-------------------------------|
+| **Crear entrada** | Entry → EntryDetail → EntryDetailSeries → Inventory (upsert) → StoreOnInventory (increment) → InventoryHistory → *AccEntry* → *JournalEntry* |
+| **Crear venta** | Sales → SalesDetail → EntryDetailSeries (status→inactive) → StoreOnInventory (decrement) → InventoryHistory → SalePayment → CashTransaction → CashRegister (increment balance) → InvoiceSales → *JournalEntry* |
+| **Eliminar venta** | StoreOnInventory (increment) → InventoryHistory → EntryDetailSeries (status→active) → CashRegister (decrement) → CashTransaction (delete) → SalePayment (delete) → SalesDetail (delete) → Sales (delete) → AccEntry (void) |
+| **Producto con stock** | Product → (llama createEntry completo) |
+| **Import Excel** | Por cada fila: Product (upsert) → Entry → EntryDetail → Inventory → StoreOnInventory → EntryDetailSeries |
+
+*Cursiva = post-transacción, no-bloqueante*
+
 ## Recursos del Proyecto
 
 - Documentación en `/docs`
@@ -411,7 +523,7 @@ npx cypress open        # Tests E2E
 
 ---
 
-**Última actualización:** 2026-02-17
-**Versión:** 1.2
+**Última actualización:** 2026-02-18
+**Versión:** 1.3
 
 Este archivo debe actualizarse cuando cambien convenciones, patrones o reglas importantes del proyecto.

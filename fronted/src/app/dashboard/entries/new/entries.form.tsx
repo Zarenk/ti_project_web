@@ -1025,10 +1025,17 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setValueStore("");
     setOpen(false);
     setOpenProvider(false);
-
-    setPdfFile(null);
-    setPdfGuiaFile(null);
+    setOpenStore(false);
+    setOpenCalendar(false);
+    setIsProviderComboTouched(false);
+    setIsProviderNotFoundOpen(false);
+    setPendingProviderData(null);
+    setIsNewCategoryBoolean(false);
     setIsNewInvoiceBoolean(false);
+    setOpenSeriesModal(null);
+    setIsCurrencyDialogOpen(false);
+    setPendingCurrency(null);
+    setIsConvertingCurrency(false);
 
     // Restablece la UI al estado por defecto: factura visible, guia oculta
     setShowInvoiceFields(true);

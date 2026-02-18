@@ -152,6 +152,7 @@ export async function createProductWithStock(
     priceInSoles: number;
     tipoMoneda?: string;
     referenceId?: string;
+    series?: string[];
   },
 ) {
   const res = await authFetch(`${BACKEND_URL}/api/products/create-with-stock`, {

@@ -25,7 +25,7 @@ export class AuthService {
           role: payload.role,
           tokenVersion: user.tokenVersion,
         },
-        { expiresIn: '1h' },
+        { expiresIn: '2h' },
       );
       const refreshToken = this.jwtService.sign(
         {

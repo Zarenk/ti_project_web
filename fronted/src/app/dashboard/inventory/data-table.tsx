@@ -310,8 +310,8 @@ return (
                 {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
             </label>
         </div>
-        <div className="w-full overflow-hidden rounded-md border">
-        <Table>
+        <div className="table-scroll w-full overflow-x-auto rounded-md border">
+        <Table className="min-w-[900px]">
             <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>

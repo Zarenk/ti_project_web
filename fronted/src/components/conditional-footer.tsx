@@ -10,7 +10,8 @@ export default function ConditionalFooter() {
     pathname.startsWith("/unauthorized") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/google-auth") ||
-    pathname.startsWith("/signup")
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/barcode")
   ) {
     return null;
   }

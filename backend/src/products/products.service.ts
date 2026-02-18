@@ -248,6 +248,7 @@ export class ProductsService {
       priceInSoles: number;
       tipoMoneda?: string;
       referenceId?: string;
+      series?: string[];
     },
     organizationIdFromContext?: number | null,
   ) {
@@ -267,6 +268,7 @@ export class ProductsService {
               quantity: stockData.quantity,
               price: stockData.price,
               priceInSoles: stockData.priceInSoles,
+              series: stockData.series,
             },
           ],
           referenceId:

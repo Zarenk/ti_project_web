@@ -117,6 +117,9 @@ interface HelpAssistantContextType {
   hasMoreMessages: boolean
   isLoadingMore: boolean
   loadOlderMessages: () => Promise<void>
+  /** Mascot minimized state — shared so other floating elements can avoid overlap */
+  isMascotMinimized: boolean
+  setIsMascotMinimized: (minimized: boolean) => void
 }
 
 const HelpAssistantContext = createContext<HelpAssistantContextType | undefined>(
@@ -510,6 +513,18 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
   const [showProactiveTip, setShowProactiveTip] = useState(false)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [isOffline, setIsOffline] = useState(false) // FASE 3: Offline state
+  const [isMascotMinimized, setIsMascotMinimizedRaw] = useState(false)
+
+  // Load minimized state from localStorage on mount (avoids hydration mismatch)
+  useEffect(() => {
+    const stored = localStorage.getItem("help-mascot-minimized")
+    if (stored === "true") setIsMascotMinimizedRaw(true)
+  }, [])
+
+  const setIsMascotMinimized = useCallback((minimized: boolean) => {
+    setIsMascotMinimizedRaw(minimized)
+    localStorage.setItem("help-mascot-minimized", String(minimized))
+  }, [])
 
   // FASE 2: Get user ID for sentiment analysis tracking
   const chatUserId = useChatUserId()
@@ -1271,6 +1286,8 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
       hasMoreMessages,
       isLoadingMore,
       loadOlderMessages,
+      isMascotMinimized,
+      setIsMascotMinimized,
     }),
     [
       currentSection,
@@ -1287,6 +1304,8 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
       hasMoreMessages,
       isLoadingMore,
       loadOlderMessages,
+      isMascotMinimized,
+      setIsMascotMinimized,
     ],
   )
 

@@ -2,6 +2,7 @@
 
 import { memo, type ChangeEvent } from 'react'
 import type { FieldArrayWithId, UseFieldArrayAppend, UseFieldArrayRemove } from 'react-hook-form'
+import { AlertTriangle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +26,7 @@ export type ProductImagesSectionProps = ProductFormContext & {
   showComputerSpecs: boolean
   isGeneralVertical: boolean
   OptionalChip: React.ComponentType<{ filled: boolean }>
+  imageUploadErrors?: Record<number, string>
 }
 
 export const ProductImagesSection = memo(function ProductImagesSection({
@@ -39,6 +41,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
   showComputerSpecs,
   isGeneralVertical,
   OptionalChip,
+  imageUploadErrors,
 }: ProductImagesSectionProps) {
   return (
     <div
@@ -62,10 +65,15 @@ export const ProductImagesSection = memo(function ProductImagesSection({
       <div className="space-y-4">
         {imageFields.map((field, index) => {
           const preview = form.watch(`images.${index}` as const) || '';
+          const uploadError = imageUploadErrors?.[index]
           return (
             <div
               key={field.id}
-              className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-start"
+              className={`flex flex-col gap-3 rounded-md border p-3 transition-colors sm:flex-row sm:items-start ${
+                uploadError
+                  ? 'border-destructive/60 bg-destructive/5 dark:bg-destructive/10'
+                  : ''
+              }`}
             >
               <div className="flex-1 space-y-2">
                 <Input
@@ -79,16 +87,29 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                         type="file"
                         accept="image/*"
                         disabled={isProcessing}
-                        className="cursor-pointer"
+                        className={`cursor-pointer ${
+                          uploadError
+                            ? 'border-destructive/50 focus-visible:ring-destructive/30'
+                            : ''
+                        }`}
                         onChange={(event) => handleImageFile(event, index)}
                       />
                     </TooltipTrigger>
                     <TooltipContent side="top">Seleccionar imagen</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <p className="text-xs text-muted-foreground">
-                  Puedes ingresar una URL externa o subir un archivo (se almacenara en /uploads).
-                </p>
+                {uploadError ? (
+                  <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1.5 dark:bg-destructive/20">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                    <p className="text-xs font-medium text-destructive">
+                      {uploadError}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Puedes ingresar una URL externa o subir un archivo (se almacenara en /uploads).
+                  </p>
+                )}
               </div>
               <div className="flex flex-col items-center gap-2">
                 {preview ? (
@@ -98,7 +119,9 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     className="h-24 w-24 rounded border object-cover"
                   />
                 ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded border text-xs text-muted-foreground">
+                  <div className={`flex h-24 w-24 items-center justify-center rounded border text-xs text-muted-foreground ${
+                    uploadError ? 'border-destructive/40' : ''
+                  }`}>
                     Sin vista previa
                   </div>
                 )}

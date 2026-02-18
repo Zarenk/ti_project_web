@@ -369,7 +369,11 @@ export default function UserForm(): React.ReactElement {
             variant="outline"
             className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
             type="button"
-            onClick={() => reset(DEFAULT_VALUES)}
+            onClick={() => {
+              reset(DEFAULT_VALUES)
+              setEmailExists(null)
+              setUsernameExists(null)
+            }}
           >
             Limpiar
           </Button>

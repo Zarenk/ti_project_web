@@ -3200,45 +3200,70 @@ const getSaleReferenceId = () => {
                             name: "",
                             description: "",
                             price: 1,
-                            quantity:1 ,
+                            quantity: 1,
                             category_name: "",
                             client_name: "",
-                            client_type: "", 
-                            client_typeNumber: "", 
+                            client_type: "",
+                            client_typeNumber: "",
                             store_name: "",
-                            store_adress: "",      
+                            store_adress: "",
                             ruc: "",
                             fecha_emision_comprobante: "",
                             tipoComprobante: "",
                             serie: "",
                             total_comprobante: "",
                         })
-                        // Limpia los estados relacionados con productos y proveedores
-                        setSelectedProducts([]); // Limpia la lista de productos seleccionados en el datatable
-                        setCurrentProduct(null); // Limpia el producto actual
-                        setQuantity(1); // Restablece la cantidad a 1
-                        setStock(0); // Restablece el stock
 
-                        // Limpia los combobox
-                        setValueProduct(""); // Limpia el valor del combobox de productos
-                        setValueClient(""); // Limpia el valor del combobox de clientes
-                        setValueStore(""); // Limpia el valor del combobox de tiendas
-                        setValueInvoice(""); // Limpia el valor del combobox de tipo de comprobantes
+                        // Limpia productos y stock
+                        setSelectedProducts([]);
+                        setCurrentProduct(null);
+                        setQuantity(1);
+                        setStock(0);
+                        setActiveProductIndex(null);
+                        setShowOutOfStock(false);
 
-                        // Restablece el calendario al d?a de hoy
+                        // Limpia pagos y series
+                        setPayments([]);
+                        setSeries([]);
+                        setCurrentSeries([]);
+                        setAvailableSeries([]);
+                        setSelectedSeries([]);
+                        setAutoSyncPayment(false);
+                        setQuickPaymentMethodId(null);
+
+                        // Limpia combobox
+                        setValueProduct("");
+                        setValueClient("");
+                        setValueStore("");
+                        setValueInvoice("");
+
+                        // Limpia seleccion de tienda y cliente
+                        setSelectedStoreId(null);
+                        setIsClientDisabled(true);
+
+                        // Restablece el calendario al dia de hoy
                         const today = new Date();
-                        setSelectedDate(today); // Actualiza el estado del calendario
-                        form.setValue("fecha_emision_comprobante", today.toISOString().split("T")[0]); // Actualiza el valor del formulario
+                        setSelectedDate(today);
+                        form.setValue("fecha_emision_comprobante", today.toISOString().split("T")[0]);
 
-                        // Restablece la moneda a "SOLES (PEN)"
-                        setCurrency("PEN"); // Actualiza el estado de la moneda
-                        form.setValue("tipo_moneda", "PEN"); // Actualiza el valor del formulario
+                        // Restablece la moneda a PEN
+                        setCurrency("PEN");
+                        form.setValue("tipo_moneda", "PEN");
 
-                        // Cierra los popovers de los combobox
-                        setOpen(false); // Cierra el combobox de productos
-                        setOpenClient(false); // Cierra el combobox de clientes
-                        setOpenStore(false); // Cierra el combobox de tiendas
-                        setOpenInvoice(false); // Cierra el combobox de tipo de comprobantes
+                        // Limpia PDF y SUNAT
+                        setShowPDF(false);
+                        setPdfData(null);
+                        setSunatSearchValue("");
+                        setSunatSearchResults([]);
+                        setSunatSearchError(null);
+
+                        // Cierra todos los popovers
+                        setOpen(false);
+                        setOpenClient(false);
+                        setOpenStore(false);
+                        setOpenInvoice(false);
+                        setOpenCalendar(false);
+
                         // Limpiar draft sincronicamente
                         if (draftSaveTimerRef.current) {
                           window.clearTimeout(draftSaveTimerRef.current);
