@@ -691,3 +691,59 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(59, 130, 246, 0.6) rgba(100, 116, 139, 0.1);
 }
+
+/* Visible scrollbar for data tables — thick, easy to grab */
+.table-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: hsl(var(--primary) / 0.35) hsl(var(--muted) / 0.5);
+}
+.table-scroll:hover {
+  scrollbar-color: hsl(var(--primary) / 0.55) hsl(var(--muted) / 0.6);
+}
+.table-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+.table-scroll::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.4);
+  border-radius: 6px;
+  margin: 0 4px;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.35);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  min-width: 60px;
+}
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.55);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.table-scroll::-webkit-scrollbar-thumb:active {
+  background: hsl(var(--primary) / 0.7);
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+/* Sidebar scrollbar — always visible, subtle */
+[data-slot="sidebar-content"] {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--sidebar-foreground) / 0.15) transparent;
+}
+[data-slot="sidebar-content"]:hover {
+  scrollbar-color: hsl(var(--sidebar-foreground) / 0.3) hsl(var(--sidebar-foreground) / 0.05);
+}
+[data-slot="sidebar-content"]::-webkit-scrollbar {
+  width: 6px;
+}
+[data-slot="sidebar-content"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-slot="sidebar-content"]::-webkit-scrollbar-thumb {
+  background: hsl(var(--sidebar-foreground) / 0.15);
+  border-radius: 3px;
+}
+[data-slot="sidebar-content"]::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--sidebar-foreground) / 0.3);
+}

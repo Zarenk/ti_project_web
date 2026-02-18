@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import { Boxes, LocateFixed, Trash2, X } from 'lucide-react'
+import { memo, useState, type Dispatch, type SetStateAction } from 'react'
+import { Barcode, Boxes, ShoppingCart, Trash2, X, Minimize2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { resolveImageUrl } from '@/lib/images'
+import { useHelpAssistant } from '@/context/help-assistant-context'
 
 type BatchCartItem = {
   id: string
@@ -23,72 +24,100 @@ type BatchCartItem = {
 export type ProductBatchPanelProps = {
   batchCart: BatchCartItem[]
   setBatchCart: Dispatch<SetStateAction<BatchCartItem[]>>
+  onRemoveItem: (itemId: string) => void
+  onClearAll: () => void
   editingBatchId: string | null
   startBatchEditFromCart: (item: BatchCartItem) => void
-  floatingPanelRef: MutableRefObject<HTMLDivElement | null>
-  floatingPanelPosition: { x: number; y: number } | null
-  setFloatingPanelPosition: Dispatch<SetStateAction<{ x: number; y: number } | null>>
-  isFloatingPanelDragging: boolean
-  setIsFloatingPanelDragging: Dispatch<SetStateAction<boolean>>
-  floatingDragOffsetRef: MutableRefObject<{ x: number; y: number }>
-  floatingPanelPinnedRef: MutableRefObject<boolean>
-  getDefaultPanelPosition: () => { x: number; y: number }
-  setIsBatchStockDialogOpen: Dispatch<SetStateAction<boolean>>
+  onOpenAssignDialog: () => void
   isProcessing: boolean
   categories: any
   formatMoney: (value: unknown) => string | null
   currentProductId: string | number | undefined
+  batchSerials?: Record<string, string[]>
+  onOpenSerials?: (itemId: string) => void
 }
 
 export const ProductBatchPanel = memo(function ProductBatchPanel({
   batchCart,
-  setBatchCart,
+  onRemoveItem,
+  onClearAll,
   editingBatchId,
   startBatchEditFromCart,
-  floatingPanelRef,
-  floatingPanelPosition,
-  setFloatingPanelPosition,
-  isFloatingPanelDragging,
-  setIsFloatingPanelDragging,
-  floatingDragOffsetRef,
-  floatingPanelPinnedRef,
-  getDefaultPanelPosition,
-  setIsBatchStockDialogOpen,
+  onOpenAssignDialog,
   isProcessing,
   categories,
   formatMoney,
   currentProductId,
+  batchSerials,
+  onOpenSerials,
 }: ProductBatchPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const { isMascotMinimized } = useHelpAssistant()
+
+  // When mascot is visible (not minimized), offset FAB to the left to avoid overlap
+  // Mascot is h-16 w-16 (64px) at right-6 (24px), so offset = 64px + 12px gap = 76px
+  const mascotVisible = !isMascotMinimized
+
   if (batchCart.length === 0 || currentProductId) return null
 
+  // ── Collapsed: floating cart FAB ──
+  if (!isExpanded) {
+    return (
+      <button
+        type="button"
+        className="fixed bottom-6 z-40 flex items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-600 text-white shadow-[0_4px_24px_rgba(16,185,129,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_6px_32px_rgba(16,185,129,0.45)] active:scale-95 dark:border-emerald-400/40 dark:bg-emerald-500 h-14 w-14"
+        style={{ right: mascotVisible ? 100 : 24 }}
+        onClick={() => setIsExpanded(true)}
+        aria-label={`Ver ${batchCart.length} productos agregados`}
+      >
+        {/* Pulse ring */}
+        <span className="absolute inset-0 rounded-full border-2 border-emerald-400/60 animate-ping opacity-30" />
+
+        <ShoppingCart className="h-6 w-6 relative" />
+
+        {/* Badge count */}
+        <span className="absolute -top-1.5 -right-1.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-background bg-rose-500 px-1.5 text-[11px] font-bold text-white tabular-nums shadow-sm">
+          {batchCart.length}
+        </span>
+      </button>
+    )
+  }
+
+  // ── Expanded: full product panel ──
   return (
     <div
-      ref={floatingPanelRef}
-      className={`fixed z-40 w-[280px] rounded-xl border border-border/60 bg-card/95 p-4 shadow-lg backdrop-blur ${
-        isFloatingPanelDragging ? "cursor-grabbing" : ""
-      }`}
-      style={{
-        left: floatingPanelPosition?.x ?? 0,
-        top: floatingPanelPosition?.y ?? 0,
-      }}
+      className="fixed bottom-6 z-40 w-[300px] max-h-[70vh] flex flex-col rounded-xl border border-border/60 bg-card/95 shadow-[0_8px_40px_rgba(0,0,0,0.25)] backdrop-blur animate-in fade-in slide-in-from-bottom-4 duration-200"
+      style={{ right: mascotVisible ? 100 : 24 }}
     >
-      <div
-        className={`flex items-center justify-between ${
-          isFloatingPanelDragging ? "cursor-grabbing" : "cursor-grab"
-        }`}
-        onPointerDown={(event) => {
-          setIsFloatingPanelDragging(true)
-          floatingPanelPinnedRef.current = true
-          floatingDragOffsetRef.current = {
-            x: event.clientX - (floatingPanelPosition?.x ?? 0),
-            y: event.clientY - (floatingPanelPosition?.y ?? 0),
-          }
-        }}
-      >
-        <p className="text-sm font-semibold">Productos agregados</p>
-        <Badge variant="secondary">{batchCart.length}</Badge>
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 pb-0">
+        <div className="flex items-center gap-2">
+          <ShoppingCart className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-semibold">Productos agregados</p>
+          <Badge variant="secondary" className="text-[10px] tabular-nums">
+            {batchCart.length}
+          </Badge>
+        </div>
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={() => setIsExpanded(false)}
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Minimizar</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
-      <div className="mt-3 max-h-40 space-y-2 overflow-auto text-xs">
+
+      {/* Product list — scrollable */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {batchCart.map((item) => {
           const imageSrc =
             Array.isArray(item.payload?.images) && item.payload.images[0]
@@ -110,7 +139,7 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
           return (
             <div
               key={item.id}
-              className="flex items-start justify-between gap-2"
+              className="flex items-start justify-between gap-1.5"
             >
               <div
                 className={`flex min-w-0 flex-1 items-start gap-2 rounded-md p-2 transition-colors ${
@@ -121,7 +150,7 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                 onClick={() => startBatchEditFromCart(item)}
                 title="Clic para editar en el formulario"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded border border-border/60 bg-muted/20">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border/60 bg-muted/20">
                   {imageSrc ? (
                     <img
                       src={imageSrc}
@@ -133,9 +162,19 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Producto
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Producto
+                    </p>
+                    {item.initialStock > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1.5 text-[9px] font-bold tabular-nums bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0"
+                      >
+                        ×{item.initialStock}
+                      </Badge>
+                    )}
+                  </div>
                   <p className="truncate text-xs font-medium">{item.name}</p>
                   <p className="mt-1 truncate text-[10px] text-muted-foreground">
                     <span className="font-semibold text-foreground/80">
@@ -144,7 +183,7 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                     {brandLabel || "-"}{" "}
                     <span className="text-muted-foreground">|</span>{" "}
                     <span className="font-semibold text-foreground/80">
-                      Categoria:
+                      Cat:
                     </span>{" "}
                     {categoryLabel || "-"}
                   </p>
@@ -161,32 +200,65 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                   </p>
                 </div>
               </div>
-              <TooltipProvider delayDuration={150}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8 cursor-pointer border-rose-500/60 bg-rose-50 text-rose-700 transition-all duration-200 hover:scale-105 hover:border-rose-500/80 hover:text-rose-800 hover:shadow-[0_0_18px_rgba(244,63,94,0.25)] dark:border-rose-400/40 dark:bg-transparent dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100 dark:hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setBatchCart((prev) =>
-                          prev.filter((entry) => entry.id !== item.id),
-                        )
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Quitar producto</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className="flex flex-col items-center gap-0.5 shrink-0">
+                {/* Series button — only when item has quantity */}
+                {item.initialStock > 0 && onOpenSerials && (
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 relative"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onOpenSerials(item.id)
+                          }}
+                        >
+                          <Barcode className="h-3.5 w-3.5" />
+                          {(batchSerials?.[item.id]?.length ?? 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[8px] font-bold text-white tabular-nums">
+                              {batchSerials![item.id].length}
+                            </span>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {(batchSerials?.[item.id]?.length ?? 0) > 0
+                          ? `Series: ${batchSerials![item.id].length}/${item.initialStock}`
+                          : "Agregar series"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onRemoveItem(item.id)
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Quitar producto</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </div>
           )
         })}
       </div>
-      <div className="mt-4 flex items-center gap-2">
+
+      {/* Actions footer */}
+      <div className="border-t border-border/40 p-3 flex items-center gap-2">
         <TooltipProvider delayDuration={150}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -194,8 +266,8 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 transition-all duration-200 hover:scale-105 hover:border-emerald-500/80 hover:text-emerald-800 hover:shadow-[0_0_18px_rgba(16,185,129,0.25)] dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100 dark:hover:shadow-[0_0_18px_rgba(16,185,129,0.35)]"
-                onClick={() => setIsBatchStockDialogOpen(true)}
+                className="h-8 w-8 cursor-pointer border-emerald-500/60 text-emerald-600 hover:border-emerald-500/80 hover:text-emerald-500 dark:border-emerald-400/40 dark:text-emerald-300 dark:hover:border-emerald-300/70 dark:hover:text-emerald-200"
+                onClick={onOpenAssignDialog}
                 disabled={isProcessing}
               >
                 <Boxes className="h-4 w-4" />
@@ -209,32 +281,34 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                 type="button"
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 transition-all duration-200 hover:scale-105 hover:border-sky-500/80 hover:text-sky-800 hover:shadow-[0_0_18px_rgba(56,189,248,0.25)] dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100 dark:hover:shadow-[0_0_18px_rgba(56,189,248,0.35)]"
-                onClick={() => {
-                  setFloatingPanelPosition(getDefaultPanelPosition())
-                  floatingPanelPinnedRef.current = true
-                }}
-                disabled={isProcessing}
-              >
-                <LocateFixed className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Restaurar posición</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-9 w-9 cursor-pointer border-rose-500/60 bg-rose-50 text-rose-700 transition-all duration-200 hover:scale-105 hover:border-rose-500/80 hover:text-rose-800 hover:shadow-[0_0_18px_rgba(244,63,94,0.25)] dark:border-rose-400/40 dark:bg-transparent dark:text-rose-200 dark:hover:border-rose-300/70 dark:hover:text-rose-100 dark:hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
-                onClick={() => setBatchCart([])}
+                className="h-8 w-8 cursor-pointer border-rose-500/60 text-rose-600 hover:border-rose-500/80 hover:text-rose-500 dark:border-rose-400/40 dark:text-rose-300 dark:hover:border-rose-300/70 dark:hover:text-rose-200"
+                onClick={onClearAll}
                 disabled={isProcessing}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Vaciar</TooltipContent>
+            <TooltipContent>Vaciar todo</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => setIsExpanded(false)}
+              >
+                <Minimize2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Minimizar</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>

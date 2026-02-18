@@ -1410,7 +1410,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                     Detalle de productos
                                   </p>
-                                  <div className="overflow-hidden rounded-md border">
+                                  <div className="table-scroll overflow-x-auto rounded-md border">
                                     <table className="w-full text-xs">
                                       <thead className="bg-muted/60 text-muted-foreground">
                                         <tr>
@@ -2070,7 +2070,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                 Métodos de pago utilizados
                               </p>
                               {paymentEntriesForModal.length > 0 ? (
-                                <div className="overflow-hidden rounded-md border">
+                                <div className="table-scroll overflow-x-auto rounded-md border">
                                   <table className="w-full text-sm">
                                     <tbody>
                                       {paymentEntriesForModal.map((entry, index) => {
@@ -2109,7 +2109,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                     <div className="space-y-3">
                       <div>
                         <p className="font-semibold">Detalle del cierre</p>
-                        <div className="overflow-hidden rounded-md border">
+                        <div className="table-scroll overflow-x-auto rounded-md border">
                           <table className="w-full text-sm">
                             <tbody>
                               {[
@@ -2179,7 +2179,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                       {modalClosureDetails.paymentBreakdown.length > 0 && (
                         <div className="space-y-2">
                           <p className="font-semibold">Totales por método de pago</p>
-                          <div className="overflow-hidden rounded-md border">
+                          <div className="table-scroll overflow-x-auto rounded-md border">
                             <table className="w-full text-sm">
                               <tbody>
                                 {modalClosureDetails.paymentBreakdown.map((entry) => {
@@ -2232,7 +2232,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           return <p className="text-muted-foreground">No hay notas adicionales.</p>
                         }
                         return (
-                          <div className="overflow-hidden rounded-md border">
+                          <div className="table-scroll overflow-x-auto rounded-md border">
                             <table className="w-full text-sm">
                               <tbody>
                                 {combined.map((entry, index) => (

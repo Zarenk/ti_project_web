@@ -546,7 +546,7 @@ export function ProductSelection({
         {...register("description")}
         readOnly
       />
-      <div className="grid grid-cols-[1fr_auto] gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto] lg:items-end">
             <div className="flex flex-col">
               <Label className="text-sm font-medium py-2">Cantidad</Label>
               <div className="flex items-center gap-1.5">
@@ -614,10 +614,10 @@ export function ProductSelection({
                 </Tooltip>
               </div>
             </div>
-            <div className="flex w-24 flex-col">
+            <div className="flex flex-col lg:min-w-[140px]">
               <Label className="text-sm font-medium py-2">Precio Unitario</Label>
               <Input
-                className="h-9 text-center"
+                className="h-9 text-center text-sm font-semibold"
                 value={totalPurchasePrice}
                 readOnly
               />

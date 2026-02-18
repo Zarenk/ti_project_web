@@ -82,23 +82,16 @@ export function HelpMascot() {
     showProactiveTip,
     dismissTip,
     sectionMeta,
+    isMascotMinimized: isMinimized,
+    setIsMascotMinimized: setIsMinimized,
   } = useHelpAssistant()
-
-  const [isMinimized, setIsMinimized] = useState(false)
-
-  // Load minimized state from localStorage on mount (avoids hydration mismatch)
-  useEffect(() => {
-    const stored = localStorage.getItem("help-mascot-minimized")
-    if (stored === "true") setIsMinimized(true)
-  }, [])
 
   // Auto-restore when panel is opened externally (e.g. from sidebar link)
   useEffect(() => {
     if (isOpen && isMinimized) {
       setIsMinimized(false)
-      localStorage.setItem("help-mascot-minimized", "false")
     }
-  }, [isOpen, isMinimized])
+  }, [isOpen, isMinimized, setIsMinimized])
 
   const handleToggle = () => {
     setIsOpen(!isOpen)
@@ -108,14 +101,12 @@ export function HelpMascot() {
   const handleMinimize = (e: React.MouseEvent) => {
     e.stopPropagation()
     setIsMinimized(true)
-    localStorage.setItem("help-mascot-minimized", "true")
     if (isOpen) setIsOpen(false)
     if (showProactiveTip) dismissTip()
   }
 
   const handleRestore = () => {
     setIsMinimized(false)
-    localStorage.setItem("help-mascot-minimized", "false")
   }
 
   const showTip = showProactiveTip && !isOpen && !!sectionMeta && !isMinimized
@@ -144,7 +135,7 @@ export function HelpMascot() {
 
   /* ─── Full mascot button ─── */
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 print:hidden">
+    <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 print:hidden">
       {/* Proactive tip tooltip — always mounted, CSS transitions */}
       <div
         className={`mb-1 max-w-[260px] rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg transition-all duration-200 dark:border-slate-700 dark:bg-slate-900 ${
@@ -181,7 +172,7 @@ export function HelpMascot() {
       </div>
 
       {/* Mascot container with minimize option */}
-      <div className="group relative">
+      <div className="group relative pointer-events-auto">
         {/* Minimize button — visible on mobile, hover-only on desktop */}
         {!isOpen && (
           <button

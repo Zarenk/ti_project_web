@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2, Package, Info, DollarSign, Settings, ImageIcon } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2, Package, Info, DollarSign, Settings, ImageIcon, Store, Truck, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +47,7 @@ import { getBrands } from '../../brands/brands.api'
 import { createCategory, getCategories } from '../../categories/categories.api'
 import { getStores } from '../../stores/stores.api'
 import { getProviders } from '../../providers/providers.api'
+import { ProductSerialsDialog } from '../../entries/components/quick-entry/serials-dialog'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { IconName, icons } from '@/lib/icons'
@@ -64,6 +65,7 @@ import { ProductSchemaFields } from './components/product-schema-fields'
 import { ProductComputerSpecs } from './components/product-computer-specs'
 import { ProductImagesSection } from './components/product-images-section'
 import { ProductBatchPanel } from './components/product-batch-panel'
+import { ProductGuideButton } from './components/product-guide-dialog'
 
 const normalizeImagePath = (input?: string): string => {
   const raw = input?.trim() ?? ''
@@ -121,6 +123,455 @@ type BatchCartItem = {
 const BATCH_CART_STORAGE_KEY = "product-batch-cart:v1"
 const BATCH_ASSIGNMENTS_STORAGE_KEY = "product-batch-assignments:v1"
 const BATCH_UI_STATE_STORAGE_KEY = "product-batch-ui-state:v1"
+const BATCH_SERIALS_STORAGE_KEY = "product-batch-serials:v1"
+
+// ---------------------------------------------------------------------------
+// BatchOnlyAssignDialog — Hybrid global + individual store/provider assignment
+// ---------------------------------------------------------------------------
+type BatchAssignment = {
+  storeId: string
+  providerId: string
+  quantity: number
+  price: number
+  currency: 'PEN' | 'USD'
+}
+
+interface BatchOnlyAssignDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  batchCart: BatchCartItem[]
+  stores: any[]
+  providers: any[]
+  batchAssignments: Record<string, BatchAssignment>
+  updateBatchAssignment: (
+    id: string,
+    next: Partial<BatchAssignment>,
+  ) => void
+  isProcessing: boolean
+  onCreateWithStock: () => Promise<void>
+  onCreateWithoutStock: () => Promise<void>
+}
+
+const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
+  open,
+  onOpenChange,
+  batchCart,
+  stores,
+  providers,
+  batchAssignments,
+  updateBatchAssignment,
+  isProcessing,
+  onCreateWithStock,
+  onCreateWithoutStock,
+}: BatchOnlyAssignDialogProps) {
+  const [globalStoreId, setGlobalStoreId] = useState('')
+  const [globalProviderId, setGlobalProviderId] = useState('')
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [showSkipOption, setShowSkipOption] = useState(false)
+
+  // Auto-select when only one store/provider exists.
+  // Runs every time the dialog opens so new items always get assigned.
+  useEffect(() => {
+    if (!open) {
+      setExpandedItems(new Set())
+      setShowSkipOption(false)
+      return
+    }
+
+    // --- Single store: auto-assign to every item missing it ---
+    if (stores.length === 1) {
+      const storeId = String(stores[0].id)
+      setGlobalStoreId(storeId)
+      for (const item of batchCart) {
+        const curr = batchAssignments[item.id]
+        if (!curr?.storeId || curr.storeId !== storeId) {
+          const qty = item.initialStock > 0 ? item.initialStock : 1
+          updateBatchAssignment(item.id, {
+            storeId,
+            quantity: curr?.quantity || qty,
+          })
+        }
+      }
+    }
+
+    // --- Single provider: auto-assign to every item missing it ---
+    if (providers.length === 1) {
+      const providerId = String(providers[0].id)
+      setGlobalProviderId(providerId)
+      for (const item of batchCart) {
+        const curr = batchAssignments[item.id]
+        if (!curr?.providerId || curr.providerId !== providerId) {
+          const qty = item.initialStock > 0 ? item.initialStock : 1
+          updateBatchAssignment(item.id, {
+            providerId,
+            quantity: curr?.quantity || qty,
+          })
+        }
+      }
+    }
+
+    // --- Fix items with quantity=0 that already have store/provider ---
+    for (const item of batchCart) {
+      const curr = batchAssignments[item.id]
+      if (curr && (curr.storeId || curr.providerId) && (!curr.quantity || curr.quantity <= 0)) {
+        const qty = item.initialStock > 0 ? item.initialStock : 1
+        updateBatchAssignment(item.id, { quantity: qty })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const applyGlobalStore = useCallback(
+    (storeId: string) => {
+      setGlobalStoreId(storeId)
+      for (const item of batchCart) {
+        const curr = batchAssignments[item.id]
+        // Only override items not individually customized or unassigned
+        if (!curr?.storeId || curr.storeId === globalStoreId) {
+          const qty = item.initialStock > 0 ? item.initialStock : 1
+          updateBatchAssignment(item.id, {
+            storeId,
+            quantity: curr?.quantity || qty,
+          })
+        }
+      }
+    },
+    [batchAssignments, batchCart, globalStoreId, updateBatchAssignment],
+  )
+
+  const applyGlobalProvider = useCallback(
+    (providerId: string) => {
+      setGlobalProviderId(providerId)
+      for (const item of batchCart) {
+        const curr = batchAssignments[item.id]
+        if (!curr?.providerId || curr.providerId === globalProviderId) {
+          const qty = item.initialStock > 0 ? item.initialStock : 1
+          updateBatchAssignment(item.id, {
+            providerId,
+            quantity: curr?.quantity || qty,
+          })
+        }
+      }
+    },
+    [batchAssignments, batchCart, globalProviderId, updateBatchAssignment],
+  )
+
+  const allAssigned = batchCart.every((item) => {
+    const a = batchAssignments[item.id]
+    return a && a.storeId && a.providerId && a.quantity > 0
+  })
+
+  const assignedCount = batchCart.filter((item) => {
+    const a = batchAssignments[item.id]
+    return a && a.storeId && a.providerId && a.quantity > 0
+  }).length
+
+  const toggleExpand = (id: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Package className="h-5 w-5 shrink-0" />
+            <span>Crear productos agregados ({batchCart.length})</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 sm:space-y-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Asigna tienda y proveedor para crear los productos con stock inicial.
+          </p>
+
+          {/* Global assignment — stacks on mobile */}
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-2.5 sm:p-3 space-y-2.5 sm:space-y-3">
+            <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Asignación global
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+              {/* Store selector */}
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Store className="h-3.5 w-3.5 shrink-0" />
+                  Tienda
+                </Label>
+                {stores.length === 1 ? (
+                  <div className="flex items-center gap-1.5 rounded-md border bg-muted/50 px-3 py-2 text-sm min-w-0">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    <span className="truncate">{stores[0].name}</span>
+                  </div>
+                ) : (
+                  <Select
+                    value={globalStoreId}
+                    onValueChange={applyGlobalStore}
+                  >
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder="Seleccionar tienda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stores.map((store: any) => (
+                        <SelectItem key={store.id} value={String(store.id)}>
+                          {store.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Provider selector */}
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5 shrink-0" />
+                  Proveedor
+                </Label>
+                {providers.length === 1 ? (
+                  <div className="flex items-center gap-1.5 rounded-md border bg-muted/50 px-3 py-2 text-sm min-w-0">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    <span className="truncate">{providers[0].name}</span>
+                  </div>
+                ) : (
+                  <Select
+                    value={globalProviderId}
+                    onValueChange={applyGlobalProvider}
+                  >
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder="Seleccionar proveedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((provider: any) => (
+                        <SelectItem key={provider.id} value={String(provider.id)}>
+                          {provider.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Products list */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Productos
+              </p>
+              <Badge
+                variant={allAssigned ? 'default' : 'secondary'}
+                className="text-[10px]"
+              >
+                {assignedCount}/{batchCart.length} listos
+              </Badge>
+            </div>
+
+            <div className="max-h-[30vh] sm:max-h-[35vh] overflow-y-auto space-y-1.5 rounded-lg border border-border/40 p-1.5 sm:p-2">
+              {batchCart.map((item) => {
+                const assignment = batchAssignments[item.id]
+                const hasStore = !!assignment?.storeId
+                const hasProvider = !!assignment?.providerId
+                const hasQty = (assignment?.quantity ?? 0) > 0
+                const isComplete = hasStore && hasProvider && hasQty
+                const isExpanded = expandedItems.has(item.id)
+                const effectiveQty = assignment?.quantity ?? item.initialStock ?? 0
+
+                // Resolve display names
+                const storeName = hasStore
+                  ? stores.find((s: any) => String(s.id) === assignment.storeId)?.name ?? '—'
+                  : '—'
+                const providerName = hasProvider
+                  ? providers.find((p: any) => String(p.id) === assignment.providerId)?.name ?? '—'
+                  : '—'
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-md border transition-colors overflow-hidden ${
+                      isComplete
+                        ? 'border-emerald-500/30 bg-emerald-500/5'
+                        : 'border-border/60 bg-card/50'
+                    }`}
+                  >
+                    {/* Collapsed row — name wraps up to 2 lines */}
+                    <button
+                      type="button"
+                      className="flex w-full items-start gap-2 px-2.5 sm:px-3 py-2 text-left min-w-0"
+                      onClick={() => toggleExpand(item.id)}
+                    >
+                      {isComplete ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+                      )}
+                      <span className="flex-1 min-w-0 text-[13px] sm:text-sm font-medium leading-snug line-clamp-2 break-words">
+                        {item.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums mr-0.5">
+                        ×{effectiveQty}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5" />
+                      )}
+                    </button>
+
+                    {/* Expanded: individual overrides — stacks on mobile */}
+                    {isExpanded && (
+                      <div className="border-t border-border/40 px-2.5 sm:px-3 pb-3 pt-2 space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Tienda</Label>
+                            <Select
+                              value={assignment?.storeId ?? ''}
+                              onValueChange={(v) =>
+                                updateBatchAssignment(item.id, { storeId: v })
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-full text-xs">
+                                <SelectValue placeholder="Tienda" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {stores.map((s: any) => (
+                                  <SelectItem key={s.id} value={String(s.id)}>
+                                    {s.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Proveedor</Label>
+                            <Select
+                              value={assignment?.providerId ?? ''}
+                              onValueChange={(v) =>
+                                updateBatchAssignment(item.id, { providerId: v })
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-full text-xs">
+                                <SelectValue placeholder="Proveedor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {providers.map((p: any) => (
+                                  <SelectItem key={p.id} value={String(p.id)}>
+                                    {p.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Cantidad</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              className="h-8 text-xs"
+                              value={assignment?.quantity ?? item.initialStock ?? 0}
+                              onChange={(e) =>
+                                updateBatchAssignment(item.id, {
+                                  quantity: Math.max(0, Number(e.target.value) || 0),
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">
+                              Resumen
+                            </Label>
+                            <div className="text-[10px] leading-tight text-muted-foreground space-y-0.5">
+                              <div className="flex items-start gap-1 min-w-0">
+                                <Store className="h-3 w-3 shrink-0 mt-0.5" />
+                                <span className="line-clamp-2 break-words">{storeName}</span>
+                              </div>
+                              <div className="flex items-start gap-1 min-w-0">
+                                <Truck className="h-3 w-3 shrink-0 mt-0.5" />
+                                <span className="line-clamp-2 break-words">{providerName}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Progress indicator */}
+          {!allAssigned && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 sm:px-3 py-2 text-[11px] sm:text-xs text-amber-200 flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>Selecciona tienda y proveedor para habilitar la creación con stock.</span>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-col gap-2 sm:flex-col mt-1">
+          <div className="flex w-full flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 text-xs sm:text-sm"
+              onClick={() => onOpenChange(false)}
+              disabled={isProcessing}
+            >
+              Volver al formulario
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 text-xs sm:text-sm"
+              onClick={onCreateWithStock}
+              disabled={isProcessing || !allAssigned}
+            >
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Crear con stock ({assignedCount}/{batchCart.length})
+            </Button>
+          </div>
+          {!showSkipOption ? (
+            <button
+              type="button"
+              className="text-[11px] sm:text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+              onClick={() => setShowSkipOption(true)}
+            >
+              Crear sin stock (omitir asignación)
+            </button>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-2.5 sm:px-3 py-2">
+              <p className="flex-1 text-[11px] sm:text-xs text-amber-200">
+                Los productos se crearán sin stock. Podrás asignarlo luego desde inventario.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-xs h-7 w-full sm:w-auto"
+                onClick={onCreateWithoutStock}
+                disabled={isProcessing}
+              >
+                Confirmar
+              </Button>
+            </div>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+})
 
 // Optimized: Memoized components for better performance
 const OptionalChip = memo(({ filled }: { filled: boolean }) => (
@@ -233,6 +684,7 @@ export function ProductForm({
   const [batchCart, setBatchCart] = useState<BatchCartItem[]>([])
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
+  const skipNameValidationRef = useRef(false)
   const { userId } = useAuth()
   const [existingProductNames, setExistingProductNames] = useState<Set<string>>(
     () => new Set(),
@@ -288,6 +740,8 @@ export function ProductForm({
       }
     >
   >({})
+  const [batchSerials, setBatchSerials] = useState<Record<string, string[]>>({})
+  const [serialsDialogItemId, setSerialsDialogItemId] = useState<string | null>(null)
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const [dragOverStoreId, setDragOverStoreId] = useState<string | null>(null)
   const [dragOverProviderId, setDragOverProviderId] = useState<string | null>(null)
@@ -928,8 +1382,8 @@ const VariantRowItem = memo(function VariantRowItem({
       const images = Array.isArray(source?.images)
         ? source.images
             .filter((img: unknown): img is string => typeof img === 'string')
-            .map((img) => normalizeImagePath(img))
-            .filter((img) => img.length > 0)
+            .map((img: string) => normalizeImagePath(img))
+            .filter((img: string) => img.length > 0)
         : []
 
       const features = Array.isArray(source?.features)
@@ -1109,6 +1563,13 @@ const VariantRowItem = memo(function VariantRowItem({
     const trimmedName = String(debouncedNameValidation ?? "").trim()
     if (trimmedName.length < 3) {
       setNameValidation({ status: "idle", message: undefined })
+      return
+    }
+
+    // Skip validation when loading a batch item for editing — name was already validated
+    if (skipNameValidationRef.current) {
+      skipNameValidationRef.current = false
+      setNameValidation({ status: "valid", message: undefined })
       return
     }
 
@@ -1357,28 +1818,71 @@ const VariantRowItem = memo(function VariantRowItem({
     }
   }, [version])
 
+  // ── Centralized batch cleanup helpers ──────────────────────────────
+  const resetBatchState = useCallback(() => {
+    setBatchCart([])
+    setBatchAssignments({})
+    setIsBatchStockDialogOpen(false)
+    setIsBatchOnlyConfirmOpen(false)
+    setActiveBatchId(null)
+    setFloatingPanelPosition(null)
+    setIsFloatingPanelDragging(false)
+    floatingPanelPinnedRef.current = false
+    batchCartHydratedRef.current = false
+    setDraggingItemId(null)
+    setDragOverStoreId(null)
+    setDragOverProviderId(null)
+    setHoveredBatchId(null)
+    setIsBatchDragActive(false)
+    setBatchDragCursor(null)
+    setBatchStockError(null)
+    setEditingBatchId(null)
+    setBatchSerials({})
+    setSerialsDialogItemId(null)
+    try {
+      localStorage.removeItem(BATCH_CART_STORAGE_KEY)
+      localStorage.removeItem(BATCH_ASSIGNMENTS_STORAGE_KEY)
+      localStorage.removeItem(BATCH_UI_STATE_STORAGE_KEY)
+      localStorage.removeItem(BATCH_SERIALS_STORAGE_KEY)
+    } catch { /* ignore */ }
+    queueMicrotask(() => {
+      batchCartHydratedRef.current = true
+    })
+  }, [])
+
+  const handleRemoveBatchItem = useCallback(
+    (itemId: string) => {
+      setBatchCart((prev) => prev.filter((entry) => entry.id !== itemId))
+      setBatchAssignments((prev) => {
+        const next = { ...prev }
+        delete next[itemId]
+        return next
+      })
+      setBatchSerials((prev) => {
+        const next = { ...prev }
+        delete next[itemId]
+        return next
+      })
+      if (activeBatchId === itemId) setActiveBatchId(null)
+      if (editingBatchId === itemId) setEditingBatchId(null)
+      if (hoveredBatchId === itemId) setHoveredBatchId(null)
+    },
+    [activeBatchId, editingBatchId, hoveredBatchId],
+  )
+
+  const handleClearBatchCart = useCallback(() => {
+    resetBatchState()
+  }, [resetBatchState])
+  // ── End centralized batch cleanup ────────────────────────────────
+
   // Clear batch cart when organization/company changes
   useEffect(() => {
     if (versionResetRef.current) {
       versionResetRef.current = false
       return
     }
-    // Organization changed — clear batch cart state and localStorage
-    setBatchCart([])
-    setBatchAssignments({})
-    setIsBatchStockDialogOpen(false)
-    setActiveBatchId(null)
-    setFloatingPanelPosition(null)
-    floatingPanelPinnedRef.current = false
-    batchCartHydratedRef.current = false
-    localStorage.removeItem(BATCH_CART_STORAGE_KEY)
-    localStorage.removeItem(BATCH_ASSIGNMENTS_STORAGE_KEY)
-    localStorage.removeItem(BATCH_UI_STATE_STORAGE_KEY)
-    // Re-enable hydration so if user adds items in the new org, persistence works
-    queueMicrotask(() => {
-      batchCartHydratedRef.current = true
-    })
-  }, [version])
+    resetBatchState()
+  }, [version, resetBatchState])
 
   const handleCreateCategory = async () => {
     const trimmedName = newCategoryName.trim()
@@ -1450,9 +1954,17 @@ const VariantRowItem = memo(function VariantRowItem({
     }
   }
 
+  const [imageUploadErrors, setImageUploadErrors] = useState<Record<number, string>>({})
+
   const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Clear previous error for this slot
+    setImageUploadErrors((prev) => {
+      const next = { ...prev }
+      delete next[index]
+      return next
+    })
     try {
       const { url } = await uploadProductImage(file);
       const normalizedPath = normalizeImagePath(url);
@@ -1461,8 +1973,10 @@ const VariantRowItem = memo(function VariantRowItem({
         shouldValidate: true,
       })
       clearErrors(`images.${index}` as const)
-    } catch (err) {
-      console.error('Error subiendo imagen', err);
+    } catch (err: any) {
+      const message = err?.message || 'Error al subir la imagen'
+      toast.error(message)
+      setImageUploadErrors((prev) => ({ ...prev, [index]: message }))
     }
   };
 
@@ -1616,8 +2130,7 @@ const VariantRowItem = memo(function VariantRowItem({
         createdCount.push(1)
       }
       toast.success("Productos creados correctamente.")
-      setBatchCart([])
-      localStorage.removeItem(BATCH_CART_STORAGE_KEY)
+      resetBatchState()
       if (onSuccess) {
         await onSuccess(savedProduct)
       } else {
@@ -1743,6 +2256,7 @@ const VariantRowItem = memo(function VariantRowItem({
           assignment.quantity > 0
         ) {
           const purchasePrice = Number(assignment.price ?? item.payload?.price ?? 0)
+          const itemSerials = batchSerials[item.id]
           await createProductWithStock(item.payload, {
             storeId: Number(assignment.storeId),
             userId,
@@ -1751,6 +2265,7 @@ const VariantRowItem = memo(function VariantRowItem({
             price: purchasePrice,
             priceInSoles: purchasePrice,
             tipoMoneda: assignment.currency,
+            series: itemSerials?.length ? itemSerials : undefined,
           })
         } else {
           await createProduct(item.payload)
@@ -1758,10 +2273,7 @@ const VariantRowItem = memo(function VariantRowItem({
         successIds.push(item.id)
       }
       toast.success("Productos y stock inicial registrados.")
-      setBatchCart([])
-      setBatchAssignments({})
-      setIsBatchStockDialogOpen(false)
-      localStorage.removeItem(BATCH_CART_STORAGE_KEY)
+      resetBatchState()
       if (!onSuccess) {
         router.push("/dashboard/products")
         router.refresh()
@@ -1787,7 +2299,7 @@ const VariantRowItem = memo(function VariantRowItem({
     } finally {
       setIsProcessing(false)
     }
-  }, [batchAssignments, batchCart, batchMissingAssignmentsCount, onSuccess, router, userId])
+  }, [batchAssignments, batchCart, batchMissingAssignmentsCount, batchSerials, onSuccess, router, userId])
 
 
   const handleAddAnother = useCallback(async () => {
@@ -1889,6 +2401,8 @@ const VariantRowItem = memo(function VariantRowItem({
       const payload = item.payload ?? {}
       const nextExtraAttributes = (payload.extraAttributes ??
         {}) as Record<string, unknown>
+      // Skip name validation when loading batch item — name was already validated on add
+      skipNameValidationRef.current = true
       setEditingBatchId(item.id)
       setExtraFieldError(null)
       setExtraAttributes(nextExtraAttributes)
@@ -1941,8 +2455,7 @@ const VariantRowItem = memo(function VariantRowItem({
         await createProduct(item.payload)
       }
       toast.success("Productos creados correctamente.")
-      setBatchCart([])
-      localStorage.removeItem(BATCH_CART_STORAGE_KEY)
+      resetBatchState()
       if (!onSuccess) {
         router.push("/dashboard/products")
         router.refresh()
@@ -1953,7 +2466,7 @@ const VariantRowItem = memo(function VariantRowItem({
     } finally {
       setIsProcessing(false)
     }
-  }, [batchCart, onSuccess, router])
+  }, [batchCart, onSuccess, resetBatchState, router])
 
   const handleSubmitWithBatchGuard = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
@@ -2093,6 +2606,27 @@ const VariantRowItem = memo(function VariantRowItem({
     }
     localStorage.setItem(BATCH_ASSIGNMENTS_STORAGE_KEY, JSON.stringify(batchAssignments))
   }, [batchAssignments, batchCart.length])
+
+  // Hydrate batch serials from localStorage
+  useEffect(() => {
+    const raw = localStorage.getItem(BATCH_SERIALS_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object") {
+        setBatchSerials(parsed as Record<string, string[]>)
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  // Persist batch serials
+  useEffect(() => {
+    if (!batchCart.length) {
+      localStorage.removeItem(BATCH_SERIALS_STORAGE_KEY)
+      return
+    }
+    localStorage.setItem(BATCH_SERIALS_STORAGE_KEY, JSON.stringify(batchSerials))
+  }, [batchSerials, batchCart.length])
 
   useEffect(() => {
     const raw = localStorage.getItem(BATCH_UI_STATE_STORAGE_KEY)
@@ -2274,9 +2808,12 @@ const VariantRowItem = memo(function VariantRowItem({
               </p>
             </div>
           </div>
-          <Badge variant="outline" className="text-xs">
-            {verticalInfo?.config?.displayName ?? verticalName}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <ProductGuideButton />
+            <Badge variant="outline" className="text-xs">
+              {verticalInfo?.config?.displayName ?? verticalName}
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -2361,6 +2898,7 @@ const VariantRowItem = memo(function VariantRowItem({
                 hasPrice={hasPrice}
                 hasPriceSell={hasPriceSell}
                 hasInitialStock={hasInitialStock}
+                isEditing={Boolean(currentProductId)}
                 OptionalChip={OptionalChip}
               />
               <ProductFeaturesSection
@@ -2435,12 +2973,22 @@ const VariantRowItem = memo(function VariantRowItem({
               suppressInlineErrors={suppressInlineErrors}
               imageFields={imageFields}
               appendImage={appendImage}
-              removeImage={removeImage}
+              removeImage={(index?: number | number[]) => {
+                removeImage(index)
+                if (typeof index === 'number') {
+                  setImageUploadErrors((prev) => {
+                    const next = { ...prev }
+                    delete next[index]
+                    return next
+                  })
+                }
+              }}
               handleImageFile={handleImageFile}
               hasImages={hasImages}
               showComputerSpecs={showComputerSpecs}
               isGeneralVertical={isGeneralVertical}
               OptionalChip={OptionalChip}
+              imageUploadErrors={imageUploadErrors}
             />
           </div>
           {/* ── Sticky footer: botones de acción ── */}
@@ -2477,6 +3025,13 @@ const VariantRowItem = memo(function VariantRowItem({
                   setIngredientRows([])
                   setExtraFieldError(null)
                   setNameError(null)
+                  setNameValidation({ status: 'idle', message: undefined })
+                  setPendingCategoryId(null)
+                  setStockStoreId('')
+                  setStockProviderId('')
+                  setStockDialogError(null)
+                  setPendingStockPayload(null)
+                  setPendingStockQuantity(0)
                   form.reset({
                     name: "",
                     description: "",
@@ -2522,22 +3077,41 @@ const VariantRowItem = memo(function VariantRowItem({
       <ProductBatchPanel
         batchCart={batchCart}
         setBatchCart={setBatchCart}
+        onRemoveItem={handleRemoveBatchItem}
+        onClearAll={handleClearBatchCart}
         editingBatchId={editingBatchId}
         startBatchEditFromCart={startBatchEditFromCart}
-        floatingPanelRef={floatingPanelRef}
-        floatingPanelPosition={floatingPanelPosition}
-        setFloatingPanelPosition={setFloatingPanelPosition}
-        isFloatingPanelDragging={isFloatingPanelDragging}
-        setIsFloatingPanelDragging={setIsFloatingPanelDragging}
-        floatingDragOffsetRef={floatingDragOffsetRef}
-        floatingPanelPinnedRef={floatingPanelPinnedRef}
-        getDefaultPanelPosition={getDefaultPanelPosition}
-        setIsBatchStockDialogOpen={setIsBatchStockDialogOpen}
+        onOpenAssignDialog={() => setIsBatchOnlyConfirmOpen(true)}
         isProcessing={isProcessing}
         categories={categories}
         formatMoney={formatMoney}
         currentProductId={currentProductId}
+        batchSerials={batchSerials}
+        onOpenSerials={(itemId) => setSerialsDialogItemId(itemId)}
       />
+      {/* Serial numbers dialog for batch items */}
+      {(() => {
+        const serialsItem = batchCart.find((i) => i.id === serialsDialogItemId)
+        if (!serialsItem) return null
+        const allOtherSerials = Object.entries(batchSerials)
+          .filter(([id]) => id !== serialsDialogItemId)
+          .flatMap(([, serials]) => serials)
+        const qty = batchAssignments[serialsItem.id]?.quantity || serialsItem.initialStock || 0
+        return (
+          <ProductSerialsDialog
+            open={serialsDialogItemId !== null}
+            onOpenChange={(open) => { if (!open) setSerialsDialogItemId(null) }}
+            productName={serialsItem.name}
+            quantity={qty}
+            existingSerials={batchSerials[serialsItem.id] ?? []}
+            allOtherSerials={allOtherSerials}
+            onSave={(serials) => {
+              setBatchSerials((prev) => ({ ...prev, [serialsItem.id]: serials }))
+              toast.success(`${serials.length} serie(s) guardada(s) correctamente.`)
+            }}
+          />
+        )
+      })()}
       <Dialog open={isBatchConfirmOpen} onOpenChange={setIsBatchConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -2567,507 +3141,24 @@ const VariantRowItem = memo(function VariantRowItem({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={isBatchOnlyConfirmOpen} onOpenChange={setIsBatchOnlyConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Crear productos agregados</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              El formulario actual no est&aacute; completo. Puedes crear los{" "}
-              <span className="font-semibold text-foreground">{batchCart.length}</span>{" "}
-              producto(s) del carrito y continuar editando luego.
-            </p>
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              Faltan asignaciones de <span className="font-semibold">tienda/proveedor</span>.
-              Se crear&aacute;n los productos <span className="font-semibold">sin stock</span> hasta que
-              registres las cantidades en el inventario.
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsBatchOnlyConfirmOpen(false)}
-              disabled={isProcessing}
-            >
-              Volver al formulario
-            </Button>
-            <Button
-              type="button"
-              onClick={async () => {
-                setIsBatchOnlyConfirmOpen(false)
-                await handleCreateBatch()
-              }}
-              disabled={isProcessing}
-            >
-              Crear productos agregados
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={isBatchStockDialogOpen}
-        onOpenChange={(open) => {
-          setIsBatchStockDialogOpen(open)
-          if (!open) {
-            setBatchStockError(null)
-            setActiveBatchId(null)
-            setIsBatchDragActive(false)
-          }
+      <BatchOnlyAssignDialog
+        open={isBatchOnlyConfirmOpen}
+        onOpenChange={setIsBatchOnlyConfirmOpen}
+        batchCart={batchCart}
+        stores={stores}
+        providers={providers}
+        batchAssignments={batchAssignments}
+        updateBatchAssignment={updateBatchAssignment}
+        isProcessing={isProcessing}
+        onCreateWithStock={async () => {
+          setIsBatchOnlyConfirmOpen(false)
+          await handleCreateBatchWithAssignments()
         }}
-      >
-        {isBatchDragActive && batchDragCursor ? (
-          <div
-            className="pointer-events-none fixed z-[70] inline-flex items-center gap-2 rounded-full border border-amber-500/60 bg-amber-200/40 px-2 py-1 text-[10px] text-amber-900 shadow-[0_8px_20px_rgba(0,0,0,0.25)] backdrop-blur dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200"
-            style={{
-              left: batchDragCursor.x + 12,
-              top: batchDragCursor.y + 12,
-            }}
-          >
-            <span className="text-[11px] text-amber-900 dark:text-amber-200">↕</span>
-          </div>
-        ) : null}
-        <DialogContent
-          ref={batchDialogRef}
-          className="max-w-5xl max-h-[90vh] overflow-y-auto bg-card/95"
-          onClick={() => {
-            setActiveBatchId(null)
-            setHoveredBatchId(null)
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Asignar stock por tienda y proveedor</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-slate-600 dark:text-muted-foreground">
-            Arrastra cada producto hacia su tienda y proveedor. Mant&eacute;n el movimiento simple:
-            el stock y precio se ajustan desde cada tarjeta.
-          </p>
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
-            <div className="space-y-3 rounded-lg border border-border/40 bg-muted/10 p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-muted-foreground">
-                  Tiendas
-                </p>
-                <span className="text-[10px] text-slate-500 dark:text-muted-foreground">
-                  {stores.length} registradas
-                </span>
-              </div>
-              <div className="grid max-h-[30vh] gap-2 overflow-y-auto sm:grid-cols-2">
-                {stores.length ? stores.map((store: any) => {
-                  const assignedCount = storeAssignmentCounts[String(store.id)] ?? 0
-                  return (
-                  <div
-                    key={store.id}
-                    className={`rounded-lg border px-3 py-2 text-[10px] tracking-[0.03em] transition-all cursor-pointer ${
-                      dragOverStoreId === String(store.id)
-                        ? "border-emerald-300/70 bg-emerald-100/60 shadow-[0_0_18px_rgba(16,185,129,0.18)] dark:bg-emerald-400/10"
-                        : "border-slate-300/70 bg-white text-slate-700 hover:border-emerald-400/50 dark:border-border/50 dark:bg-background/40 dark:text-muted-foreground"
-                    }`}
-                    onDragOver={(event) => {
-                      event.preventDefault()
-                      setDragOverStoreId(String(store.id))
-                    }}
-                    onDragLeave={() => setDragOverStoreId(null)}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      setDragOverStoreId(null)
-                      const droppedId =
-                        event.dataTransfer.getData("text/plain") || draggingItemId
-                      if (droppedId) {
-                        updateBatchAssignment(droppedId, { storeId: String(store.id) })
-                      }
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="line-clamp-2 text-slate-700 dark:text-muted-foreground">
-                        {store.name}
-                      </span>
-                      {assignedCount > 0 && (
-                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-emerald-300/60 bg-emerald-100 px-1 text-[10px] text-emerald-700 dark:border-emerald-300/40 dark:bg-emerald-500/20 dark:text-emerald-200">
-                          {assignedCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}) : (
-                  <div className="rounded-lg border border-dashed border-slate-300/70 px-3 py-6 text-center text-[11px] text-slate-500 dark:border-border/50 dark:text-muted-foreground">
-                    No hay tiendas registradas.
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="space-y-3 rounded-lg border border-border/40 bg-muted/10 p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-muted-foreground">
-                  Proveedores
-                </p>
-                <span className="text-[10px] text-slate-500 dark:text-muted-foreground">
-                  {providers.length} registrados
-                </span>
-              </div>
-              <div className="grid max-h-[30vh] gap-2 overflow-y-auto sm:grid-cols-2">
-                {providers.length ? providers.map((provider: any) => {
-                  const assignedCount = providerAssignmentCounts[String(provider.id)] ?? 0
-                  return (
-                  <div
-                    key={provider.id}
-                    className={`rounded-lg border px-3 py-2 text-[10px] tracking-[0.03em] transition-all cursor-pointer ${
-                      dragOverProviderId === String(provider.id)
-                        ? "border-sky-300/70 bg-sky-100/60 shadow-[0_0_18px_rgba(56,189,248,0.18)] dark:bg-sky-400/10"
-                        : "border-slate-300/70 bg-white text-slate-700 hover:border-sky-400/50 dark:border-border/50 dark:bg-background/40 dark:text-muted-foreground"
-                    }`}
-                    onDragOver={(event) => {
-                      event.preventDefault()
-                      setDragOverProviderId(String(provider.id))
-                    }}
-                    onDragLeave={() => setDragOverProviderId(null)}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      setDragOverProviderId(null)
-                      const droppedId =
-                        event.dataTransfer.getData("text/plain") || draggingItemId
-                      if (droppedId) {
-                        updateBatchAssignment(droppedId, { providerId: String(provider.id) })
-                      }
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="line-clamp-2 text-slate-700 dark:text-muted-foreground">
-                        {provider.name}
-                      </span>
-                      {assignedCount > 0 && (
-                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-sky-300/60 bg-sky-100 px-1 text-[10px] text-sky-700 dark:border-sky-300/40 dark:bg-sky-500/20 dark:text-sky-200">
-                          {assignedCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}) : (
-                  <div className="rounded-lg border border-dashed border-slate-300/70 px-3 py-6 text-center text-[11px] text-slate-500 dark:border-border/50 dark:text-muted-foreground">
-                    No hay proveedores registrados.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 rounded-lg border border-border/40 bg-muted/10 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-muted-foreground">
-                Productos
-              </p>
-              <span className="text-[10px] text-slate-500 dark:text-muted-foreground">
-                Arrastra un producto hacia una tienda y proveedor.
-              </span>
-            </div>
-            {isBatchDragActive && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/60 bg-amber-200/40 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/10 dark:text-amber-200">
-              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-amber-700 dark:bg-amber-300" />
-              Arrastrando: suelta el producto sobre una tienda o proveedor.
-            </div>
-            )}
-            <div className="mt-3 grid gap-3 overflow-visible sm:grid-cols-2 lg:grid-cols-4">
-              {batchCart.map((item) => {
-                const assignment = batchAssignments[item.id]
-                const effectiveQty = assignment?.quantity ?? item.initialStock ?? 0
-                const priceValue = Number(assignment?.price ?? item.payload?.price ?? 0)
-                const isReady =
-                  assignment?.quantity > 0 && assignment?.storeId && assignment?.providerId
-                const storeName =
-                  stores.find((s: any) => String(s.id) === assignment?.storeId)?.name ?? ""
-                const providerName =
-                  providers.find((p: any) => String(p.id) === assignment?.providerId)?.name ?? ""
-                const isActive = activeBatchId === item.id
-                return (
-                  <TooltipProvider key={item.id} delayDuration={200}>
-                    <Tooltip open={!isBatchDragActive && !activeBatchId && hoveredBatchId === item.id}>
-                      <TooltipTrigger asChild>
-                        <div
-                          ref={(node) => {
-                            batchCardRefs.current[item.id] = node
-                          }}
-                          className={`group relative flex h-40 w-full flex-col justify-between rounded-xl border px-3 py-3 text-xs transition-[border-color,box-shadow,background-color] duration-200 cursor-grab active:cursor-grabbing hover:z-10 ${
-                            isReady
-                              ? "border-emerald-400/40 bg-emerald-400/10 shadow-[0_0_18px_rgba(16,185,129,0.2)]"
-                              : "border-slate-300/60 bg-white text-slate-700 hover:border-emerald-400/30 dark:border-border/50 dark:bg-background/40 dark:text-foreground"
-                          }`}
-                          draggable
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setActiveBatchId(item.id)
-                          }}
-                          onDragStart={(event) => {
-                            event.dataTransfer.setData("text/plain", item.id)
-                            event.dataTransfer.effectAllowed = "move"
-                            setDraggingItemId(item.id)
-                            setIsBatchDragActive(true)
-                            setActiveBatchId(null)
-                            setHoveredBatchId(null)
-                          }}
-                          onDragEnd={() => {
-                            setDraggingItemId(null)
-                            setIsBatchDragActive(false)
-                          }}
-                          onMouseEnter={() => {
-                            if (!activeBatchId || activeBatchId === item.id) {
-                              setHoveredBatchId(item.id)
-                            }
-                          }}
-                          onMouseLeave={() => {
-                            if (!activeBatchId || activeBatchId === item.id) {
-                              setHoveredBatchId((prev) => (prev === item.id ? null : prev))
-                            }
-                          }}
-                        >
-                          <div className="flex min-h-[36px] flex-col items-center gap-1 text-center">
-                            {isReady ? (
-                              <Badge variant="secondary">Listo</Badge>
-                            ) : (
-                              <Badge variant="outline">Pendiente</Badge>
-                            )}
-                            <p
-                              className="w-full max-w-[140px] truncate text-[10px] font-semibold text-slate-800 dark:text-foreground"
-                              title={item.name}
-                            >
-                              {item.name}
-                            </p>
-                          </div>
-                          {/* Inline stock controls */}
-                          <div
-                            className="flex items-center justify-center gap-1.5"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              className="flex h-5 w-5 items-center justify-center rounded border border-slate-300/60 bg-white text-[10px] text-slate-600 hover:bg-slate-100 active:scale-90 dark:border-border/50 dark:bg-background/60 dark:text-muted-foreground dark:hover:bg-background"
-                              onClick={() =>
-                                updateBatchAssignment(item.id, {
-                                  quantity: Math.max(0, effectiveQty - 1),
-                                })
-                              }
-                            >
-                              −
-                            </button>
-                            <span className={`min-w-[28px] text-center text-[11px] font-bold ${
-                              effectiveQty > 0
-                                ? "text-emerald-600 dark:text-emerald-300"
-                                : "text-slate-400 dark:text-muted-foreground"
-                            }`}>
-                              {effectiveQty}
-                            </span>
-                            <button
-                              type="button"
-                              className="flex h-5 w-5 items-center justify-center rounded border border-slate-300/60 bg-white text-[10px] text-slate-600 hover:bg-slate-100 active:scale-90 dark:border-border/50 dark:bg-background/60 dark:text-muted-foreground dark:hover:bg-background"
-                              onClick={() =>
-                                updateBatchAssignment(item.id, {
-                                  quantity: effectiveQty + 1,
-                                })
-                              }
-                            >
-                              +
-                            </button>
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
-                            {storeName ? (
-                              <span className="rounded-full border border-slate-300/70 bg-white px-2 py-0.5 text-slate-600 dark:border-border/40 dark:bg-transparent dark:text-muted-foreground">
-                                {storeName}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-rose-600/50 bg-rose-600/15 px-2 py-0.5 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
-                                <AlertTriangle className="h-3 w-3" />
-                                Sin Tienda
-                              </span>
-                            )}
-                            {providerName ? (
-                              <span className="rounded-full border border-slate-300/70 bg-white px-2 py-0.5 text-slate-600 dark:border-border/40 dark:bg-transparent dark:text-muted-foreground">
-                                {providerName}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-rose-600/50 bg-rose-600/15 px-2 py-0.5 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
-                                <AlertTriangle className="h-3 w-3" />
-                                Sin Proveedor
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <div className="space-y-1 text-xs">
-                          <p className="font-semibold">{item.name}</p>
-                          <p>
-                            Tienda:{" "}
-                            <span className="font-semibold">
-                              {storeName || "-"}
-                            </span>
-                          </p>
-                          <p>
-                            Proveedor:{" "}
-                            <span className="font-semibold">
-                              {providerName || "-"}
-                            </span>
-                          </p>
-                          <p>
-                            Stock: <span className="font-semibold">{effectiveQty}</span>
-                          </p>
-                          <p>
-                            Precio compra:{" "}
-                            <span className="font-semibold">S/. {priceValue.toFixed(2)}</span>
-                          </p>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              })}
-            </div>
-            <div
-              className={`absolute z-20 w-60 rounded-xl border border-slate-300/70 bg-white/95 px-3 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.28)] backdrop-blur transition-all duration-300 ease-out dark:border-border/60 dark:bg-background/95 ${
-                !isBatchDragActive && activeBatchId && batchPanelPosition
-                  ? "opacity-100 translate-y-0"
-                  : "pointer-events-none opacity-0 translate-y-2"
-              }`}
-              style={{
-                left: batchPanelPosition?.left ?? 0,
-                top: batchPanelPosition?.top ?? 0,
-              }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {activeBatchId && batchPanelPosition
-                ? (() => {
-                    const activeItem = batchCart.find((entry) => entry.id === activeBatchId)
-                    const assignment = activeItem ? batchAssignments[activeItem.id] : undefined
-                    const activeEffectiveQty = assignment?.quantity ?? activeItem?.initialStock ?? 0
-                    const priceValue = Number(assignment?.price ?? activeItem?.payload?.price ?? 0)
-                    if (!activeItem) return null
-                    return (
-                      <div className="grid gap-2">
-                      <div className="flex items-center gap-2 rounded-md border border-emerald-300/60 bg-emerald-50/70 px-2.5 py-2 dark:border-border/40 dark:bg-background/40">
-                        <Boxes className="h-4 w-4 text-emerald-700 dark:text-emerald-200" />
-                          <Input
-                            type="number"
-                            min={0}
-                            className="h-7 flex-1 border-0 bg-transparent px-0 text-[12px] [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder="Stock"
-                            value={activeEffectiveQty}
-                            onChange={(event) =>
-                              updateBatchAssignment(activeItem.id, {
-                                quantity: Number(event.target.value || 0),
-                              })
-                            }
-                          />
-                          <div className="flex items-center gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6 border-emerald-400/40 text-emerald-200 hover:border-emerald-300/70 hover:text-emerald-100"
-                              aria-label="Disminuir stock"
-                              onClick={() =>
-                                updateBatchAssignment(activeItem.id, {
-                                  quantity: Math.max(0, activeEffectiveQty - 1),
-                                })
-                              }
-                            >
-                              −
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6 border-emerald-400/40 text-emerald-200 hover:border-emerald-300/70 hover:text-emerald-100"
-                              aria-label="Aumentar stock"
-                              onClick={() =>
-                                updateBatchAssignment(activeItem.id, {
-                                  quantity: activeEffectiveQty + 1,
-                                })
-                              }
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </div>
-                      <div className="flex items-center gap-2 rounded-md border border-sky-300/60 bg-sky-50/70 px-2.5 py-2 dark:border-border/40 dark:bg-background/40">
-                        <span className="text-[12px] font-semibold text-sky-700 dark:text-sky-200">S/</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            className="h-7 flex-1 border-0 bg-transparent px-0 text-[12px] [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder="Compra"
-                            value={Number.isFinite(priceValue) ? priceValue : 0}
-                            onChange={(event) =>
-                              updateBatchAssignment(activeItem.id, {
-                                price: Number(event.target.value || 0),
-                              })
-                            }
-                          />
-                          <div className="flex items-center gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6 border-sky-400/40 text-sky-200 hover:border-sky-300/70 hover:text-sky-100"
-                              aria-label="Disminuir precio"
-                              onClick={() =>
-                                updateBatchAssignment(activeItem.id, {
-                                  price: Math.max(0, (assignment?.price ?? priceValue ?? 0) - 1),
-                                })
-                              }
-                            >
-                              −
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6 border-sky-400/40 text-sky-200 hover:border-sky-300/70 hover:text-sky-100"
-                              aria-label="Aumentar precio"
-                              onClick={() =>
-                                updateBatchAssignment(activeItem.id, {
-                                  price: (assignment?.price ?? priceValue ?? 0) + 1,
-                                })
-                              }
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })()
-                : null}
-            </div>
-          </div>
-          {batchStockError && (
-            <p className="text-xs text-rose-500">{batchStockError}</p>
-          )}
-          {batchMissingAssignmentsCount > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {batchMissingAssignmentsCount} producto(s) sin stock asignado.
-            </p>
-          )}
-          <DialogFooter className="gap-3 sm:gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="border-slate-300/80 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/10"
-              onClick={() => setIsBatchStockDialogOpen(false)}
-              disabled={isProcessing}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              Cerrar
-            </Button>
-            <Button
-              type="button"
-              className="bg-emerald-500 text-emerald-950 hover:bg-emerald-400 dark:bg-emerald-400 dark:text-emerald-950 dark:hover:bg-emerald-300"
-              onClick={handleCreateBatchWithAssignments}
-              disabled={isProcessing || batchMissingAssignmentsCount > 0}
-            >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Crear productos y stock
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onCreateWithoutStock={async () => {
+          setIsBatchOnlyConfirmOpen(false)
+          await handleCreateBatch()
+        }}
+      />
       <Dialog
         open={isStockDialogOpen}
         onOpenChange={(open) => {

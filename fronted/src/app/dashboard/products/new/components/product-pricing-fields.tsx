@@ -17,6 +17,7 @@ export type ProductPricingFieldsProps = ProductFormContext & {
   hasPrice: boolean
   hasPriceSell: boolean
   hasInitialStock: boolean
+  isEditing?: boolean
   OptionalChip: React.ComponentType<{ filled: boolean }>
 }
 
@@ -27,6 +28,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
   hasPrice,
   hasPriceSell,
   hasInitialStock,
+  isEditing,
   OptionalChip,
 }: ProductPricingFieldsProps) {
   return (
@@ -155,67 +157,69 @@ export const ProductPricingFields = memo(function ProductPricingFields({
         )}
       </div>
 
-      <div className="flex flex-col">
-        <Label className='py-3'>
-          Cantidad / Stock inicial
-          {<OptionalChip filled={hasInitialStock} />}
-        </Label>
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center rounded-md bg-background px-3 py-1">
-            <Input
-              step="1"
-              min={0}
-              max={99999999.99}
-              type="number"
-              className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              {...register('initialStock', { valueAsNumber: true })}
-            />
+      {!isEditing && (
+        <div className="flex flex-col">
+          <Label className='py-3'>
+            Cantidad / Stock inicial
+            {<OptionalChip filled={hasInitialStock} />}
+          </Label>
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 items-center rounded-md bg-background px-3 py-1">
+              <Input
+                step="1"
+                min={0}
+                max={99999999.99}
+                type="number"
+                className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                {...register('initialStock', { valueAsNumber: true })}
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
+                    aria-label="Disminuir stock inicial"
+                    onClick={() => {
+                      const current = Number(form.getValues('initialStock') ?? 0)
+                      const next = Math.max(0, current - 1)
+                      setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
+                    }}
+                  >
+                    −
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Disminuir stock inicial</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
+                    aria-label="Aumentar stock inicial"
+                    onClick={() => {
+                      const current = Number(form.getValues('initialStock') ?? 0)
+                      const next = current + 1
+                      setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
+                    }}
+                  >
+                    +
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Aumentar stock inicial</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
-                  aria-label="Disminuir stock inicial"
-                  onClick={() => {
-                    const current = Number(form.getValues('initialStock') ?? 0)
-                    const next = Math.max(0, current - 1)
-                    setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
-                  }}
-                >
-                  −
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Disminuir stock inicial</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
-                  aria-label="Aumentar stock inicial"
-                  onClick={() => {
-                    const current = Number(form.getValues('initialStock') ?? 0)
-                    const next = current + 1
-                    setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
-                  }}
-                >
-                  +
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Aumentar stock inicial</TooltipContent>
-            </Tooltip>
-          </div>
+          {form.formState.errors.initialStock && (
+            <p className="text-red-500 text-sm">{form.formState.errors.initialStock.message as string}</p>
+          )}
         </div>
-        {form.formState.errors.initialStock && (
-          <p className="text-red-500 text-sm">{form.formState.errors.initialStock.message as string}</p>
-        )}
-      </div>
+      )}
     </>
   )
 })

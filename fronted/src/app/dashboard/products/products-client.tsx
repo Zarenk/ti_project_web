@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LayoutGrid, List, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutGrid, List, Search, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -205,6 +205,20 @@ export function ProductsClient() {
                 </p>
               </div>
               <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      className="w-full gap-2 border-emerald-500/50 bg-emerald-600 text-white shadow-[0_2px_10px_rgba(16,185,129,0.25)] transition-all hover:bg-emerald-500 hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] active:scale-[0.98] dark:border-emerald-400/30 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:w-auto"
+                    >
+                      <Link href="/dashboard/entries/excel-upload">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Importar Excel
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Carga masiva de productos desde Excel</TooltipContent>
+                </Tooltip>
                 <Button asChild className="w-full sm:w-auto">
                   <Link href="/dashboard/products/new">Nuevo plato</Link>
                 </Button>
@@ -386,6 +400,20 @@ export function ProductsClient() {
                 <Button asChild variant="outline">
                   <Link href="/dashboard/products/migration">Asistente de migración</Link>
                 </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      className="gap-2 border-emerald-500/50 bg-emerald-600 text-white shadow-[0_2px_10px_rgba(16,185,129,0.25)] transition-all hover:bg-emerald-500 hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] active:scale-[0.98] dark:border-emerald-400/30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                    >
+                      <Link href="/dashboard/entries/excel-upload">
+                        <FileSpreadsheet className="h-4 w-4" />
+                        <span className="hidden sm:inline">Importar Excel</span>
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Carga masiva de productos desde Excel</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             {loading ? (

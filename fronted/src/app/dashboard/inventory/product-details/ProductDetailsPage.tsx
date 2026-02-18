@@ -418,7 +418,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
             )
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="overflow-hidden rounded-md border">
+              <div className="table-scroll overflow-x-auto rounded-md border">
                 <div className="bg-muted px-4 py-2 font-semibold">Entradas</div>
                 <div className="overflow-y-auto">
                   <table className="w-full text-sm">
@@ -460,7 +460,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-md border">
+              <div className="table-scroll overflow-x-auto rounded-md border">
                 <div className="bg-muted px-4 py-2 font-semibold">Salidas</div>
                 <div className="overflow-y-auto">
                   <table className="w-full text-sm">

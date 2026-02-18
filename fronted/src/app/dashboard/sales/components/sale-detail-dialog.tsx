@@ -499,7 +499,7 @@ export function SaleDetailDialog({
             {aggregatedPayments.length > 0 && (
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Pagos</h3>
-                <div className="overflow-hidden rounded-md border">
+                <div className="table-scroll overflow-x-auto rounded-md border">
                   <table className="w-full text-sm">
                     <thead className="bg-muted">
                       <tr className="text-left">
