@@ -66,3 +66,30 @@ export async function deleteIngredient(id: number) {
   }
   return res.json()
 }
+
+export type IngredientMovement = {
+  id: number
+  ingredientId: number
+  type: "IN" | "OUT" | "ADJUSTMENT" | "WASTE"
+  quantity: number
+  unit: string
+  orderId: number | null
+  notes: string | null
+  createdAt: string
+  order?: { id: number; status: string } | null
+  createdBy?: { id: number; username: string } | null
+}
+
+export async function getIngredientMovements(ingredientId: number): Promise<IngredientMovement[]> {
+  let res: Response
+  try {
+    res = await authFetch(`/ingredients/${ingredientId}/movements`, { cache: "no-store" })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return []
+    throw error
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res, "No se pudieron cargar los movimientos."))
+  }
+  return res.json()
+}

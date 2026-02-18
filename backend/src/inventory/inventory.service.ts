@@ -42,6 +42,26 @@ export class InventoryService {
     private readonly verticalConfig: VerticalConfigService,
   ) {}
 
+  /**
+   * Builds an organizationId WHERE clause that also includes records with
+   * null organizationId (legacy records created before multi-tenant fix).
+   */
+  private buildOrgFilter(
+    organizationId: number | null | undefined,
+  ): Prisma.InventoryWhereInput {
+    if (organizationId === undefined) return {};
+    const orgId = organizationId ?? null;
+    if (orgId !== null) {
+      return {
+        OR: [
+          { organizationId: orgId },
+          { organizationId: null },
+        ],
+      };
+    }
+    return { organizationId: null };
+  }
+
   private async ensureInventoryFeatureEnabled(
     companyId?: number | null,
   ): Promise<void> {
@@ -617,11 +637,10 @@ export class InventoryService {
   ) {
     try {
       await this.ensureInventoryFeatureEnabled(companyId ?? null);
-      const where: Prisma.InventoryWhereInput = {};
+      const where: Prisma.InventoryWhereInput = {
+        ...this.buildOrgFilter(organizationId),
+      };
 
-      if (organizationId !== undefined) {
-        where.organizationId = organizationId ?? null;
-      }
       if (companyId !== undefined) {
         where.storeOnInventory = {
           some: {
@@ -632,20 +651,24 @@ export class InventoryService {
         };
       }
 
+      this.logger.debug(
+        `getInventoryWithEntries: orgId=${organizationId}, companyId=${companyId}, where=${JSON.stringify(where)}`,
+      );
+
       const inventories = await this.prisma.inventory.findMany({
         where,
-        take: 500,
+        orderBy: { updatedAt: 'desc' },
         include: {
           product: {
             include: {
-              category: true, // Incluir información de la categoría del producto
+              category: true,
             },
           },
           entryDetails: {
             include: {
-              entry: true, // Incluye información de la entrada
-              salesDetails: true, // Necesario para calcular stock restante
-              series: true, // Incluir series disponibles
+              entry: true,
+              salesDetails: true,
+              series: true,
             },
           },
           storeOnInventory: {
@@ -656,12 +679,16 @@ export class InventoryService {
         },
       });
 
+      this.logger.debug(
+        `getInventoryWithEntries: found ${inventories.length} inventory records from DB`,
+      );
+
       if (companyId === undefined) {
         return inventories;
       }
 
       const targetCompanyId = companyId ?? null;
-      return inventories
+      const filtered = inventories
         .map((item) => {
           const filteredStoreOnInventory = item.storeOnInventory.filter(
             (storeInventory) =>
@@ -686,10 +713,16 @@ export class InventoryService {
           (item) =>
             item.storeOnInventory.length > 0 || item.entryDetails.length > 0,
         );
+
+      this.logger.debug(
+        `getInventoryWithEntries: after companyId filter (${targetCompanyId}): ${filtered.length} records`,
+      );
+
+      return filtered;
     } catch (error) {
       this.logger.error('Error in getInventoryWithEntries:', error);
       handlePrismaError(error);
-      return []; // Return empty array on error instead of undefined
+      return [];
     }
   }
 
@@ -747,6 +780,7 @@ export class InventoryService {
     } catch (error) {
       this.logger.error('Error in calculateInventoryWithCurrencyByStore:', error);
       handlePrismaError(error);
+      return [];
     }
   }
 
@@ -997,11 +1031,10 @@ export class InventoryService {
     organizationId?: number | null,
     companyId?: number | null,
   ) {
-    const inventoryFilter: Prisma.InventoryWhereInput = {};
+    const inventoryFilter: Prisma.InventoryWhereInput = {
+      ...this.buildOrgFilter(organizationId),
+    };
 
-    if (organizationId !== undefined) {
-      inventoryFilter.organizationId = organizationId ?? null;
-    }
     if (companyId !== undefined) {
       inventoryFilter.storeOnInventory = {
         some: { store: { companyId: companyId ?? null } },
@@ -1042,11 +1075,10 @@ export class InventoryService {
     companyId?: number | null,
   ) {
     await this.ensureInventoryFeatureEnabled(companyId ?? null);
-    const where: Prisma.InventoryWhereInput = {};
+    const where: Prisma.InventoryWhereInput = {
+      ...this.buildOrgFilter(organizationId),
+    };
 
-    if (organizationId !== undefined) {
-      where.organizationId = organizationId ?? null;
-    }
     if (companyId !== undefined) {
       where.storeOnInventory = {
         some: { store: { companyId: companyId ?? null } },
@@ -1103,11 +1135,10 @@ export class InventoryService {
     companyId?: number | null,
   ) {
     await this.ensureInventoryFeatureEnabled(companyId ?? null);
-    const where: Prisma.InventoryWhereInput = {};
+    const where: Prisma.InventoryWhereInput = {
+      ...this.buildOrgFilter(organizationId),
+    };
 
-    if (organizationId !== undefined) {
-      where.organizationId = organizationId ?? null;
-    }
     if (companyId !== undefined) {
       where.storeOnInventory = {
         some: { store: { companyId: companyId ?? null } },
@@ -1189,11 +1220,8 @@ export class InventoryService {
 
     const inventoryFilter: Prisma.InventoryWhereInput = {
       product: categoryFilter,
+      ...this.buildOrgFilter(organizationId),
     };
-
-    if (organizationId !== undefined) {
-      inventoryFilter.organizationId = organizationId ?? null;
-    }
 
     return this.prisma.storeOnInventory.findMany({
       where: {
@@ -1211,7 +1239,7 @@ export class InventoryService {
             }
           : {}),
         stock: {
-          gt: 0, // Solo productos con stock > 0
+          gt: 0,
         },
         inventory: inventoryFilter,
       },
@@ -1257,11 +1285,8 @@ export class InventoryService {
 
     const inventoryFilter: Prisma.InventoryWhereInput = {
       product: categoryFilter,
+      ...this.buildOrgFilter(organizationId),
     };
-
-    if (organizationId !== undefined) {
-      inventoryFilter.organizationId = organizationId ?? null;
-    }
 
     return this.prisma.storeOnInventory.findMany({
       where: {

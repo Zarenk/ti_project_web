@@ -1,17 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import { getRestaurantOrder, updateRestaurantOrder } from "@/app/dashboard/orders/orders.api";
+import {
+  getRestaurantOrder,
+  updateRestaurantOrder,
+  checkoutRestaurantOrder,
+} from "@/app/dashboard/orders/orders.api";
+import { getStores } from "@/app/dashboard/stores/stores.api";
+import { pdf } from "@react-pdf/renderer";
+import {
+  RestaurantReceiptPdf,
+  type RestaurantReceiptData,
+} from "../components/RestaurantReceiptPdf";
 
 type RestaurantOrderStatus =
   | "OPEN"
@@ -27,6 +42,7 @@ type RestaurantOrder = {
   id: number;
   status: RestaurantOrderStatus;
   orderType: RestaurantOrderType;
+  storeId?: number | null;
   openedAt?: string;
   closedAt?: string | null;
   total?: number | null;
@@ -36,6 +52,7 @@ type RestaurantOrder = {
   salesId?: number | null;
   notes?: string | null;
   table?: { name?: string | null; code?: string | null } | null;
+  store?: { id: number; name: string; adress?: string | null } | null;
   client?: { name?: string | null; email?: string | null } | null;
   items?: Array<{ product?: { name?: string | null } | null; quantity?: number | null; unitPrice?: number | null }>;
   history?: Array<{
@@ -91,6 +108,16 @@ export default function RestaurantOrderDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
 
+  // Checkout dialog state
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [stores, setStores] = useState<Array<{ id: number; name: string }>>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState("-1");
+  const [tipoComprobante, setTipoComprobante] = useState("BOLETA");
+  const [servicePercent, setServicePercent] = useState("10");
+  const [tipAmount, setTipAmount] = useState("0");
+
   const computedHistory = useMemo(() => {
     if (!order) return [];
     const events = [...(order.history ?? [])].filter(Boolean);
@@ -122,7 +149,7 @@ export default function RestaurantOrderDetailPage() {
             timestamp: order.closedAt ?? null,
           }
         : null,
-    ].filter(Boolean) as Array<{ key: string; label: string; timestamp: string | null }>;
+    ].filter(Boolean) as Array<{ key: string; label: string; timestamp: string | null; meta?: unknown }>;
   }, [order]);
 
   const formatTimestamp = (value: string | null | undefined) => {
@@ -191,6 +218,113 @@ export default function RestaurantOrderDetailPage() {
       setUpdating(false);
     }
   };
+
+  // Load stores for checkout
+  useEffect(() => {
+    if (!isRestaurant) return;
+    getStores()
+      .then((data: any) => {
+        const list = Array.isArray(data) ? data : data?.stores ?? [];
+        setStores(list);
+        if (list.length === 1) setSelectedStoreId(String(list[0].id));
+      })
+      .catch(() => {});
+  }, [isRestaurant]);
+
+  const checkoutSubtotal = useMemo(() => {
+    if (!order) return 0;
+    const items = order.items ?? [];
+    return items.reduce((acc, item) => acc + (item.quantity ?? 0) * (item.unitPrice ?? 0), 0);
+  }, [order]);
+
+  const checkoutService = Number(servicePercent) > 0
+    ? Number((checkoutSubtotal * Number(servicePercent) / 100).toFixed(2))
+    : 0;
+  const checkoutTip = Number(tipAmount) || 0;
+  const checkoutTaxable = checkoutSubtotal + checkoutService;
+  const checkoutIgv = Number((checkoutTaxable * 0.18).toFixed(2));
+  const checkoutTotal = checkoutTaxable + checkoutTip;
+
+  const handleCheckout = useCallback(async () => {
+    if (!order || !selectedStoreId) {
+      toast.error("Selecciona una tienda para procesar el pago.");
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const result = await checkoutRestaurantOrder(order.id, {
+        storeId: Number(selectedStoreId),
+        tipoComprobante,
+        tipoMoneda: "PEN",
+        serviceChargePercent: Number(servicePercent),
+        tip: checkoutTip,
+        payments: [
+          {
+            paymentMethodId: Number(paymentMethod),
+            amount: checkoutTotal,
+            currency: "PEN",
+          },
+        ],
+      });
+      toast.success(`Pago registrado. Venta #${result.salesId}`);
+      setCheckoutOpen(false);
+      // Reload order to reflect CLOSED status + salesId
+      const updated = await getRestaurantOrder(order.id);
+      setOrder(updated as RestaurantOrder);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Error al procesar el pago.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }, [order, selectedStoreId, tipoComprobante, servicePercent, checkoutTip, paymentMethod, checkoutTotal]);
+
+  const handlePrintReceipt = useCallback(async () => {
+    if (!order) return;
+    const PAYMENT_LABELS: Record<string, string> = {
+      "-1": "Efectivo", "-2": "Transferencia", "-3": "Visa",
+      "-4": "Yape", "-5": "Plin", "-6": "Otro",
+    };
+    const items = (order.items ?? []).map((i) => ({
+      name: i.product?.name ?? "Producto",
+      quantity: i.quantity ?? 1,
+      unitPrice: i.unitPrice ?? 0,
+      total: (i.quantity ?? 1) * (i.unitPrice ?? 0),
+    }));
+    const subtotal = order.subtotal ?? items.reduce((sum, i) => sum + i.total, 0);
+    const service = order.serviceCharge ?? 0;
+    const igv = order.tax ?? subtotal * 0.18;
+    const total = order.total ?? (subtotal + service + igv);
+
+    const orderStore = order.store;
+    const fallbackStore = stores.find((s) => s.id === order.storeId);
+    const receiptData: RestaurantReceiptData = {
+      storeName: orderStore?.name ?? fallbackStore?.name ?? "Restaurante",
+      storeAddress: orderStore?.adress ?? undefined,
+      orderNumber: String(order.id),
+      tableName: order.table?.name ?? undefined,
+      orderType: order.orderType ?? "DINE_IN",
+      dateTime: order.closedAt
+        ? new Date(order.closedAt).toLocaleString()
+        : new Date().toLocaleString(),
+      items,
+      subtotal,
+      serviceCharge: service > 0 ? service : undefined,
+      igv,
+      total,
+      paymentMethod: PAYMENT_LABELS[String(paymentMethod)] ?? "Efectivo",
+      tipoComprobante: tipoComprobante,
+      notes: order.notes ?? undefined,
+    };
+
+    try {
+      const blob = await pdf(<RestaurantReceiptPdf data={receiptData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error("Error al generar el recibo.");
+      console.error(err);
+    }
+  }, [order, stores, paymentMethod, tipoComprobante]);
 
   if (!isRestaurant) {
     return (
@@ -365,38 +499,184 @@ export default function RestaurantOrderDetailPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Estado de pago</span>
-                    <span className="font-semibold text-foreground">
-                      {order.salesId ? "Registrado" : "Pendiente"}
-                    </span>
+                    <Badge variant="outline" className={order.salesId ? "border-emerald-500/40 text-emerald-200 bg-emerald-500/10" : "border-amber-500/40 text-amber-200 bg-amber-500/10"}>
+                      {order.salesId ? "Pagado" : "Pendiente"}
+                    </Badge>
                   </div>
                 </div>
                 <div className="space-y-2 pt-1">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    disabled={!order.salesId}
-                    onClick={() => {
-                      toast.message("Comprobante disponible desde la venta vinculada.");
-                    }}
-                  >
-                    Ver comprobante
-                  </Button>
-                  <Button
-                    className="w-full"
-                    variant="default"
-                    disabled={order.status !== "SERVED" || Boolean(order.salesId)}
-                    onClick={() => {
-                      toast.message("Cierra la orden para registrar el pago desde caja.");
-                    }}
-                  >
-                    Registrar pago
-                  </Button>
+                  {order.salesId ? (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => router.push(`/dashboard/sales`)}
+                      >
+                        Ver en ventas
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        onClick={handlePrintReceipt}
+                      >
+                        Imprimir recibo
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      variant="default"
+                      disabled={order.status !== "SERVED" && order.status !== "READY"}
+                      onClick={() => setCheckoutOpen(true)}
+                    >
+                      Cobrar orden
+                    </Button>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  El pago y comprobante se gestionan cuando la orden esta servida y cerrada.
-                </p>
+                {!order.salesId && order.status !== "SERVED" && order.status !== "READY" && (
+                  <p className="text-xs text-muted-foreground">
+                    La orden debe estar en estado Servido o Listo para cobrar.
+                  </p>
+                )}
               </CardContent>
             </Card>
+
+            {/* Checkout Dialog */}
+            <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Cobrar Orden #{order.id}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {/* Items summary */}
+                  <div className="space-y-1 text-sm">
+                    {items.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between">
+                        <span>{item.quantity}x {item.product?.name}</span>
+                        <span>S/. {((item.quantity ?? 0) * (item.unitPrice ?? 0)).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Separator />
+
+                  {/* Store selector */}
+                  <div className="space-y-2">
+                    <Label>Tienda / Caja</Label>
+                    <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar tienda" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Payment method */}
+                  <div className="space-y-2">
+                    <Label>Metodo de pago</Label>
+                    <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center space-x-2 rounded-md border p-2">
+                        <RadioGroupItem value="-1" id="cash" />
+                        <Label htmlFor="cash" className="cursor-pointer text-sm">Efectivo</Label>
+                      </div>
+                      <div className="flex items-center space-x-2 rounded-md border p-2">
+                        <RadioGroupItem value="-3" id="card" />
+                        <Label htmlFor="card" className="cursor-pointer text-sm">Tarjeta</Label>
+                      </div>
+                      <div className="flex items-center space-x-2 rounded-md border p-2">
+                        <RadioGroupItem value="-4" id="yape" />
+                        <Label htmlFor="yape" className="cursor-pointer text-sm">Yape</Label>
+                      </div>
+                      <div className="flex items-center space-x-2 rounded-md border p-2">
+                        <RadioGroupItem value="-5" id="plin" />
+                        <Label htmlFor="plin" className="cursor-pointer text-sm">Plin</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {/* Document type */}
+                  <div className="space-y-2">
+                    <Label>Comprobante</Label>
+                    <RadioGroup value={tipoComprobante} onValueChange={setTipoComprobante} className="flex gap-3">
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="BOLETA" id="boleta" />
+                        <Label htmlFor="boleta" className="cursor-pointer text-sm">Boleta</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="FACTURA" id="factura" />
+                        <Label htmlFor="factura" className="cursor-pointer text-sm">Factura</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="SIN COMPROBANTE" id="sin" />
+                        <Label htmlFor="sin" className="cursor-pointer text-sm">Sin comprobante</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {/* Service charge & tip */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Servicio (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={servicePercent}
+                        onChange={(e) => setServicePercent(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Propina (S/.)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={tipAmount}
+                        onChange={(e) => setTipAmount(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Totals */}
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span>{formatCurrency(checkoutSubtotal, "PEN")}</span>
+                    </div>
+                    {checkoutService > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Servicio ({servicePercent}%)</span>
+                        <span>{formatCurrency(checkoutService, "PEN")}</span>
+                      </div>
+                    )}
+                    {checkoutTip > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Propina</span>
+                        <span>{formatCurrency(checkoutTip, "PEN")}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base font-semibold pt-1">
+                      <span>Total a cobrar</span>
+                      <span>{formatCurrency(checkoutTotal, "PEN")}</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    disabled={checkoutLoading || !selectedStoreId}
+                    onClick={handleCheckout}
+                  >
+                    {checkoutLoading ? "Procesando..." : `Confirmar pago S/. ${checkoutTotal.toFixed(2)}`}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Card className="border-white/10 bg-background/60">
               <CardHeader className="px-4 pt-4 pb-2">

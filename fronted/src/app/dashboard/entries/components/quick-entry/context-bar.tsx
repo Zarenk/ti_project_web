@@ -386,7 +386,7 @@ export function ContextBar({
           onCreateClick={onCreateStore ? () => setStoreDialogOpen(true) : undefined}
         />
 
-        <div className="w-[170px] space-y-1.5">
+        <div className="w-full sm:w-[170px] space-y-1.5">
           <Label className="text-xs font-medium">Fecha</Label>
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>

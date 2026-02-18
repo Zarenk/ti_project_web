@@ -6,5 +6,6 @@ import { IngredientsService } from './ingredients.service';
 @Module({
   controllers: [IngredientsController],
   providers: [IngredientsService, PrismaService],
+  exports: [IngredientsService],
 })
 export class IngredientsModule {}

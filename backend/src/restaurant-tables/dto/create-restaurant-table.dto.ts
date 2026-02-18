@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min, IsEnum } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString, Min, IsEnum } from 'class-validator';
 import { RestaurantTableStatus } from '@prisma/client';
 
 export class CreateRestaurantTableDto {
@@ -17,6 +17,14 @@ export class CreateRestaurantTableDto {
   @IsOptional()
   @IsString()
   area?: string;
+
+  @IsOptional()
+  @IsNumber()
+  positionX?: number;
+
+  @IsOptional()
+  @IsNumber()
+  positionY?: number;
 
   @IsOptional()
   @IsEnum(RestaurantTableStatus)

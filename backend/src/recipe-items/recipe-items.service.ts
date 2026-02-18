@@ -21,7 +21,7 @@ export class RecipeItemsService {
     }
 
     const config = await this.verticalConfig.getConfig(companyId);
-    if (config.features.production === false) {
+    if (config.features.production === false && config.features.reservations === false) {
       throw new ForbiddenException(
         'El modulo de produccion/recetas no esta habilitado para esta empresa.',
       );

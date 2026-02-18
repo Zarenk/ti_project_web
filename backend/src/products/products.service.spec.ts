@@ -38,6 +38,7 @@ const createService = () => {
     mocks.brandsService as any,
     mocks.tenantContext as any,
     mocks.verticalConfig as any,
+    {} as any,
   );
   return { service, ...mocks };
 };

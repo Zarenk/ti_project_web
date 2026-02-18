@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { ChefHat, Clock, Flame, TimerReset, CheckCircle2, HandPlatter } from "lucide-react"
+import { ChefHat, Clock, Flame, TimerReset, CheckCircle2, HandPlatter, Wifi, WifiOff } from "lucide-react"
 
 import {
   createKitchenStation,
@@ -14,6 +14,7 @@ import {
   type KitchenStation,
 } from "./kitchen.api"
 import { useVerticalConfig } from "@/hooks/use-vertical-config"
+import { useKitchenSocket } from "@/hooks/use-kitchen-socket"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -85,6 +86,23 @@ export default function KitchenPage() {
   useEffect(() => {
     loadQueue()
   }, [loadQueue])
+
+  // Real-time kitchen updates via WebSocket (falls back to polling if disconnected)
+  const { connected: socketConnected } = useKitchenSocket({
+    enabled: isRestaurant,
+    onOrderUpdate: useCallback(() => {
+      void loadQueue()
+    }, [loadQueue]),
+  })
+
+  // Fallback polling only when WebSocket is disconnected
+  useEffect(() => {
+    if (!isRestaurant || socketConnected) return
+    const interval = setInterval(() => {
+      void loadQueue()
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [isRestaurant, socketConnected, loadQueue])
 
   const handleCreate = async () => {
     if (!form.name.trim() || !form.code.trim()) {
@@ -303,9 +321,20 @@ export default function KitchenPage() {
               Coordina estaciones y prepara pedidos con visibilidad en tiempo real.
             </p>
           </div>
-          <Badge variant="outline" className="border-primary/30 text-primary">
-            Vertical Restaurantes
-          </Badge>
+          <div className="flex items-center gap-2">
+            {socketConnected ? (
+              <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 gap-1">
+                <Wifi className="h-3 w-3" /> En vivo
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-amber-500/30 text-amber-400 gap-1">
+                <WifiOff className="h-3 w-3" /> Polling
+              </Badge>
+            )}
+            <Badge variant="outline" className="border-primary/30 text-primary">
+              Vertical Restaurantes
+            </Badge>
+          </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">

@@ -4,6 +4,12 @@ import { useState } from "react"
 import { Package, Plus, Minus, Info, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { resolveImageUrl } from "@/lib/images"
 
 type ProductFeature = {
@@ -160,9 +166,18 @@ export function ProductCard({
       {/* Info */}
       <div className="flex flex-1 flex-col gap-1 p-3">
         <div className="flex items-start justify-between gap-1">
-          <h3 className="truncate text-sm font-semibold leading-tight">
-            {product.name}
-          </h3>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <h3 className="text-xs font-semibold leading-tight cursor-default">
+                  {product.name}
+                </h3>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[280px]">
+                <p className="text-xs font-medium">{product.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {/* Detail toggle button */}
           {hasDetail && (
             <Button

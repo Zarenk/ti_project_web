@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { useDebounce } from "@/app/hooks/useDebounce";
 import { getRestaurantOrders, updateRestaurantOrder } from "@/app/dashboard/orders/orders.api";
+import { toast } from "sonner";
 
  type RestaurantOrderStatus =
   | "OPEN"
@@ -147,21 +148,13 @@ export default function RestaurantOrdersPage() {
     try {
       const updated = await updateRestaurantOrder(orderId, { status: nextStatus });
       setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
-      try {
-        const label = nextStatus === "CANCELLED"
-          ? "Orden cancelada"
-          : `Orden marcada ${RESTAURANT_STATUS_LABELS[nextStatus]}`;
-        toast.success(label);
-      } catch {
-        /* ignore */
-      }
+      const label = nextStatus === "CANCELLED"
+        ? "Orden cancelada"
+        : `Orden marcada ${RESTAURANT_STATUS_LABELS[nextStatus]}`;
+      toast.success(label);
     } catch (err) {
       console.error(err);
-      try {
-        toast.error("No se pudo actualizar el estado.");
-      } catch {
-        /* ignore */
-      }
+      toast.error("No se pudo actualizar el estado.");
     }
   };
 
@@ -169,18 +162,10 @@ export default function RestaurantOrdersPage() {
     try {
       const updated = await updateRestaurantOrder(orderId, { orderType: targetType });
       setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
-      try {
-        toast.success(`Orden movida a ${RESTAURANT_TYPE_LABELS[targetType]}.`);
-      } catch {
-        /* ignore */
-      }
+      toast.success(`Orden movida a ${RESTAURANT_TYPE_LABELS[targetType]}.`);
     } catch (err) {
       console.error(err);
-      try {
-        toast.error("No se pudo mover la orden.");
-      } catch {
-        /* ignore */
-      }
+      toast.error("No se pudo mover la orden.");
     }
   };
 

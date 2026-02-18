@@ -17,6 +17,7 @@ type BatchCartItem = {
   id: string
   name: string
   payload: any
+  initialStock: number
 }
 
 export type ProductBatchPanelProps = {

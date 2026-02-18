@@ -493,40 +493,42 @@ export default function WelcomeDashboard() {
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <div className="flex flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-          <div className="flex items-center gap-2">
-            <Package className="h-6 w-6" />
-            <span className="text-lg font-semibold">Managment Pro V1</span>
-          </div>
-          {showOrganizationSelector ? (
-            <div className="ml-auto flex items-center gap-3">
-              <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
-                Organizacion
-              </span>
-              <Select
-                value={organizationSelectValue.length > 0 ? organizationSelectValue : undefined}
-                onValueChange={handleOrganizationChange}
-                disabled={organizationsLoading || organizations.length === 0}
-              >
-                <SelectTrigger className="w-[240px]">
-                  <SelectValue
-                    placeholder={
-                      organizationsLoading
-                        ? "Cargando organizaciones..."
-                        : "Selecciona una organizacion"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {organizations.map((org) => (
-                    <SelectItem key={org.id} value={String(org.id)}>
-                      {org.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <header className="sticky top-0 z-10 border-b bg-background px-4 py-3 md:px-6">
+          <div className="flex flex-col gap-2 sm:h-10 sm:flex-row sm:items-center sm:gap-4">
+            <div className="flex items-center gap-2">
+              <Package className="h-6 w-6 shrink-0" />
+              <span className="text-lg font-semibold">Pro V1.3</span>
             </div>
-          ) : null}
+            {showOrganizationSelector ? (
+              <div className="flex items-center gap-3 sm:ml-auto">
+                <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
+                  Organizacion
+                </span>
+                <Select
+                  value={organizationSelectValue.length > 0 ? organizationSelectValue : undefined}
+                  onValueChange={handleOrganizationChange}
+                  disabled={organizationsLoading || organizations.length === 0}
+                >
+                  <SelectTrigger className="w-full sm:w-[240px]">
+                    <SelectValue
+                      placeholder={
+                        organizationsLoading
+                          ? "Cargando organizaciones..."
+                          : "Selecciona una organizacion"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {organizations.map((org) => (
+                      <SelectItem key={org.id} value={String(org.id)}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+          </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">

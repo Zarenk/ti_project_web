@@ -7,15 +7,32 @@ import {
   createIngredient,
   deleteIngredient,
   getIngredients,
+  getIngredientMovements,
   type Ingredient,
+  type IngredientMovement,
 } from "./ingredients.api"
 import { useVerticalConfig } from "@/hooks/use-vertical-config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+
+const MOVEMENT_TYPE_LABELS: Record<string, string> = {
+  IN: "Entrada",
+  OUT: "Salida",
+  ADJUSTMENT: "Ajuste",
+  WASTE: "Merma",
+}
+
+const MOVEMENT_TYPE_COLORS: Record<string, string> = {
+  IN: "text-emerald-400",
+  OUT: "text-red-400",
+  ADJUSTMENT: "text-blue-400",
+  WASTE: "text-amber-400",
+}
 
 const UNIT_OPTIONS = ["UNIDAD", "KG", "GR", "LT", "ML", "CAJA", "BOTELLA"]
 
@@ -26,6 +43,28 @@ export default function IngredientsPage() {
 
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [loading, setLoading] = useState(false)
+
+  // Movements dialog state
+  const [movementsOpen, setMovementsOpen] = useState(false)
+  const [movementsIngredient, setMovementsIngredient] = useState<Ingredient | null>(null)
+  const [movements, setMovements] = useState<IngredientMovement[]>([])
+  const [movementsLoading, setMovementsLoading] = useState(false)
+
+  const openMovements = useCallback(async (ingredient: Ingredient) => {
+    setMovementsIngredient(ingredient)
+    setMovementsOpen(true)
+    setMovementsLoading(true)
+    try {
+      const data = await getIngredientMovements(ingredient.id)
+      setMovements(data)
+    } catch {
+      toast.error("No se pudieron cargar los movimientos.")
+      setMovements([])
+    } finally {
+      setMovementsLoading(false)
+    }
+  }, [])
+
   const [form, setForm] = useState({
     name: "",
     unit: UNIT_OPTIONS[0],
@@ -245,7 +284,14 @@ export default function IngredientsPage() {
                           {ingredient.stock}
                         </TableCell>
                         <TableCell>{ingredient.minStock ?? "-"}</TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openMovements(ingredient)}
+                          >
+                            Historial
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -271,6 +317,62 @@ export default function IngredientsPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={movementsOpen} onOpenChange={setMovementsOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Movimientos — {movementsIngredient?.name ?? ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          {movementsLoading ? (
+            <p className="text-sm text-muted-foreground py-4">Cargando movimientos...</p>
+          ) : movements.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              No hay movimientos registrados para este insumo.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Cantidad</TableHead>
+                  <TableHead>Orden</TableHead>
+                  <TableHead>Nota</TableHead>
+                  <TableHead>Fecha</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {movements.map((mov) => (
+                  <TableRow key={mov.id}>
+                    <TableCell>
+                      <span className={MOVEMENT_TYPE_COLORS[mov.type] ?? ""}>
+                        {MOVEMENT_TYPE_LABELS[mov.type] ?? mov.type}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {mov.type === "IN" || mov.type === "ADJUSTMENT" ? "+" : "-"}
+                      {mov.quantity} {mov.unit}
+                    </TableCell>
+                    <TableCell>
+                      {mov.order
+                        ? `Orden #${mov.order.id}`
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
+                      {mov.notes ?? "-"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(mov.createdAt).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
