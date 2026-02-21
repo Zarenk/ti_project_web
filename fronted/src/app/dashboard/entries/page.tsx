@@ -1,6 +1,7 @@
 import { getProducts } from '../products/products.api'
 import { DataTable } from './data-table';
 import { getAllEntries } from './entries.api';
+import { EntriesListGuideButton } from './entries-list-guide-button';
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
@@ -34,7 +35,10 @@ export default async function Page() {
     <>
       <section className='py-2 sm:py-6'>
         <div className='container mx-auto px-1 sm:px-6 lg:px-8'>
-          <h1 className='px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6'>Control de Inventarios: Ingresos</h1>
+          <div className="flex items-center gap-2 px-5 mb-4 sm:mb-6">
+            <h1 className='text-2xl sm:text-3xl lg:text-4xl font-bold'>Control de Inventarios: Ingresos</h1>
+            <EntriesListGuideButton />
+          </div>
           <div className="overflow-x-auto">
             <DataTable data={mappedData}></DataTable>
           </div>

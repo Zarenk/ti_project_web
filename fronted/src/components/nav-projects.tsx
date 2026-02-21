@@ -8,6 +8,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useHelpAssistant } from "@/context/help-assistant-context"
 
@@ -21,9 +22,11 @@ export function NavProjects({
   }[]
 }) {
   const { setIsOpen } = useHelpAssistant()
+  const { setOpenMobile, isMobile } = useSidebar()
 
   const handleChatbotClick = (e: React.MouseEvent) => {
     e.preventDefault()
+    if (isMobile) setOpenMobile(false)
     setIsOpen(true)
   }
 

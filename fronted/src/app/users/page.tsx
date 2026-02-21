@@ -27,7 +27,7 @@ import {
 import { getOrdersByUser, getOrdersByEmail, getOrdersByDni } from "../dashboard/sales/sales.api"
 import Navbar from "@/components/navbar"
 import { useRouter } from "next/navigation"
-import SimplePagination from "@/components/simple-pagination"
+import { ManualPagination } from "@/components/data-table-pagination"
 import { motion } from "framer-motion"
 import { getFavorites } from "../favorites/favorite.api"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -658,12 +658,14 @@ export default function UserPanel() {
                   </Table>
                 </div>
                 <div className="py-4">
-                  <SimplePagination
-                    page={page}
+                  <ManualPagination
+                    currentPage={page}
+                    totalPages={Math.ceil(orderHistory.length / pageSize) || 1}
                     pageSize={pageSize}
                     totalItems={orderHistory.length}
                     onPageChange={setPage}
                     onPageSizeChange={setPageSize}
+                    pageSizeOptions={[5, 10, 20, 30]}
                   />
                 </div>
               </CardContent>

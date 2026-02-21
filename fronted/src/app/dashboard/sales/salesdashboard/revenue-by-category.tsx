@@ -167,13 +167,13 @@ export function RevenueByCategory({ dateRange }: { dateRange: DateRange }) {
       </ResponsiveContainer>
 
       {/* Tabla de detalle con todas las categorías */}
-      <div className="max-h-48 overflow-y-auto rounded-md border">
-        <table className="w-full text-xs">
+      <div className="max-h-48 overflow-y-auto rounded-md border w-full min-w-0">
+        <table className="w-full text-xs min-w-0">
           <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
             <tr>
-              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Categoría</th>
-              <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">Ingresos</th>
-              <th className="px-3 py-1.5 text-right font-medium text-muted-foreground">%</th>
+              <th className="px-2 sm:px-3 py-1.5 text-left font-medium text-muted-foreground">Categoría</th>
+              <th className="px-2 sm:px-3 py-1.5 text-right font-medium text-muted-foreground">Ingresos</th>
+              <th className="px-2 sm:px-3 py-1.5 text-right font-medium text-muted-foreground whitespace-nowrap">%</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -184,19 +184,19 @@ export function RevenueByCategory({ dateRange }: { dateRange: DateRange }) {
               const dotColor = isMain ? COLORS[mainIndex % COLORS.length] : OTHERS_COLOR
               return (
                 <tr key={item.name} className="hover:bg-muted/50 transition-colors">
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
+                  <td className="px-2 sm:px-3 py-1.5 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 w-full">
                       <span
                         className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: dotColor }}
                       />
-                      <span className="truncate max-w-[180px]">{item.name}</span>
+                      <span className="break-words text-xs sm:text-sm min-w-0 flex-1">{item.name}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">
+                  <td className="px-2 sm:px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-xs sm:text-sm">
                     S/. {item.value.toLocaleString("es-PE", { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{item.percent}%</td>
+                  <td className="px-2 sm:px-3 py-1.5 text-right tabular-nums whitespace-nowrap text-xs sm:text-sm">{item.percent}%</td>
                 </tr>
               )
             })}

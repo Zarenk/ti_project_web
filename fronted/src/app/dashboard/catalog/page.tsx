@@ -51,6 +51,8 @@ import { CatalogStepper, type StepDef } from "./catalog-stepper";
 
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useAuth } from "@/context/auth-context";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { CATALOG_GUIDE_STEPS } from "./catalog-guide-steps";
 
 const STEPS: StepDef[] = [
   { label: "Categorias", description: "Selecciona productos" },
@@ -548,9 +550,12 @@ export default function CatalogPage() {
 
         {/* Header */}
         <div className="mb-6 space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">
-            Exportar Catalogo
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">
+              Exportar Catalogo
+            </h1>
+            <PageGuideButton steps={CATALOG_GUIDE_STEPS} tooltipLabel="Guía del catálogo" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Configura y descarga tu catalogo de productos en PDF o Excel
           </p>

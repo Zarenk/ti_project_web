@@ -10,6 +10,8 @@ import { useTenantSelection } from "@/context/tenant-selection-context";
 
 import { getStore } from "../stores.api";
 import StoreForm from "./store-form";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { STORE_FORM_GUIDE_STEPS } from "./store-form-guide-steps";
 
 type LoadedStore = Awaited<ReturnType<typeof getStore>> | null;
 
@@ -92,7 +94,10 @@ export default function StoresNewPage(): React.ReactElement {
     <div className="flex min-h-screen items-start justify-center p-3">
       <Card className="w-full max-w-lg sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
         <CardHeader className="pb-2 sm:pb-2">
-          <CardTitle className="pt-5 text-center text-xl font-bold">{title}</CardTitle>
+          <CardTitle className="flex items-center justify-center gap-2 pt-5 text-xl font-bold">
+            {title}
+            <PageGuideButton steps={STORE_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (

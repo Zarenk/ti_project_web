@@ -1114,6 +1114,7 @@ export type VerticalName =
   | "RESTAURANTS"
   | "SERVICES"
   | "MANUFACTURING"
+  | "LAW_FIRM"
 
 export interface VerticalCompatibilityResult {
   isCompatible: boolean

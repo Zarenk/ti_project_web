@@ -155,10 +155,11 @@ export class RestaurantOrdersService {
     return created;
   }
 
-  findAll(
+  async findAll(
     organizationIdFromContext?: number | null,
     companyIdFromContext?: number | null,
     status?: RestaurantOrderStatus,
+    pagination?: { page: number; take: number; from?: string; to?: string },
   ) {
     const where = buildOrganizationFilter(
       organizationIdFromContext,
@@ -168,14 +169,39 @@ export class RestaurantOrdersService {
       where.status = status;
     }
 
-    return this.prisma.restaurantOrder.findMany({
-      where,
-      orderBy: { openedAt: 'desc' },
-      include: {
-        table: true,
-        items: { include: { product: true, station: true } },
-      },
-    });
+    // Date range filter on openedAt
+    // Frontend sends full ISO timestamps with local-timezone boundaries
+    if (pagination?.from || pagination?.to) {
+      const openedAt: Record<string, Date> = {};
+      if (pagination.from) openedAt.gte = new Date(pagination.from);
+      if (pagination.to) openedAt.lte = new Date(pagination.to);
+      where.openedAt = openedAt;
+    }
+
+    const page = pagination?.page ?? 1;
+    const take = pagination?.take ?? 20;
+    const skip = (page - 1) * take;
+
+    const [data, total] = await Promise.all([
+      this.prisma.restaurantOrder.findMany({
+        where,
+        orderBy: { openedAt: 'desc' },
+        skip,
+        take,
+        include: {
+          table: true,
+          items: { include: { product: true, station: true } },
+        },
+      }),
+      this.prisma.restaurantOrder.count({ where }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / take),
+    };
   }
 
   async findOne(
@@ -246,6 +272,25 @@ export class RestaurantOrdersService {
       where: { id },
       select: { status: true, organizationId: true, companyId: true },
     });
+
+    // Guard: prevent cancellation when items are already being prepared
+    if (dto.status === 'CANCELLED') {
+      const items = await this.prisma.restaurantOrderItem.findMany({
+        where: { orderId: id },
+        select: { status: true },
+      });
+      const hasActiveItems = items.some(
+        (i) =>
+          i.status === 'COOKING' ||
+          i.status === 'READY' ||
+          i.status === 'SERVED',
+      );
+      if (hasActiveItems) {
+        throw new BadRequestException(
+          'No se puede cancelar la orden porque ya tiene items en preparacion.',
+        );
+      }
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.restaurantOrder.update({
@@ -364,11 +409,78 @@ export class RestaurantOrdersService {
       },
     });
 
-    // Emit WebSocket event for item update
+    // Auto-sync order status based on all item statuses
+    const allItems = await this.prisma.restaurantOrderItem.findMany({
+      where: { orderId: item.order.id },
+      select: { status: true },
+    });
+
+    const nonCancelled = allItems.filter((i) => i.status !== 'CANCELLED');
+    let derivedStatus: string | null = null;
+
+    if (nonCancelled.length > 0) {
+      const everyServed = nonCancelled.every((i) => i.status === 'SERVED');
+      const everyReadyOrServed = nonCancelled.every(
+        (i) => i.status === 'READY' || i.status === 'SERVED',
+      );
+      const anyCookingOrBeyond = nonCancelled.some(
+        (i) =>
+          i.status === 'COOKING' ||
+          i.status === 'READY' ||
+          i.status === 'SERVED',
+      );
+
+      if (everyServed) {
+        derivedStatus = 'SERVED';
+      } else if (everyReadyOrServed) {
+        derivedStatus = 'READY';
+      } else if (anyCookingOrBeyond) {
+        derivedStatus = 'IN_PROGRESS';
+      }
+    }
+
+    const currentOrderStatus = item.order.status;
+
+    if (derivedStatus && derivedStatus !== currentOrderStatus) {
+      // Deduct ingredient stock when order auto-transitions to IN_PROGRESS
+      if (derivedStatus === 'IN_PROGRESS' && currentOrderStatus === 'OPEN') {
+        try {
+          const orderItems = await this.prisma.restaurantOrderItem.findMany({
+            where: { orderId: item.order.id },
+            select: { productId: true, quantity: true },
+          });
+          await this.ingredientsService.deductForOrder(
+            item.order.id,
+            orderItems.map((oi) => ({
+              productId: oi.productId,
+              quantity: oi.quantity,
+            })),
+            item.order.organizationId ?? null,
+            item.order.companyId ?? null,
+            null,
+          );
+        } catch (err) {
+          this.logger.error(
+            `Order #${item.order.id} auto ingredient deduction failed: ${err}`,
+          );
+        }
+      }
+
+      await this.prisma.restaurantOrder.update({
+        where: { id: item.order.id },
+        data: { status: derivedStatus as any },
+      });
+    }
+
+    // Emit WebSocket event for item update (with potentially new order status)
     this.kitchenGateway.emitOrderUpdate(
       item.order.organizationId ?? null,
       item.order.companyId ?? null,
-      { orderId: item.order.id, status: item.order.status, action: 'item_updated' },
+      {
+        orderId: item.order.id,
+        status: derivedStatus ?? currentOrderStatus,
+        action: 'item_updated',
+      },
     );
 
     return updated;

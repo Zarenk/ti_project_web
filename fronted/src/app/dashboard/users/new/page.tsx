@@ -9,6 +9,8 @@ import { useTenantSelection } from "@/context/tenant-selection-context";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
 
 import UserForm from "./user-form";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { USER_FORM_GUIDE_STEPS } from "./user-form-guide-steps";
 
 const ALLOWED_ROLES = new Set(["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN"]);
 
@@ -78,9 +80,12 @@ export default function UserNewPage(): React.ReactElement | null {
     <div className="flex min-h-screen items-start justify-center p-3">
       <Card className="w-full max-w-lg sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
         <CardHeader className="pb-2 sm:pb-2">
-          <CardTitle className="pt-5 text-center text-xl font-bold">
-            Crear Usuario
-          </CardTitle>
+          <div className="flex items-center justify-center gap-2 pt-5">
+            <CardTitle className="text-center text-xl font-bold">
+              Crear Usuario
+            </CardTitle>
+            <PageGuideButton steps={USER_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
+          </div>
         </CardHeader>
         <CardContent>
           <UserForm />

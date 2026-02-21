@@ -25,6 +25,9 @@ import { DailyProfitChart } from "./daily-profit-chart"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
 import { useAuth } from "@/context/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SALESDASHBOARD_GUIDE_STEPS } from "./salesdashboard-guide-steps"
+import { ProfitAnalyticsTab } from "./components/ProfitAnalyticsTab"
 
 export default function SalesDashboard() {
     const router = useRouter()
@@ -535,7 +538,10 @@ export default function SalesDashboard() {
     <div className="sales-dashboard-theme flex w-full max-w-full flex-col gap-5 p-6 overflow-x-hidden">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
+            <PageGuideButton steps={SALESDASHBOARD_GUIDE_STEPS} tooltipLabel="Guía del dashboard" />
+          </div>
           <p className="text-muted-foreground">Monitorea el rendimiento de tus ventas y tendencias</p>
         </div>
         <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:justify-end">
@@ -547,7 +553,8 @@ export default function SalesDashboard() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
+      {/* Desktop: Navegación con botones */}
+      <div className="hidden md:flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
         <Button
           variant="ghost"
           size="icon"
@@ -579,6 +586,15 @@ export default function SalesDashboard() {
         >
           <span className="text-lg">&gt;</span>
         </Button>
+      </div>
+
+      {/* Móvil: Swipe horizontal con snap points */}
+      <div className="md:hidden overflow-x-auto snap-x snap-mandatory flex gap-4 pb-4 -mx-4 px-4 scrollbar-hide">
+        {cards.map((card, index) => (
+          <div key={index} className="min-w-[280px] snap-center flex-shrink-0">
+            {card}
+          </div>
+        ))}
       </div>
 
 
@@ -646,6 +662,7 @@ export default function SalesDashboard() {
             <TabsTrigger value="customers" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Clientes</TabsTrigger>
             <TabsTrigger value="transactions" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Transacciones</TabsTrigger>
             <TabsTrigger value="profits" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Utilidades</TabsTrigger>
+            <TabsTrigger value="analytics" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Análisis de Utilidades</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="overview" className="space-y-4">
@@ -669,22 +686,22 @@ export default function SalesDashboard() {
               </CardContent>
             </Card>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="lg:col-span-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 w-full min-w-0">
+            <Card className="lg:col-span-3 w-full min-w-0 overflow-hidden">
               <CardHeader>
                 <CardTitle>Ingresos por categoria</CardTitle>
                 <CardDescription>Distribucion de ventas entre categorias de productos</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-hidden">
                 <RevenueByCategory dateRange={dateRange} />
               </CardContent>
             </Card>
-            <Card className="lg:col-span-4">
+            <Card className="lg:col-span-4 w-full min-w-0 overflow-hidden">
               <CardHeader>
                 <CardTitle>Ventas Recientes</CardTitle>
                 <CardDescription>Ultimas transacciones en todos los canales</CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
+              <CardContent className="overflow-hidden">
                 <SalesTable dateRange={dateRange} />
               </CardContent>
             </Card>
@@ -845,6 +862,9 @@ export default function SalesDashboard() {
             <DailyProfitChart dateRange={dateRange} />
           </div>
           <ProfitProductsTable dateRange={dateRange} />
+        </TabsContent>
+        <TabsContent value="analytics" className="space-y-4">
+          <ProfitAnalyticsTab dateRange={dateRange} />
         </TabsContent>
       </Tabs>
     </div>

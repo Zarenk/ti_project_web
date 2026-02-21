@@ -42,6 +42,8 @@ import {
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { cn } from "@/lib/utils";
 import { JournalEntryForm } from "./JournalEntryForm";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { JOURNALS_GUIDE_STEPS } from "./journals-guide-steps";
 
 type PeriodView = "day" | "month" | "year";
 
@@ -292,7 +294,10 @@ export default function JournalsPage() {
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <CardTitle className="leading-tight">Libro Diario</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="leading-tight">Libro Diario</CardTitle>
+                <PageGuideButton steps={JOURNALS_GUIDE_STEPS} tooltipLabel="Guía del libro diario" />
+              </div>
               <p className="text-sm text-muted-foreground mt-1">
                 Registro cronológico de asientos contables
               </p>

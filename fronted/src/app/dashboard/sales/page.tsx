@@ -21,6 +21,8 @@ import Link from "next/link";
 import { BarChart3, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePageSkeleton } from "@/components/table-page-skeleton";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { SALES_LIST_GUIDE_STEPS } from "./sales-list-guide-steps";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
@@ -1120,9 +1122,12 @@ export default function Page() {
     <>
       <section className="py-2 sm:py-6">
         <div className="container mx-auto px-1 sm:px-6 lg:px-8">
-          <h1 className="px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6">
-            Historial de Ventas
-          </h1>
+          <div className="flex items-center gap-2 px-5 mb-4 sm:mb-6">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">
+              Historial de Ventas
+            </h1>
+            <PageGuideButton steps={SALES_LIST_GUIDE_STEPS} tooltipLabel="Guía de ventas" />
+          </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between px-5 mb-4">
             <div className="space-y-1 text-sm text-muted-foreground">
               <p>

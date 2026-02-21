@@ -1,0 +1,28 @@
+# Database backups (may contain sensitive data)
+*.sql
+!backend/prisma/migrations/**/*.sql
+
+# Env files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+*.log
+backend/backend-logs.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE tool configs (large skill directories)
+.agents/
+.claude/
+.windsurf/
+
+# Uploaded files
+backend/uploads/
+
+# Docs that are local-only
+CHECKLIST_PRE_DEPLOY.md

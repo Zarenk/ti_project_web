@@ -1,0 +1,318 @@
+###
+# Sistema de Jurisprudencia RAG - Pruebas de API
+# Compatible con: REST Client (VSCode), Thunder Client, HTTP Client
+###
+
+# Variables
+@baseUrl = http://localhost:4000/api
+@token = {{loginResponse.body.token}}
+@documentId = 1
+@queryId = 1
+
+### ============================================
+### 1. AUTENTICACIÓN
+### ============================================
+
+### Login (obtener token)
+# @name loginResponse
+POST {{baseUrl}}/users/login
+Content-Type: application/json
+
+{
+  "email": "jdzare@gmail.com",
+  "password": "m8L4pNhV5YZL5Vqz"
+}
+
+### Verificar usuario autenticado
+GET {{baseUrl}}/users/me
+Authorization: Bearer {{token}}
+
+
+### ============================================
+### 2. JURISPRUDENCE SCRAPER
+### ============================================
+
+### Trigger scraping job (Corte Suprema)
+POST {{baseUrl}}/jurisprudence-scraper/trigger
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "court": "Corte Suprema",
+  "startYear": 2020,
+  "endYear": 2024,
+  "scrapeType": "MANUAL"
+}
+
+### Trigger scraping job (Corte Superior de Lima)
+POST {{baseUrl}}/jurisprudence-scraper/trigger
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "court": "Corte Superior de Lima",
+  "startYear": 2022,
+  "endYear": 2024,
+  "scrapeType": "ONDEMAND"
+}
+
+
+### ============================================
+### 3. JURISPRUDENCE DOCUMENTS
+### ============================================
+
+### List documents (all)
+GET {{baseUrl}}/jurisprudence-documents?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### List documents (filtered by court)
+GET {{baseUrl}}/jurisprudence-documents?page=1&limit=20&court=Corte%20Suprema
+Authorization: Bearer {{token}}
+
+### List documents (filtered by year)
+GET {{baseUrl}}/jurisprudence-documents?page=1&limit=20&year=2023
+Authorization: Bearer {{token}}
+
+### List documents (filtered by status)
+GET {{baseUrl}}/jurisprudence-documents?page=1&limit=20&status=COMPLETED
+Authorization: Bearer {{token}}
+
+### List documents (filtered by status FAILED)
+GET {{baseUrl}}/jurisprudence-documents?page=1&limit=20&status=FAILED
+Authorization: Bearer {{token}}
+
+### Get document details
+GET {{baseUrl}}/jurisprudence-documents/{{documentId}}
+Authorization: Bearer {{token}}
+
+### Upload document (PDF)
+# Nota: Cambiar la ruta del archivo PDF según tu sistema
+POST {{baseUrl}}/jurisprudence-documents/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="ejemplo.pdf"
+Content-Type: application/pdf
+
+< ./ejemplo.pdf
+------WebKitFormBoundary
+Content-Disposition: form-data; name="title"
+
+Casación N° 1234-2020-Lima
+------WebKitFormBoundary
+Content-Disposition: form-data; name="court"
+
+Corte Suprema
+------WebKitFormBoundary
+Content-Disposition: form-data; name="expediente"
+
+1234-2020
+------WebKitFormBoundary
+Content-Disposition: form-data; name="year"
+
+2020
+------WebKitFormBoundary
+Content-Disposition: form-data; name="publishDate"
+
+2020-05-15
+------WebKitFormBoundary--
+
+### Process document (trigger embedding generation)
+POST {{baseUrl}}/jurisprudence-documents/{{documentId}}/process
+Authorization: Bearer {{token}}
+
+### Delete document (soft delete)
+DELETE {{baseUrl}}/jurisprudence-documents/{{documentId}}
+Authorization: Bearer {{token}}
+
+
+### ============================================
+### 4. JURISPRUDENCE ASSISTANT (RAG)
+### ============================================
+
+### Query - Plazo de prescripción
+POST {{baseUrl}}/jurisprudence-assistant/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "¿Cuál es el plazo de prescripción para delitos de robo?"
+}
+
+### Query - Con filtros de corte
+POST {{baseUrl}}/jurisprudence-assistant/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "¿Qué dice la jurisprudencia sobre la prescripción en casos de estafa?",
+  "courts": ["Corte Suprema"],
+  "minYear": 2018
+}
+
+### Query - Vinculada a expediente legal
+POST {{baseUrl}}/jurisprudence-assistant/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "¿Cuál es el procedimiento para apelar una sentencia civil?",
+  "legalMatterId": 123,
+  "courts": ["Corte Suprema", "Corte Superior de Lima"],
+  "minYear": 2015
+}
+
+### Query - Pregunta compleja
+POST {{baseUrl}}/jurisprudence-assistant/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "¿Cuáles son los criterios de la Corte Suprema para determinar la responsabilidad civil extracontractual en accidentes de tránsito?"
+}
+
+### Query - Pregunta sobre precedentes
+POST {{baseUrl}}/jurisprudence-assistant/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "¿Existen precedentes vinculantes sobre la nulidad de contratos por falta de capacidad?"
+}
+
+### Get query history (all)
+GET {{baseUrl}}/jurisprudence-assistant/queries?limit=50
+Authorization: Bearer {{token}}
+
+### Get query history (by legal matter)
+GET {{baseUrl}}/jurisprudence-assistant/queries?legalMatterId=123&limit=20
+Authorization: Bearer {{token}}
+
+### Update query feedback (positive)
+PATCH {{baseUrl}}/jurisprudence-assistant/queries/{{queryId}}/feedback
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "helpful": true,
+  "citationsCorrect": true,
+  "notes": "Respuesta muy útil y precisa"
+}
+
+### Update query feedback (negative)
+PATCH {{baseUrl}}/jurisprudence-assistant/queries/{{queryId}}/feedback
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "helpful": false,
+  "citationsCorrect": false,
+  "notes": "Las citas no coinciden con el contenido del documento"
+}
+
+
+### ============================================
+### 5. JURISPRUDENCE ADMIN
+### ============================================
+
+### Get coverage dashboard
+GET {{baseUrl}}/jurisprudence-admin/coverage
+Authorization: Bearer {{token}}
+
+### Get failed documents
+GET {{baseUrl}}/jurisprudence-admin/failed-documents?limit=50
+Authorization: Bearer {{token}}
+
+### Get pending documents
+GET {{baseUrl}}/jurisprudence-admin/pending-documents?limit=50
+Authorization: Bearer {{token}}
+
+### Get query statistics
+GET {{baseUrl}}/jurisprudence-admin/stats/queries
+Authorization: Bearer {{token}}
+
+### Get system health
+GET {{baseUrl}}/jurisprudence-admin/health
+Authorization: Bearer {{token}}
+
+### Reprocess failed documents
+POST {{baseUrl}}/jurisprudence-admin/reprocess
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "failedOnly": true
+}
+
+### Reprocess documents by court
+POST {{baseUrl}}/jurisprudence-admin/reprocess
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "court": "Corte Suprema",
+  "year": 2023
+}
+
+### Reprocess specific documents
+POST {{baseUrl}}/jurisprudence-admin/reprocess
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "documentIds": [1, 2, 3, 4, 5]
+}
+
+
+### ============================================
+### 6. SMOKE TESTS (Pruebas rápidas)
+### ============================================
+
+### SMOKE 1: Health check general
+GET {{baseUrl}}/health
+Authorization: Bearer {{token}}
+
+### SMOKE 2: Coverage (debe retornar aunque esté vacío)
+GET {{baseUrl}}/jurisprudence-admin/coverage
+Authorization: Bearer {{token}}
+
+### SMOKE 3: List documents (debe retornar aunque esté vacío)
+GET {{baseUrl}}/jurisprudence-documents?page=1&limit=5
+Authorization: Bearer {{token}}
+
+### SMOKE 4: System health
+GET {{baseUrl}}/jurisprudence-admin/health
+Authorization: Bearer {{token}}
+
+
+### ============================================
+### NOTAS DE USO
+### ============================================
+
+# 1. CONFIGURACIÓN INICIAL:
+#    - Actualizar @token con el token JWT de tu sesión
+#    - Verificar que el backend esté corriendo en localhost:3000
+#    - Asegurarse de tener OPENAI_API_KEY configurado en .env
+
+# 2. FLUJO DE PRUEBA RECOMENDADO:
+#    a) Login para obtener token
+#    b) Verificar health y coverage
+#    c) Upload un PDF de prueba
+#    d) Trigger procesamiento del PDF
+#    e) Hacer query conversacional
+#    f) Revisar coverage actualizado
+
+# 3. PARA USAR UPLOAD DE PDF:
+#    - Crear un archivo ejemplo.pdf en backend/
+#    - O cambiar la ruta < ./ejemplo.pdf por tu archivo
+
+# 4. ERRORES ESPERADOS (hasta tener datos):
+#    - Query retornará "No se encontraron documentos relevantes"
+#    - Coverage mostrará totalDocuments: 0
+#    - Esto es normal hasta hacer upload y procesar PDFs
+
+# 5. EXTENSIONES RECOMENDADAS (VSCode):
+#    - REST Client (humao.rest-client)
+#    - Thunder Client (rangav.vscode-thunder-client)
+#    - HTTP Client (built-in en algunos IDEs)

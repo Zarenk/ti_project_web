@@ -32,6 +32,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { LEDGER_GUIDE_STEPS } from "./ledger-guide-steps"
 import {
   BookOpen,
   ChevronDown,
@@ -440,7 +442,10 @@ export default function LedgerReportPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Libro Mayor</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">Libro Mayor</h1>
+            <PageGuideButton steps={LEDGER_GUIDE_STEPS} tooltipLabel="Guía del libro mayor" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Movimientos por cuenta contable
           </p>

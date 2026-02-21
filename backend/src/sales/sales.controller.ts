@@ -374,6 +374,24 @@ export class SalesController {
     )
   }
 
+  @Get('analytics/profit-analysis')
+  async getProfitAnalysis(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException('Los parámetros from y to son requeridos');
+    }
+    return this.salesService.getProfitAnalysis(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
   @Get('transactions')
   getSalesTransactions(
     @Query('from') from?: string,

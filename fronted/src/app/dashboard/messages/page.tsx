@@ -14,6 +14,8 @@ import TypingIndicator from '@/components/TypingIndicator';
 import { useMessages } from '@/context/messages-context';
 import EditableMessage from './EditableMessage';
 import { toast } from 'sonner';
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { MESSAGES_GUIDE_STEPS } from "./messages-guide-steps";
 
 interface Message {
   id: number;
@@ -315,7 +317,10 @@ export default function Page() {
   return (
     <section className="p-4 space-y-4 h-[calc(100vh-8rem)] flex flex-col">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Mensajes</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Mensajes</h1>
+          <PageGuideButton steps={MESSAGES_GUIDE_STEPS} tooltipLabel="Guía de mensajes" />
+        </div>
         {isMobile && !showMobileList && (
           <Button variant="outline" size="sm" onClick={() => setShowMobileList(true)}>
             Conversaciones

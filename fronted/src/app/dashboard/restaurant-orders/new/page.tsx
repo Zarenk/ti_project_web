@@ -12,17 +12,23 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { UtensilsCrossed, ShoppingBag, Truck, Plus, Minus, Search, ImageOff, AlertCircle } from "lucide-react";
+import { resolveImageUrl } from "@/lib/images";
 import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { getStores } from "@/app/dashboard/stores/stores.api";
 import { getClients } from "@/app/dashboard/clients/clients.api";
 import { getCategories } from "@/app/dashboard/categories/categories.api";
-import { getProductsByStore, getStockByProductAndStore } from "@/app/dashboard/sales/sales.api";
+import { getStockByProductAndStore } from "@/app/dashboard/sales/sales.api";
+import { getAllProductsByStore } from "@/app/dashboard/inventory/inventory.api";
+import { getProducts } from "@/app/dashboard/products/products.api";
 import { createRestaurantOrder } from "@/app/dashboard/orders/orders.api";
 import { getRestaurantTables, type RestaurantTable } from "@/app/dashboard/tables/tables.api";
 import ClientCombobox from "@/app/dashboard/orders/new/ClientCombobox";
-import ProductsSection from "@/app/dashboard/orders/new/ProductsSection";
+import { useKitchenSocket } from "@/hooks/use-kitchen-socket";
 import { DEFAULT_STORE_ID } from "@/lib/config";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { RESTAURANT_ORDER_FORM_GUIDE_STEPS } from "./restaurant-order-form-guide-steps";
 
  type ProductOption = {
   id: number;
@@ -32,6 +38,8 @@ import { DEFAULT_STORE_ID } from "@/lib/config";
   categoryId?: number | null;
   categoryName?: string | null;
   searchKey?: string;
+  image?: string | null;
+  isDish?: boolean;
 };
 
  type OrderItem = {
@@ -65,7 +73,7 @@ export default function NewRestaurantOrderPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
-  const [selectedClientLabel, setSelectedClientLabel] = useState<string>("");
+  const [selectedClientLabel, setSelectedClientLabel] = useState<string>("Público en general");
 
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [selectedPrice, setSelectedPrice] = useState<number>(0);
@@ -73,11 +81,12 @@ export default function NewRestaurantOrderPage() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [selectedStock, setSelectedStock] = useState<number | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
+  const [menuSearch, setMenuSearch] = useState("");
 
   const handleClientPick = useCallback((client: any | null) => {
     if (!client) {
       setSelectedClientId(null);
-      setSelectedClientLabel("");
+      setSelectedClientLabel("Público en general");
       return;
     }
     setSelectedClientId(client.id);
@@ -95,10 +104,29 @@ export default function NewRestaurantOrderPage() {
     });
   }, [clients]);
 
+  const filteredProducts = useMemo(() => {
+    let list = products;
+    if (selectedCategory > 0) {
+      list = list.filter((p) => p.categoryId === selectedCategory);
+    }
+    if (menuSearch.trim()) {
+      const q = menuSearch.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+      list = list.filter((p) => (p.searchKey ?? p.name.toLowerCase()).includes(q));
+    }
+    return list;
+  }, [products, selectedCategory, menuSearch]);
+
+  const selectedProduct = useMemo(() => {
+    if (!selectedProductId) return null;
+    return products.find((p) => p.id === selectedProductId) ?? null;
+  }, [products, selectedProductId]);
+
   const remainingStock = useMemo(() => {
-    if (!selectedProductId || selectedStock == null) return null;
+    if (!selectedProduct) return null;
+    if (selectedProduct.isDish) return null;
+    if (selectedStock == null) return null;
     return Math.max(selectedStock - quantity, 0);
-  }, [selectedProductId, selectedStock, quantity]);
+  }, [selectedProduct, selectedStock, quantity]);
 
   const subtotal = useMemo(() => {
     return items.reduce((acc, item) => acc + item.quantity * item.price, 0);
@@ -128,35 +156,55 @@ export default function NewRestaurantOrderPage() {
     };
   }, [version]);
 
-  useEffect(() => {
-    let active = true;
+  const loadTables = useCallback(async () => {
     if (!isRestaurant) {
       setTables([]);
       setTablesLoading(false);
       return;
     }
-    const loadTables = async () => {
-      setTablesLoading(true);
-      try {
-        const data = await getRestaurantTables();
-        if (!active) return;
-        const list = Array.isArray(data) ? data : [];
-        setTables(list);
-        if (orderType === "DINE_IN" && list.length > 0) {
-          setSelectedTableId((prev) => prev ?? list[0].id);
-        }
-      } catch (err) {
-        console.error("Error loading tables", err);
-        if (active) setTables([]);
-      } finally {
-        if (active) setTablesLoading(false);
+    setTablesLoading(true);
+    try {
+      const data = await getRestaurantTables();
+      const list = Array.isArray(data) ? data : [];
+      setTables(list);
+      // Auto-select first available table (skip occupied)
+      if (orderType === "DINE_IN" && list.length > 0) {
+        setSelectedTableId((prev) => {
+          if (prev !== null) {
+            // If current selection became occupied, clear it
+            const current = list.find((t) => t.id === prev);
+            if (current && (current.status === "OCCUPIED" || current.currentOrderId)) {
+              const firstAvailable = list.find((t) => t.status === "AVAILABLE");
+              return firstAvailable?.id ?? null;
+            }
+            return prev;
+          }
+          const firstAvailable = list.find((t) => t.status === "AVAILABLE");
+          return firstAvailable?.id ?? null;
+        });
       }
-    };
+    } catch (err) {
+      console.error("Error loading tables", err);
+      setTables([]);
+    } finally {
+      setTablesLoading(false);
+    }
+  }, [isRestaurant, orderType]);
+
+  useEffect(() => {
     loadTables();
-    return () => {
-      active = false;
-    };
-  }, [version, isRestaurant, orderType]);
+  }, [loadTables, version]);
+
+  // Real-time table updates via WebSocket
+  useKitchenSocket({
+    enabled: isRestaurant,
+    onTableUpdate: useCallback(() => {
+      void loadTables();
+    }, [loadTables]),
+    onOrderUpdate: useCallback(() => {
+      void loadTables();
+    }, [loadTables]),
+  });
 
   useEffect(() => {
     let active = true;
@@ -199,9 +247,46 @@ export default function NewRestaurantOrderPage() {
     const loadProducts = async () => {
       setProductsLoading(true);
       try {
-        const data = await getProductsByStore(Number(storeId));
+        // Fetch all products (no inventory filter) + inventory data for stock
+        const [allProducts, inventoryData] = await Promise.all([
+          getProducts(),
+          getAllProductsByStore(Number(storeId)).catch(() => []),
+        ]);
         if (!active) return;
-        const list = Array.isArray(data) ? data : [];
+
+        // Build stock map from inventory data: productId → stock
+        const stockMap = new Map<number, number>();
+        const invRaw = Array.isArray(inventoryData) ? inventoryData : [];
+        for (const item of invRaw) {
+          const pid = item?.inventory?.product?.id;
+          if (pid && typeof item?.stock === "number") {
+            stockMap.set(pid, item.stock);
+          }
+        }
+
+        const raw = Array.isArray(allProducts) ? allProducts : [];
+        const list: ProductOption[] = raw
+          .map((product: any) => {
+            if (!product?.id || !product?.name) return null;
+            const extra = product.extraAttributes as Record<string, any> | null | undefined;
+            const hasIngredients = Array.isArray(extra?.ingredients) && extra.ingredients.length > 0;
+            const stockVal = stockMap.get(product.id);
+            return {
+              id: product.id,
+              name: product.name,
+              price: Number(product.priceSell ?? product.price ?? 0),
+              stock: typeof stockVal === "number" ? stockVal : null,
+              categoryId: product.categoryId ?? product.category?.id ?? null,
+              categoryName: product.category?.name ?? null,
+              image: product.image ?? (Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : null),
+              isDish: hasIngredients,
+              searchKey: `${product.name ?? ""} ${product.category?.name ?? ""}`
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/\p{Diacritic}/gu, ""),
+            };
+          })
+          .filter(Boolean) as ProductOption[];
         setProducts(list);
       } catch (err) {
         console.error("Error loading products", err);
@@ -223,6 +308,11 @@ export default function NewRestaurantOrderPage() {
         setSelectedStock(null);
         return;
       }
+      const prod = products.find((p) => p.id === selectedProductId);
+      if (prod?.isDish) {
+        setSelectedStock(null);
+        return;
+      }
       try {
         const data = await getStockByProductAndStore(Number(storeId), Number(selectedProductId));
         if (!active) return;
@@ -236,7 +326,7 @@ export default function NewRestaurantOrderPage() {
     return () => {
       active = false;
     };
-  }, [selectedProductId, storeId]);
+  }, [selectedProductId, storeId, products]);
 
   const handleProductPick = useCallback((product: ProductOption | null) => {
     if (!product) {
@@ -360,7 +450,10 @@ export default function NewRestaurantOrderPage() {
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Restaurante</p>
-            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Nueva orden</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Nueva orden</h1>
+              <PageGuideButton steps={RESTAURANT_ORDER_FORM_GUIDE_STEPS} tooltipLabel="Guía de nueva orden" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Registra una orden de mesa, para llevar o delivery con productos del menu.
             </p>
@@ -381,22 +474,28 @@ export default function NewRestaurantOrderPage() {
                   <Button
                     type="button"
                     variant={orderType === "DINE_IN" ? "default" : "outline"}
+                    className={`cursor-pointer gap-2 transition-all duration-200 ${orderType === "DINE_IN" ? "shadow-md shadow-primary/25 ring-1 ring-primary/30" : "hover:border-primary/50 hover:bg-primary/5 hover:text-primary"}`}
                     onClick={() => setOrderType("DINE_IN")}
                   >
+                    <UtensilsCrossed className="h-4 w-4" />
                     Mesa
                   </Button>
                   <Button
                     type="button"
                     variant={orderType === "TAKEAWAY" ? "default" : "outline"}
+                    className={`cursor-pointer gap-2 transition-all duration-200 ${orderType === "TAKEAWAY" ? "shadow-md shadow-primary/25 ring-1 ring-primary/30" : "hover:border-primary/50 hover:bg-primary/5 hover:text-primary"}`}
                     onClick={() => setOrderType("TAKEAWAY")}
                   >
+                    <ShoppingBag className="h-4 w-4" />
                     Para llevar
                   </Button>
                   <Button
                     type="button"
                     variant={orderType === "DELIVERY" ? "default" : "outline"}
+                    className={`cursor-pointer gap-2 transition-all duration-200 ${orderType === "DELIVERY" ? "shadow-md shadow-primary/25 ring-1 ring-primary/30" : "hover:border-primary/50 hover:bg-primary/5 hover:text-primary"}`}
                     onClick={() => setOrderType("DELIVERY")}
                   >
+                    <Truck className="h-4 w-4" />
                     Delivery
                   </Button>
                 </div>
@@ -413,13 +512,43 @@ export default function NewRestaurantOrderPage() {
                           <SelectValue placeholder={tablesLoading ? "Cargando mesas..." : "Selecciona una mesa"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {tables.map((table) => (
-                            <SelectItem key={table.id} value={String(table.id)}>
-                              {table.code} - {table.name}
-                            </SelectItem>
-                          ))}
+                          {tables.map((table) => {
+                            const isOccupied = table.status === "OCCUPIED" || !!table.currentOrderId;
+                            return (
+                              <SelectItem
+                                key={table.id}
+                                value={String(table.id)}
+                                disabled={isOccupied}
+                                className={isOccupied ? "opacity-50" : ""}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                                      isOccupied
+                                        ? "bg-rose-400"
+                                        : table.status === "RESERVED"
+                                          ? "bg-amber-400"
+                                          : table.status === "DISABLED"
+                                            ? "bg-sky-400"
+                                            : "bg-emerald-400"
+                                    }`}
+                                  />
+                                  {table.code} - {table.name}
+                                  {isOccupied && (
+                                    <span className="text-[10px] text-rose-400">Ocupada</span>
+                                  )}
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
+                      {selectedTableId && tables.find((t) => t.id === selectedTableId && (t.status === "OCCUPIED" || t.currentOrderId)) && (
+                        <p className="flex items-center gap-1.5 text-xs text-amber-400">
+                          <AlertCircle className="h-3 w-3" />
+                          Esta mesa se ocupo — selecciona otra
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Cliente</Label>
@@ -428,6 +557,7 @@ export default function NewRestaurantOrderPage() {
                         selectedId={selectedClientId}
                         selectedLabel={selectedClientLabel}
                         onPick={handleClientPick}
+                        showPublicOption
                       />
                     </div>
                   </div>
@@ -453,26 +583,195 @@ export default function NewRestaurantOrderPage() {
               </CardContent>
             </Card>
 
-            <ProductsSection
-              storeId={storeId}
-              stores={stores}
-              setStoreId={setStoreId}
-              categories={categories}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-              selectedProductId={selectedProductId}
-              products={products}
-              handleProductPick={handleProductPick}
-              selectedStock={selectedStock}
-              remainingStock={remainingStock}
-              quantity={quantity}
-              setQuantity={setQuantity}
-              selectedPrice={selectedPrice}
-              setSelectedPrice={setSelectedPrice}
-              addItem={addItem}
-              items={items}
-              removeItem={removeItem}
-            />
+            {/* ── Menú de platos y productos ── */}
+            <Card className="border-white/10 bg-background/60">
+              <CardHeader className="px-4 pt-4 pb-2">
+                <CardTitle>Menú</CardTitle>
+                <p className="text-xs text-muted-foreground">Selecciona platos y productos para la orden.</p>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-4">
+                {/* Tienda (solo si hay más de una) */}
+                {stores.length > 1 && (
+                  <div className="space-y-2">
+                    <Label>Tienda</Label>
+                    <Select value={String(storeId)} onValueChange={(v) => setStoreId(Number(v))}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {stores.map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Buscador */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar plato o producto..."
+                    value={menuSearch}
+                    onChange={(e) => setMenuSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {/* Categorías como tabs */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={selectedCategory === 0 ? "default" : "outline"}
+                    size="sm"
+                    className={`cursor-pointer text-xs transition-all duration-150 ${selectedCategory === 0 ? "shadow-sm" : "hover:border-primary/50 hover:text-primary"}`}
+                    onClick={() => setSelectedCategory(0)}
+                  >
+                    Todos
+                  </Button>
+                  {categories.map((c) => (
+                    <Button
+                      key={c.id}
+                      type="button"
+                      variant={selectedCategory === c.id ? "default" : "outline"}
+                      size="sm"
+                      className={`cursor-pointer text-xs transition-all duration-150 ${selectedCategory === c.id ? "shadow-sm" : "hover:border-primary/50 hover:text-primary"}`}
+                      onClick={() => setSelectedCategory(c.id)}
+                    >
+                      {c.name}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Grid de productos */}
+                {filteredProducts.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    {products.length === 0 ? "No hay platos o productos registrados." : "Sin resultados para esta búsqueda."}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {filteredProducts.map((p) => {
+                      const imgSrc = p.image ? resolveImageUrl(p.image) : null;
+                      const isSelected = selectedProductId === p.id;
+                      const inCart = items.some((i) => i.productId === p.id);
+                      const noStock = !p.isDish && typeof p.stock === "number" && p.stock <= 0;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={noStock}
+                          onClick={() => {
+                            if (isSelected) {
+                              addItem();
+                            } else {
+                              handleProductPick(p);
+                            }
+                          }}
+                          className={`group relative flex flex-col overflow-hidden rounded-lg border text-left transition-all duration-150 cursor-pointer ${
+                            isSelected
+                              ? "border-primary ring-2 ring-primary/30 bg-primary/5"
+                              : noStock
+                                ? "border-white/5 opacity-50 cursor-not-allowed"
+                                : "border-white/10 hover:border-primary/40 hover:bg-white/[0.02]"
+                          }`}
+                        >
+                          {/* Imagen */}
+                          <div className="relative aspect-square w-full overflow-hidden bg-muted/30">
+                            {imgSrc ? (
+                              <img
+                                src={imgSrc}
+                                alt={p.name}
+                                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <ImageOff className="h-8 w-8 text-muted-foreground/30" />
+                              </div>
+                            )}
+                            {inCart && (
+                              <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                                {items.find((i) => i.productId === p.id)?.quantity ?? 0}
+                              </div>
+                            )}
+                          </div>
+                          {/* Info */}
+                          <div className="flex flex-1 flex-col gap-0.5 p-2">
+                            <span className="text-xs font-medium leading-tight line-clamp-2">{p.name}</span>
+                            <span className="text-xs font-semibold text-primary">S/. {(Number(p.price) || 0).toFixed(2)}</span>
+                            {!p.isDish && typeof p.stock === "number" && (
+                              <Badge variant="outline" className={`mt-0.5 w-fit text-[10px] ${p.stock > 0 ? "border-green-500/40 text-green-400" : "border-red-500/40 text-red-400"}`}>
+                                Stock: {p.stock}
+                              </Badge>
+                            )}
+                            {p.isDish && (
+                              <span className="mt-0.5 text-[10px] text-muted-foreground">Plato</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Panel del producto seleccionado */}
+                {selectedProduct && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">{selectedProduct.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedProduct.isDish ? "Plato" : `Stock: ${selectedStock ?? "-"}`}
+                          {" · "}S/. {(Number(selectedPrice) || 0).toFixed(2)} c/u
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => setQuantity(Math.max(1, quantity - 1))}>
+                          <Minus className="h-3.5 w-3.5" />
+                        </Button>
+                        <span className="w-8 text-center text-sm font-semibold">{quantity}</span>
+                        <Button
+                          type="button" variant="outline" size="icon" className="h-8 w-8 cursor-pointer"
+                          onClick={() => setQuantity(quantity + 1)}
+                          disabled={remainingStock !== null && quantity >= (selectedStock ?? Infinity)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full cursor-pointer gap-2"
+                      type="button"
+                      onClick={addItem}
+                      disabled={!selectedProduct.isDish && remainingStock !== null && quantity > (selectedStock ?? 0)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Agregar · S/. {(quantity * selectedPrice).toFixed(2)}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Items agregados */}
+                <Separator />
+                <div className="space-y-2">
+                  {items.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No has agregado items a la orden.</p>
+                  ) : (
+                    items.map((it) => (
+                      <div key={it.productId} className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.02] p-3">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{it.name}</p>
+                          <p className="text-xs text-muted-foreground">{it.quantity} x S/. {it.price.toFixed(2)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">S/. {(it.quantity * it.price).toFixed(2)}</span>
+                          <Button variant="ghost" size="sm" className="cursor-pointer text-xs text-destructive hover:text-destructive" onClick={() => removeItem(it.productId)}>
+                            Quitar
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             {!storesLoading && stores.length === 0 && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">

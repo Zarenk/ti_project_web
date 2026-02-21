@@ -26,6 +26,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getBrands } from "../../brands/brands.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useTenantFeatures } from "@/context/tenant-features-context";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { PRODUCTS_BY_STORE_GUIDE_STEPS } from "./products-by-store-guide-steps";
 
 type SortKey =
   | "product"
@@ -645,7 +647,10 @@ export default function ProductsByStorePage() {
 
   return (
     <Card className="p-6 w-full max-w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl mx-auto shadow-md">
-      <h1 className="text-2xl font-semibold mb-6">📦 Productos por Tienda</h1>
+      <div className="flex items-center gap-2 mb-6">
+        <h1 className="text-2xl font-semibold">📦 Productos por Tienda</h1>
+        <PageGuideButton steps={PRODUCTS_BY_STORE_GUIDE_STEPS} tooltipLabel="Guía de productos" />
+      </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <TooltipProvider delayDuration={500}>

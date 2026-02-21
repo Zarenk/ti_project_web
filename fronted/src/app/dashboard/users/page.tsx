@@ -12,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HelpAdminTab } from "./help-admin-tab";
 import { HelpTestingPanel } from "./help-testing";
 import { HelpLearningDashboard } from "./help-learning";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { USERS_LIST_GUIDE_STEPS } from "./users-guide-steps";
 
 type UsersState = {
   data: DashboardUser[];
@@ -111,7 +113,10 @@ export default function UsersPage(): React.ReactElement {
     <section className="py-6">
       <div className="container mx-auto px-4">
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold">Usuarios</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Usuarios</h1>
+            <PageGuideButton steps={USERS_LIST_GUIDE_STEPS} tooltipLabel="Guía de usuarios" />
+          </div>
           {loading ? (
             <span className="text-sm text-muted-foreground">Actualizando...</span>
           ) : error ? (

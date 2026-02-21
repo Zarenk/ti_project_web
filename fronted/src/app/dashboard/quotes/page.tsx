@@ -71,6 +71,8 @@ import {
 import { useVerticalConfig } from '@/hooks/use-vertical-config';
 import { useTenantSelection } from '@/context/tenant-selection-context';
 import { cn } from '@/lib/utils';
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { QUOTES_GUIDE_STEPS } from "./quotes-guide-steps"
 import {
   AlertTriangle,
   BadgeCheck,
@@ -834,8 +836,21 @@ export default function QuotesPage() {
   }, [catalog, quoteIdParam, clients]);
 
   const buildQuoteItemsPayload = (): QuoteItemPayload[] => {
+    // Build reverse map: sectionId → origin tab (category key)
+    const sectionToTab = new Map<string, QuoteCategoryKey>();
+    if (catalog) {
+      for (const catKey of Object.keys(catalog) as QuoteCategoryKey[]) {
+        for (const section of catalog[catKey]) {
+          if (!sectionToTab.has(section.id)) {
+            sectionToTab.set(section.id, catKey);
+          }
+        }
+      }
+    }
+
     const items: QuoteItemPayload[] = [];
-    Object.entries(selection).forEach(([, options]) => {
+    Object.entries(selection).forEach(([sectionId, options]) => {
+      const originTab = sectionToTab.get(sectionId) ?? tab;
       options.forEach((item) => {
         const qty = Math.max(1, quantities[item.id] ?? 1);
         const unitPrice =
@@ -853,9 +868,9 @@ export default function QuotesPage() {
             ? 'SERVICE'
             : type === 'WARRANTY'
               ? 'WARRANTY'
-              : tab === 'laptops'
+              : originTab === 'laptops'
                 ? 'LAPTOP'
-                : tab === 'pc'
+                : originTab === 'pc'
                   ? 'PC'
                   : 'HARDWARE';
         items.push({
@@ -1234,6 +1249,7 @@ export default function QuotesPage() {
                   <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                     Cotizaciones
                   </h1>
+                  <PageGuideButton steps={QUOTES_GUIDE_STEPS} tooltipLabel="Guía de cotizaciones" />
                   <Badge variant="secondary" className="text-[11px]">
                     {nonServiceItems.length} items
                   </Badge>

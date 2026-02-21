@@ -20,6 +20,8 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTenantSelection } from '@/context/tenant-selection-context';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
+import { PageGuideButton } from '@/components/page-guide-dialog';
+import { BRANDS_GUIDE_STEPS } from './brands-guide-steps';
 
 const JPEG_MIME_TYPES = new Set(['image/jpeg', 'image/jpg']);
 
@@ -358,7 +360,10 @@ export default function BrandsPage() {
     <section className="py-2 sm:py-6">
       <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 lg:px-8">
         <div className="mb-6 space-y-3">
-          <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Marcas</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Marcas</h1>
+            <PageGuideButton steps={BRANDS_GUIDE_STEPS} tooltipLabel="Guía de marcas" />
+          </div>
 
           <Card className="border-muted/60 bg-card/70 backdrop-blur-sm">
             <CardContent className="flex flex-col gap-4 py-4 sm:flex-row sm:items-end sm:justify-between">

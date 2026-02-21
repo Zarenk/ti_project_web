@@ -1,7 +1,7 @@
 # CLAUDE.md - TI Projecto Web
 
 ## Descripción del Proyecto
-Sistema integral de gestión empresarial multi-tenant con contabilidad integrada, diseñado para el mercado peruano. Incluye módulos de inventario, ventas, compras, cotizaciones, contabilidad y más.
+Sistema integral de gestión empresarial multi-tenant con contabilidad de doble partida integrada, diseñado para el mercado peruano. Soporta múltiples verticales de negocio (General, Retail, Restaurantes, Servicios, Manufactura, Computación, Estudio de Abogados) con configuración dinámica por empresa. Incluye módulos de inventario, ventas, compras, cotizaciones, contabilidad PCGE, facturación SUNAT, gestión legal, pedidos de restaurante, e-commerce, sistema de suscripciones y más.
 
 ## Stack Tecnológico
 
@@ -46,8 +46,24 @@ Sistema integral de gestión empresarial multi-tenant con contabilidad integrada
 ### Multi-tenancy
 - Sistema multi-tenant con `tenantId` en todas las entradas
 - Schema enforcement configurable por organización
-- Middleware de tenant en backend
-- Context de tenant selection en frontend
+- Middleware de tenant en backend (`TenantHeaderMiddleware` + `TenantSlugResolverMiddleware`)
+- Decorador `@CurrentTenant()` para extraer `organizationId` y `companyId` en controllers
+- Context de tenant selection en frontend (`TenantSelectionContext`)
+- Restauración automática de último contexto usado (`context-restore.service.ts`)
+- Permisos por módulo en JSON (`OrganizationMembership.modulePermissions`)
+
+### Business Verticals
+Sistema de verticales de negocio que adapta la UI y funcionalidades según el tipo de empresa:
+
+- **Enum `BusinessVertical`:** GENERAL, RESTAURANTS, RETAIL, SERVICES, MANUFACTURING, COMPUTERS, LAW_FIRM
+- **Configuración por empresa:** `CompanyVerticalOverride` + `OrganizationVerticalOverride`
+- **Feature flags:** `VerticalConfigService` → `TenantFeaturesContext` en frontend
+- **Theming:** Variables CSS dinámicas por vertical (`vertical-css-variables.ts` + `vertical-css-provider.tsx`)
+- **Patrón de archivo (archive/rollback):** Al cambiar vertical, los datos específicos se archivan a modelos `Archived*` (no se eliminan), con snapshot para rollback
+- **Guard de módulo:** `@ModulePermission('legal')` en backend + `ModulePermissionGuard` en frontend
+- **Hook `use-vertical-config.ts`:** Retorna la configuración activa de la vertical
+
+**Ejemplo:** Una empresa `LAW_FIRM` ve módulo legal, no ve módulo restaurante. Si cambia a `RESTAURANTS`, los datos legales se archivan y se habilitan mesas/cocina.
 
 ## Convenciones de Código
 
@@ -105,19 +121,207 @@ export async function GET/POST/PUT/DELETE(request: Request) {
 - Definir schemas cerca de donde se usan
 - Validar en cliente Y servidor
 
+#### Paginación (Componente Unificado)
+- **SIEMPRE** usar el componente unificado de `@/components/data-table-pagination`
+- **NO** crear componentes de paginación nuevos ni usar los obsoletos (`simple-pagination`, `catalog-pagination`)
+- Dos modos disponibles:
+  - `DataTablePagination` — para tablas con TanStack React Table (`table` prop)
+  - `ManualPagination` — para paginación manual/server-side (`currentPage`, `totalPages`, `pageSize`, `onPageChange`, `onPageSizeChange`)
+- Incluye: page pills con ellipsis, first/last, prev/next, selector de items por página, info text responsive
+- Ejemplo de uso manual:
+```typescript
+import { ManualPagination } from "@/components/data-table-pagination"
+
+<ManualPagination
+  currentPage={page}
+  totalPages={totalPages}
+  pageSize={pageSize}
+  totalItems={total}
+  onPageChange={setPage}
+  onPageSizeChange={setPageSize}
+  pageSizeOptions={[10, 20, 30, 50]} // opcional
+/>
+```
+
 #### Estilos
 - Tailwind CSS para todo el styling
 - Componentes shadcn/ui para UI consistente
 - No usar CSS modules ni styled-components
 - Clases utilitarias antes que CSS personalizado
+- **Cursor pointer obligatorio:** Todos los elementos interactivos (botones, links, selects, checkboxes, switches, tabs, dropdowns, cards clickeables, etc.) deben tener `cursor-pointer` para indicar que son interactivos
+- **Errores inline obligatorios:** Los mensajes de error de validación deben mostrarse siempre debajo del input/combobox/select correspondiente (además del toast si aplica). No depender solo del toast para comunicar errores de campo
+
+#### Diseño Responsive Mobile (CRÍTICO)
+
+**PROBLEMA COMÚN:** Componentes que se expanden más allá de los límites de la pantalla en mobile, causando scroll horizontal no deseado.
+
+**REGLAS OBLIGATORIAS para prevenir overflow:**
+
+1. **Overflow Control en Contenedores**
+   ```typescript
+   // ✅ CORRECTO - Card con overflow control
+   <Card className="border shadow-md w-full min-w-0 overflow-hidden">
+     <CardContent className="overflow-hidden">
+       {/* contenido */}
+     </CardContent>
+   </Card>
+
+   // ❌ INCORRECTO - Sin overflow control
+   <Card className="border shadow-md">
+     <CardContent>
+       {/* contenido puede expandirse */}
+     </CardContent>
+   </Card>
+   ```
+
+2. **Width Control: SIEMPRE usar `w-full min-w-0`**
+   ```typescript
+   // ✅ CORRECTO - Contenedores con width control
+   <div className="flex flex-col gap-2 w-full min-w-0 overflow-hidden">
+     <div className="flex items-start gap-2 w-full min-w-0">
+       {/* contenido */}
+     </div>
+   </div>
+
+   // ❌ INCORRECTO - Sin width control
+   <div className="flex flex-col gap-2">
+     <div className="flex items-start gap-2">
+       {/* puede expandirse */}
+     </div>
+   </div>
+   ```
+
+3. **Evitar Layouts Condicionales Complejos**
+   ```typescript
+   // ✅ CORRECTO - Layout simple apilado
+   <div className="flex flex-col gap-2">
+     <div className="flex items-start gap-2">
+       <Icon className="flex-shrink-0" />
+       <p className="break-words">{longText}</p>
+     </div>
+   </div>
+
+   // ❌ INCORRECTO - Conditional layout propenso a overflow
+   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+     <div className="sm:flex-1 sm:min-w-0">
+       <p className="truncate">{longText}</p>
+     </div>
+     <div className="sm:min-w-[6rem]">{/* puede romper mobile */}</div>
+   </div>
+   ```
+
+4. **Texto: `break-words` para contenido largo**
+   ```typescript
+   // ✅ CORRECTO - Texto que se ajusta
+   <p className="font-semibold text-sm sm:text-base break-words">
+     {productName}
+   </p>
+
+   // ❌ INCORRECTO - Solo truncate puede no ser suficiente
+   <p className="font-semibold truncate">
+     {productName}
+   </p>
+   ```
+
+5. **NUNCA usar `min-width` sin `max-width` correspondiente**
+   ```typescript
+   // ✅ CORRECTO - Width fijo sin min-width
+   <div className="w-8 sm:w-12 flex-shrink-0">
+     {ranking}
+   </div>
+
+   // ❌ INCORRECTO - min-width puede forzar overflow
+   <div className="min-w-[6rem] flex-shrink-0">
+     {content}
+   </div>
+   ```
+
+6. **Iconos y Elementos Fijos: usar `flex-shrink-0`**
+   ```typescript
+   // ✅ CORRECTO - Iconos que no se comprimen
+   <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+   <Badge className="text-xs flex-shrink-0">SKU</Badge>
+
+   // ❌ INCORRECTO - Pueden comprimirse y distorsionarse
+   <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
+   ```
+
+7. **Texto Responsive: Mobile-first**
+   ```typescript
+   // ✅ CORRECTO - Tamaños que escalan
+   <p className="text-xs sm:text-sm">Metadata</p>
+   <p className="text-sm sm:text-base">Content</p>
+   <p className="text-base sm:text-lg">Emphasis</p>
+
+   // ❌ INCORRECTO - Tamaños fijos grandes
+   <p className="text-lg">Content</p>
+   ```
+
+8. **Grid Layouts: Usar `min-w-0` en columnas**
+   ```typescript
+   // ✅ CORRECTO - Grid que respeta límites
+   <div className="grid gap-6 md:grid-cols-2 w-full min-w-0">
+     <Component1 />
+     <Component2 />
+   </div>
+
+   // ❌ INCORRECTO - Puede expandirse
+   <div className="grid gap-6 md:grid-cols-2">
+     <Component1 />
+     <Component2 />
+   </div>
+   ```
+
+9. **Patrón de 3 Filas Apiladas (Recomendado para Listas)**
+   ```typescript
+   // ✅ PATRÓN RECOMENDADO - Simple y seguro
+   <div className="flex flex-col gap-2 p-2 sm:p-3 rounded-lg border w-full min-w-0 overflow-hidden">
+     {/* Fila 1: Indicador + Título */}
+     <div className="flex items-start gap-2 w-full min-w-0">
+       <Icon className="w-4 h-4 flex-shrink-0" />
+       <p className="font-semibold text-sm sm:text-base break-words">{title}</p>
+     </div>
+
+     {/* Fila 2: Metadata */}
+     <div className="flex flex-wrap items-center gap-2 text-xs pl-6">
+       <Badge>Tag</Badge>
+       <span className="whitespace-nowrap">Info</span>
+     </div>
+
+     {/* Fila 3: Acción/Valor */}
+     <div className="flex justify-between items-center pl-6 pt-1 border-t">
+       <p className="text-xs text-muted-foreground">Label</p>
+       <p className="text-base font-bold">Value</p>
+     </div>
+   </div>
+   ```
+
+10. **Verificación Obligatoria**
+    - Antes de commitear, probar SIEMPRE en viewport mobile (375px width)
+    - Verificar que NO aparezca scroll horizontal
+    - Usar DevTools responsive mode para validar
+    - Probar con nombres de productos/texto largo
+
+**NUNCA:**
+- ❌ Usar `flex-col sm:flex-row` en items de lista sin overflow control estricto
+- ❌ Usar `min-w-[Xrem]` sin validación mobile
+- ❌ Confiar solo en `truncate` para texto largo en containers flex
+- ❌ Omitir `overflow-hidden` en Cards o contenedores principales
+- ❌ Dejar elementos sin `w-full min-w-0` en flex containers
+
+**REFERENCIAS:**
+- Componentes de ejemplo: `TopProfitableProducts.tsx`, `LowProfitProducts.tsx`
+- Problema documentado: 2026-02-21 - Overflow en dashboard de ventas
 
 ### Backend (NestJS)
 
-#### Módulos
+#### Módulos (~59 módulos NestJS)
 - Un módulo por dominio de negocio
 - Estructura: controller, service, entity (Prisma model)
-- DTOs con class-validator para validación
-- Guards para autenticación y permisos
+- DTOs con class-validator para validación (`@IsString()`, `@IsNumber()`, `@IsBoolean()`, `@IsOptional()`, `@IsDateString()`)
+- Guards para autenticación y permisos (`JwtAuthGuard`, `RolesGuard`, `TenantRequiredGuard`)
+- Decoradores: `@Roles(...)`, `@ModulePermission('...')`, `@CurrentTenant('organizationId')`
+- Módulos principales: `products`, `sales`, `entries`, `inventory`, `accounting`, `legal-matters`, `legal-documents`, `legal-events`, `restaurant-orders`, `restaurant-tables`, `kitchen-stations`, `ingredients`, `subscriptions`, `chat`, `help`, `ml`
 
 #### Base de Datos (Prisma)
 - Migraciones con nombre descriptivo
@@ -161,15 +365,74 @@ export async function GET/POST/PUT/DELETE(request: Request) {
 - Generación de guías de remisión
 
 #### Contabilidad
-- Sistema híbrido simplificado/completo
-- Registro de compras y ventas
-- Conciliación bancaria
-- Reportes SUNAT
+- Sistema dual: modo simplificado (`AccEntry`/`AccPeriod`) y modo completo de doble partida (`JournalEntry`/`JournalLine`/`Account`)
+- Cambio de modo via `User.accountingMode` + `AccountingModeContext` en frontend
+- Plan Contable General Empresarial (PCGE) peruano
+- Hooks post-transaccionales para generar asientos automáticos desde ventas y compras
+- Libro Diario, Mayor, Balance de Comprobación
+- Exportación PLE para SUNAT (generación asíncrona por cola)
+- Cuentas contables con tipos: ACTIVO, PASIVO, PATRIMONIO, INGRESO, GASTO
+
+#### Estudio de Abogados (Legal Vertical)
+- **Expedientes** (`LegalMatter`): gestión de casos legales con código interno, área, estado, prioridad
+- **Partes** (`LegalMatterParty`): demandantes, demandados, abogados, peritos con roles configurables
+- **Documentos** (`LegalDocument`): upload con cadena de custodia (SHA-256), descarga por streaming, tipos: demanda, contestación, recurso, sentencia, etc.
+- **Eventos** (`LegalEvent`): audiencias, plazos, reuniones con calendario integrado y recordatorios
+- **Notas** (`LegalNote`): notas del expediente con opción de privacidad
+- **Horas** (`LegalTimeEntry`): registro de horas facturables por abogado con tarifa configurable
+- Edición inline en todas las entidades (patrón `editingId` + formulario compartido crear/editar)
+- Backend: 3 módulos NestJS (`legal-matters`, `legal-documents`, `legal-events`)
+- Frontend: `/dashboard/legal`, `/dashboard/legal/new`, `/dashboard/legal/[id]`, `/dashboard/legal/calendar`, `/dashboard/legal/documents`
+
+#### Restaurante (Restaurant Vertical)
+- **Pedidos** (`RestaurantOrder`): DINE_IN, TAKEAWAY, DELIVERY con estado en tiempo real
+- **Mesas** (`RestaurantTable`): gestión de mesas con estado (libre, ocupada, reservada)
+- **Cocina** (`KitchenStation`): estaciones de cocina con ruteo de ítems y display en tiempo real (WebSocket)
+- **Ingredientes** (`Ingredient`): control de stock de ingredientes con movimientos
+- **Recetas** (`RecipeItem`): relación producto ↔ ingredientes con cantidades
+- Frontend: `/dashboard/restaurant-orders`, `/dashboard/kitchen`, `/dashboard/tables`, `/dashboard/ingredients`
+
+#### E-commerce y Publicidad
+- **Catálogo público** (`catalog`): productos publicados para tienda web
+- **Pedidos web** (`websales`, `ordertracking`): ventas por canal web con seguimiento
+- **Campañas** (`campaigns`, `ads`, `adslab`): gestión de campañas publicitarias
+- **Creativos** (`Creative`, `Template`, `Asset`): plantillas y assets para anuncios
+- **Publicación** (`PublishTarget`): adaptadores de publicación multi-canal
+
+#### Suscripciones y Facturación de Plataforma
+- **Planes** (`SubscriptionPlan`): planes de suscripción con cuotas por módulo
+- **Suscripciones** (`Subscription`): ciclo de vida completo (TRIAL → ACTIVE → PAST_DUE → CANCELED)
+- **Facturación** (`SubscriptionInvoice`): facturas de plataforma
+- **Dunning automático** (`dunning-cron.service.ts`): cobro automático con reintentos
+- **Trial automático** (`trial-cron.service.ts`): gestión de período de prueba
+- **Webhook Mercado Pago**: integración de pagos
+- Frontend: `/dashboard/account/plan`, `/dashboard/account/billing`
+
+#### Caja Registradora
+- **Cajas** (`CashRegister`): apertura/cierre de caja con balance
+- **Transacciones** (`CashTransaction`): movimientos de entrada/salida por método de pago
+- **Cierres** (`CashClosure`): cortes de caja con conciliación
+- Frontend: `/dashboard/cashregister`
+
+#### Sistema de Ayuda Inteligente
+- **Embeddings vectoriales** (`HelpEmbedding`): búsqueda semántica de respuestas
+- **Aprendizaje** (`HelpLearningSession`, `HelpSynonymRule`): mejora continua del KB
+- **Candidatos KB** (`HelpKBCandidate`): promoción de buenas respuestas al knowledge base
+- Componente `HelpAssistant` con worker en background (`use-help-worker.ts`)
+
+#### Extracción de Facturas (ML)
+- **Módulo ML** (`ml/`): bridge NestJS → Python (`predict.py`, `train_model.py`)
+- **Templates** (`InvoiceTemplate`, `InvoiceSample`): plantillas por proveedor para extracción
+- **Logs** (`InvoiceExtractionLog`): auditoría de extracciones
+- Extracción de datos desde PDF de factura de proveedor
 
 ### Permisos y Roles
-- Sistema basado en módulos
-- Guard `ModulePermissionGuard` en frontend
+- **Roles de usuario:** ADMIN, EMPLOYEE, CLIENT, GUEST, SUPER_ADMIN_GLOBAL, SUPER_ADMIN_ORG
+- **Roles de membresía:** OWNER, ADMIN, MEMBER, VIEWER, SUPER_ADMIN
+- Sistema basado en módulos con permisos JSON en `OrganizationMembership.modulePermissions`
+- Guard `ModulePermissionGuard` en frontend (oculta UI si no tiene permiso)
 - Guard `DeleteActionsGuard` para operaciones destructivas
+- Backend: `@Roles(...)` + `@ModulePermission(...)` decoradores en controllers
 - Verificar permisos en backend siempre
 
 ## Patrones y Mejores Prácticas
@@ -336,13 +599,32 @@ Task("analizar middleware de tenant", "Explore", "medium")
 - Tests unitarios para lógica crítica
 - Validar flujos completos de negocio
 
-## Sistema de Ayuda Contextual
+## React Contexts (`fronted/src/context/`)
 
-El proyecto incluye un sistema de ayuda contextual inteligente:
-- Ubicado en `/fronted/src/data/help/`
-- Búsqueda fuzzy y por intención
-- Screenshots en `/fronted/public/help/`
-- Componente `HelpAssistant` para asistencia en tiempo real
+| Context | Propósito |
+|---------|-----------|
+| `AuthContext` | Estado de autenticación y sesión del usuario |
+| `TenantSelectionContext` | Cambio de organización/empresa activa |
+| `TenantFeaturesContext` | Feature flags por vertical de negocio |
+| `AccountingModeContext` | Alterna entre contabilidad simplificada y completa |
+| `SiteSettingsContext` | Configuración global del sitio (Zod schema) |
+| `CartContext` | Carrito de compras (e-commerce) |
+| `MessagesContext` | Estado del chat en tiempo real |
+| `HelpAssistantContext` | Asistente de ayuda contextual |
+
+## Custom Hooks (`fronted/src/hooks/`)
+
+| Hook | Propósito |
+|------|-----------|
+| `use-module-permission` | Verifica permiso del usuario para un módulo |
+| `use-enforced-module-permission` | Redirige si no tiene permiso |
+| `use-delete-action-visibility` | Controla visibilidad de botones de eliminación |
+| `use-vertical-config` | Retorna configuración de vertical activa |
+| `use-kitchen-socket` | WebSocket para cocina de restaurante |
+| `use-help-worker` | Worker de fondo para asistente de ayuda |
+| `use-chat-user-id` | Resolución de ID de usuario para chat |
+| `use-mobile` | Detección responsive/mobile |
+| `use-user-context-sync` | Sincroniza último contexto usado al backend |
 
 ## Comandos Útiles
 
@@ -366,9 +648,13 @@ npx cypress open        # Tests E2E
 1. **Nombre del directorio:** Es `fronted` (con 'd'), NO `frontend`
 2. **Prisma:** Versión 7 con nuevas características
 3. **Autenticación:** Tokens en cookies httpOnly, no localStorage
-4. **WebSockets:** Gateway de barcode en puerto específico
+4. **WebSockets:** Gateway de barcode + gateway de cocina (restaurante) + gateway de chat
 5. **PDFs:** Generación server-side con @react-pdf/renderer
 6. **Imágenes:** Upload a `/storage` con validación de tamaño
+7. **Documentos legales:** Upload a `./uploads/legal-documents/` con hash SHA-256 para cadena de custodia
+8. **API Proxy:** Frontend NUNCA llama al backend directamente — siempre pasa por `/app/api/*` route handlers que reenvían con cookie `authToken`
+9. **Archivos API co-locados:** Cada sección del dashboard tiene un `*.api.tsx` hermano (ej: `sales.api.tsx`, `legal-matters.api.tsx`)
+10. **Prisma schema:** ~80+ modelos definidos en `/backend/prisma/schema.prisma`
 
 ## Cuando Hagas Cambios
 
@@ -523,7 +809,7 @@ Entry                                      Sales
 
 ---
 
-**Última actualización:** 2026-02-18
-**Versión:** 1.3
+**Última actualización:** 2026-02-21
+**Versión:** 1.5
 
 Este archivo debe actualizarse cuando cambien convenciones, patrones o reglas importantes del proyecto.

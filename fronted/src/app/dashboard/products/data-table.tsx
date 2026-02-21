@@ -41,10 +41,10 @@ import { DataTablePagination } from "../../../components/data-table-pagination"
 import { useMemo, useRef, useState } from "react";
 import { DateRange } from "react-day-picker"; // Asegúrate de que este tipo esté disponible
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
-import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
+import { DataTableFacetedFilter } from "../../../components/data-table-faceted-filter"
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { EyeIcon, FileSpreadsheet, FileText, Loader2, PrinterIcon } from "lucide-react"
+import { EyeIcon, FileSpreadsheet, FileText, Loader2, PrinterIcon, CalendarDays, SlidersHorizontal, Columns3 } from "lucide-react"
 
 import { BACKEND_URL } from "@/lib/utils"
 
@@ -196,6 +196,18 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
       }
     });
     return Array.from(keys);
+  }, [sanitizedData]);
+
+  // Derive category options from table data (no extra API call)
+  const categories = useMemo(() => {
+    const unique = new Map<string, { label: string; value: string }>();
+    sanitizedData.forEach((item) => {
+      const name = item.category_name;
+      if (name && name !== "Sin categoria" && !unique.has(name)) {
+        unique.set(name, { label: name, value: name });
+      }
+    });
+    return Array.from(unique.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [sanitizedData]);
 
   const formatHtmlValue = (value: unknown) => {
@@ -789,100 +801,162 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
 
   return (
     <div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py4- px-4 gap-4 mb-6">
+          {/* ── Mobile: search + category + icon row ─────────── */}
+          <div className="flex flex-col gap-3 px-4 py-4 mb-4 sm:hidden">
+            <Input
+              placeholder="Buscar producto..."
+              value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+              onChange={(event) =>
+                table.getColumn("name")?.setFilterValue(event.target.value)
+              }
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex items-center gap-2">
+              {/* Date picker - now in icon row */}
+              <CalendarDatePicker
+                className="h-9 flex-1 min-w-0"
+                variant="outline"
+                date={selectedDateRange || { from: undefined, to: undefined }}
+                onDateSelect={handleDateSelect}
+              />
+              {/* Export */}
+              <Button
+                onClick={handleExportExcel}
+                disabled={isExporting}
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                title="Exportar Excel"
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="h-4 w-4" />
+                )}
+              </Button>
+              {/* Vistas */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Vistas">
+                    <Columns3 className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={4} className="w-48">
+                  <div className="px-4 py-2 text-sm font-medium border-b text-center">Columnas</div>
+                  {table
+                    .getAllColumns()
+                    .filter((column) => column.getCanHide() && column.id !== "actions")
+                    .map((column) => (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                      >
+                        {columnLabels[column.id] || column.id}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {/* Reset */}
+              {(totalSelectedRows > 0 || isFiltered) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleResetDateRange}
+                  className="h-9 w-9 shrink-0"
+                  title="Reset filtros"
+                >
+                  <Cross2Icon className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {/* Category filter - full width row */}
+            {table.getColumn("category_name") && (
+              <DataTableFacetedFilter
+                column={table.getColumn("category_name")}
+                title="Categoria"
+                options={categories}
+                className="h-9 w-full"
+              />
+            )}
+          </div>
+
+          {/* ── Desktop: full toolbar ────────────────────────── */}
+          <div className="hidden sm:flex flex-wrap items-center gap-3 px-4 py-4 mb-6">
             <Input
               placeholder="Filtrar por nombre del Producto..."
               value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
               onChange={(event) =>
                 table.getColumn("name")?.setFilterValue(event.target.value)
               }
-              className="w-full sm:w-1/3 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-auto flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            {/* Selector de Rango de Fechas con CalendarDatePicker */}
-            <div className="px-0 sm:px-2">
-              <CalendarDatePicker 
+            <CalendarDatePicker
               className="h-9 w-[300px]"
               variant="outline"
-              date={selectedDateRange || { from: undefined, to: undefined }} 
-              onDateSelect={handleDateSelect} />
-            </div>
-            <div className="px-0 sm:px-2">
-              <DataTableToolbar table={table} />
-            </div>
-            <div className="px-0 sm:px-2">
-              <Button
-                onClick={handleExportExcel}
-                disabled={isExporting}
-                className="w-full sm:w-auto"
-              >
-                {isExporting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    Exportar Excel
-                  </>
-                )}
-              </Button>
-            </div>
-            {/* Botón Reset: Solo aparece si hay filtros activos */}
+              date={selectedDateRange || { from: undefined, to: undefined }}
+              onDateSelect={handleDateSelect}
+            />
+            {table.getColumn("category_name") && (
+              <DataTableFacetedFilter
+                column={table.getColumn("category_name")}
+                title="Categoria"
+                options={categories}
+              />
+            )}
+            <Button
+              onClick={handleExportExcel}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Exportar Excel
+                </>
+              )}
+            </Button>
             {(totalSelectedRows > 0 || isFiltered) && (
-            <div className="px-0 sm:px-2 self-start sm:self-auto">
               <Button
-                  variant="ghost"
-                  onClick={handleResetDateRange}
-                  className="h-8 px-2 lg:px-3"
+                variant="ghost"
+                onClick={handleResetDateRange}
+                className="h-8 px-2 lg:px-3"
               >
                 Reset
-              <Cross2Icon className="ml-2 h-4 w-4" />
+                <Cross2Icon className="ml-2 h-4 w-4" />
               </Button>
-            </div>              
             )}
-          
-          <div className="sm:mt-0 sm:ml-auto">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="ml-auto">
-                  Vistas
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-              align="start" // Alinea el menú al final del botón
-              side="bottom" // Posiciona el menú debajo del botón
-              sideOffset={4} // Agrega un pequeño espacio entre el botón y el menú
-              className="w-48 sm:w-48 sm:align-end" // Cambia el comportamiento en pantallas medianas y grandes      
-              >
-              {/* Título encima de las opciones */}
-              <div className="px-4 py-2 text-sm font-medium border-b text-center">
-                Opciones
-              </div>
-                {table
-                  .getAllColumns()
-                  .filter(
-                    (column) => column.getCanHide() && column.id !== "actions" // Excluye la columna "actions"
-                  )
-                  .map((column) => {
-                    return (
+            <div className="ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    Vistas
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" sideOffset={4} className="w-48">
+                  <div className="px-4 py-2 text-sm font-medium border-b text-center">Opciones</div>
+                  {table
+                    .getAllColumns()
+                    .filter((column) => column.getCanHide() && column.id !== "actions")
+                    .map((column) => (
                       <DropdownMenuCheckboxItem
                         key={column.id}
                         className="capitalize"
                         checked={column.getIsVisible()}
-                        onCheckedChange={(value) =>
-                          column.toggleVisibility(!!value)
-                        }
+                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
                       >
-                        {/* Usa el mapa de traducción para mostrar nombres amigables */}
                         {columnLabels[column.id] || column.id}
                       </DropdownMenuCheckboxItem>
-                    )
-                  })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </div>
       {/* Aquí agregamos el contador de datos */}
       <div className="py-2 px-4 flex flex-col sm:flex-row items-start sm:items-center space-x-4">
           <label className="text-sm text-gray-600">

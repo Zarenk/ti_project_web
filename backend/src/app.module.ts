@@ -68,6 +68,13 @@ import { RecipeItemsModule } from './recipe-items/recipe-items.module';
 import { RestaurantOrdersModule } from './restaurant-orders/restaurant-orders.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { HelpModule } from './help/help.module';
+import { LegalMattersModule } from './legal-matters/legal-matters.module';
+import { LegalDocumentsModule } from './legal-documents/legal-documents.module';
+import { LegalEventsModule } from './legal-events/legal-events.module';
+import { JurisprudenceScraperModule } from './jurisprudence-scraper/jurisprudence-scraper.module';
+import { JurisprudenceDocumentsModule } from './jurisprudence-documents/jurisprudence-documents.module';
+import { JurisprudenceAssistantModule } from './jurisprudence-assistant/jurisprudence-assistant.module';
+import { JurisprudenceAdminModule } from './jurisprudence-admin/jurisprudence-admin.module';
 
 @Module({
   imports: [
@@ -128,6 +135,13 @@ import { HelpModule } from './help/help.module';
     QuotesModule,
     BarcodeModule,
     HelpModule,
+    LegalMattersModule,
+    LegalDocumentsModule,
+    LegalEventsModule,
+    JurisprudenceScraperModule,
+    JurisprudenceDocumentsModule,
+    JurisprudenceAssistantModule,
+    JurisprudenceAdminModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

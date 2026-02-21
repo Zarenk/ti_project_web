@@ -28,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { CLIENTS_GUIDE_STEPS } from "./clients-guide-steps";
 
 type ClientsState = {
   data: ClientRow[];
@@ -167,7 +169,10 @@ export default function ClientsPage(): React.ReactElement {
     <div className="flex h-full flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+            <PageGuideButton steps={CLIENTS_GUIDE_STEPS} tooltipLabel="Guía de clientes" />
+          </div>
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Gestiona los clientes de tu sistema
           </p>

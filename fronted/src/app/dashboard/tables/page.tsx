@@ -14,13 +14,15 @@ import { useVerticalConfig } from "@/hooks/use-vertical-config"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Bath, CircleCheck, Flame, LayoutGrid, Map, Pencil, Snowflake, Trash2 } from "lucide-react"
+import { Bath, CircleCheck, Flame, LayoutGrid, Map, Pencil, Plus, Snowflake, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { TABLES_GUIDE_STEPS } from "./tables-guide-steps"
 import { TableFloorPlan } from "./table-floor-plan"
 import { useKitchenSocket } from "@/hooks/use-kitchen-socket"
 
@@ -67,6 +69,8 @@ export default function RestaurantTablesPage() {
     capacity: "",
     area: "",
   })
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   const isRestaurant = verticalName === "RESTAURANTS"
   const [viewMode, setViewMode] = useState<"cards" | "floorplan">("cards")
@@ -102,18 +106,39 @@ export default function RestaurantTablesPage() {
     }, [loadTables]),
   })
 
+  const validateForm = useCallback(() => {
+    const errors: Record<string, string> = {}
+    if (!form.name.trim()) errors.name = "El nombre es obligatorio"
+    if (!form.code.trim()) errors.code = "El codigo es obligatorio"
+    if (!form.capacity || Number(form.capacity) < 1) errors.capacity = "Ingresa una capacidad valida"
+    if (!form.area.trim()) errors.area = "La ubicacion es obligatoria"
+    return errors
+  }, [form])
+
+  const updateField = useCallback((field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }, [])
+
   const handleSubmit = async () => {
-    if (!form.name.trim() || !form.code.trim()) {
-      toast.error("Completa el nombre y el codigo de la mesa.")
+    const errors = validateForm()
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
       return
     }
+    setSubmitting(true)
     try {
       await createRestaurantTable({
         name: form.name.trim(),
         code: form.code.trim(),
         status: form.status,
-        capacity: form.capacity ? Number(form.capacity) : undefined,
-        area: form.area.trim() || undefined,
+        capacity: Number(form.capacity),
+        area: form.area.trim(),
       })
       toast.success("Mesa creada correctamente.")
       setForm({
@@ -123,11 +148,21 @@ export default function RestaurantTablesPage() {
         capacity: "",
         area: "",
       })
+      setFormErrors({})
       await loadTables()
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo crear la mesa."
       toast.error(message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      void handleSubmit()
     }
   }
 
@@ -204,9 +239,12 @@ export default function RestaurantTablesPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
-              Gestión de mesas
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                Gestión de mesas
+              </h1>
+              <PageGuideButton steps={TABLES_GUIDE_STEPS} tooltipLabel="Guía de mesas" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Organiza el plano del salón y controla disponibilidad en tiempo real.
             </p>
@@ -216,7 +254,7 @@ export default function RestaurantTablesPage() {
               <Button
                 variant={viewMode === "cards" ? "default" : "ghost"}
                 size="sm"
-                className="h-8 gap-1.5"
+                className="h-8 cursor-pointer gap-1.5"
                 onClick={() => setViewMode("cards")}
               >
                 <LayoutGrid className="h-3.5 w-3.5" /> Tarjetas
@@ -224,7 +262,7 @@ export default function RestaurantTablesPage() {
               <Button
                 variant={viewMode === "floorplan" ? "default" : "ghost"}
                 size="sm"
-                className="h-8 gap-1.5"
+                className="h-8 cursor-pointer gap-1.5"
                 onClick={() => setViewMode("floorplan")}
               >
                 <Map className="h-3.5 w-3.5" /> Plano
@@ -262,7 +300,7 @@ export default function RestaurantTablesPage() {
               <Button
                 variant={floorEditMode ? "default" : "outline"}
                 size="sm"
-                className="gap-1.5"
+                className="cursor-pointer gap-1.5"
                 onClick={() => setFloorEditMode((v) => !v)}
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -289,31 +327,35 @@ export default function RestaurantTablesPage() {
             <CardHeader>
               <CardTitle className="text-base font-semibold">Nueva mesa</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4" onKeyDown={handleFormKeyDown}>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Nombre</Label>
+                <div className="space-y-1.5">
+                  <Label className={formErrors.name ? "text-destructive" : ""}>Nombre</Label>
                   <Input
                     value={form.name}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, name: event.target.value }))
-                    }
+                    onChange={(event) => updateField("name", event.target.value)}
                     placeholder="Mesa Terraza"
+                    className={formErrors.name ? "border-destructive focus-visible:ring-destructive/30" : ""}
                   />
+                  {formErrors.name && (
+                    <p className="text-xs text-destructive">{formErrors.name}</p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label>Codigo</Label>
+                <div className="space-y-1.5">
+                  <Label className={formErrors.code ? "text-destructive" : ""}>Codigo</Label>
                   <Input
                     value={form.code}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, code: event.target.value }))
-                    }
+                    onChange={(event) => updateField("code", event.target.value)}
                     placeholder="M-01"
+                    className={formErrors.code ? "border-destructive focus-visible:ring-destructive/30" : ""}
                   />
+                  {formErrors.code && (
+                    <p className="text-xs text-destructive">{formErrors.code}</p>
+                  )}
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label>Estado inicial</Label>
                   <Select
                     value={form.status}
@@ -336,31 +378,36 @@ export default function RestaurantTablesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Capacidad</Label>
+                <div className="space-y-1.5">
+                  <Label className={formErrors.capacity ? "text-destructive" : ""}>Capacidad</Label>
                   <Input
                     type="number"
-                    min={0}
+                    min={1}
                     value={form.capacity}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, capacity: event.target.value }))
-                    }
+                    onChange={(event) => updateField("capacity", event.target.value)}
                     placeholder="4"
+                    className={formErrors.capacity ? "border-destructive focus-visible:ring-destructive/30" : ""}
                   />
+                  {formErrors.capacity && (
+                    <p className="text-xs text-destructive">{formErrors.capacity}</p>
+                  )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Ubicacion / Area</Label>
+              <div className="space-y-1.5">
+                <Label className={formErrors.area ? "text-destructive" : ""}>Ubicacion / Area</Label>
                 <Input
                   value={form.area}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, area: event.target.value }))
-                  }
+                  onChange={(event) => updateField("area", event.target.value)}
                   placeholder="Salon principal"
+                  className={formErrors.area ? "border-destructive focus-visible:ring-destructive/30" : ""}
                 />
+                {formErrors.area && (
+                  <p className="text-xs text-destructive">{formErrors.area}</p>
+                )}
               </div>
-              <Button className="w-full cursor-pointer" onClick={handleSubmit}>
-                Guardar mesa
+              <Button className="w-full cursor-pointer gap-2" onClick={handleSubmit} disabled={submitting}>
+                <Plus className="h-4 w-4" />
+                {submitting ? "Guardando..." : "Guardar mesa"}
               </Button>
             </CardContent>
           </Card>
@@ -445,7 +492,9 @@ export default function RestaurantTablesPage() {
                       </div>
                     ))
                   ) : (
-                    filteredTables.map((table) => (
+                    filteredTables.map((table) => {
+                      const hasActiveOrder = !!table.currentOrderId
+                      return (
                       <div
                         key={table.id}
                         className={cn(
@@ -470,6 +519,11 @@ export default function RestaurantTablesPage() {
                             {table.area ?? "General"}
                           </span>
                         </div>
+                        {hasActiveOrder && (
+                          <p className="mt-2 text-xs text-rose-300">
+                            Orden #{table.currentOrderId} en curso — mesa bloqueada
+                          </p>
+                        )}
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <TooltipProvider delayDuration={200}>
                             <div className="flex flex-wrap gap-2">
@@ -479,13 +533,13 @@ export default function RestaurantTablesPage() {
                                     variant="outline"
                                     size="icon"
                                     className="h-9 w-9 cursor-pointer border-emerald-400/40 text-emerald-200 transition-all duration-200 hover:scale-105 hover:border-emerald-300/70 hover:text-emerald-100 hover:shadow-[0_0_18px_rgba(16,185,129,0.35)]"
-                                    disabled={table.status === "AVAILABLE"}
+                                    disabled={table.status === "AVAILABLE" || hasActiveOrder}
                                     onClick={() => handleStatusChange(table.id, "AVAILABLE")}
                                   >
                                     <CircleCheck className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Liberar</TooltipContent>
+                                <TooltipContent>{hasActiveOrder ? "Orden activa — cierra la orden primero" : "Liberar"}</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -493,13 +547,13 @@ export default function RestaurantTablesPage() {
                                     variant="outline"
                                     size="icon"
                                     className="h-9 w-9 cursor-pointer border-amber-400/40 text-amber-200 transition-all duration-200 hover:scale-105 hover:border-amber-300/70 hover:text-amber-100 hover:shadow-[0_0_18px_rgba(245,158,11,0.35)]"
-                                    disabled={table.status === "RESERVED"}
+                                    disabled={table.status === "RESERVED" || hasActiveOrder}
                                     onClick={() => handleStatusChange(table.id, "RESERVED")}
                                   >
                                     <Snowflake className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Reservar</TooltipContent>
+                                <TooltipContent>{hasActiveOrder ? "Orden activa — cierra la orden primero" : "Reservar"}</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -507,13 +561,13 @@ export default function RestaurantTablesPage() {
                                     variant="outline"
                                     size="icon"
                                     className="h-9 w-9 cursor-pointer border-rose-400/40 text-rose-200 transition-all duration-200 hover:scale-105 hover:border-rose-300/70 hover:text-rose-100 hover:shadow-[0_0_18px_rgba(244,63,94,0.35)]"
-                                    disabled={table.status === "OCCUPIED"}
+                                    disabled={table.status === "OCCUPIED" || hasActiveOrder}
                                     onClick={() => handleStatusChange(table.id, "OCCUPIED")}
                                   >
                                     <Flame className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Ocupar</TooltipContent>
+                                <TooltipContent>{hasActiveOrder ? "Orden activa — cierra la orden primero" : "Ocupar"}</TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -521,13 +575,13 @@ export default function RestaurantTablesPage() {
                                     variant="outline"
                                     size="icon"
                                     className="h-9 w-9 cursor-pointer border-sky-400/40 text-sky-200 transition-all duration-200 hover:scale-105 hover:border-sky-300/70 hover:text-sky-100 hover:shadow-[0_0_18px_rgba(56,189,248,0.35)]"
-                                    disabled={table.status === "DISABLED"}
+                                    disabled={table.status === "DISABLED" || hasActiveOrder}
                                     onClick={() => handleStatusChange(table.id, "DISABLED")}
                                   >
                                     <Bath className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Limpieza</TooltipContent>
+                                <TooltipContent>{hasActiveOrder ? "Orden activa — cierra la orden primero" : "Limpieza"}</TooltipContent>
                               </Tooltip>
                             </div>
                             <Tooltip>
@@ -536,17 +590,19 @@ export default function RestaurantTablesPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-9 w-9 cursor-pointer text-destructive transition-all duration-200 hover:scale-105 hover:text-destructive hover:shadow-[0_0_18px_rgba(239,68,68,0.35)]"
+                                  disabled={hasActiveOrder}
                                   onClick={() => handleDelete(table.id)}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Eliminar</TooltipContent>
+                              <TooltipContent>{hasActiveOrder ? "No se puede eliminar — orden activa" : "Eliminar"}</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </div>
                       </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               )}

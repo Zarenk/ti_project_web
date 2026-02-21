@@ -37,6 +37,7 @@ export class ModulePermissionsGuard implements CanActivate {
     'marketing',
     'providers',
     'settings',
+    'legal',
     'hidePurchaseCost',
     'hideDeleteActions',
   ] as const;

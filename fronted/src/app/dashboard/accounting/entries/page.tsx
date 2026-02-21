@@ -28,6 +28,8 @@ import {
   XCircle,
 } from "lucide-react"
 import { toast } from "sonner"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { ENTRIES_GUIDE_STEPS } from "./entries-guide-steps"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -267,9 +269,12 @@ export default function AccountingEntriesPage() {
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
-              Libro Diario
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
+                Libro Diario
+              </h1>
+              <PageGuideButton steps={ENTRIES_GUIDE_STEPS} tooltipLabel="Guía de asientos" />
+            </div>
             <p className="text-sm text-muted-foreground mt-0.5">
               Registro cronológico de asientos contables
             </p>

@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useDebounce } from "@/app/hooks/useDebounce";
 import { useAuth } from "@/context/auth-context";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { ORDERS_GUIDE_STEPS } from "./orders-guide-steps";
 
 type RestaurantOrderStatus =
   | "OPEN"
@@ -288,7 +290,10 @@ export default function OrdersPage() {
     <section className="py-2 sm:py-6">
       <div className="container mx-auto px-1 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between px-5 gap-3 mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Ordenes</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Ordenes</h1>
+            <PageGuideButton steps={ORDERS_GUIDE_STEPS} tooltipLabel="Guía de órdenes" />
+          </div>
           <Button
             onClick={() => router.push("/dashboard/orders/new")}
             className="bg-blue-900 hover:bg-blue-800 text-white"

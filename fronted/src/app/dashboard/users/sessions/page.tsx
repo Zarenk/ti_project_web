@@ -28,6 +28,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SESSIONS_GUIDE_STEPS } from "./sessions-guide-steps"
 import {
   Tooltip,
   TooltipContent,
@@ -167,9 +169,12 @@ export default function ActiveSessionsPage() {
               <Wifi className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">
-                Sesiones Activas
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight">
+                  Sesiones Activas
+                </h1>
+                <PageGuideButton steps={SESSIONS_GUIDE_STEPS} tooltipLabel="Guía de sesiones" />
+              </div>
               <p className="text-sm text-muted-foreground">
                 {isGlobal
                   ? "Usuarios conectados en todas las organizaciones"

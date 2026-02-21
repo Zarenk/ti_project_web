@@ -937,3 +937,137 @@ export async function getProfitByDate(from: string, to: string) {
     throw error
   }
 }
+
+export interface ProductProfitSummary {
+  productId: number
+  sku?: string
+  name: string
+  unitsSold: number
+  avgSalePrice: number
+  avgPurchasePrice: number
+  revenue: number
+  cost: number
+  profit: number
+  currentStock: number
+}
+
+export interface InvestmentRecommendation {
+  productId: number
+  name: string
+  sku?: string
+  score: number
+  priority: 'ALTA' | 'MEDIA' | 'BAJA'
+  profitMargin: number
+  rotationSpeed: number
+  stockLevel: number
+  reason: string
+}
+
+export interface MonthlyHistoryItem {
+  month: string
+  year: number
+  monthNumber: number
+  profit: number
+  changePercent: number
+}
+
+export interface MonthlyHistory {
+  months: MonthlyHistoryItem[]
+  bestMonth: MonthlyHistoryItem | null
+  worstMonth: MonthlyHistoryItem | null
+}
+
+export interface InventoryROI {
+  totalInventoryValue: number
+  monthlyProfit: number
+  roiPercent: number
+  status: 'critical' | 'warning' | 'healthy'
+  alertMessage?: string
+}
+
+export interface ROIHistoryItem {
+  month: string
+  year: number
+  monthNumber: number
+  roiPercent: number
+  changePercent: number
+  profit: number
+  inventoryValue: number
+  totalSales: number
+  totalPurchases: number
+}
+
+export interface ROIHistory {
+  months: ROIHistoryItem[]
+  bestMonth: ROIHistoryItem | null
+  worstMonth: ROIHistoryItem | null
+}
+
+export interface ProfitAnalysisResponse {
+  top50Profitable: ProductProfitSummary[]
+  top50Unprofitable: ProductProfitSummary[]
+  monthProjection: {
+    current: number
+    projected: number
+    confidence: number
+    trend: 'up' | 'down' | 'stable'
+    daysAnalyzed: number
+    daysRemaining: number
+    breakdown: {
+      last30Days: number
+      days30to60: number
+      days60to90: number
+    }
+  }
+  recommendations: InvestmentRecommendation[]
+  monthlyHistory: MonthlyHistory
+  inventoryROI: InventoryROI
+  roiHistory: ROIHistory
+}
+
+export async function getProfitAnalysis(from: string, to: string): Promise<ProfitAnalysisResponse> {
+  const qs = new URLSearchParams()
+  qs.append('from', from)
+  qs.append('to', to)
+
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/sales/analytics/profit-analysis?${qs.toString()}`)
+    if (!res.ok) {
+      throw new Error('Error al obtener análisis de utilidades')
+    }
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return {
+        top10Profitable: [],
+        top10Unprofitable: [],
+        monthProjection: {
+          current: 0,
+          projected: 0,
+          confidence: 0,
+          trend: 'stable',
+          daysAnalyzed: 0,
+          daysRemaining: 0,
+          breakdown: {
+            last30Days: 0,
+            days30to60: 0,
+            days60to90: 0,
+          },
+        },
+        recommendations: [],
+        monthlyHistory: {
+          months: [],
+          bestMonth: null,
+          worstMonth: null,
+        },
+        inventoryROI: {
+          totalInventoryValue: 0,
+          monthlyProfit: 0,
+          roiPercent: 0,
+          status: 'healthy',
+        },
+      }
+    }
+    throw error
+  }
+}

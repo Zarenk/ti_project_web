@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import SimplePagination from "@/components/simple-pagination"
+import { ManualPagination } from "@/components/data-table-pagination"
 import { Campaign, fetchCampaigns, createCampaign } from "./ads.api"
 import { useRBAC } from "../hooks/use-rbac"
 import { trackEvent } from "@/lib/analytics"
@@ -113,12 +113,14 @@ export default function AdsDashboardPage() {
         ))}
       </div>
 
-      <SimplePagination
-        page={page}
+      <ManualPagination
+        currentPage={page}
+        totalPages={Math.ceil(total / pageSize) || 1}
         pageSize={pageSize}
         totalItems={total}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
+        pageSizeOptions={[5, 10, 20, 30]}
       />
     </div>
   )

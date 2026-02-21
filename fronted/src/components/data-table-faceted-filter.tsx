@@ -30,6 +30,7 @@ interface DataTableFacetedFilterProps<TData, TValue> {
     icon?: React.ComponentType<{ className?: string }>;
   }[];
   onChange?: (selectedValue: any) => void; // Agrega esta línea
+  className?: string;
 }
 
 export function DataTableFacetedFilter<TData, TValue>({
@@ -37,6 +38,7 @@ export function DataTableFacetedFilter<TData, TValue>({
   title,
   options,
   onChange,
+  className,
 }: DataTableFacetedFilterProps<TData, TValue>) {
 
   const facets = column?.getFacetedUniqueValues();
@@ -58,7 +60,7 @@ export function DataTableFacetedFilter<TData, TValue>({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 border-dashed">
+        <Button variant="outline" size="sm" className={cn("h-8 border-dashed", className)}>
           <PlusCircledIcon className="mr-2 h-4 w-4" />
           {title}
           {selectedValues?.size > 0 && (
@@ -96,7 +98,7 @@ export function DataTableFacetedFilter<TData, TValue>({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0" align="start">
         <Command>
           <CommandInput placeholder={title} />
           <CommandList>

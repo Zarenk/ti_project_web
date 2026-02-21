@@ -356,14 +356,19 @@ export function HelpChatPanel() {
 
   return (
     <div
-      className={`fixed bottom-24 right-6 z-50 flex h-[480px] w-[360px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-900 max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:h-[70vh] max-md:w-full max-md:rounded-b-none ${
+      className={`fixed bottom-[5.5rem] right-6 z-50 flex h-[480px] w-[360px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-900 max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:top-0 max-md:h-full max-md:w-full max-md:rounded-none max-md:border-0 sm:max-md:top-auto sm:max-md:h-[85vh] sm:max-md:rounded-t-2xl ${
         isOpen
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
           : "pointer-events-none translate-y-4 scale-95 opacity-0"
       }`}
     >
+      {/* Mobile drag handle */}
+      <div className="hidden max-md:flex justify-center pt-2 pb-0 sm:max-md:block">
+        <div className="mx-auto h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-600" />
+      </div>
+
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 max-md:bg-transparent max-md:border-b max-md:py-2.5 dark:border-slate-700 dark:bg-slate-800 max-md:dark:bg-transparent">
         <Bot className="h-5 w-5 text-primary" />
         <div className="flex-1">
           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -395,10 +400,10 @@ export function HelpChatPanel() {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setIsOpen(false)}
-                className="group relative flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-all hover:bg-slate-200 hover:text-slate-700 hover:scale-110 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                className="group relative flex h-7 w-7 max-md:h-9 max-md:w-9 items-center justify-center rounded-md max-md:rounded-full text-slate-500 transition-all hover:bg-slate-200 hover:text-slate-700 hover:scale-110 active:scale-95 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200 max-md:bg-slate-100 max-md:dark:bg-slate-800"
                 aria-label="Cerrar asistente"
               >
-                <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
+                <X className="h-4 w-4 max-md:h-5 max-md:w-5 transition-transform group-hover:rotate-90" />
               </button>
             </TooltipTrigger>
             <TooltipContent
@@ -510,7 +515,7 @@ export function HelpChatPanel() {
       <Separator />
 
       {/* Input area */}
-      <div className="flex items-end gap-2 px-3 py-2">
+      <div className="flex items-end gap-2 px-3 py-2 max-md:px-4 max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <textarea
           ref={inputRef}
           value={input}
@@ -518,11 +523,11 @@ export function HelpChatPanel() {
           onKeyDown={handleKeyDown}
           placeholder="Escribe tu pregunta..."
           rows={1}
-          className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-200 bg-transparent px-3 py-2 text-xs outline-none placeholder:text-slate-400 focus:border-primary dark:border-slate-700"
+          className="max-h-20 min-h-[36px] flex-1 resize-none rounded-md border border-slate-200 bg-transparent px-3 py-2 text-xs outline-none placeholder:text-slate-400 focus:border-primary max-md:min-h-[40px] max-md:text-sm dark:border-slate-700"
         />
         <Button
           size="icon"
-          className="h-9 w-9 shrink-0"
+          className="h-9 w-9 shrink-0 max-md:h-10 max-md:w-10"
           disabled={!input.trim() || mascotState === "thinking"}
           onClick={() => void handleSend()}
         >

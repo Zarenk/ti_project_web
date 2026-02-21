@@ -611,6 +611,17 @@
   40%, 100% { opacity: 1; }
 }
 
+@keyframes guide-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.82); }
+}
+
+@keyframes guide-ring {
+  0% { box-shadow: 0 0 0 0 rgba(var(--guide-ring-rgb, 99 102 241) / 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(var(--guide-ring-rgb, 99 102 241) / 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--guide-ring-rgb, 99 102 241) / 0); }
+}
+
 @layer utilities {
   .animate-fade-in { animation: fade-in 0.6s ease-out both; }
   .animate-fade-in-up { animation: fade-in-up 0.75s ease-out both; }
@@ -618,6 +629,10 @@
   .animate-dot { animation: dot-blink 1.4s infinite; }
   .animate-dot-2 { animation: dot-blink 1.4s infinite 0.2s; }
   .animate-dot-3 { animation: dot-blink 1.4s infinite 0.4s; }
+  .animate-guide-breathe {
+    animation: guide-breathe 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+               guide-ring 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
 }
 
 /* Sales dashboard scoped tokens */

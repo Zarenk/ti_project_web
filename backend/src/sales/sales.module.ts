@@ -8,6 +8,9 @@ import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { SunatModule } from 'src/sunat/sunat.module';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { ProfitAnalysisService } from './services/profit-analysis.service';
+import { PredictiveAlgorithmService } from './services/predictive-algorithm.service';
+import { InvestmentRecommendationService } from './services/investment-recommendation.service';
 
 @Module({
   imports: [InventoryModule, ActivityModule, SunatModule, TenancyModule],
@@ -17,6 +20,9 @@ import { TenancyModule } from 'src/tenancy/tenancy.module';
     PrismaService,
     AccountingHook,
     SubscriptionQuotaService,
+    ProfitAnalysisService,
+    PredictiveAlgorithmService,
+    InvestmentRecommendationService,
   ],
 })
 export class SalesModule {}

@@ -137,17 +137,46 @@ export async function updateOrderSeries(
   return res.json();
 }
 
-export async function getRestaurantOrders(params: { status?: string } = {}) {
+export type RestaurantOrdersParams = {
+  status?: string
+  page?: number
+  take?: number
+  from?: string
+  to?: string
+}
+
+export type PaginatedRestaurantOrders = {
+  data: Array<{
+    id: number
+    status: string
+    orderType: string
+    openedAt?: string
+    total?: number | null
+    table?: { name?: string | null } | null
+    items?: Array<{ product?: { name?: string | null } | null; quantity?: number | null }>
+  }>
+  total: number
+  page: number
+  totalPages: number
+}
+
+export async function getRestaurantOrders(
+  params: RestaurantOrdersParams = {},
+): Promise<PaginatedRestaurantOrders> {
   try {
     const qs = new URLSearchParams()
     if (params.status) qs.append("status", params.status)
+    if (params.page) qs.append("page", String(params.page))
+    if (params.take) qs.append("take", String(params.take))
+    if (params.from) qs.append("from", params.from)
+    if (params.to) qs.append("to", params.to)
     const query = qs.toString()
     const res = await authFetch(`/restaurant-orders${query ? `?${query}` : ""}`, {
       credentials: "include",
     })
 
     if (res.status === 403) {
-      return []
+      return { data: [], total: 0, page: 1, totalPages: 0 }
     }
 
     if (!res.ok) {
@@ -163,7 +192,7 @@ export async function getRestaurantOrders(params: { status?: string } = {}) {
     return res.json()
   } catch (error) {
     if (error instanceof UnauthenticatedError) {
-      return []
+      return { data: [], total: 0, page: 1, totalPages: 0 }
     }
     throw error
   }

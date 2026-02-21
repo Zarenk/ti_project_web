@@ -17,7 +17,7 @@ import {
   ChevronUp,
   ChevronDown
 } from "lucide-react"
-import SimplePagination from "@/components/simple-pagination"
+import { ManualPagination } from "@/components/data-table-pagination"
 import { SaleDetailModal } from "./components/SalesDetailModal"
 import { getRecentSalesByRange } from "../sales.api"
 import { DateRange } from "react-day-picker"
@@ -96,13 +96,9 @@ export function SalesTable({ dateRange }: Props) {
   }
 
   return (
-    <div className="rounded-xl border bg-card shadow-md overflow-hidden">
-      <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold">Últimas Ventas</h2>
-        <p className="text-sm text-muted-foreground">Ventas más recientes registradas</p>
-      </div>
-      <div className="w-full overflow-x-auto">
-        <Table className="w-full text-sm">
+    <div className="w-full min-w-0 overflow-hidden">
+      <div className="w-full overflow-x-auto min-w-0">
+        <Table className="w-full text-sm min-w-0">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[70px]">ID</TableHead>
@@ -150,17 +146,17 @@ export function SalesTable({ dateRange }: Props) {
                     minute: "2-digit",
                   })}
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <div className="flex flex-wrap gap-1 max-w-full">
+                <TableCell className="hidden md:table-cell min-w-0">
+                  <div className="flex flex-wrap gap-1 w-full min-w-0">
                     {sale.products.map((p: any, i: number) => (
                       <Badge
                         key={i}
-                        className="flex flex-col items-start gap-0 text-xs font-normal max-w-[160px] whitespace-normal"
+                        className="flex flex-col items-start gap-0 text-xs font-normal min-w-0 max-w-full"
                         variant="secondary"
                       >
-                        <span className="truncate w-full">{p.name} - {p.quantity}</span>
+                        <span className="break-words w-full">{p.name} - {p.quantity}</span>
                         {Array.isArray(p.series) && p.series.length > 0 && (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-[10px] text-muted-foreground break-words w-full">
                             Serie{p.series.length > 1 ? "s" : ""}: {p.series.join(", ")}
                           </span>
                         )}
@@ -175,12 +171,14 @@ export function SalesTable({ dateRange }: Props) {
       </div>
 
         <div className="py-2">
-          <SimplePagination
-            page={page}
+          <ManualPagination
+            currentPage={page}
+            totalPages={Math.ceil(sortedSales.length / pageSize) || 1}
             pageSize={pageSize}
             totalItems={sortedSales.length}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
+            pageSizeOptions={[5, 10, 20, 30]}
           />
         </div>
 

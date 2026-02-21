@@ -23,6 +23,7 @@ const BUSINESS_VERTICALS = [
   'RETAIL',
   'SERVICES',
   'MANUFACTURING',
+  'LAW_FIRM',
 ] as const;
 
 export class CompanyInputDto {

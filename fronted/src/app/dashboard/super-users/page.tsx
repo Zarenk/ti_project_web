@@ -22,6 +22,8 @@ import { createManagedUser } from "./super-users.api"
 import { listOrganizations, type OrganizationResponse } from "../tenancy/tenancy.api"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { useAuth } from "@/context/auth-context"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SUPER_USERS_GUIDE_STEPS } from "./super-users-guide-steps"
 
 const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Administrador" },
@@ -206,9 +208,12 @@ export default function SuperUsersAdminPage() {
     <div className="container mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-10">
       <Card className="border-slate-200/70 bg-slate-50/40 shadow-sm dark:border-slate-800/80 dark:bg-slate-900/60">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            Crear usuario privilegiado
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Crear usuario privilegiado
+            </CardTitle>
+            <PageGuideButton steps={SUPER_USERS_GUIDE_STEPS} tooltipLabel="Guía de usuarios privilegiados" />
+          </div>
         </CardHeader>
         <CardContent className="space-y-6 text-sm text-slate-600 dark:text-slate-300">
           <p>

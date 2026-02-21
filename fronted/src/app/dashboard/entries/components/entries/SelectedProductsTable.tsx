@@ -208,9 +208,10 @@ export const SelectedProductsTable = ({
   }
 
   return (
-    <div ref={tableContainerRef} className='border px-1 sm:px-2 overflow-x-auto max-w-full'>
-      <Table className={cn("w-full min-w-[340px] sm:min-w-[640px] text-[11px] sm:text-xs table-auto")}>
-        <TableHeader>
+    <div className="w-full overflow-x-auto border rounded-md">
+      <div ref={tableContainerRef} className='px-1 sm:px-2'>
+        <Table className={cn("w-full text-[11px] sm:text-xs")}>
+          <TableHeader>
           <TableRow>
             {/* Nombre: Compacto, pero siempre visible. Con truncate es clave. */}
             <TableHead className="relative text-left truncate py-1.5 sm:py-2" style={nameColumnWidthStyle}>
@@ -243,8 +244,8 @@ export const SelectedProductsTable = ({
                 {renderSortIcon("category_name")}
               </button>
             </TableHead>
-            {/* Cantidad: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
-            <TableHead className="text-left w-[70px] py-1.5 sm:py-2">
+            {/* Cantidad: visible siempre, más compacto en móvil */}
+            <TableHead className="text-left w-[55px] sm:w-[70px] py-1.5 sm:py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("quantity")}
@@ -254,8 +255,8 @@ export const SelectedProductsTable = ({
                 {renderSortIcon("quantity")}
               </button>
             </TableHead>
-            {/* Precio Compra: AMPLIFICADO, visible siempre. Ancho un poco más generoso. */}
-            <TableHead className="text-left w-[85px] py-1.5 sm:py-2">
+            {/* Precio Compra: visible siempre, más compacto en móvil */}
+            <TableHead className="text-left w-[70px] sm:w-[85px] py-1.5 sm:py-2">
               <button
                 type="button"
                 onClick={() => sortProducts("price")}
@@ -298,8 +299,8 @@ export const SelectedProductsTable = ({
                 {renderSortIcon("series")}
               </button>
             </TableHead>
-            {/* Acciones: Ancho fijo y mínimo */}
-            <TableHead className="text-left w-[36px] py-1.5 sm:py-2">Acc.</TableHead>
+            {/* Acciones: Ancho mínimo */}
+            <TableHead className="text-left w-[32px] sm:w-[36px] py-1.5 sm:py-2">Acc.</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -399,7 +400,7 @@ export const SelectedProductsTable = ({
                   </PopoverContent>
                 </Popover>
               </TableCell>
-              <TableCell className={cn("w-[64px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
+              <TableCell className={cn("w-[55px] sm:w-[64px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
                 <Input
                   type="number"
                   value={product.quantity}
@@ -414,11 +415,11 @@ export const SelectedProductsTable = ({
                       )
                     }
                   }}
-                  className="w-full h-8 sm:h-9 text-[11px] sm:text-xs"
+                  className="w-full h-7 sm:h-9 text-[10px] sm:text-xs px-1 sm:px-3"
                   title="Cantidad de unidades para este producto"
                 />
               </TableCell>
-              <TableCell className={cn("w-[85px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
+              <TableCell className={cn("w-[70px] sm:w-[85px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
                 <Input
                   type="number"
                   value={product.price}
@@ -434,7 +435,7 @@ export const SelectedProductsTable = ({
                       )
                     }
                   }}
-                  className="w-full h-8 sm:h-9 text-[11px] sm:text-xs"
+                  className="w-full h-7 sm:h-9 text-[10px] sm:text-xs px-1 sm:px-3"
                   title="Precio de compra unitario editable"
                 />
               </TableCell>
@@ -498,17 +499,17 @@ export const SelectedProductsTable = ({
                   getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                 />
               )}
-              <TableCell className={cn("w-[32px] truncate overflow-hidden whitespace-nowrap py-1.5 sm:py-2")}>
+              <TableCell className={cn("w-[32px] sm:w-[36px] truncate overflow-hidden whitespace-nowrap py-1.5 sm:py-2")}>
                 <Button
                   variant="outline"
                   onClick={(e) => {
-                    e.stopPropagation(); // 👈 Evita que el click llegue al TableRow
+                    e.stopPropagation();
                     removeProduct(product.id);
                   }}
                   title="Elimina este producto del ingreso"
-                  className="h-8 sm:h-9 px-1"
+                  className="h-7 sm:h-9 w-7 sm:w-9 p-0 sm:px-1"
                 >
-                  <X className="w-4 h-4" color="red" />
+                  <X className="w-3 h-3 sm:w-4 sm:h-4" color="red" />
                 </Button>
               </TableCell>
             </TableRow>
@@ -537,6 +538,7 @@ export const SelectedProductsTable = ({
           setActiveProductIndex(null)
         }}
       />
+      </div>
     </div>
   )
 }

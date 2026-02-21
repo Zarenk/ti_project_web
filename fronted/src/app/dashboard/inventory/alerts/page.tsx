@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { ALERTS_GUIDE_STEPS } from "./alerts-guide-steps";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import {
   getInventoryAlerts,
@@ -100,7 +102,10 @@ export default function InventoryAlertsPage() {
       <div className="container mx-auto px-3 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold sm:text-3xl">Alertas de inventario</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold sm:text-3xl">Alertas de inventario</h1>
+              <PageGuideButton steps={ALERTS_GUIDE_STEPS} tooltipLabel="Guía de alertas" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Revisa metricas de extraccion y plantillas que necesitan atencion.
             </p>

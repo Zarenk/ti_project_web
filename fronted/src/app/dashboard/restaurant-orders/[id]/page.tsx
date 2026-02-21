@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
+import { useKitchenSocket } from "@/hooks/use-kitchen-socket";
 import {
   getRestaurantOrder,
   updateRestaurantOrder,
@@ -89,9 +90,9 @@ const TYPE_LABELS: Record<RestaurantOrderType, string> = {
 };
 
 const FLOW_ACTIONS: Record<RestaurantOrderStatus, RestaurantOrderStatus[]> = {
-  OPEN: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["READY", "CANCELLED"],
-  READY: ["SERVED", "CANCELLED"],
+  OPEN: ["CANCELLED"],
+  IN_PROGRESS: [],
+  READY: [],
   SERVED: ["CLOSED"],
   CLOSED: [],
   CANCELLED: [],
@@ -158,27 +159,36 @@ export default function RestaurantOrderDetailPage() {
     return Number.isNaN(parsed.getTime()) ? "Sin fecha" : parsed.toLocaleString();
   };
 
-  useEffect(() => {
+  const loadOrder = useCallback(async () => {
     if (!isRestaurant || !id) return;
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await getRestaurantOrder(id as string);
-        if (cancelled) return;
-        setOrder(data as RestaurantOrder);
-        setNotesDraft(data?.notes ?? "");
-      } catch (err: any) {
-        toast.error(err?.message ?? "No se pudo cargar la orden.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, isRestaurant]);
+    setLoading(true);
+    try {
+      const data = await getRestaurantOrder(id as string);
+      setOrder(data as RestaurantOrder);
+      setNotesDraft(data?.notes ?? "");
+    } catch (err: any) {
+      toast.error(err?.message ?? "No se pudo cargar la orden.");
+    } finally {
+      setLoading(false);
+    }
+  }, [isRestaurant, id]);
+
+  useEffect(() => {
+    loadOrder();
+  }, [loadOrder]);
+
+  // Real-time updates from kitchen
+  useKitchenSocket({
+    enabled: isRestaurant,
+    onOrderUpdate: useCallback(
+      (payload: { orderId: number; status: string; action: string }) => {
+        if (payload.orderId === Number(id)) {
+          void loadOrder();
+        }
+      },
+      [loadOrder, id],
+    ),
+  });
 
   const subtotal = useMemo(() => {
     if (!order) return 0;

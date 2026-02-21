@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ProviderForm from './provider-form'
 import { getProvider } from '../providers.api'
+import { ProviderFormGuideButton } from './provider-form-guide-button'
 
 interface Props {
 
@@ -29,8 +30,9 @@ export default async function ProviderNewPage({params}: Props) {
                 {/* Renderizado del componente: Usamos resolvedParams.id para determinar si 
                 stamos creando un producto nuevo o actualizando uno existente. 
                 Esto se refleja en el título del formulario:*/}
-                <CardTitle className="text-center text-xl font-bold pt-5">
-                    {resolvedParams.id ? 'Actualizar Proveedor' : 'Crear Provedor'}
+                <CardTitle className="flex items-center justify-center gap-2 text-xl font-bold pt-5">
+                    {resolvedParams.id ? 'Actualizar Proveedor' : 'Crear Proveedor'}
+                    <ProviderFormGuideButton />
                 </CardTitle>
             </CardHeader>
             <CardContent>

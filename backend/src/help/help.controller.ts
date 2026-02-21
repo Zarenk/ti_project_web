@@ -127,6 +127,15 @@ export class HelpController {
     return this.helpService.getAnalytics();
   }
 
+  @Get('admin/performance')
+  @UseGuards(JwtAuthGuard)
+  async getPerformance(@Query('days') days: string, @Req() req: any) {
+    this.ensureSuperAdmin(req);
+    return this.helpService.getPerformanceMetrics(
+      Math.min(Number(days) || 7, 90),
+    );
+  }
+
   @Patch('admin/candidates/:id')
   @UseGuards(JwtAuthGuard)
   async reviewCandidate(

@@ -203,6 +203,34 @@ export class HelpService {
 
   /** Main ask method — persists messages and uses conversation context */
   async ask(params: AskParams): Promise<AskResult> {
+    const startTime = Date.now();
+    const result = await this.askInternal(params);
+    const durationMs = Date.now() - startTime;
+
+    // Log performance asynchronously (non-blocking)
+    this.prisma.helpPerformanceLog
+      .create({
+        data: {
+          durationMs,
+          source: result.source,
+          section: params.section || null,
+          similarity: null,
+          userId: params.userId,
+        },
+      })
+      .catch((err) =>
+        this.logger.warn(`Failed to log performance: ${err.message}`),
+      );
+
+    this.logger.debug(
+      `Help ask: "${params.question.substring(0, 50)}" → ${result.source} in ${durationMs}ms`,
+    );
+
+    return result;
+  }
+
+  /** Internal ask logic */
+  private async askInternal(params: AskParams): Promise<AskResult> {
     const conversation = await this.getOrCreateConversation(params.userId);
 
     // 🚀 OPTIMIZACIÓN: Batch DB writes - crear mensaje + update conversación en una transacción
@@ -1076,4 +1104,90 @@ Reglas:
   }
 
   // ========== END ADAPTIVE LEARNING METHODS ==========
+
+  // ========== PERFORMANCE METRICS ==========
+
+  async getPerformanceMetrics(days = 7) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const logs = await this.prisma.helpPerformanceLog.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        durationMs: true,
+        source: true,
+        section: true,
+        createdAt: true,
+      },
+    });
+
+    if (logs.length === 0) {
+      return {
+        total: 0,
+        p50: 0,
+        p95: 0,
+        p99: 0,
+        avgMs: 0,
+        dailyStats: [],
+        bySource: [],
+      };
+    }
+
+    // Calculate percentiles
+    const durations = logs.map((l) => l.durationMs).sort((a, b) => a - b);
+    const p50 = durations[Math.floor(durations.length * 0.5)] ?? 0;
+    const p95 = durations[Math.floor(durations.length * 0.95)] ?? 0;
+    const p99 = durations[Math.floor(durations.length * 0.99)] ?? 0;
+    const avgMs = Math.round(
+      durations.reduce((sum, d) => sum + d, 0) / durations.length,
+    );
+
+    // Group by day for chart
+    const dailyMap = new Map<
+      string,
+      { durations: number[]; count: number }
+    >();
+    for (const log of logs) {
+      const day = log.createdAt.toISOString().split('T')[0];
+      const entry = dailyMap.get(day) || { durations: [], count: 0 };
+      entry.durations.push(log.durationMs);
+      entry.count++;
+      dailyMap.set(day, entry);
+    }
+
+    const dailyStats = Array.from(dailyMap.entries()).map(([date, data]) => {
+      const sorted = data.durations.sort((a, b) => a - b);
+      return {
+        date,
+        count: data.count,
+        avgMs: Math.round(
+          sorted.reduce((s, d) => s + d, 0) / sorted.length,
+        ),
+        p50: sorted[Math.floor(sorted.length * 0.5)] ?? 0,
+        p95: sorted[Math.floor(sorted.length * 0.95)] ?? 0,
+      };
+    });
+
+    // Distribution by source
+    const sourceMap = new Map<
+      string,
+      { count: number; totalMs: number }
+    >();
+    for (const log of logs) {
+      const src = log.source || 'unknown';
+      const entry = sourceMap.get(src) || { count: 0, totalMs: 0 };
+      entry.count++;
+      entry.totalMs += log.durationMs;
+      sourceMap.set(src, entry);
+    }
+
+    const bySource = Array.from(sourceMap.entries()).map(([source, data]) => ({
+      source,
+      count: data.count,
+      avgMs: Math.round(data.totalMs / data.count),
+      percentage: Math.round((data.count / logs.length) * 100),
+    }));
+
+    return { total: logs.length, p50, p95, p99, avgMs, dailyStats, bySource };
+  }
 }

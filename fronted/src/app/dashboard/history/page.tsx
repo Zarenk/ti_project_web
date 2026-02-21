@@ -13,6 +13,8 @@ import { es } from "date-fns/locale";
 import { jwtDecode } from "jwt-decode";
 import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { HISTORY_GUIDE_STEPS } from "./history-guide-steps";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1174,7 +1176,10 @@ export default function UserHistory(): React.ReactElement {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-xl">Resumen del usuario</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-xl">Resumen del usuario</CardTitle>
+            <PageGuideButton steps={HISTORY_GUIDE_STEPS} tooltipLabel="Guía del historial" />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4 hidden md:block">{userFilters}</div>

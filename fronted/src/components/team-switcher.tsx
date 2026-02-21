@@ -77,6 +77,15 @@ function normalizeOrganizations(orgs: OrganizationResponse[]): ExtendedOrganizat
   }))
 }
 
+/** Read a numeric cookie value synchronously to prevent wrong-org flash on mount */
+function readCookieNumber(name: string): number | null {
+  if (typeof document === "undefined") return null
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`))
+  if (!match?.[1]) return null
+  const val = Number(decodeURIComponent(match[1]))
+  return Number.isFinite(val) ? val : null
+}
+
 export function TeamSwitcher(): React.ReactElement | null {
   const { isMobile } = useSidebar()
   const { role, isPublicSignup, userId } = useAuth()
@@ -122,8 +131,12 @@ export function TeamSwitcher(): React.ReactElement | null {
 
   const [organizations, setOrganizations] = useState<ExtendedOrganization[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeOrgId, setActiveOrgId] = useState<number | null>(null)
-  const [activeCompanyId, setActiveCompanyId] = useState<number | null>(null)
+  const [activeOrgId, setActiveOrgId] = useState<number | null>(
+    () => selection.orgId ?? readCookieNumber("tenant_org_id"),
+  )
+  const [activeCompanyId, setActiveCompanyId] = useState<number | null>(
+    () => selection.companyId ?? readCookieNumber("tenant_company_id"),
+  )
   const [dialogOpen, setDialogOpen] = useState(false)
   const [companyName, setCompanyName] = useState("")
   const [companyLegalName, setCompanyLegalName] = useState("")
@@ -175,6 +188,18 @@ export function TeamSwitcher(): React.ReactElement | null {
           if (cached) {
             const normalizedCached = normalizeOrganizations(cached)
             setOrganizations(normalizedCached)
+            // Resolve active IDs from selection with cache to prevent wrong-org flash
+            const cachedOrgId =
+              selection.orgId ??
+              normalizedCached.find((org) => org.companies.length > 0)?.id ??
+              normalizedCached[0]?.id ??
+              null
+            const cachedCompanyId =
+              selection.companyId ??
+              normalizedCached.find((org) => org.id === cachedOrgId)?.companies?.[0]?.id ??
+              null
+            setActiveOrgId(cachedOrgId)
+            setActiveCompanyId(cachedCompanyId)
             setLoading(false)
           }
         }

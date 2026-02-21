@@ -29,6 +29,8 @@ import SummaryCard from "./SummaryCard";
 import ClientCombobox from "./ClientCombobox";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useAuth } from "@/context/auth-context";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { ORDER_FORM_GUIDE_STEPS } from "./order-form-guide-steps";
 
 // (Combos de bÃƒÂºsqueda se aislaron en componentes)
 
@@ -904,7 +906,10 @@ export default function NewOrderPage() {
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Restaurante</p>
-              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Nueva orden</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Nueva orden</h1>
+                <PageGuideButton steps={ORDER_FORM_GUIDE_STEPS} tooltipLabel="Guía de la orden" />
+              </div>
               <p className="text-sm text-muted-foreground">
                 Registra una orden de mesa, para llevar o delivery con productos del menu.
               </p>

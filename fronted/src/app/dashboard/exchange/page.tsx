@@ -79,6 +79,8 @@ import {
   getAllTipoCambio,
   getLatestExchangeRateByCurrency,
 } from "./exchange.api"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { EXCHANGE_GUIDE_STEPS } from "./exchange-guide-steps"
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -338,7 +340,10 @@ export default function ExchangeRatePage() {
           <ArrowRightLeft className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Tipo de Cambio</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">Tipo de Cambio</h1>
+            <PageGuideButton steps={EXCHANGE_GUIDE_STEPS} tooltipLabel="Guía de tipo de cambio" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Registra y consulta los tipos de cambio del día
           </p>

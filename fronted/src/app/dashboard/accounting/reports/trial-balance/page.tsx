@@ -23,6 +23,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { TRIAL_BALANCE_GUIDE_STEPS } from "./trial-balance-guide-steps"
 import {
   BookOpen,
   CheckCircle2,
@@ -300,7 +302,10 @@ export default function TrialBalancePage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Balance de Comprobación</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">Balance de Comprobación</h1>
+            <PageGuideButton steps={TRIAL_BALANCE_GUIDE_STEPS} tooltipLabel="Guía del balance" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Sumas y saldos por cuenta contable
           </p>

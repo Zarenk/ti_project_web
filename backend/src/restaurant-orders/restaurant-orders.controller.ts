@@ -46,15 +46,24 @@ export class RestaurantOrdersController {
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('take') take?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     const normalized =
       status && typeof status === 'string'
         ? status.trim().toUpperCase()
         : undefined;
+
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
+    const takeNum = take ? Math.min(100, Math.max(1, parseInt(take, 10) || 20)) : 20;
+
     return this.service.findAll(
       organizationId === undefined ? undefined : organizationId,
       companyId === undefined ? undefined : companyId,
       normalized as any,
+      { page: pageNum, take: takeNum, from, to },
     );
   }
 

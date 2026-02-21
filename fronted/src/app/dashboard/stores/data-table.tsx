@@ -44,13 +44,18 @@ import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { EyeIcon, FileText, PrinterIcon } from "lucide-react"
+import { EyeIcon, FileText, LayoutGrid, List, PrinterIcon, SlidersHorizontal } from "lucide-react"
 
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { DataTableToolbar } from "./data-table-components/data-table-toolbar"
+import { StoresGallery } from "./stores-gallery"
+import { ManualPagination } from "@/components/data-table-pagination"
+
+type ViewMode = "table" | "gallery"
+const VIEW_MODE_KEY = "stores-view-mode"
  
 interface DataTableProps<TData extends {id:string, name:string, 
   description:string, ruc:string, phone: string, adress: string, email: string, website: string
@@ -70,26 +75,60 @@ export function DataTable<TData extends {id:string, name:string,
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
 
+  // View mode: table or gallery
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "table"
+    return (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || "table"
+  })
+  const handleViewChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem(VIEW_MODE_KEY, mode)
+    setGalleryPage(1)
+  }
+
+  // Gallery pagination
+  const [galleryPage, setGalleryPage] = useState(1)
+  const [galleryPageSize, setGalleryPageSize] = useState(12)
+
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
-  
-  // Filtrar los datos según el rango de fechas seleccionado
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filtrar los datos según búsqueda y rango de fechas (aplica a AMBAS vistas)
   const filteredData = useMemo(() => {
-    if (!selectedDateRange?.from || !selectedDateRange?.to) {
-      return data; // Si no hay rango seleccionado, mostrar todos los datos
+    let result = data;
+
+    // Filtro por nombre
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter((item) =>
+        item.name.toLowerCase().includes(query)
+      );
     }
 
-    const from = new Date(selectedDateRange.from);
-    const to = new Date(selectedDateRange.to);
+    // Filtro por rango de fechas
+    if (selectedDateRange?.from && selectedDateRange?.to) {
+      const from = new Date(selectedDateRange.from);
+      const to = new Date(selectedDateRange.to);
+      result = result.filter((item) => {
+        const itemDate = new Date(item.createdAt);
+        return itemDate >= from && itemDate <= to;
+      });
+    }
 
-    return data.filter((item) => {
-      const itemDate = new Date(item.createdAt); // Asegúrate de que `item.date` sea una fecha válida
-      return itemDate >= from && itemDate <= to;
-    });
-  }, [data, selectedDateRange]);
-  
+    return result;
+  }, [data, searchQuery, selectedDateRange]);
+
   const handleDateSelect = (range: DateRange | undefined) => {
       setSelectedDateRange(range);
+      setGalleryPage(1);
   };
+
+  // Gallery paginated data
+  const galleryTotalPages = Math.ceil(filteredData.length / galleryPageSize) || 1
+  const galleryPaginatedData = useMemo(() => {
+    const start = (galleryPage - 1) * galleryPageSize
+    return filteredData.slice(start, start + galleryPageSize)
+  }, [filteredData, galleryPage, galleryPageSize])
   //
 
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -200,22 +239,19 @@ export function DataTable<TData extends {id:string, name:string,
   // FILTRO RESET
 
     const handleResetDateRange = () => {
-
-      // Restablecer el filtro de búsqueda
-      table.getColumn("name")?.setFilterValue(""); // Limpia el filtro de la columna "name"
-  
-      setSelectedDateRange(undefined); // Restablece el rango de fechas
-  
-      // Restablecer los filtros de la tabla
+      setSearchQuery("");
+      table.getColumn("name")?.setFilterValue("");
+      setSelectedDateRange(undefined);
       table.resetColumnFilters();
       table.resetRowSelection();
+      setGalleryPage(1);
     };
-  
+
      // Verificar si hay filtros activos
      const isFiltered =
-     !!table.getColumn("name")?.getFilterValue() || // Filtro de búsqueda
-     !!selectedDateRange || // Rango de fechas
-     table.getState().columnFilters.length > 0; // Filtros de columnas
+     !!searchQuery.trim() ||
+     !!selectedDateRange ||
+     table.getState().columnFilters.length > 0;
   
   //
 
@@ -422,83 +458,119 @@ export function DataTable<TData extends {id:string, name:string,
 
   return (
     <div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py4- px-4 gap-4 mb-6">
-            <Input
-              placeholder="Filtrar por nombre de tienda..."
-              value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-              onChange={(event) =>
-                table.getColumn("name")?.setFilterValue(event.target.value)
-              }
-              className="w-full sm:w-1/3 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {/* Selector de Rango de Fechas con CalendarDatePicker */}
-            <div className="px-0 sm:px-2">
-              <CalendarDatePicker 
-              className="h-9 w-[300px]"
-              variant="outline"
-              date={selectedDateRange || { from: undefined, to: undefined }} 
-              onDateSelect={handleDateSelect} />
+          {/* ── Filters toolbar ─────────────────────────── */}
+          <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 mb-4">
+            {/* Search — full width on mobile */}
+            <div className="w-full sm:w-auto sm:min-w-[220px] sm:flex-1 sm:max-w-xs">
+              <Input
+                placeholder="Filtrar por nombre de tienda..."
+                value={searchQuery}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSearchQuery(value);
+                  table.getColumn("name")?.setFilterValue(value);
+                  setGalleryPage(1);
+                }}
+                className="h-9 w-full"
+              />
             </div>
-            <div className="px-0 sm:px-2">
-              <DataTableToolbar table={table} />
-            </div>
-            {/* Botón Reset: Solo aparece si hay filtros activos */}
-            {(totalSelectedRows > 0 || isFiltered) && (
-            <div className="px-0 sm:px-2 self-start sm:self-auto">
-              <Button
+
+            {/* Date range + view toggle — same row on mobile */}
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <div className="min-w-0 flex-1 sm:flex-none">
+                <CalendarDatePicker
+                  className="h-9 w-full sm:w-[300px]"
+                  variant="outline"
+                  date={selectedDateRange || { from: undefined, to: undefined }}
+                  onDateSelect={handleDateSelect}
+                />
+              </div>
+
+              {/* View toggle */}
+              <div className="flex shrink-0 rounded-lg border p-0.5">
+                <Button
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleViewChange("table")}
+                  title="Vista de tabla"
+                >
+                  <List className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={viewMode === "gallery" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleViewChange("gallery")}
+                  title="Vista de galería"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Column visibility: icon-only on mobile */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 sm:hidden" title="Columnas visibles">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" sideOffset={4} className="w-48">
+                  <div className="px-4 py-2 text-sm font-medium border-b text-center">Columnas</div>
+                  {table.getAllColumns().filter((column) => column.getCanHide() && column.id !== "actions").map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                    >
+                      {columnLabels[column.id] || column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {(totalSelectedRows > 0 || isFiltered) && (
+                <Button
                   variant="ghost"
                   onClick={handleResetDateRange}
-                  className="h-8 px-2 lg:px-3"
-              >
-                Reset
-              <Cross2Icon className="ml-2 h-4 w-4" />
-              </Button>
-            </div>              
-            )}
-          
-          <div className="sm:mt-0 sm:ml-auto">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="ml-auto">
-                  Vistas
+                  className="h-9 shrink-0 px-2"
+                >
+                  <Cross2Icon className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Reset</span>
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-              align="start" // Alinea el menú al final del botón
-              side="bottom" // Posiciona el menú debajo del botón
-              sideOffset={4} // Agrega un pequeño espacio entre el botón y el menú
-              className="w-48 sm:w-48 sm:align-end" // Cambia el comportamiento en pantallas medianas y grandes      
-              >
-              {/* Título encima de las opciones */}
-              <div className="px-4 py-2 text-sm font-medium border-b text-center">
-                Opciones
-              </div>
-                {table
-                  .getAllColumns()
-                  .filter(
-                    (column) => column.getCanHide() && column.id !== "actions" // Excluye la columna "actions"
-                  )
-                  .map((column) => {
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        className="capitalize"
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) =>
-                          column.toggleVisibility(!!value)
-                        }
-                      >
-                        {/* Usa el mapa de traducción para mostrar nombres amigables */}
-                        {columnLabels[column.id] || column.id}
-                      </DropdownMenuCheckboxItem>
-                    )
-                  })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+            </div>
+
+            <DataTableToolbar table={table} />
+
+            {/* Vistas: text button on desktop only */}
+            <div className="hidden sm:flex sm:ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="h-9 gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Vistas
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" sideOffset={4} className="w-48">
+                  <div className="px-4 py-2 text-sm font-medium border-b text-center">Columnas</div>
+                  {table.getAllColumns().filter((column) => column.getCanHide() && column.id !== "actions").map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                    >
+                      {columnLabels[column.id] || column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </div>
       {/* Aquí agregamos el contador de datos */}
-      <div className="py-2 px-4 flex flex-col sm:flex-row items-start sm:items-center space-x-4">
+      <div className="py-2 px-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <label className="text-sm text-gray-600">
             Total de datos: {table.getRowModel().rows.length}
           </label>
@@ -675,158 +747,158 @@ export function DataTable<TData extends {id:string, name:string,
 
       </div>
 
-      <div className="rounded-md border px-2 lg:px-2 py-2 lg:py-2 xl:max-w-[1450px] lg:max-w-[1000px] md:max-w-[850px] sm:max-w-[700px] mx-auto">
-        {/* Contenedor del DataTable con scroll horizontal */}
-        <div className="overflow-x-auto rounded-md border">
-        <Table className="table-auto w-full min-w-[600px]">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead 
-                      key={header.id}
-                      className="text-left text-xs md:text-sm lg:text-base font-medium"
-                      style={{
-                        minWidth: header.id === "name" ? "150px" : header.id === "createdAt" ? "120px" : "auto",
-                        maxWidth: header.id === "description" ? "300px" : "auto",
-                      }}
-                      >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className="hover:border-gray-800"
-                  onDoubleClick={() => handleRowDoubleClick(row.original)} // Evento de doble clic
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell 
-                    key={cell.id} className="text-xs md:text-sm lg:text-base"
-                    style={{
-                      minWidth: cell.column.id === "name" ? "150px" : cell.column.id === "createdAt" ? "120px" : "auto",
-                      maxWidth: cell.column.id === "description" ? "300px" : "auto",
-                    }}
+      {viewMode === "table" ? (
+        <>
+          <div className="rounded-md border px-2 lg:px-2 py-2 lg:py-2 xl:max-w-[1450px] lg:max-w-[1000px] md:max-w-[850px] sm:max-w-[700px] mx-auto">
+            <div className="overflow-x-auto rounded-md border">
+            <Table className="table-auto w-full min-w-[600px]">
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => {
+                      return (
+                        <TableHead
+                          key={header.id}
+                          className="text-left text-xs md:text-sm lg:text-base font-medium"
+                          style={{
+                            minWidth: header.id === "name" ? "150px" : header.id === "createdAt" ? "120px" : "auto",
+                            maxWidth: header.id === "description" ? "300px" : "auto",
+                          }}
+                          >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      )
+                    })}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && "selected"}
+                      className="hover:border-gray-800"
+                      onDoubleClick={() => handleRowDoubleClick(row.original)}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell
+                        key={cell.id} className="text-xs md:text-sm lg:text-base"
+                        style={{
+                          minWidth: cell.column.id === "name" ? "150px" : cell.column.id === "createdAt" ? "120px" : "auto",
+                          maxWidth: cell.column.id === "description" ? "300px" : "auto",
+                        }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-24 text-center text-sm">
+                      No hay Datos.
                     </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-sm">
-                  No hay Datos.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
 
-        {/* Modal para mostrar detalles */}
-        {isModalOpen && selectedRowData && (
-            <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Detalles de la tienda</AlertDialogTitle>
-                </AlertDialogHeader>
-                <AlertDialogDescription>                
-                </AlertDialogDescription>
-                <span className="block space-y-2">
-                    <div><strong>Nombre:</strong> {selectedRowData.name}</div>
-                    <div><strong>Descripción / Razon S. :</strong> {selectedRowData.description}</div>
-                    <div><strong>Ruc:</strong> {selectedRowData.ruc}</div>
-                    <div><strong>Telefono:</strong> S/. {selectedRowData.phone}</div>
-                    <div><strong>Direccion:</strong> S/. {selectedRowData.adress}</div>
-                    <div><strong>Email:</strong> {selectedRowData.email}</div>
-                    <div><strong>Pagina Web:</strong> {selectedRowData.website}</div>
-                    <div><strong>Estado:</strong> {selectedRowData.status}</div>
-                    <div><strong>Fecha:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
-                </span>
-                <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+            {/* Modal para mostrar detalles */}
+            {isModalOpen && selectedRowData && (
+                <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Detalles de la tienda</AlertDialogTitle>
+                    </AlertDialogHeader>
+                    <AlertDialogDescription>
+                    </AlertDialogDescription>
+                    <span className="block space-y-2">
+                        <div><strong>Nombre:</strong> {selectedRowData.name}</div>
+                        <div><strong>Descripción / Razón S.:</strong> {selectedRowData.description}</div>
+                        <div><strong>RUC:</strong> {selectedRowData.ruc}</div>
+                        <div><strong>Teléfono:</strong> {selectedRowData.phone}</div>
+                        <div><strong>Dirección:</strong> {selectedRowData.adress}</div>
+                        <div><strong>Email:</strong> {selectedRowData.email}</div>
+                        <div><strong>Página Web:</strong> {selectedRowData.website}</div>
+                        <div><strong>Estado:</strong> {selectedRowData.status}</div>
+                        <div><strong>Fecha:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
+                    </span>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
 
-          {isViewModalOpen && (
-            <AlertDialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-              <AlertDialogContent className="max-h-[80vh] overflow-y-auto">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Visualización Masiva</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Aquí puedes ver los datos seleccionados.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="space-y-6">
-                  {selectedRowsData.length > 0 ? (
-                    selectedRowsData.map((row) => (
-                      <div
-                        key={row.id}
-                        className="p-4 border rounded-md shadow-sm space-y-2"
-                      >
-                        <div>
-                          <strong>Nombre:</strong> {row.name}
-                        </div>
-                        <div>
-                          <strong>Descripción/R.S:</strong> {row.description}
-                        </div>
-                        <div>
-                          <strong>Ruc:</strong> {row.ruc}
-                        </div>
-                        <div>
-                          <strong>Telefono:</strong> {row.phone}
-                        </div>
-                        <div>
-                          <strong>Direccion:</strong> {row.adress}
-                        </div>
-                        <div>
-                          <strong>Email:</strong> {row.email}
-                        </div>
-                        <div>
-                          <strong>Pagina Web:</strong> {row.website}
-                        </div>
-                        <div>
-                          <strong>Estado:</strong> {row.status}
-                        </div>
-                        <div>
-                          <strong>Fecha de Creación:</strong>{" "}
-                          {new Date(row.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p>No hay datos seleccionados.</p>
-                  )}
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setIsViewModalOpen(false)}>
-                    Cerrar
-                  </AlertDialogCancel>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+              {isViewModalOpen && (
+                <AlertDialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+                  <AlertDialogContent className="max-h-[80vh] overflow-y-auto">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Visualización Masiva</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Aquí puedes ver los datos seleccionados.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-6">
+                      {selectedRowsData.length > 0 ? (
+                        selectedRowsData.map((row) => (
+                          <div
+                            key={row.id}
+                            className="p-4 border rounded-md shadow-sm space-y-2"
+                          >
+                            <div><strong>Nombre:</strong> {row.name}</div>
+                            <div><strong>Descripción/R.S:</strong> {row.description}</div>
+                            <div><strong>RUC:</strong> {row.ruc}</div>
+                            <div><strong>Teléfono:</strong> {row.phone}</div>
+                            <div><strong>Dirección:</strong> {row.adress}</div>
+                            <div><strong>Email:</strong> {row.email}</div>
+                            <div><strong>Página Web:</strong> {row.website}</div>
+                            <div><strong>Estado:</strong> {row.status}</div>
+                            <div><strong>Fecha de Creación:</strong>{" "}{new Date(row.createdAt).toLocaleDateString()}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <p>No hay datos seleccionados.</p>
+                      )}
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setIsViewModalOpen(false)}>
+                        Cerrar
+                      </AlertDialogCancel>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          </div>
+
+          <div className="py-4">
+            <DataTablePagination table={table} />
+          </div>
+        </>
+      ) : (
+        /* ── Gallery view ─────────────────────────── */
+        <div className="px-4">
+          <StoresGallery data={galleryPaginatedData as any} />
+          <div className="py-4">
+            <ManualPagination
+              currentPage={galleryPage}
+              totalPages={galleryTotalPages}
+              pageSize={galleryPageSize}
+              totalItems={filteredData.length}
+              onPageChange={setGalleryPage}
+              onPageSizeChange={setGalleryPageSize}
+              pageSizeOptions={[12, 24, 48]}
+            />
+          </div>
         </div>
-      </div>
-
-      <div className="py-4">
-      <DataTablePagination table={table} />
-      </div>
+      )}
       
     </div>
       

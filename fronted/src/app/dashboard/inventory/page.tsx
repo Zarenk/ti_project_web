@@ -3,12 +3,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Filter, Tags, CalendarDays, TrendingUp } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import {
+  Filter,
+  Tags,
+  CalendarDays,
+  TrendingUp,
+  Bell,
+  ArrowRightLeft,
+  MoreHorizontal,
+  BookOpen,
+  Store,
+  PackagePlus,
+} from "lucide-react";
 import type { DateRange } from "react-day-picker";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -24,20 +42,32 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useTenantFeatures } from "@/context/tenant-features-context";
-import { useInventoryColumns } from "./columns"; // Importar las columnas definidas
+import { useInventoryColumns } from "./columns";
 import {
   getAllPurchasePrices,
   getInventoryWithCurrency,
   getInventoryAlertSummary,
+  getCategoriesFromInventory,
+  getAllStores,
   type InventoryAlertSummary,
 } from "./inventory.api";
 import { DataTable } from "./data-table";
 import { CreateTemplateDialog } from "./create-template-dialog";
 import { TablePageSkeleton } from "@/components/table-page-skeleton";
+import OutOfStockDialog from "./data-table-components/OutOfStockDialog";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { INVENTORY_GUIDE_STEPS } from "./inventory-guide-steps";
 
 interface InventoryItem {
   id: number;
@@ -52,7 +82,7 @@ interface InventoryItem {
   stockByCurrency: {
     USD: number;
     PEN: number;
-  }; // Nuevo campo para el desglose por moneda
+  };
   storeOnInventory: {
     id: number;
     stock: number;
@@ -67,6 +97,8 @@ interface InventoryItem {
 
 type SortMode = "created" | "stock";
 type MigrationFilter = "all" | "legacy" | "migrated";
+
+/* ─── Compact FilterControls (desktop: inline row, mobile: inside Sheet) ─── */
 
 interface FilterControlsProps {
   sortMode: SortMode;
@@ -89,94 +121,66 @@ function FilterControls({
   dateRange,
   onDateRangeChange,
 }: FilterControlsProps) {
-  const baseButtonClasses =
-    "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
-
   return (
-    <div className="grid gap-3 lg:grid-cols-12">
-      <div className="rounded-xl border bg-muted/20 p-3 lg:col-span-7">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Ordenar por
-        </span>
-        <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,280px)]">
-          <button
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+      {/* Sort toggle — segmented control */}
+      <div className="flex items-center gap-1.5">
+        <span className="mr-1 hidden text-xs font-medium text-muted-foreground lg:inline">Ordenar:</span>
+        <div className="flex rounded-lg border p-0.5">
+          <Button
             type="button"
-            className={cn(
-              baseButtonClasses,
-              sortMode === "created"
-                ? "border-primary bg-primary/5 text-primary"
-                : "border-border text-foreground"
-            )}
+            variant={sortMode === "created" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-xs"
             onClick={() => onSortChange("created")}
           >
-            <div className="flex size-8 items-center justify-center rounded-full border bg-background">
-              <CalendarDays className="size-4" />
-            </div>
-            <div className="space-y-0.5">
-              <span className="font-medium leading-none">Último ingreso</span>
-              <p className="hidden text-xs text-muted-foreground sm:block">
-                Prioriza los productos agregados recientemente.
-              </p>
-            </div>
-          </button>
-          <button
+            <CalendarDays className="size-3.5" />
+            <span className="hidden sm:inline">Reciente</span>
+          </Button>
+          <Button
             type="button"
-            className={cn(
-              baseButtonClasses,
-              sortMode === "stock"
-                ? "border-primary bg-primary/5 text-primary"
-                : "border-border text-foreground"
-            )}
+            variant={sortMode === "stock" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-xs"
             onClick={() => onSortChange("stock")}
           >
-            <div className="flex size-8 items-center justify-center rounded-full border bg-background">
-              <TrendingUp className="size-4" />
-            </div>
-            <div className="space-y-0.5">
-              <span className="font-medium leading-none">Mayor stock</span>
-              <p className="hidden text-xs text-muted-foreground sm:block">
-                Muestra primero los productos con más unidades.
-              </p>
-            </div>
-          </button>
-          <div className="flex flex-col justify-center rounded-lg border border-dashed border-border/60 bg-background/60 px-3 py-2">
-            <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Rango de fechas
-            </Label>
-            <CalendarDatePicker
-              className="mt-1 h-9 w-full"
-              variant="outline"
-              date={dateRange || { from: undefined, to: undefined }}
-              onDateSelect={onDateRangeChange}
-            />
-          </div>
+            <TrendingUp className="size-3.5" />
+            <span className="hidden sm:inline">Stock</span>
+          </Button>
         </div>
       </div>
-      <div className="rounded-xl border bg-muted/20 p-3 lg:col-span-3">
-        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Estado de migración
+
+      {/* Date range picker */}
+      <CalendarDatePicker
+        className="h-8 w-full text-xs sm:w-[240px]"
+        variant="outline"
+        date={dateRange || { from: undefined, to: undefined }}
+        onDateSelect={onDateRangeChange}
+      />
+
+      {/* Migration status */}
+      <Select value={migrationStatus} onValueChange={onMigrationChange}>
+        <SelectTrigger className="h-8 w-full text-xs sm:w-[140px]">
+          <SelectValue placeholder="Migración" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="legacy">Legacy</SelectItem>
+          <SelectItem value="migrated">Migrados</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* In-stock toggle */}
+      <div className="flex items-center gap-2">
+        <Switch
+          id="in-stock-only"
+          checked={inStockOnly}
+          onCheckedChange={onInStockToggle}
+          className="scale-90"
+        />
+        <Label htmlFor="in-stock-only" className="cursor-pointer text-xs font-medium">
+          Solo en stock
         </Label>
-        <Select value={migrationStatus} onValueChange={onMigrationChange}>
-          <SelectTrigger className="mt-2 w-full">
-            <SelectValue placeholder="Selecciona un estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="legacy">Legacy</SelectItem>
-            <SelectItem value="migrated">Migrados</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3 lg:col-span-2">
-        <div>
-          <Label htmlFor="in-stock-only" className="text-sm font-medium">
-            Solo en stock
-          </Label>
-          <p className="hidden text-xs text-muted-foreground sm:block">
-            Oculta sin unidades.
-          </p>
-        </div>
-        <Switch id="in-stock-only" checked={inStockOnly} onCheckedChange={onInStockToggle} />
       </div>
     </div>
   );
@@ -200,6 +204,48 @@ export default function InventoryPage() {
   const pendingLegacyProducts = migration?.legacy ?? 0;
   const columns = useInventoryColumns({ productSchema });
 
+  // Lifted filter state (shared with DataTable)
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [selectedStore, setSelectedStore] = useState('all');
+  const [storeOptions, setStoreOptions] = useState<{id:number; name:string}[]>([]);
+
+  // OutOfStock dialog
+  const [isOutOfStockDialogOpen, setIsOutOfStockDialogOpen] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const open = searchParams?.get('outOfStock');
+    if (open && (open === '1' || open.toLowerCase() === 'true')) {
+      setIsOutOfStockDialogOpen(true);
+    }
+  }, [searchParams]);
+
+  // Load categories and stores for filters
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const categories = await getCategoriesFromInventory();
+        setCategoryOptions(Array.isArray(categories) ? categories : []);
+      } catch (error) {
+        console.error('Error al cargar las categorías:', error);
+        setCategoryOptions([]);
+      }
+    }
+    async function loadStores() {
+      try {
+        const stores = await getAllStores();
+        setStoreOptions(Array.isArray(stores) ? stores : []);
+      } catch (error) {
+        console.error('Error al cargar las tiendas:', error);
+        setStoreOptions([]);
+      }
+    }
+    loadCategories();
+    loadStores();
+  }, []);
+
 
   useEffect(() => {
     if (tenantLoading || !selection.companyId) {
@@ -215,8 +261,8 @@ export default function InventoryPage() {
 
       try {
         const [inventoryData, purchasePrices] = await Promise.all([
-          getInventoryWithCurrency(), // Llama al endpoint para obtener el inventario con desglose por moneda
-          getAllPurchasePrices(), // Llama al endpoint para obtener los precios de compra
+          getInventoryWithCurrency(),
+          getAllPurchasePrices(),
         ]);
 
         if (cancelled) {
@@ -389,7 +435,7 @@ export default function InventoryPage() {
 
     setInventory(data);
   }, [baseInventory, sortMode, inStockOnly, migrationStatus, selectedDateRange]);
-  
+
 
   if (loading) {
     return <TablePageSkeleton filters={3} columns={5} rows={8} />;
@@ -400,23 +446,62 @@ export default function InventoryPage() {
       <section className="py-2 sm:py-6">
         <div className="container mx-auto px-1 sm:px-6 lg:px-8">
           <div className="rounded-2xl border bg-card shadow-sm">
-            <div className="flex flex-col gap-4 border-b px-5 pb-5 pt-6 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1">
-                <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Inventario General</h1>
-                <p className="text-sm text-muted-foreground sm:text-base">
-                  Monitorea existencias, números de serie y precios en tiempo real.
+            {/* ── Header: title + action buttons ─────────────────── */}
+            <div className="flex flex-col gap-3 border-b px-5 pb-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold sm:text-2xl lg:text-3xl">Inventario General</h1>
+                  <PageGuideButton steps={INVENTORY_GUIDE_STEPS} tooltipLabel="Guía del inventario" />
+                </div>
+                <p className="text-xs text-muted-foreground sm:text-sm">
+                  Monitorea existencias, series y precios en tiempo real.
                 </p>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                {/* ── Mobile: Botones de acción agrupados (Sin Stock + Por Tienda + Ingresar items) ── */}
+                <div className="flex items-center gap-2 sm:hidden">
+                  <Button
+                    size="icon"
+                    className="h-8 w-8 bg-red-600 text-white hover:bg-red-700"
+                    onClick={() => setIsOutOfStockDialogOpen(true)}
+                    title="Sin Stock"
+                  >
+                    <BookOpen className="size-3.5" />
+                  </Button>
+                  <Button
+                    asChild
+                    size="icon"
+                    className="h-8 w-8 bg-blue-600 text-white hover:bg-blue-700"
+                    title="Por Tienda"
+                  >
+                    <Link href="/dashboard/inventory/products-by-store">
+                      <Store className="size-3.5" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    size="icon"
+                    className="h-8 w-8 bg-emerald-600 text-white shadow-[0_2px_8px_rgba(16,185,129,0.3)] hover:bg-emerald-500 active:scale-95"
+                  >
+                    <Link href="/dashboard/entries/new">
+                      <PackagePlus className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+
+                {/* ── Mobile: Filtros sheet ── */}
                 <Sheet>
                   <SheetTrigger asChild>
                     <Button
                       type="button"
                       variant="outline"
-                      className="inline-flex w-full items-center justify-center gap-2 sm:hidden"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs sm:hidden"
                     >
-                      <Filter className="size-4" />
-                      <span>Filtros</span>
+                      <Filter className="size-3.5" />
+                      Filtros
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="bottom" className="sm:hidden">
@@ -427,85 +512,266 @@ export default function InventoryPage() {
                       </SheetDescription>
                     </SheetHeader>
                     <div className="px-1 pb-6">
-                        <FilterControls
-                          sortMode={sortMode}
-                          onSortChange={setSortMode}
-                          inStockOnly={inStockOnly}
-                          onInStockToggle={(value) => setInStockOnly(!!value)}
-                          migrationStatus={migrationStatus}
-                          onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
-                          dateRange={selectedDateRange}
-                          onDateRangeChange={setSelectedDateRange}
-                        />
+                      <FilterControls
+                        sortMode={sortMode}
+                        onSortChange={setSortMode}
+                        inStockOnly={inStockOnly}
+                        onInStockToggle={(value) => setInStockOnly(!!value)}
+                        migrationStatus={migrationStatus}
+                        onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
+                        dateRange={selectedDateRange}
+                        onDateRangeChange={setSelectedDateRange}
+                      />
                     </div>
                   </SheetContent>
                 </Sheet>
-                <CreateTemplateDialog
-                  organizationId={selection?.orgId ?? null}
-                  companyId={selection?.companyId ?? null}
-                  sampleId={null}
-                />
-                <Button
-                  asChild
-                  variant={pendingLegacyProducts > 0 ? "destructive" : "outline"}
-                  className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
-                >
-                  <Link href="/dashboard/products/migration">
-                    <Tags className="size-4" />
-                    <span>
-                      {pendingLegacyProducts > 0
-                        ? `Migrar productos (${pendingLegacyProducts})`
-                        : "Asistente de migración"}
-                    </span>
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
-                >
-                  <Link href="/dashboard/inventory/labels">
-                    <Tags className="size-4" />
-                    <span>Generar etiquetas</span>
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="secondary"
-                  className="inline-flex w-full items-center justify-center gap-2 sm:w-auto"
-                  disabled={!tenantReady}
-                >
-                  <Link href="/dashboard/inventory/alerts">
-                    <Tags className="size-4" />
-                    <span>Mostrar alertas</span>
-                    {alertSummary?.badgeCount ? (
-                      <span className="ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-destructive px-2 text-xs font-semibold text-destructive-foreground">
-                        {alertSummary.badgeCount}
-                      </span>
-                    ) : null}
-                  </Link>
-                </Button>
-        </div>
-        </div>
-            <div className="hidden border-b px-5 py-4 sm:block">
-              <FilterControls
-                sortMode={sortMode}
-                onSortChange={setSortMode}
-                inStockOnly={inStockOnly}
-                onInStockToggle={(value) => setInStockOnly(!!value)}
-                migrationStatus={migrationStatus}
-                onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
-                dateRange={selectedDateRange}
-                onDateRangeChange={setSelectedDateRange}
-              />
+
+                {/* Mobile: dropdown for secondary actions */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8 sm:hidden">
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/products/migration" className="gap-2">
+                        <ArrowRightLeft className="size-4" />
+                        {pendingLegacyProducts > 0
+                          ? `Migrar productos (${pendingLegacyProducts})`
+                          : "Asistente de migración"}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/inventory/labels" className="gap-2">
+                        <Tags className="size-4" />
+                        Generar etiquetas
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/inventory/alerts" className="gap-2">
+                        <Bell className="size-4" />
+                        Alertas
+                        {alertSummary?.badgeCount ? (
+                          <span className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+                            {alertSummary.badgeCount}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* ── Desktop: compact button row ──────────────────── */}
+                <TooltipProvider delayDuration={300}>
+                <div className="hidden items-center gap-1.5 sm:flex">
+                  <CreateTemplateDialog
+                    organizationId={selection?.orgId ?? null}
+                    companyId={selection?.companyId ?? null}
+                    sampleId={null}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        asChild
+                        variant={pendingLegacyProducts > 0 ? "destructive" : "outline"}
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                      >
+                        <Link href="/dashboard/products/migration">
+                          <ArrowRightLeft className="size-3.5" />
+                          <span className="hidden lg:inline">
+                            {pendingLegacyProducts > 0
+                              ? `Migrar (${pendingLegacyProducts})`
+                              : "Migración"}
+                          </span>
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">Asistente de migración de productos</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        asChild
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                      >
+                        <Link href="/dashboard/inventory/labels">
+                          <Tags className="size-3.5" />
+                          <span className="hidden lg:inline">Etiquetas</span>
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">Generar etiquetas de productos</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        asChild
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                        disabled={!tenantReady}
+                      >
+                        <Link href="/dashboard/inventory/alerts">
+                          <Bell className="size-3.5" />
+                          <span className="hidden lg:inline">Alertas</span>
+                          {alertSummary?.badgeCount ? (
+                            <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+                              {alertSummary.badgeCount}
+                            </span>
+                          ) : null}
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">Alertas de inventario</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1.5 bg-red-600 text-xs text-white hover:bg-red-700"
+                        onClick={() => setIsOutOfStockDialogOpen(true)}
+                      >
+                        <BookOpen className="size-3.5" />
+                        <span className="hidden lg:inline">Sin Stock</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">Ver productos sin stock</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        asChild
+                        size="sm"
+                        className="h-8 gap-1.5 bg-blue-600 text-xs text-white hover:bg-blue-700"
+                      >
+                        <Link href="/dashboard/inventory/products-by-store">
+                          <Store className="size-3.5" />
+                          <span className="hidden lg:inline">Por Tienda</span>
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">Ver productos por tienda</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        asChild
+                        size="sm"
+                        className="h-8 gap-1.5 bg-emerald-600 text-xs text-white shadow-[0_2px_8px_rgba(16,185,129,0.3)] hover:bg-emerald-500"
+                      >
+                        <Link href="/dashboard/entries/new">
+                          <PackagePlus className="size-3.5" />
+                          <span className="hidden lg:inline">Ingresar items</span>
+                        </Link>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">Registrar entrada de inventario</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                </TooltipProvider>
+              </div>
             </div>
+
+            {/* ── Desktop filter bar (compact inline row) ─────── */}
+            <div className="hidden border-b px-5 py-3 sm:block">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* lg-only: search, category, store inline */}
+                <div className="hidden items-center gap-2 lg:flex">
+                  <Input
+                    placeholder="Filtrar por producto o serie..."
+                    value={globalFilter}
+                    onChange={(e) => setGlobalFilter(e.target.value)}
+                    className="h-8 w-[220px] text-xs"
+                  />
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="h-8 w-[170px] text-xs">
+                      <SelectValue placeholder="Categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">
+                        <div className="flex items-center gap-2 font-semibold text-muted-foreground">
+                          <Filter className="w-3.5 h-3.5" />
+                          Todas las categorías
+                        </div>
+                      </SelectItem>
+                      {categoryOptions.map((cat) => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedStore} onValueChange={setSelectedStore}>
+                    <SelectTrigger className="h-8 w-[170px] text-xs">
+                      <SelectValue placeholder="Tienda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">
+                        <div className="flex items-center gap-2 font-semibold text-muted-foreground">
+                          <Store className="w-3.5 h-3.5" />
+                          Todas las tiendas
+                        </div>
+                      </SelectItem>
+                      {storeOptions.map((store) => (
+                        <SelectItem key={store.id} value={String(store.id)}>{store.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="h-5 w-px bg-border" />
+                </div>
+                <FilterControls
+                  sortMode={sortMode}
+                  onSortChange={setSortMode}
+                  inStockOnly={inStockOnly}
+                  onInStockToggle={(value) => setInStockOnly(!!value)}
+                  migrationStatus={migrationStatus}
+                  onMigrationChange={(value) => setMigrationStatus(value as MigrationFilter)}
+                  dateRange={selectedDateRange}
+                  onDateRangeChange={setSelectedDateRange}
+                />
+              </div>
+            </div>
+
+            {/* ── Data table ─────────────────────────────────── */}
             <div className="px-2 pb-6 sm:px-5">
               <div className="overflow-x-auto">
-                <DataTable columns={columns} data={inventory} inStockOnly={inStockOnly}></DataTable>
+                <DataTable
+                  columns={columns}
+                  data={inventory}
+                  inStockOnly={inStockOnly}
+                  globalFilter={globalFilter}
+                  onGlobalFilterChange={setGlobalFilter}
+                  selectedCategory={selectedCategory}
+                  onCategoryChange={setSelectedCategory}
+                  categoryOptions={categoryOptions}
+                  selectedStore={selectedStore}
+                  onStoreChange={setSelectedStore}
+                  storeOptions={storeOptions}
+                />
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      <OutOfStockDialog
+        isOpen={isOutOfStockDialogOpen}
+        onClose={() => setIsOutOfStockDialogOpen(false)}
+      />
    </>
   );
 }

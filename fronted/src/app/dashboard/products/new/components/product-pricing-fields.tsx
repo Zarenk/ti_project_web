@@ -18,6 +18,7 @@ export type ProductPricingFieldsProps = ProductFormContext & {
   hasPriceSell: boolean
   hasInitialStock: boolean
   isEditing?: boolean
+  hideStock?: boolean
   OptionalChip: React.ComponentType<{ filled: boolean }>
 }
 
@@ -29,6 +30,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
   hasPriceSell,
   hasInitialStock,
   isEditing,
+  hideStock,
   OptionalChip,
 }: ProductPricingFieldsProps) {
   return (
@@ -46,7 +48,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
               max={99999999.99}
               type="number"
               className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              {...register('price', { valueAsNumber: true })}
+              {...register('price')}
             />
           </div>
           <div className="flex items-center gap-1">
@@ -59,9 +61,9 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                   className="h-7 w-7 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 hover:border-sky-500/80 hover:text-sky-800 dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100"
                   aria-label="Disminuir precio de compra"
                   onClick={() => {
-                    const current = Number(form.getValues('price') ?? 0)
-                    const next = Math.max(0, current - 1)
-                    setValue('price', next, { shouldDirty: true, shouldValidate: true })
+                    const n = Number(form.getValues('price'))
+                    const current = Number.isFinite(n) ? n : 0
+                    setValue('price', Math.max(0, current - 1), { shouldDirty: true, shouldValidate: true })
                   }}
                 >
                   −
@@ -78,9 +80,9 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                   className="h-7 w-7 cursor-pointer border-sky-500/60 bg-sky-50 text-sky-700 hover:border-sky-500/80 hover:text-sky-800 dark:border-sky-400/40 dark:bg-transparent dark:text-sky-200 dark:hover:border-sky-300/70 dark:hover:text-sky-100"
                   aria-label="Aumentar precio de compra"
                   onClick={() => {
-                    const current = Number(form.getValues('price') ?? 0)
-                    const next = current + 1
-                    setValue('price', next, { shouldDirty: true, shouldValidate: true })
+                    const n = Number(form.getValues('price'))
+                    const current = Number.isFinite(n) ? n : 0
+                    setValue('price', current + 1, { shouldDirty: true, shouldValidate: true })
                   }}
                 >
                   +
@@ -108,7 +110,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
               max={99999999.99}
               type="number"
               className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              {...register('priceSell', { valueAsNumber: true })}
+              {...register('priceSell')}
             />
           </div>
           <div className="flex items-center gap-1">
@@ -121,9 +123,9 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                   className="h-7 w-7 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
                   aria-label="Disminuir precio de venta"
                   onClick={() => {
-                    const current = Number(form.getValues('priceSell') ?? 0)
-                    const next = Math.max(0, current - 1)
-                    setValue('priceSell', next, { shouldDirty: true, shouldValidate: true })
+                    const n = Number(form.getValues('priceSell'))
+                    const current = Number.isFinite(n) ? n : 0
+                    setValue('priceSell', Math.max(0, current - 1), { shouldDirty: true, shouldValidate: true })
                   }}
                 >
                   −
@@ -140,9 +142,9 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                   className="h-7 w-7 cursor-pointer border-emerald-500/60 bg-emerald-50 text-emerald-700 hover:border-emerald-500/80 hover:text-emerald-800 dark:border-emerald-400/40 dark:bg-transparent dark:text-emerald-200 dark:hover:border-emerald-300/70 dark:hover:text-emerald-100"
                   aria-label="Aumentar precio de venta"
                   onClick={() => {
-                    const current = Number(form.getValues('priceSell') ?? 0)
-                    const next = current + 1
-                    setValue('priceSell', next, { shouldDirty: true, shouldValidate: true })
+                    const n = Number(form.getValues('priceSell'))
+                    const current = Number.isFinite(n) ? n : 0
+                    setValue('priceSell', current + 1, { shouldDirty: true, shouldValidate: true })
                   }}
                 >
                   +
@@ -157,7 +159,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
         )}
       </div>
 
-      {!isEditing && (
+      {!isEditing && !hideStock && (
         <div className="flex flex-col">
           <Label className='py-3'>
             Cantidad / Stock inicial
@@ -171,7 +173,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                 max={99999999.99}
                 type="number"
                 className="h-8 w-full border-0 bg-transparent px-0 pl-2 text-sm [appearance:textfield] focus-visible:ring-0 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                {...register('initialStock', { valueAsNumber: true })}
+                {...register('initialStock')}
               />
             </div>
             <div className="flex items-center gap-1">
@@ -184,9 +186,9 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                     className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
                     aria-label="Disminuir stock inicial"
                     onClick={() => {
-                      const current = Number(form.getValues('initialStock') ?? 0)
-                      const next = Math.max(0, current - 1)
-                      setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
+                      const n = Number(form.getValues('initialStock'))
+                      const current = Number.isFinite(n) ? n : 0
+                      setValue('initialStock', Math.max(0, current - 1), { shouldDirty: true, shouldValidate: true })
                     }}
                   >
                     −
@@ -203,9 +205,9 @@ export const ProductPricingFields = memo(function ProductPricingFields({
                     className="h-7 w-7 cursor-pointer border-indigo-500/60 bg-indigo-50 text-indigo-700 hover:border-indigo-500/80 hover:text-indigo-800 dark:border-indigo-400/40 dark:bg-transparent dark:text-indigo-200 dark:hover:border-indigo-300/70 dark:hover:text-indigo-100"
                     aria-label="Aumentar stock inicial"
                     onClick={() => {
-                      const current = Number(form.getValues('initialStock') ?? 0)
-                      const next = current + 1
-                      setValue('initialStock', next, { shouldDirty: true, shouldValidate: true })
+                      const n = Number(form.getValues('initialStock'))
+                      const current = Number.isFinite(n) ? n : 0
+                      setValue('initialStock', current + 1, { shouldDirty: true, shouldValidate: true })
                     }}
                   >
                     +

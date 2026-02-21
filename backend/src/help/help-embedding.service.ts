@@ -55,6 +55,8 @@ export class HelpEmbeddingService implements OnModuleInit {
     question: string;
     answer: string;
     embedding: number[];
+    organizationId: number | null;
+    companyId: number | null;
   }> = [];
 
   /** In-memory map of sourceId → steps (loaded from static KB JSON) */
@@ -107,6 +109,8 @@ export class HelpEmbeddingService implements OnModuleInit {
           question: true,
           answer: true,
           embedding: true,
+          organizationId: true,
+          companyId: true,
         },
       });
       this.embeddingIndex = records;
@@ -266,12 +270,22 @@ export class HelpEmbeddingService implements OnModuleInit {
     queryEmbedding: number[],
     section: string | null,
     limit = 3,
+    organizationId?: number | null,
   ): EmbeddingSearchResult[] {
     if (this.embeddingIndex.length === 0) return [];
 
     const results: EmbeddingSearchResult[] = [];
 
     for (const entry of this.embeddingIndex) {
+      // Tenant isolation: show global entries (null) + entries from the user's org
+      if (
+        organizationId != null &&
+        entry.organizationId != null &&
+        entry.organizationId !== organizationId
+      ) {
+        continue;
+      }
+
       const similarity = this.cosineSimilarity(queryEmbedding, entry.embedding);
 
       // Boost entries from the same section
@@ -337,6 +351,8 @@ export class HelpEmbeddingService implements OnModuleInit {
         question: candidate.question,
         answer: candidate.answer,
         embedding,
+        organizationId: null as number | null,
+        companyId: null as number | null,
       };
       if (existingIdx >= 0) {
         this.embeddingIndex[existingIdx] = record;

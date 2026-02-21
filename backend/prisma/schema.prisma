@@ -212,6 +212,17 @@ model User {
   verticalChangeAudits        VerticalChangeAudit[]
   cashClosures                CashClosure[]
   cashTransactions            CashTransaction[]
+  legalMattersAssigned        LegalMatter[]                @relation("LegalMatterAssignedTo")
+  legalMattersCreated         LegalMatter[]                @relation("LegalMatterCreatedBy")
+  legalDocumentsUploaded      LegalDocument[]              @relation("LegalDocumentUploadedBy")
+  legalEventsAssigned         LegalEvent[]                 @relation("LegalEventAssignedTo")
+  legalEventsCreated          LegalEvent[]                 @relation("LegalEventCreatedBy")
+  legalTimeEntries            LegalTimeEntry[]             @relation("LegalTimeEntryUser")
+  legalNotesCreated           LegalNote[]                  @relation("LegalNoteCreatedBy")
+  calendarNotesCreated        CalendarNote[]               @relation("CalendarNoteCreatedBy")
+  jurisprudenceDocumentsUploaded JurisprudenceDocument[]   @relation("JurisprudenceDocumentUploadedBy")
+  jurisprudenceQueries        JurisprudenceQuery[]
+  jurisprudenceScrapeJobsCreated JurisprudenceScrapeJob[]  @relation("JurisprudenceScrapeJobCreatedBy")
 
   @@index([email])
   @@index([username])
@@ -299,6 +310,12 @@ model Organization {
   rollbackSnapshots                VerticalRollbackSnapshot[]
   archivedRestaurantTables         ArchivedRestaurantTable[]
   archivedKitchenStations          ArchivedKitchenStation[]
+  legalMatters                     LegalMatter[]
+  legalDocuments                   LegalDocument[]
+  inventorySnapshots               InventorySnapshot[]
+  calendarNotes                    CalendarNote[]
+  jurisprudenceDocuments           JurisprudenceDocument[]
+  jurisprudenceConfigs             JurisprudenceConfig[]
 
   @@index([status])
   @@index([businessVertical])
@@ -388,6 +405,10 @@ model Company {
   archivedPosStations              ArchivedPosStation[]
   archivedBillOfMaterials          ArchivedBillOfMaterials[]
   archivedWorkOrders               ArchivedWorkOrder[]
+  legalMatters                     LegalMatter[]
+  inventorySnapshots               InventorySnapshot[]
+  calendarNotes                    CalendarNote[]
+  jurisprudenceDocuments           JurisprudenceDocument[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -772,6 +793,7 @@ model Client {
   quotes           Quote[]
   restaurantOrders RestaurantOrder[]
   sales            Sales[]
+  legalMatters     LegalMatter[]
 
   @@index([organizationId, name])
   @@index([companyId])
@@ -1061,6 +1083,29 @@ model InventoryHistory {
   @@index([createdAt])
   @@index([organizationId, createdAt])
   @@index([companyId, createdAt])
+}
+
+model InventorySnapshot {
+  id                  Int          @id @default(autoincrement())
+  month               Int          // 1-12
+  year                Int
+  totalInventoryValue Float        // Valor total del inventario en ese mes
+  totalProducts       Int          // Cantidad total de productos
+  totalUnits          Int          // Cantidad total de unidades en stock
+  organizationId      Int?
+  companyId           Int?
+  snapshotType        SnapshotType @default(ACTUAL) // ACTUAL (cron real) vs CALCULATED (backfill)
+  calculatedAt        DateTime?    // Cuando fue calculado retroactivamente (solo para CALCULATED)
+  dataSourcePeriod    String?      // Rango de datos usado para calcular (ej: "2023-01-01 to 2025-12-31")
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  company             Company?     @relation(fields: [companyId], references: [id])
+  organization        Organization? @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, companyId, year, month])
+  @@index([organizationId, year, month])
+  @@index([companyId, year, month])
+  @@index([snapshotType])
 }
 
 model Transfer {
@@ -2256,18 +2301,34 @@ model HelpKBCandidate {
 }
 
 model HelpEmbedding {
-  id         Int      @id @default(autoincrement())
-  sourceType String
-  sourceId   String
-  section    String
-  question   String
-  answer     String
-  embedding  Float[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  sourceType     String
+  sourceId       String
+  section        String
+  question       String
+  answer         String
+  embedding      Float[]
+  organizationId Int?
+  companyId      Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([sourceType, sourceId])
   @@index([section])
+  @@index([organizationId, section])
+}
+
+model HelpPerformanceLog {
+  id         Int      @id @default(autoincrement())
+  durationMs Int
+  source     String
+  section    String?
+  similarity Float?
+  userId     Int?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([source])
 }
 
 model HelpLearningSession {
@@ -2322,6 +2383,7 @@ enum BusinessVertical {
   SERVICES
   MANUFACTURING
   COMPUTERS
+  LAW_FIRM
 }
 
 enum RestaurantTableStatus {
@@ -2576,4 +2638,580 @@ enum HelpCandidateStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ──────────────────────────────────────────────
+// Legal Module (Law Firm Vertical)
+// ──────────────────────────────────────────────
+
+enum LegalMatterStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+  CLOSED
+  WON
+  LOST
+  SETTLED
+}
+
+enum LegalArea {
+  CIVIL
+  PENAL
+  LABORAL
+  COMERCIAL
+  TRIBUTARIO
+  ADMINISTRATIVO
+  CONSTITUCIONAL
+  FAMILIA
+  AMBIENTAL
+  ADUANERO
+  MIGRATORIO
+  OTRO
+}
+
+enum LegalMatterPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum LegalPartyRole {
+  DEMANDANTE
+  DEMANDADO
+  TERCERO
+  LITISCONSORTE
+  MINISTERIO_PUBLICO
+  TESTIGO
+  PERITO
+  OTRO
+}
+
+enum LegalEventType {
+  AUDIENCIA
+  PLAZO_PROCESAL
+  NOTIFICACION
+  DILIGENCIA
+  VENCIMIENTO
+  RESOLUCION
+  SENTENCIA
+  APELACION
+  CASACION
+  OTRO
+}
+
+enum LegalEventStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum LegalDocumentType {
+  DEMANDA
+  CONTESTACION
+  RECURSO
+  ESCRITO
+  RESOLUCION
+  SENTENCIA
+  CARTA_NOTARIAL
+  CONTRATO
+  PODER
+  ACTA
+  PERICIA
+  DICTAMEN
+  OTRO
+}
+
+enum JurisprudenceSourceType {
+  SCRAPED
+  MANUAL
+  IMPORTED
+}
+
+enum JurisprudenceProcessingStatus {
+  PENDING
+  DOWNLOADING
+  EXTRACTING
+  OCR_REQUIRED
+  OCR_IN_PROGRESS
+  EMBEDDING
+  COMPLETED
+  COMPLETED_WITH_WARNINGS
+  FAILED
+  MANUAL_REQUIRED
+}
+
+enum JurisprudenceScrapeType {
+  MANUAL
+  SCHEDULED
+  ONDEMAND
+}
+
+enum JurisprudenceJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  MANUAL_REQUIRED
+}
+
+enum JurisprudenceStructureType {
+  SUMILLA
+  FUNDAMENTOS
+  FALLO
+  OTROS
+}
+
+enum SnapshotType {
+  ACTUAL      // Snapshot capturado en tiempo real por el cron
+  CALCULATED  // Snapshot calculado retroactivamente (backfill)
+}
+
+model LegalMatter {
+  id               Int                @id @default(autoincrement())
+  organizationId   Int?
+  companyId        Int?
+  title            String
+  internalCode     String?
+  externalCode     String?
+  description      String?
+  area             LegalArea          @default(CIVIL)
+  status           LegalMatterStatus  @default(DRAFT)
+  priority         LegalMatterPriority @default(MEDIUM)
+  court            String?
+  judge            String?
+  jurisdiction     String?
+  caseValue        Float?
+  currency         String             @default("PEN")
+  openedAt         DateTime           @default(now())
+  closedAt         DateTime?
+  nextDeadline     DateTime?
+  assignedToId     Int?
+  clientId         Int?
+  createdById      Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  organization     Organization?      @relation(fields: [organizationId], references: [id])
+  company          Company?           @relation(fields: [companyId], references: [id])
+  assignedTo       User?              @relation("LegalMatterAssignedTo", fields: [assignedToId], references: [id])
+  client           Client?            @relation(fields: [clientId], references: [id])
+  createdBy        User?              @relation("LegalMatterCreatedBy", fields: [createdById], references: [id])
+
+  parties          LegalMatterParty[]
+  documents        LegalDocument[]
+  events           LegalEvent[]
+  timeEntries      LegalTimeEntry[]
+  notes            LegalNote[]
+  jurisprudenceQueries JurisprudenceQuery[]
+
+  @@unique([organizationId, internalCode])
+  @@index([organizationId, companyId])
+  @@index([status])
+  @@index([area])
+  @@index([assignedToId])
+  @@index([clientId])
+  @@index([nextDeadline])
+}
+
+model LegalMatterParty {
+  id            Int            @id @default(autoincrement())
+  matterId      Int
+  role          LegalPartyRole @default(OTRO)
+  name          String
+  documentType  String?
+  documentNumber String?
+  email         String?
+  phone         String?
+  address       String?
+  lawyerName    String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  matter        LegalMatter    @relation(fields: [matterId], references: [id], onDelete: Cascade)
+
+  @@index([matterId])
+  @@index([documentNumber])
+}
+
+model LegalDocument {
+  id             Int               @id @default(autoincrement())
+  matterId       Int
+  organizationId Int?
+  type           LegalDocumentType @default(OTRO)
+  title          String
+  description    String?
+  filePath       String?
+  fileUrl        String?
+  fileName       String?
+  fileSize       Int?
+  mimeType       String?
+  sha256Hash     String?
+  version        Int               @default(1)
+  parentId       Int?
+  uploadedById   Int?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  matter         LegalMatter       @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  organization   Organization?     @relation(fields: [organizationId], references: [id])
+  uploadedBy     User?             @relation("LegalDocumentUploadedBy", fields: [uploadedById], references: [id])
+  parent         LegalDocument?    @relation("LegalDocumentVersions", fields: [parentId], references: [id])
+  versions       LegalDocument[]   @relation("LegalDocumentVersions")
+
+  @@index([matterId])
+  @@index([organizationId])
+  @@index([type])
+  @@index([parentId])
+}
+
+model LegalEvent {
+  id             Int              @id @default(autoincrement())
+  matterId       Int
+  type           LegalEventType   @default(OTRO)
+  status         LegalEventStatus @default(PENDING)
+  title          String
+  description    String?
+  location       String?
+  scheduledAt    DateTime
+  endAt          DateTime?
+  reminderAt     DateTime?
+  completedAt    DateTime?
+  assignedToId   Int?
+  createdById    Int?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  matter         LegalMatter      @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  assignedTo     User?            @relation("LegalEventAssignedTo", fields: [assignedToId], references: [id])
+  createdBy      User?            @relation("LegalEventCreatedBy", fields: [createdById], references: [id])
+
+  @@index([matterId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([type])
+}
+
+model LegalTimeEntry {
+  id            Int          @id @default(autoincrement())
+  matterId      Int
+  userId        Int
+  description   String
+  hours         Float
+  rate          Float?
+  amount        Float?
+  billable      Boolean      @default(true)
+  date          DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  matter        LegalMatter  @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  user          User         @relation("LegalTimeEntryUser", fields: [userId], references: [id])
+
+  @@index([matterId])
+  @@index([userId])
+  @@index([date])
+  @@index([billable])
+}
+
+model LegalNote {
+  id            Int          @id @default(autoincrement())
+  matterId      Int
+  content       String
+  isPrivate     Boolean      @default(false)
+  createdById   Int?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  matter        LegalMatter  @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  createdBy     User?        @relation("LegalNoteCreatedBy", fields: [createdById], references: [id])
+
+  @@index([matterId])
+  @@index([createdById])
+}
+
+model JurisprudenceDocument {
+  id               Int                          @id @default(autoincrement())
+  organizationId   Int
+  companyId        Int
+
+  title            String
+  court            String
+  chamber          String?
+  expediente       String
+  year             Int
+  publishDate      DateTime
+
+  sourceType       JurisprudenceSourceType      @default(SCRAPED)
+  sourceUrl        String?
+  sourceDocId      String?
+
+  pdfPath          String
+  fileName         String?
+  fileSize         Int?
+  mimeType         String?
+  fileHash         String
+
+  processingStatus JurisprudenceProcessingStatus @default(PENDING)
+  processedAt      DateTime?
+  retryCount       Int                          @default(0)
+  failedReason     String?                      @db.Text
+  lastAttemptAt    DateTime?
+
+  deletedAt        DateTime?
+
+  uploadedById     Int?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  organization     Organization                 @relation(fields: [organizationId], references: [id])
+  company          Company                      @relation(fields: [companyId], references: [id])
+  uploadedBy       User?                        @relation("JurisprudenceDocumentUploadedBy", fields: [uploadedById], references: [id])
+
+  pages            JurisprudenceDocumentPage[]
+  sections         JurisprudenceDocumentSection[]
+  embeddings       JurisprudenceEmbedding[]
+
+  @@unique([organizationId, sourceUrl, fileHash])
+  @@index([organizationId, companyId])
+  @@index([organizationId, court, year])
+  @@index([processingStatus])
+  @@index([fileHash])
+  @@index([deletedAt])
+}
+
+model JurisprudenceDocumentPage {
+  id             Int                   @id @default(autoincrement())
+  documentId     Int
+  organizationId Int
+  companyId      Int
+
+  pageNumber     Int
+  rawText        String?               @db.Text
+  hasText        Boolean               @default(false)
+
+  ocrRequired    Boolean               @default(false)
+  ocrCompleted   Boolean               @default(false)
+  ocrJobId       Int?
+
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  document       JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ocrJob         JurisprudenceOcrJob?  @relation(fields: [ocrJobId], references: [id])
+
+  @@unique([documentId, pageNumber])
+  @@index([documentId])
+  @@index([ocrRequired, ocrCompleted])
+}
+
+model JurisprudenceDocumentSection {
+  id             Int                        @id @default(autoincrement())
+  documentId     Int
+  organizationId Int
+  companyId      Int
+
+  structureType  JurisprudenceStructureType
+  sectionName    String
+  startPage      Int
+  endPage        Int
+  sectionText    String                     @db.Text
+
+  createdAt      DateTime                   @default(now())
+
+  document       JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, structureType])
+}
+
+model JurisprudenceEmbedding {
+  id             Int                   @id @default(autoincrement())
+  documentId     Int
+  organizationId Int
+  companyId      Int
+
+  chunkIndex     Int
+  chunkText      String                @db.Text
+  // TODO: Cambiar a Unsupported("vector(1536)") cuando pgvector esté instalado
+  // embedding      Unsupported("vector(1536)")
+  embedding      Bytes                 // Temporal: usar Bytes hasta que pgvector esté disponible
+
+  embeddingModel   String              @default("text-embedding-3-small")
+  embeddingVersion String              @default("v1")
+
+  metadata       Json
+
+  createdAt      DateTime              @default(now())
+
+  document       JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([organizationId, companyId])
+  @@index([embeddingModel, embeddingVersion])
+}
+
+model JurisprudenceQuery {
+  id             Int           @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+  userId         Int
+  legalMatterId  Int?
+
+  query          String        @db.Text
+  answer         String        @db.Text
+  confidence     String
+
+  hasValidCitations Boolean    @default(false)
+  needsHumanReview  Boolean    @default(false)
+
+  documentsUsed  Json
+
+  userFeedback   Json?
+
+  tokensUsed     Int           @default(0)
+  costUsd        Decimal       @default(0) @db.Decimal(10, 6)
+  responseTime   Int
+
+  createdAt      DateTime      @default(now())
+
+  user           User          @relation(fields: [userId], references: [id])
+  legalMatter    LegalMatter?  @relation(fields: [legalMatterId], references: [id])
+
+  @@index([organizationId, userId])
+  @@index([legalMatterId])
+  @@index([confidence])
+  @@index([needsHumanReview])
+  @@index([createdAt])
+}
+
+model JurisprudenceScrapeJob {
+  id             Int                      @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+
+  court          String
+  startYear      Int?
+  endYear        Int?
+  scrapeType     JurisprudenceScrapeType  @default(MANUAL)
+  status         JurisprudenceJobStatus   @default(PENDING)
+
+  documentsFound    Int                   @default(0)
+  documentsDownloaded Int                 @default(0)
+  documentsFailed   Int                   @default(0)
+
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  errorLog       String?                  @db.Text
+
+  createdById    Int?
+  createdAt      DateTime                 @default(now())
+
+  createdBy      User?                    @relation("JurisprudenceScrapeJobCreatedBy", fields: [createdById], references: [id])
+
+  @@index([status])
+  @@index([organizationId, companyId])
+  @@index([createdAt])
+}
+
+model JurisprudenceOcrJob {
+  id             Int                    @id @default(autoincrement())
+  documentId     Int
+  organizationId Int
+  companyId      Int
+
+  status         JurisprudenceJobStatus @default(PENDING)
+  provider       String
+
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  pagesProcessed Int                    @default(0)
+  pagesTotal     Int
+
+  costUsd        Decimal                @default(0) @db.Decimal(10, 4)
+  errorLog       String?                @db.Text
+
+  createdAt      DateTime               @default(now())
+
+  pages          JurisprudenceDocumentPage[]
+
+  @@index([status])
+  @@index([organizationId, companyId])
+}
+
+model JurisprudenceUsageStats {
+  id                 Int      @id @default(autoincrement())
+  organizationId     Int
+  companyId          Int
+  date               DateTime @db.Date
+
+  queriesCount       Int      @default(0)
+  documentsIndexed   Int      @default(0)
+  embeddingsCreated  Int      @default(0)
+  tokensUsed         Int      @default(0)
+  costUsd            Decimal  @default(0) @db.Decimal(10, 6)
+
+  createdAt          DateTime @default(now())
+
+  @@unique([organizationId, companyId, date])
+  @@index([date])
+}
+
+model JurisprudenceConfig {
+  id                    Int      @id @default(autoincrement())
+  organizationId        Int      @unique
+  companyId             Int?
+
+  ragEnabled            Boolean  @default(false)
+  scrapingEnabled       Boolean  @default(false)
+
+  scrapingFrequency     String   @default("monthly")
+  courtsEnabled         Json
+
+  maxDocumentsPerMonth  Int      @default(1000)
+  maxQueriesPerDay      Int      @default(100)
+
+  chatModel             String   @default("gpt-4o-mini")
+  embeddingModel        String   @default("text-embedding-3-small")
+  embeddingVersion      String   @default("v1")
+  topK                  Int      @default(5)
+  minSimilarity         Decimal  @default(0.7) @db.Decimal(3, 2)
+  minYear               Int      @default(2015)
+
+  ocrProvider           String   @default("tesseract")
+  ocrEnabled            Boolean  @default(true)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization          Organization @relation(fields: [organizationId], references: [id])
+}
+
+model CalendarNote {
+  id             Int           @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  date           DateTime      @db.Date
+  content        String
+  color          String?       @db.VarChar(7)
+  reminderAt     DateTime?
+  reminderSent   Boolean       @default(false)
+  isPrivate      Boolean       @default(false)
+  createdById    Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  company        Company?      @relation(fields: [companyId], references: [id])
+  createdBy      User?         @relation("CalendarNoteCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, companyId, date])
+  @@index([reminderAt, reminderSent])
+  @@index([createdById])
 }

@@ -25,6 +25,7 @@ export type ProductBrandDescriptionProps = ProductFormContext & {
   isLoadingBrands: boolean
   hasBrand: boolean
   hasDescription: boolean
+  hideBrand?: boolean
   OptionalChip: React.ComponentType<{ filled: boolean }>
 }
 
@@ -37,37 +38,40 @@ export const ProductBrandDescription = memo(function ProductBrandDescription({
   isLoadingBrands,
   hasBrand,
   hasDescription,
+  hideBrand,
   OptionalChip,
 }: ProductBrandDescriptionProps) {
   return (
     <>
-      <div className="flex flex-col lg:col-start-1 lg:row-start-2">
-        <Label className='py-3'>
-          Marca
-          {<OptionalChip filled={hasBrand} />}
-        </Label>
-        <Input
-          disabled={isProcessing || isLoadingBrands}
-          list="brand-options"
-          maxLength={50}
-          {...register('brand')}
-        />
-        <datalist id="brand-options">
-          {brands.map((b) => (
-            <option key={b.id} value={b.name} />
-          ))}
-        </datalist>
-        {isLoadingBrands && (
-          <p className="pt-1 text-xs text-muted-foreground">
-            Cargando marcas...
-          </p>
-        )}
-        {form.formState.errors.brand && (
-          <p className="text-red-500 text-sm">{form.formState.errors.brand.message as string}</p>
-        )}
-      </div>
+      {!hideBrand && (
+        <div className="flex flex-col lg:col-start-1 lg:row-start-2">
+          <Label className='py-3'>
+            Marca
+            {<OptionalChip filled={hasBrand} />}
+          </Label>
+          <Input
+            disabled={isProcessing || isLoadingBrands}
+            list="brand-options"
+            maxLength={50}
+            {...register('brand')}
+          />
+          <datalist id="brand-options">
+            {brands.map((b) => (
+              <option key={b.id} value={b.name} />
+            ))}
+          </datalist>
+          {isLoadingBrands && (
+            <p className="pt-1 text-xs text-muted-foreground">
+              Cargando marcas...
+            </p>
+          )}
+          {form.formState.errors.brand && (
+            <p className="text-red-500 text-sm">{form.formState.errors.brand.message as string}</p>
+          )}
+        </div>
+      )}
 
-      <div className="flex flex-col lg:col-start-2 lg:row-start-2">
+      <div className={`flex flex-col ${hideBrand ? 'lg:col-start-1' : 'lg:col-start-2'} lg:row-start-2`}>
         <Label className='py-3'>
           Descripcion
           {<OptionalChip filled={hasDescription} />}
@@ -81,7 +85,7 @@ export const ProductBrandDescription = memo(function ProductBrandDescription({
         )}
       </div>
 
-      <div className="flex flex-col lg:col-start-3 lg:row-start-2">
+      <div className={`flex flex-col ${hideBrand ? 'lg:col-start-2' : 'lg:col-start-3'} lg:row-start-2`}>
         <Label className='py-3'>
           Selecciona un estado
         </Label>

@@ -47,6 +47,7 @@ import { getBrands } from '../../brands/brands.api'
 import { createCategory, getCategories } from '../../categories/categories.api'
 import { getStores } from '../../stores/stores.api'
 import { getProviders } from '../../providers/providers.api'
+import { createEntry } from '../../entries/entries.api'
 import { ProductSerialsDialog } from '../../entries/components/quick-entry/serials-dialog'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
@@ -164,6 +165,12 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
   onCreateWithStock,
   onCreateWithoutStock,
 }: BatchOnlyAssignDialogProps) {
+  // Only items with stock > 0 need store/provider assignment
+  const itemsWithStock = useMemo(
+    () => batchCart.filter((item) => item.initialStock > 0),
+    [batchCart],
+  )
+
   const [globalStoreId, setGlobalStoreId] = useState('')
   const [globalProviderId, setGlobalProviderId] = useState('')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
@@ -178,44 +185,41 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
       return
     }
 
-    // --- Single store: auto-assign to every item missing it ---
+    // --- Single store: auto-assign to every item with stock ---
     if (stores.length === 1) {
       const storeId = String(stores[0].id)
       setGlobalStoreId(storeId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
         if (!curr?.storeId || curr.storeId !== storeId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             storeId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     }
 
-    // --- Single provider: auto-assign to every item missing it ---
+    // --- Single provider: auto-assign to every item with stock ---
     if (providers.length === 1) {
       const providerId = String(providers[0].id)
       setGlobalProviderId(providerId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
         if (!curr?.providerId || curr.providerId !== providerId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             providerId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     }
 
     // --- Fix items with quantity=0 that already have store/provider ---
-    for (const item of batchCart) {
+    for (const item of itemsWithStock) {
       const curr = batchAssignments[item.id]
       if (curr && (curr.storeId || curr.providerId) && (!curr.quantity || curr.quantity <= 0)) {
-        const qty = item.initialStock > 0 ? item.initialStock : 1
-        updateBatchAssignment(item.id, { quantity: qty })
+        updateBatchAssignment(item.id, { quantity: item.initialStock })
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,44 +228,41 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
   const applyGlobalStore = useCallback(
     (storeId: string) => {
       setGlobalStoreId(storeId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
-        // Only override items not individually customized or unassigned
         if (!curr?.storeId || curr.storeId === globalStoreId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             storeId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     },
-    [batchAssignments, batchCart, globalStoreId, updateBatchAssignment],
+    [batchAssignments, itemsWithStock, globalStoreId, updateBatchAssignment],
   )
 
   const applyGlobalProvider = useCallback(
     (providerId: string) => {
       setGlobalProviderId(providerId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
         if (!curr?.providerId || curr.providerId === globalProviderId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             providerId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     },
-    [batchAssignments, batchCart, globalProviderId, updateBatchAssignment],
+    [batchAssignments, itemsWithStock, globalProviderId, updateBatchAssignment],
   )
 
-  const allAssigned = batchCart.every((item) => {
+  const allAssigned = itemsWithStock.length > 0 && itemsWithStock.every((item) => {
     const a = batchAssignments[item.id]
     return a && a.storeId && a.providerId && a.quantity > 0
   })
 
-  const assignedCount = batchCart.filter((item) => {
+  const assignedCount = itemsWithStock.filter((item) => {
     const a = batchAssignments[item.id]
     return a && a.storeId && a.providerId && a.quantity > 0
   }).length
@@ -281,7 +282,7 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Package className="h-5 w-5 shrink-0" />
-            <span>Crear productos agregados ({batchCart.length})</span>
+            <span>Crear productos agregados ({batchCart.length}){itemsWithStock.length < batchCart.length && ` · ${itemsWithStock.length} con stock`}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -369,12 +370,12 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
                 variant={allAssigned ? 'default' : 'secondary'}
                 className="text-[10px]"
               >
-                {assignedCount}/{batchCart.length} listos
+                {assignedCount}/{itemsWithStock.length} listos
               </Badge>
             </div>
 
             <div className="max-h-[30vh] sm:max-h-[35vh] overflow-y-auto space-y-1.5 rounded-lg border border-border/40 p-1.5 sm:p-2">
-              {batchCart.map((item) => {
+              {itemsWithStock.map((item) => {
                 const assignment = batchAssignments[item.id]
                 const hasStore = !!assignment?.storeId
                 const hasProvider = !!assignment?.providerId
@@ -539,7 +540,7 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
               ) : (
                 <CheckCircle2 className="mr-2 h-4 w-4" />
               )}
-              Crear con stock ({assignedCount}/{batchCart.length})
+              Crear con stock ({assignedCount}/{itemsWithStock.length})
             </Button>
           </div>
           {!showSkipOption ? (
@@ -835,6 +836,17 @@ export function ProductForm({
     return field?.options ?? []
   }, [schemaFields])
 
+  const optionLabels: Record<string, string> = useMemo(() => ({
+    GRILL: 'Parrilla',
+    FRY: 'Freidora',
+    COLD: 'Fria',
+    BAKERY: 'Horno / Panaderia',
+    VEGAN: 'Vegano',
+    GLUTEN_FREE: 'Sin Gluten',
+    LACTOSE_FREE: 'Sin Lactosa',
+    SPICY: 'Picante',
+  }), [])
+
   const renderSchemaField = (field: (typeof schemaFields)[number]) => {
     const value = getFieldValue(field.key)
     switch (field.type) {
@@ -912,7 +924,7 @@ export function ProductForm({
               <div className="space-y-2">
                 {ingredientRows.map((row, index) => (
                   <div
-                    key={`${row.name}-${index}`}
+                    key={`ingredient-${index}`}
                     className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1.5fr_1fr_1fr_auto]"
                   >
                     <Input
@@ -985,7 +997,7 @@ export function ProductForm({
             <SelectContent>
               {(field.options ?? []).map((option) => (
                 <SelectItem key={option} value={option}>
-                  {option}
+                  {optionLabels[option] ?? option}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1008,7 +1020,7 @@ export function ProductForm({
                       handleFieldChange(field.key, next)
                     }}
                   />
-                  <span>{option}</span>
+                  <span>{optionLabels[option] ?? option}</span>
                 </label>
               )
             })}
@@ -1107,6 +1119,13 @@ export function ProductForm({
     return { value: Object.keys(normalized).length ? normalized : null }
   }, [extraAttributes, schemaFields, isRetail, isRestaurant])
 
+  // Normalize any value to a finite number (handles strings, NaN, undefined, null)
+  const safeNumber = (v: unknown): number => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    const parsed = Number(v)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
   const buildPayload = useCallback(
     (data: ProductType) => {
       const {
@@ -1145,6 +1164,8 @@ export function ProductForm({
 
       const payload: any = {
         ...productData,
+        price: safeNumber(productData.price),
+        priceSell: safeNumber(productData.priceSell),
         brand: brand || undefined,
         images: cleanedImages,
         categoryId: Number(productData.categoryId),
@@ -1446,6 +1467,43 @@ const VariantRowItem = memo(function VariantRowItem({
     remove: removeFeature,
   } = useFieldArray<ProductType, 'features'>({ control, name: 'features' });
 
+  const NUMERIC_FIELD_NAMES = ['price', 'priceSell', 'initialStock'] as const
+
+  // Read actual DOM <input> values for numeric fields and push them into form state.
+  // Fixes a react-hook-form + React 19 desync where form.getValues() can return
+  // stale values that don't match what the user sees in the DOM.
+  const syncNumericFieldsFromDOM = useCallback(() => {
+    for (const name of NUMERIC_FIELD_NAMES) {
+      const el = document.querySelector<HTMLInputElement>(`input[name="${name}"]`)
+      if (el) {
+        const raw = el.value
+        if (raw === '') {
+          form.setValue(name, undefined as any, { shouldValidate: false, shouldDirty: false })
+        } else {
+          const n = Number(raw.replace(',', '.'))
+          if (Number.isFinite(n)) {
+            form.setValue(name, n, { shouldValidate: false, shouldDirty: false })
+          }
+        }
+      }
+    }
+  }, [form])
+
+  // Force-set DOM <input> values to match form state after form.reset().
+  // Works around a react-hook-form issue where reset() updates internal state
+  // but fails to update the DOM for <input type="number"> fields.
+  const flushNumericFieldsToDOM = useCallback(() => {
+    requestAnimationFrame(() => {
+      for (const name of NUMERIC_FIELD_NAMES) {
+        const el = document.querySelector<HTMLInputElement>(`input[name="${name}"]`)
+        if (el) {
+          const v = form.getValues(name)
+          el.value = (v != null && Number(v) !== 0) ? String(v) : ''
+        }
+      }
+    })
+  }, [form])
+
   const router = useRouter();
   const params = useParams();
   const rawRouteId = params?.id;
@@ -1518,15 +1576,15 @@ const VariantRowItem = memo(function VariantRowItem({
   const hasBrand = useMemo(() => Boolean(watchedBrand?.trim()), [watchedBrand])
   const hasDescription = useMemo(() => Boolean(watchedDescription?.trim()), [watchedDescription])
   const hasPrice = useMemo(
-    () => typeof watchedPrice === 'number' && Number.isFinite(watchedPrice) && watchedPrice > 0,
+    () => { const n = Number(watchedPrice); return Number.isFinite(n) && n > 0 },
     [watchedPrice]
   )
   const hasPriceSell = useMemo(
-    () => typeof watchedPriceSell === 'number' && Number.isFinite(watchedPriceSell) && watchedPriceSell > 0,
+    () => { const n = Number(watchedPriceSell); return Number.isFinite(n) && n > 0 },
     [watchedPriceSell]
   )
   const hasInitialStock = useMemo(
-    () => typeof watchedInitialStock === 'number' && Number.isFinite(watchedInitialStock) && watchedInitialStock > 0,
+    () => { const n = Number(watchedInitialStock); return Number.isFinite(n) && n > 0 },
     [watchedInitialStock]
   )
   const hasImages = useMemo(
@@ -1617,7 +1675,9 @@ const VariantRowItem = memo(function VariantRowItem({
     batchCount > 0 ? batchCount + draftCount : 0
   const batchMissingAssignmentsCount = useMemo(() => {
     if (!batchCart.length) return 0
+    // Only count items that have stock — items with initialStock=0 are product-only (no inventory)
     return batchCart.filter((item) => {
+      if (item.initialStock <= 0) return false
       const assignment = batchAssignments[item.id]
       return !assignment || !assignment.storeId || !assignment.providerId || assignment.quantity <= 0
     }).length
@@ -2034,10 +2094,7 @@ const VariantRowItem = memo(function VariantRowItem({
           currentProductId != null ? String(currentProductId) : undefined
         const targetProductId = formProductId ?? undefined
 
-        const initialStockValue =
-          typeof data.initialStock === 'number' && Number.isFinite(data.initialStock)
-            ? data.initialStock
-            : 0
+        const initialStockValue = safeNumber(data.initialStock)
 
         if (!targetProductId && batchCart.length > 0) {
             if (initialStockValue > 0) {
@@ -2236,7 +2293,7 @@ const VariantRowItem = memo(function VariantRowItem({
   const handleCreateBatchWithAssignments = useCallback(async () => {
     if (!batchCart.length) return
     if (batchMissingAssignmentsCount > 0) {
-      toast.error("Completa la asignación de stock para todos los productos antes de crear.")
+      toast.error("Completa la asignación de stock para los productos con cantidad antes de crear.")
       return
     }
     if (!userId) {
@@ -2247,7 +2304,17 @@ const VariantRowItem = memo(function VariantRowItem({
     setBatchStockError(null)
     const successIds: string[] = []
     try {
+      // Phase 1: Create all products first (with and without stock)
+      const createdWithStock: {
+        cartId: string
+        productId: number
+        assignment: NonNullable<typeof batchAssignments[string]>
+      }[] = []
+
       for (const item of batchCart) {
+        const product = await createProduct(item.payload)
+        successIds.push(item.id)
+
         const assignment = batchAssignments[item.id]
         if (
           assignment &&
@@ -2255,23 +2322,67 @@ const VariantRowItem = memo(function VariantRowItem({
           assignment.providerId &&
           assignment.quantity > 0
         ) {
-          const purchasePrice = Number(assignment.price ?? item.payload?.price ?? 0)
-          const itemSerials = batchSerials[item.id]
-          await createProductWithStock(item.payload, {
-            storeId: Number(assignment.storeId),
-            userId,
-            providerId: Number(assignment.providerId),
-            quantity: assignment.quantity,
+          createdWithStock.push({
+            cartId: item.id,
+            productId: product.id,
+            assignment,
+          })
+        }
+      }
+
+      // Phase 2: Group products with stock by (storeId + providerId + currency)
+      // so we create ONE entry per provider instead of one per product
+      if (createdWithStock.length > 0) {
+        const entryGroups = new Map<string, {
+          storeId: number
+          providerId: number
+          tipoMoneda: string
+          details: { productId: number; quantity: number; price: number; priceInSoles: number; series?: string[] }[]
+        }>()
+
+        for (const cp of createdWithStock) {
+          const a = cp.assignment
+          const currency = a.currency || 'PEN'
+          const key = `${a.storeId}-${a.providerId}-${currency}`
+
+          if (!entryGroups.has(key)) {
+            entryGroups.set(key, {
+              storeId: Number(a.storeId),
+              providerId: Number(a.providerId),
+              tipoMoneda: currency,
+              details: [],
+            })
+          }
+
+          const purchasePrice = Number(a.price ?? 0)
+          const itemSerials = batchSerials[cp.cartId]
+
+          entryGroups.get(key)!.details.push({
+            productId: cp.productId,
+            quantity: a.quantity,
             price: purchasePrice,
             priceInSoles: purchasePrice,
-            tipoMoneda: assignment.currency,
             series: itemSerials?.length ? itemSerials : undefined,
           })
-        } else {
-          await createProduct(item.payload)
         }
-        successIds.push(item.id)
+
+        // Phase 3: Create one entry per provider group
+        for (const [, group] of entryGroups) {
+          await createEntry({
+            storeId: group.storeId,
+            userId,
+            providerId: group.providerId,
+            date: new Date(),
+            description: group.details.length > 1
+              ? `Stock inicial (${group.details.length} productos)`
+              : 'Stock inicial',
+            tipoMoneda: group.tipoMoneda,
+            details: group.details,
+            referenceId: `batch-stock:${Date.now()}:s${group.storeId}:p${group.providerId}`,
+          })
+        }
       }
+
       toast.success("Productos y stock inicial registrados.")
       resetBatchState()
       if (!onSuccess) {
@@ -2303,20 +2414,21 @@ const VariantRowItem = memo(function VariantRowItem({
 
 
   const handleAddAnother = useCallback(async () => {
-    if (currentProductId) {
-      return
-    }
-    const isValid = await form.trigger()
-    if (!isValid) {
+    if (currentProductId) return
+
+    // Sync DOM → form state for numeric fields before reading values.
+    // Prevents desync where user sees one value but form state has another.
+    syncNumericFieldsFromDOM()
+
+    const valid = await form.trigger()
+    if (!valid) {
       toast.error("Revisa los campos obligatorios antes de continuar.")
       return
     }
-    const formValues = form.getValues()
-    const stockValue =
-      typeof formValues.initialStock === 'number' && Number.isFinite(formValues.initialStock)
-        ? formValues.initialStock
-        : 0
-    const buildResult = buildPayload(formValues)
+
+    const data = form.getValues()
+    const stockValue = safeNumber(data.initialStock)
+    const buildResult = buildPayload(data)
     if (buildResult.error) {
       setExtraFieldError(buildResult.error)
       toast.error(buildResult.error)
@@ -2330,9 +2442,7 @@ const VariantRowItem = memo(function VariantRowItem({
         return
       }
       const nameAlreadyAdded = batchCart.some((item) => {
-        if (editingBatchId && item.id === editingBatchId) {
-          return false
-        }
+        if (editingBatchId && item.id === editingBatchId) return false
         return item.name.trim().toLowerCase() === normalizedName
       })
       if (nameAlreadyAdded) {
@@ -2354,39 +2464,34 @@ const VariantRowItem = memo(function VariantRowItem({
         ),
       )
       setEditingBatchId(null)
-      setVariantRows([])
-      setIngredientRows([])
-      setExtraAttributes({})
-      form.reset({
-        ...emptyProductValues,
-        status: form.getValues("status") ?? "Activo",
-        categoryId: form.getValues("categoryId") ?? "",
-      })
       toast.success("Producto actualizado en el lote.")
-      return
+    } else {
+      const itemId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}`
+      setBatchCart((prev) => [
+        ...prev,
+        {
+          id: itemId,
+          name: payload?.name ?? "Producto sin nombre",
+          payload,
+          initialStock: stockValue,
+        },
+      ])
+      toast.success("Producto agregado al lote.")
     }
-    const itemId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}`
-    setBatchCart((prev) => [
-      ...prev,
-      {
-        id: itemId,
-        name: payload?.name ?? "Producto sin nombre",
-        payload,
-        initialStock: stockValue,
-      },
-    ])
     setVariantRows([])
     setIngredientRows([])
     setExtraAttributes({})
+
     form.reset({
       ...emptyProductValues,
       status: form.getValues("status") ?? "Activo",
       categoryId: form.getValues("categoryId") ?? "",
     })
-    toast.success("Producto agregado al lote.")
+    // Force-clear numeric inputs in DOM after reset
+    flushNumericFieldsToDOM()
   }, [
     batchCart,
     buildPayload,
@@ -2394,6 +2499,9 @@ const VariantRowItem = memo(function VariantRowItem({
     editingBatchId,
     existingProductNames,
     form,
+    syncNumericFieldsFromDOM,
+    flushNumericFieldsToDOM,
+    emptyProductValues,
   ])
 
   const startBatchEditFromCart = useCallback(
@@ -2438,13 +2546,15 @@ const VariantRowItem = memo(function VariantRowItem({
         features: Array.isArray(payload.features) ? payload.features : [],
         initialStock: item.initialStock ?? 0,
       })
+      // Sync numeric fields to DOM after reset (loads cart item values into inputs)
+      flushNumericFieldsToDOM()
       requestAnimationFrame(() => {
         nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
         nameInputRef.current?.focus()
       })
       toast.message("Producto listo para actualizar.")
     },
-    [form],
+    [form, flushNumericFieldsToDOM],
   )
 
   const handleCreateBatch = useCallback(async () => {
@@ -2470,6 +2580,9 @@ const VariantRowItem = memo(function VariantRowItem({
 
   const handleSubmitWithBatchGuard = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
+      // Sync DOM → form state for numeric fields before any submission
+      syncNumericFieldsFromDOM()
+
       if (!batchCart.length || currentProductId) {
         return onSubmit(event)
       }
@@ -2499,7 +2612,7 @@ const VariantRowItem = memo(function VariantRowItem({
 
       return onSubmit()
     },
-    [batchCart.length, currentProductId, form, handleCreateBatch, onSubmit],
+    [batchCart.length, currentProductId, form, handleCreateBatch, onSubmit, syncNumericFieldsFromDOM],
   )
 
   const handleConfirmCreateOnly = useCallback(async () => {
@@ -2557,6 +2670,11 @@ const VariantRowItem = memo(function VariantRowItem({
       }
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
+        const safeNum = (v: unknown): number => {
+          if (typeof v === 'number' && Number.isFinite(v)) return v
+          const p = Number(v)
+          return Number.isFinite(p) ? p : 0
+        }
         const deduped = parsed.filter((item, index, self) => {
           const normalized = String(item?.name ?? '').trim().toLowerCase()
           if (!normalized) return false
@@ -2564,7 +2682,15 @@ const VariantRowItem = memo(function VariantRowItem({
             self.findIndex((entry) => String(entry?.name ?? '').trim().toLowerCase() === normalized) ===
             index
           )
-        })
+        }).map((item) => ({
+          ...item,
+          initialStock: safeNum(item.initialStock),
+          payload: item.payload ? {
+            ...item.payload,
+            price: safeNum(item.payload.price),
+            priceSell: safeNum(item.payload.priceSell),
+          } : item.payload,
+        }))
         setBatchCart(deduped)
       }
     } catch (error) {
@@ -2800,20 +2926,20 @@ const VariantRowItem = memo(function VariantRowItem({
               <Package className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold">
-                {currentProductId ? 'Actualizar Producto' : 'Crear Producto'}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold">
+                  {currentProductId ? 'Actualizar Producto' : 'Crear Producto'}
+                </h1>
+                <ProductGuideButton />
+              </div>
               <p className="text-xs text-muted-foreground">
                 Completa los campos para {currentProductId ? 'actualizar' : 'registrar'} un producto
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ProductGuideButton />
-            <Badge variant="outline" className="text-xs">
-              {verticalInfo?.config?.displayName ?? verticalName}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-xs">
+            {verticalInfo?.config?.displayName ?? verticalName}
+          </Badge>
         </div>
       </div>
 
@@ -2876,6 +3002,7 @@ const VariantRowItem = memo(function VariantRowItem({
                 isLoadingBrands={isLoadingBrands}
                 hasBrand={hasBrand}
                 hasDescription={hasDescription}
+                hideBrand={isRestaurant}
                 OptionalChip={OptionalChip}
               />
             </div>
@@ -2884,9 +3011,9 @@ const VariantRowItem = memo(function VariantRowItem({
           {/* ── Sección 2: Precios y stock ── */}
           <div className="rounded-lg border bg-card p-4 shadow-sm">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <DollarSign className="h-4 w-4" /> Precios y stock
+              <DollarSign className="h-4 w-4" /> {isRestaurant ? 'Precios' : 'Precios y stock'}
             </h3>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_1fr_1.35fr]">
+            <div className={`grid grid-cols-1 gap-4 ${isRestaurant ? 'lg:grid-cols-2' : 'lg:grid-cols-[1fr_1fr_1fr_1.35fr]'}`}>
               <ProductPricingFields
                 form={form}
                 register={register}
@@ -2899,22 +3026,25 @@ const VariantRowItem = memo(function VariantRowItem({
                 hasPriceSell={hasPriceSell}
                 hasInitialStock={hasInitialStock}
                 isEditing={Boolean(currentProductId)}
+                hideStock={isRestaurant}
                 OptionalChip={OptionalChip}
               />
-              <ProductFeaturesSection
-                form={form}
-                register={register}
-                control={control}
-                setValue={setValue}
-                clearErrors={clearErrors}
-                isProcessing={isProcessing}
-                suppressInlineErrors={suppressInlineErrors}
-                featureFields={featureFields}
-                appendFeature={appendFeature}
-                removeFeature={removeFeature}
-                hasFeatures={hasFeatures}
-                OptionalChip={OptionalChip}
-              />
+              {!isRestaurant && (
+                <ProductFeaturesSection
+                  form={form}
+                  register={register}
+                  control={control}
+                  setValue={setValue}
+                  clearErrors={clearErrors}
+                  isProcessing={isProcessing}
+                  suppressInlineErrors={suppressInlineErrors}
+                  featureFields={featureFields}
+                  appendFeature={appendFeature}
+                  removeFeature={removeFeature}
+                  hasFeatures={hasFeatures}
+                  OptionalChip={OptionalChip}
+                />
+              )}
             </div>
           </div>
 
@@ -3052,6 +3182,8 @@ const VariantRowItem = memo(function VariantRowItem({
                     connectivity: "",
                     features: [],
                   })
+                  // Force-clear numeric inputs in DOM after reset
+                  flushNumericFieldsToDOM()
                 }}
               >
                 Limpiar

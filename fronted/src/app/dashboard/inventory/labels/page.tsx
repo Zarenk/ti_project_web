@@ -22,6 +22,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { LABELS_GUIDE_STEPS } from "./labels-guide-steps";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -31,7 +33,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import CatalogPagination from "@/components/catalog-pagination";
+import { ManualPagination } from "@/components/data-table-pagination";
 import { Check, ChevronsUpDown, X } from "lucide-react";
 
 import { getCategories } from "../../categories/categories.api";
@@ -642,7 +644,10 @@ export default function InventoryLabelsPage(): ReactElement {
         <div className="container mx-auto px-4">
           <div className="no-print flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold sm:text-3xl">Generar etiquetas</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold sm:text-3xl">Generar etiquetas</h1>
+                <PageGuideButton steps={LABELS_GUIDE_STEPS} tooltipLabel="Guía de etiquetas" />
+              </div>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                 Selecciona una o varias categorias, elige los productos y define si deseas imprimir codigos QR o codigos de barras.
                 Puedes personalizar que series incluir para cada item antes de generar la version imprimible.
@@ -867,15 +872,17 @@ export default function InventoryLabelsPage(): ReactElement {
                 </div>
 
                 {filteredProducts.length > productPageSize && (
-                  <CatalogPagination
+                  <ManualPagination
                     currentPage={productPage}
                     totalPages={productTotalPages}
                     pageSize={productPageSize}
+                    totalItems={filteredProducts.length}
                     onPageChange={setProductPage}
                     onPageSizeChange={(size) => {
                       setProductPageSize(size);
                       setProductPage(1);
                     }}
+                    pageSizeOptions={[8, 12, 16, 20]}
                   />
                 )}
               </CardContent>

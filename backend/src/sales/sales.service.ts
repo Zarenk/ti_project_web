@@ -33,6 +33,7 @@ import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenanc
 import { SunatService } from 'src/sunat/sunat.service';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
+import { ProfitAnalysisService } from './services/profit-analysis.service';
 
 @Injectable()
 export class SalesService {
@@ -55,6 +56,7 @@ export class SalesService {
     private readonly sunatService: SunatService,
     private readonly quotaService: SubscriptionQuotaService,
     private readonly verticalConfig: VerticalConfigService,
+    private readonly profitAnalysisService: ProfitAnalysisService,
   ) {}
 
   private async ensureSalesFeatureEnabled(
@@ -2194,5 +2196,19 @@ export class SalesService {
     } catch (error) {
       handlePrismaError(error);
     }
+  }
+
+  async getProfitAnalysis(
+    from: Date,
+    to: Date,
+    organizationId?: number,
+    companyId?: number,
+  ) {
+    return this.profitAnalysisService.getProfitAnalysis(
+      from,
+      to,
+      organizationId,
+      companyId,
+    );
   }
 }

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getCategory } from '../categories.api';
 import { CategoryForm } from './category-form';
+import { CategoryFormGuideButton } from './category-form-guide-button';
 
 interface Props {
 
@@ -28,9 +29,12 @@ export default async function CategoriesNewPage({params}: Props) {
                 {/* Renderizado del componente: Usamos resolvedParams.id para determinar si 
                 stamos creando un producto nuevo o actualizando uno existente. 
                 Esto se refleja en el título del formulario:*/}
-                <CardTitle className="text-center text-xl font-bold pt-5">
-                    {resolvedParams.id ? 'Actualizar Categoria' : 'Crear Categoria'}
-                </CardTitle>
+                <div className="flex items-center justify-center gap-2 pt-5">
+                    <CardTitle className="text-center text-xl font-bold">
+                        {resolvedParams.id ? 'Actualizar Categoria' : 'Crear Categoria'}
+                    </CardTitle>
+                    <CategoryFormGuideButton />
+                </div>
             </CardHeader>
             <CardContent>
                 <CategoryForm product={category}></CategoryForm>

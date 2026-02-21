@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import NextLink from "next/link"
 import {
   Boxes,
+  Brain,
   Building2,
   BookOpen,
   Bot,
@@ -19,6 +20,7 @@ import {
   Megaphone,
   PieChart,
   QrCode,
+  Scale,
   Settings2Icon,
   ShoppingCart,
   SquareTerminal,
@@ -323,7 +325,57 @@ const data: SidebarData = {
         },
       ],
     },
-    
+    {
+      title: "IA Training",
+      url: "#",
+      icon: Brain,
+      requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+      items: [
+        {
+          title: "Panel de IA",
+          url: "/dashboard/help-training",
+          requiredRoles: ["SUPER_ADMIN_GLOBAL"],
+        },
+      ],
+    },
+    {
+      title: "Legal",
+      url: "#",
+      icon: Scale,
+      permission: "legal" as ModulePermissionKey,
+      items: [
+        {
+          title: "Expedientes",
+          url: "/dashboard/legal",
+          permission: "legal" as ModulePermissionKey,
+        },
+        {
+          title: "Nuevo Expediente",
+          url: "/dashboard/legal/new",
+          permission: "legal" as ModulePermissionKey,
+        },
+        {
+          title: "Calendario",
+          url: "/dashboard/legal/calendar",
+          permission: "legal" as ModulePermissionKey,
+        },
+        {
+          title: "Documentos",
+          url: "/dashboard/legal/documents",
+          permission: "legal" as ModulePermissionKey,
+        },
+        {
+          title: "Jurisprudencia",
+          url: "/dashboard/jurisprudence",
+          permission: "legal" as ModulePermissionKey,
+        },
+        {
+          title: "Asistente Legal IA",
+          url: "/dashboard/jurisprudence/assistant",
+          permission: "legal" as ModulePermissionKey,
+        },
+      ],
+    },
   ],
   projects: [
     {
@@ -438,6 +490,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const verticalFeatures = verticalInfo?.config?.features
   const isComputerVertical = verticalInfo?.businessVertical === "COMPUTERS"
   const isRestaurantVertical = verticalInfo?.businessVertical === "RESTAURANTS"
+  const isLegalVertical = verticalInfo?.businessVertical === "LAW_FIRM"
 
   const accountingEnabled = useFeatureFlag("ACCOUNTING_ENABLED")
   const canAccessAccounting = useRBAC([
@@ -463,6 +516,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const filteredNav = data.navMain
     .filter((item) => {
       if (isRestaurantVertical && RESTAURANT_HIDDEN_NAV.has(item.title)) {
+        return false
+      }
+      if (item.title === "Legal" && !isLegalVertical) {
         return false
       }
       if (verticalFeatures) {
@@ -557,6 +613,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           .normalize("NFD")
           .replace(/\p{Diacritic}/gu, "");
       const excludedCustomLabels = new Set(["pos", "catalogo"]);
+      if (isLegalVertical) {
+        ["expedientes", "nuevo expediente", "calendario", "documentos", "jurisprudencia", "asistente legal ia"].forEach(
+          (l) => excludedCustomLabels.add(l),
+        );
+      }
       verticalInfo.config.ui.customMenuItems.forEach((menu) => {
         const normalized = normalizeLabel(menu.label ?? "");
         if (excludedCustomLabels.has(normalized)) {

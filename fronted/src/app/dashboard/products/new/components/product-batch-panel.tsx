@@ -55,7 +55,7 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
   const { isMascotMinimized } = useHelpAssistant()
 
   // When mascot is visible (not minimized), offset FAB to the left to avoid overlap
-  // Mascot is h-16 w-16 (64px) at right-6 (24px), so offset = 64px + 12px gap = 76px
+  // Mascot is h-14 w-14 (56px) at right-6 (24px), so offset = 56px + 24px + 20px gap = 100px
   const mascotVisible = !isMascotMinimized
 
   if (batchCart.length === 0 || currentProductId) return null
@@ -66,7 +66,7 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
       <button
         type="button"
         className="fixed bottom-6 z-40 flex items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-600 text-white shadow-[0_4px_24px_rgba(16,185,129,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_6px_32px_rgba(16,185,129,0.45)] active:scale-95 dark:border-emerald-400/40 dark:bg-emerald-500 h-14 w-14"
-        style={{ right: mascotVisible ? 100 : 24 }}
+        style={{ right: mascotVisible ? 108 : 32 }}
         onClick={() => setIsExpanded(true)}
         aria-label={`Ver ${batchCart.length} productos agregados`}
       >
@@ -87,7 +87,7 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
   return (
     <div
       className="fixed bottom-6 z-40 w-[300px] max-h-[70vh] flex flex-col rounded-xl border border-border/60 bg-card/95 shadow-[0_8px_40px_rgba(0,0,0,0.25)] backdrop-blur animate-in fade-in slide-in-from-bottom-4 duration-200"
-      style={{ right: mascotVisible ? 100 : 24 }}
+      style={{ right: mascotVisible ? 108 : 32 }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-3 pb-0">

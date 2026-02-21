@@ -5,7 +5,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import SimplePagination from "@/components/simple-pagination"
+import { ManualPagination } from "@/components/data-table-pagination"
 import { motion, AnimatePresence } from "framer-motion"
 import { Loader2 } from "lucide-react"
 import { BACKEND_URL } from "@/lib/utils"
@@ -254,12 +254,14 @@ export function TransactionHistoryTable({
       </Table>
 
       <div className="py-2">
-        <SimplePagination
-          page={safePage}
+        <ManualPagination
+          currentPage={safePage}
+          totalPages={totalPages}
           pageSize={pageSize}
           totalItems={stableData.length}
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
+          pageSizeOptions={[5, 10, 20, 30]}
         />
       </div>
     </div>

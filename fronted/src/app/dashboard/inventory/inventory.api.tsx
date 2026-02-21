@@ -612,7 +612,7 @@ interface ExportInventoryExcelOptions {
   withStockOnly?: boolean;
 }
 
-export function exportInventoryExcel({  
+export function exportInventoryExcel({
   storeId,
   categoryId,
   brandId,
@@ -642,4 +642,249 @@ export function exportInventoryExcel({
 
   // Abre directamente en nueva pestaña para que el navegador descargue el archivo
   window.open(url, '_blank');
+}
+
+// ==================== INVENTORY SNAPSHOTS ====================
+
+export interface InventorySnapshot {
+  id: number;
+  month: number;
+  year: number;
+  totalInventoryValue: number;
+  totalProducts: number;
+  totalUnits: number;
+  organizationId: number | null;
+  companyId: number | null;
+  snapshotType: 'ACTUAL' | 'CALCULATED';
+  calculatedAt: string | null;
+  dataSourcePeriod: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SnapshotResult {
+  month: number;
+  year: number;
+  totalInventoryValue: number;
+  totalProducts: number;
+  totalUnits: number;
+  created: boolean;
+}
+
+/**
+ * Crear snapshot del mes actual
+ */
+export async function createCurrentSnapshot(): Promise<SnapshotResult> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/snapshots/current`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al crear snapshot del mes actual');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
+    console.error('Error al crear snapshot del mes actual:', error);
+    throw error;
+  }
+}
+
+/**
+ * Crear snapshot para un mes/año específico
+ */
+export async function createSnapshot(month: number, year: number): Promise<SnapshotResult> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/snapshots`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ month, year }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al crear snapshot');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
+    console.error('Error al crear snapshot:', error);
+    throw error;
+  }
+}
+
+/**
+ * Obtener snapshots históricos
+ */
+export async function getSnapshots(limit: number = 12): Promise<InventorySnapshot[]> {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/snapshots?limit=${limit}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Error al obtener snapshots históricos');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return [];
+    }
+    console.error('Error al obtener snapshots históricos:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtener snapshot específico de un mes/año
+ */
+export async function getSnapshot(year: number, month: number): Promise<InventorySnapshot | null> {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/snapshots/${year}/${month}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new Error('Error al obtener snapshot');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
+    console.error('Error al obtener snapshot:', error);
+    return null;
+  }
+}
+
+// ==================== HISTORICAL SNAPSHOTS (BACKFILL) ====================
+
+export interface DataRange {
+  firstEntryDate: string;
+  lastSaleDate: string;
+  firstMonth: number;
+  firstYear: number;
+  lastMonth: number;
+  lastYear: number;
+}
+
+/**
+ * Obtener el rango de datos disponibles (primera entrada y última venta)
+ */
+export async function getDataRange(): Promise<DataRange | null> {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/snapshots/data-range`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Error al obtener rango de datos');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
+    console.error('Error al obtener rango de datos:', error);
+    return null;
+  }
+}
+
+/**
+ * Crear snapshot calculado retroactivamente para un mes específico
+ */
+export async function calculateSnapshot(month: number, year: number): Promise<InventorySnapshot> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/snapshots/calculate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ month, year }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al calcular snapshot histórico');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
+    console.error('Error al calcular snapshot histórico:', error);
+    throw error;
+  }
+}
+
+/**
+ * Backfill: crear snapshots calculados para un rango de meses
+ */
+export async function backfillSnapshots(
+  startMonth: number,
+  startYear: number,
+  endMonth: number,
+  endYear: number
+): Promise<InventorySnapshot[]> {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/inventory/snapshots/backfill`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ startMonth, startYear, endMonth, endYear }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Error al ejecutar backfill de snapshots');
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw error;
+    }
+    console.error('Error al ejecutar backfill:', error);
+    throw error;
+  }
 }

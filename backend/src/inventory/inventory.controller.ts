@@ -13,6 +13,8 @@ import {
   Header,
   Res,
   UseGuards,
+  Logger,
+  SetMetadata,
 } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -27,13 +29,19 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { InventorySnapshotService } from './inventory-snapshot.service';
+import { HistoricalSnapshotService } from './historical-snapshot.service';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class InventoryController {
+  private readonly logger = new Logger(InventoryController.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly inventoryService: InventoryService, // Inyectar el servicio
+    private readonly inventoryService: InventoryService,
+    private readonly snapshotService: InventorySnapshotService,
+    private readonly historicalSnapshotService: HistoricalSnapshotService,
   ) {}
 
   // Endpoint para crear un nuevo inventario
@@ -287,4 +295,184 @@ export class InventoryController {
       companyId ?? undefined,
     );
   }
+
+  // ==================== INVENTORY SNAPSHOTS ====================
+
+  /**
+   * Crear snapshot del mes actual manualmente
+   * POST /inventory/snapshots/current
+   */
+  @Post('/snapshots/current')
+  async createCurrentSnapshot(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.snapshotService.createCurrentMonthSnapshot(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Crear snapshot para un mes/año específico
+   * POST /inventory/snapshots
+   * Body: { month: number, year: number }
+   */
+  @Post('/snapshots')
+  async createSnapshot(
+    @Body() body: { month: number; year: number },
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const { month, year } = body;
+    if (!month || !year || month < 1 || month > 12 || year < 2000) {
+      throw new BadRequestException('Mes y año inválidos');
+    }
+    return this.snapshotService.createSnapshot(
+      month,
+      year,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Obtener snapshots históricos
+   * GET /inventory/snapshots?limit=12
+   */
+  @Get('/snapshots')
+  async getSnapshots(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNum = limit ? Number(limit) : 12;
+    return this.snapshotService.getSnapshots(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+      limitNum,
+    );
+  }
+
+  /**
+   * Obtener snapshot específico de un mes/año
+   * GET /inventory/snapshots/:year/:month
+   */
+  @Get('/snapshots/:year/:month')
+  async getSnapshot(
+    @Param('year') year: string,
+    @Param('month') month: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const yearNum = Number(year);
+    const monthNum = Number(month);
+    if (!Number.isFinite(yearNum) || !Number.isFinite(monthNum)) {
+      throw new BadRequestException('Año y mes deben ser números válidos');
+    }
+    if (monthNum < 1 || monthNum > 12 || yearNum < 2000) {
+      throw new BadRequestException('Mes y año inválidos');
+    }
+    return this.snapshotService.getSnapshot(
+      monthNum,
+      yearNum,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  // ==================== HISTORICAL SNAPSHOTS (BACKFILL) ====================
+
+  /**
+   * Obtener rango de datos disponibles (primera entrada y última venta)
+   * GET /inventory/snapshots/data-range
+   */
+  @Get('/snapshots/data-range')
+  async getDataRange(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.historicalSnapshotService.getDataRange(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Crear snapshot calculado retroactivamente para un mes específico
+   * POST /inventory/snapshots/calculate
+   * Body: { month: number, year: number }
+   */
+  @Post('/snapshots/calculate')
+  async calculateSnapshot(
+    @Body() body: { month: number; year: number },
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const { month, year } = body;
+    if (!month || !year || month < 1 || month > 12 || year < 2000) {
+      throw new BadRequestException('Mes y año inválidos');
+    }
+    return this.historicalSnapshotService.createCalculatedSnapshot(
+      month,
+      year,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Backfill: crear snapshots calculados para un rango de meses
+   * POST /inventory/snapshots/backfill
+   * Body: { startMonth: number, startYear: number, endMonth: number, endYear: number }
+   */
+  @Post('/snapshots/backfill')
+  async backfillSnapshots(
+    @Body()
+    body: {
+      startMonth: number;
+      startYear: number;
+      endMonth: number;
+      endYear: number;
+    },
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const { startMonth, startYear, endMonth, endYear } = body;
+
+    // Validaciones
+    if (
+      !startMonth ||
+      !startYear ||
+      !endMonth ||
+      !endYear ||
+      startMonth < 1 ||
+      startMonth > 12 ||
+      endMonth < 1 ||
+      endMonth > 12 ||
+      startYear < 2000 ||
+      endYear < 2000
+    ) {
+      throw new BadRequestException('Parámetros de fechas inválidos');
+    }
+
+    if (
+      startYear > endYear ||
+      (startYear === endYear && startMonth > endMonth)
+    ) {
+      throw new BadRequestException(
+        'La fecha de inicio debe ser anterior a la fecha de fin',
+      );
+    }
+
+    return this.historicalSnapshotService.backfillSnapshots(
+      startMonth,
+      startYear,
+      endMonth,
+      endYear,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
 }

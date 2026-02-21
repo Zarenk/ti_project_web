@@ -17,6 +17,8 @@ import { AccountForm } from "./account-form";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { CHART_GUIDE_STEPS } from "./chart-guide-steps";
 
 // Account type configuration
 const accountTypeConfig: Record<
@@ -209,9 +211,12 @@ export default function ChartPage() {
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              Plan de Cuentas
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                Plan de Cuentas
+              </h1>
+              <PageGuideButton steps={CHART_GUIDE_STEPS} tooltipLabel="Guía del plan de cuentas" />
+            </div>
             <p className="text-slate-600 dark:text-slate-400 mt-1">
               Organiza las cuentas contables de tu negocio
             </p>

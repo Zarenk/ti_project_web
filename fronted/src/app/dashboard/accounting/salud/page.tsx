@@ -17,6 +17,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SALUD_GUIDE_STEPS } from "./salud-guide-steps"
 
 type HealthStatus = "EXCELENTE" | "BUENO" | "ATENCIÓN" | "CRÍTICO"
 
@@ -100,7 +102,10 @@ export default function SaludNegocioPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Salud del Negocio</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Salud del Negocio</h1>
+            <PageGuideButton steps={SALUD_GUIDE_STEPS} tooltipLabel="Guía de salud" />
+          </div>
           <p className="text-muted-foreground mt-1">
             Cómo está tu empresa y qué decisiones puedes tomar
           </p>

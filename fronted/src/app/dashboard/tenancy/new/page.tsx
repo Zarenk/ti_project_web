@@ -12,6 +12,7 @@ import {
   Laptop,
   Layers,
   Plus,
+  Scale,
   ShieldCheck,
   ShoppingBag,
   Trash2,
@@ -19,6 +20,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { TENANCY_FORM_GUIDE_STEPS } from "./tenancy-form-guide-steps"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -106,6 +109,13 @@ const VERTICAL_OPTIONS = [
     icon: Factory,
     color: "amber",
   },
+  {
+    value: "LAW_FIRM",
+    label: "Estudio de Abogados",
+    description: "Expedientes, plazos procesales y control de horas",
+    icon: Scale,
+    color: "rose",
+  },
 ] as const
 
 const VERTICAL_COLOR_MAP: Record<string, { border: string; bg: string; text: string; ring: string }> = {
@@ -115,6 +125,7 @@ const VERTICAL_COLOR_MAP: Record<string, { border: string; bg: string; text: str
   emerald: { border: "border-emerald-400 dark:border-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300", ring: "ring-emerald-300 dark:ring-emerald-600" },
   violet:  { border: "border-violet-400 dark:border-violet-500", bg: "bg-violet-50 dark:bg-violet-950/40", text: "text-violet-700 dark:text-violet-300", ring: "ring-violet-300 dark:ring-violet-600" },
   amber:   { border: "border-amber-400 dark:border-amber-500", bg: "bg-amber-50 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300", ring: "ring-amber-300 dark:ring-amber-600" },
+  rose:    { border: "border-rose-400 dark:border-rose-500", bg: "bg-rose-50 dark:bg-rose-950/40", text: "text-rose-700 dark:text-rose-300", ring: "ring-rose-300 dark:ring-rose-600" },
 }
 
 function generateUnitKey() {
@@ -541,15 +552,29 @@ export default function NewOrganizationPage() {
 
     try {
       const response = await createOrganization(payload)
-      toast.success(`Organización "${response.name}" creada correctamente.`)
       const primaryCompany = response.companies?.[0] ?? null
-      setTenantSelection({
-        orgId: response.id,
-        companyId: primaryCompany?.id ?? null,
-      })
+
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
       }
+
+      toast.success(`Organización "${response.name}" creada correctamente.`, {
+        duration: 8000,
+        action: {
+          label: "Cambiar a esta organización",
+          onClick: () => {
+            setTenantSelection({
+              orgId: response.id,
+              companyId: primaryCompany?.id ?? null,
+            })
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
+            }
+            router.refresh()
+          },
+        },
+      })
+
       router.push(`/dashboard/tenancy/${response.id}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo crear la organización"
@@ -567,9 +592,12 @@ export default function NewOrganizationPage() {
         </Badge>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-              Crear nueva organización
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+                Crear nueva organización
+              </h1>
+              <PageGuideButton steps={TENANCY_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
+            </div>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
               Registra un nuevo tenant, define sus unidades operativas y garantiza que los usuarios
               trabajen en un espacio aislado del resto de clientes.

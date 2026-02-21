@@ -180,7 +180,7 @@ export function useProductColumns(options: ProductTableOptions = {}) {
           return <div className="font-medium">{category?.name || 'Sin categoria'}</div>
         },
         filterFn: (row, _columnId, filterValue) => {
-          return filterValue.includes(row.original.category?.id)
+          return filterValue.includes(row.getValue("category_name"))
         },
       },
       {

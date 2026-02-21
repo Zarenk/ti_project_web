@@ -62,7 +62,21 @@
       "Bash(npx tsx:*)",
       "Bash(file:*)",
       "Bash(find:*)",
-      "Bash(jobs)"
+      "Bash(jobs)",
+      "Bash(git stash pop:*)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:wZdoEryWAmhQQmswQDtlBSHUEhOMJlhn@nozomi.proxy.rlwy.net:18918/railway\" npx prisma migrate:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:cpe.sunat.gob.pe)",
+      "WebFetch(domain:llama.pe)",
+      "WebFetch(domain:orientacion.sunat.gob.pe)",
+      "WebFetch(domain:www.perucontable.com)",
+      "Bash(npx skills add:*)",
+      "Bash(npx skills search:*)",
+      "Bash(bash test-jurisprudence.sh)",
+      "Bash(__NEW_LINE_a5463ce9fad2ea81__ grep -n \"phone\" \"/c/Users/Usuario/Documents/Proyectos PROGRAMACION/TI_projecto_web/backend/prisma/schema.prisma\" -i)",
+      "Bash(__NEW_LINE_074ea40fadfd426d__ cat \"/c/Users/Usuario/Documents/Proyectos PROGRAMACION/TI_projecto_web/backend/src/users/dto/update-profile.dto.ts\")",
+      "Bash(__NEW_LINE_69c05e7b8bec8be3__ cat \"/c/Users/Usuario/Documents/Proyectos PROGRAMACION/TI_projecto_web/fronted/src/app/dashboard/account/account.api.ts\")",
+      "Bash(__NEW_LINE_b12fcdeaf5ef0de6__ find \"/c/Users/Usuario/Documents/Proyectos PROGRAMACION/TI_projecto_web/backend/src\" -type f \\\\\\( -name \"*calendar*\" -o -name \"*legal-note*\" \\\\\\))"
     ]
   }
 }
