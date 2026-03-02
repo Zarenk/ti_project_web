@@ -109,6 +109,10 @@ export class SunatService {
         ? company.sunatSolPasswordProd
         : company.sunatSolPasswordBeta;
 
+      this.logger.log(
+        `[sendDocument] company=${companyId} env=${environment} solUser=${username} ruc=${company.sunatRuc}`,
+      );
+
       if (!username || !password) {
         throw new BadRequestException(
           `La empresa no tiene configurados el usuario y la clave SOL para el ambiente ${environment}.`,
