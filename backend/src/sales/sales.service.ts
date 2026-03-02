@@ -614,20 +614,7 @@ export class SalesService {
         throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
       }
 
-      // Bloquear eliminacion de ventas con comprobante (factura/boleta)
-      const hasInvoice = await this.prisma.invoiceSales.findFirst({
-        where: { salesId: id },
-        select: { id: true },
-      });
-
-      if (hasInvoice) {
-        throw new ConflictException(
-          `No se puede eliminar la venta ${id}: tiene un comprobante asociado. ` +
-            `Use la opcion de anulacion en su lugar.`,
-        );
-      }
-
-      // Validar que la venta no tenga transmisiones SUNAT aceptadas
+      // Bloquear eliminacion SOLO si SUNAT aceptó el comprobante
       const sunatAccepted = await this.prisma.sunatTransmission.findFirst({
         where: { saleId: id, status: 'ACCEPTED' },
         select: {
@@ -643,6 +630,18 @@ export class SalesService {
           `No se puede eliminar la venta ${id}: ya fue transmitida y aceptada por SUNAT ` +
             `(${sunatAccepted.documentType} ${sunatAccepted.serie}-${sunatAccepted.correlativo}). ` +
             `Debe emitir una nota de crédito para anularla.`,
+        );
+      }
+
+      // Bloquear si tiene notas de crédito asociadas (FK CreditNote → InvoiceSales)
+      const invoiceWithCN = await this.prisma.invoiceSales.findFirst({
+        where: { salesId: id },
+        include: { creditNotes: { select: { id: true }, take: 1 } },
+      });
+
+      if (invoiceWithCN?.creditNotes?.length) {
+        throw new ConflictException(
+          `No se puede eliminar la venta ${id}: tiene notas de crédito asociadas.`,
         );
       }
 
@@ -779,9 +778,15 @@ export class SalesService {
           // Capturar datos de factura ANTES de eliminar (para anulación contable)
           const invoiceData = await prismaTx.invoiceSales.findFirst({
             where: { salesId: sale.id },
-            select: { serie: true, nroCorrelativo: true },
+            select: { id: true, serie: true, nroCorrelativo: true },
           });
 
+          // Eliminar transmisiones SUNAT fallidas (ERROR/SENDING/RETRYING)
+          await prismaTx.sunatTransmission.deleteMany({
+            where: { saleId: sale.id },
+          });
+
+          // WhatsAppMessage.invoiceId tiene onDelete: SetNull — Prisma lo maneja automáticamente
           await prismaTx.invoiceSales.deleteMany({
             where: { salesId: sale.id },
           });
