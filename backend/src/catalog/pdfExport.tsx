@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import SVGtoPDF from 'svg-to-pdfkit';
 import sharp from 'sharp';
-import { resolveBackendPath } from '../utils/path-utils';
+import { resolveStoragePath } from '../utils/path-utils';
 import { PrismaService } from '../prisma/prisma.service';
 
 const prisma = new PrismaService();
@@ -60,7 +60,7 @@ async function getActiveCoverPath(options: {
     return null;
   }
   const relative = cover.imagePath.replace(/^[/\\]+/, '');
-  const absolute = resolveBackendPath(...relative.split(/[\\/]+/));
+  const absolute = resolveStoragePath(...relative.split(/[\\/]+/));
   return fs.existsSync(absolute) ? absolute : null;
 }
 

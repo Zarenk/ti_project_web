@@ -16,6 +16,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -299,7 +300,7 @@ export class AdsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/ads',
+        destination: resolveStoragePath('uploads', 'ads'),
         filename: (req, file, cb) => {
           const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, `${unique}${extname(file.originalname)}`);

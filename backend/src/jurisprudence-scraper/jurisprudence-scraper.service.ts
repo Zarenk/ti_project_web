@@ -5,6 +5,7 @@ import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { JurisprudenceJobStatus, JurisprudenceScrapeType, JurisprudenceProcessingStatus } from '@prisma/client';
 import { scrapeQueue } from '../jurisprudence/jurisprudence.queue';
 import { COURT_SECTIONS, PJ_BASE_URL, MAX_PAGES_PER_SECTION, type CourtSection } from './court-sections.config';
@@ -23,7 +24,7 @@ interface PdfLinkInfo {
 @Injectable()
 export class JurisprudenceScraperService {
   private readonly logger = new Logger(JurisprudenceScraperService.name);
-  private readonly STORAGE_PATH = process.env.JURISPRUDENCE_STORAGE_PATH || './uploads/jurisprudence';
+  private readonly STORAGE_PATH = process.env.JURISPRUDENCE_STORAGE_PATH || resolveStoragePath('uploads', 'jurisprudence');
   private readonly RATE_LIMIT_MS = parseInt(process.env.JURISPRUDENCE_SCRAPING_DELAY || '2000', 10);
   private readonly USER_AGENT = 'JurisprudenceBot/1.0 (+mailto:legal@ecoterra.pe)';
   private readonly MAX_RETRIES = 3;

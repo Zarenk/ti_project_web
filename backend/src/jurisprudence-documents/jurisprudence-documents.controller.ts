@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { JurisprudenceEmbeddingService } from './jurisprudence-embedding.service';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
@@ -36,7 +37,7 @@ import { Response } from 'express';
 @UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)
 @ModulePermission('legal')
 export class JurisprudenceDocumentsController {
-  private readonly STORAGE_PATH = process.env.JURISPRUDENCE_STORAGE_PATH || './uploads/jurisprudence';
+  private readonly STORAGE_PATH = process.env.JURISPRUDENCE_STORAGE_PATH || resolveStoragePath('uploads', 'jurisprudence');
 
   constructor(
     private readonly embeddingService: JurisprudenceEmbeddingService,
@@ -117,7 +118,7 @@ export class JurisprudenceDocumentsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: process.env.JURISPRUDENCE_STORAGE_PATH || './uploads/jurisprudence',
+        destination: process.env.JURISPRUDENCE_STORAGE_PATH || resolveStoragePath('uploads', 'jurisprudence'),
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, `jurisprudence-${uniqueSuffix}.pdf`);

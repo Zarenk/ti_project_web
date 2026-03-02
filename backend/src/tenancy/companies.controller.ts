@@ -28,7 +28,7 @@ import { TenantContextGuard } from './tenant-context.guard';
 import { TenantContextService } from './tenant-context.service';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { ValidateCompanyDto } from './dto/validate-company.dto';
-import { resolveBackendPath } from 'src/utils/path-utils';
+import { resolveStoragePath } from 'src/utils/path-utils';
 
 enum SunatUploadEnvironment {
   BETA = 'beta',
@@ -116,7 +116,7 @@ export class CompaniesController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: (_req, _file, cb) => {
-          const tmpDir = resolveBackendPath('uploads', 'sunat', 'tmp');
+          const tmpDir = resolveStoragePath('uploads', 'sunat', 'tmp');
           fs.mkdirSync(tmpDir, { recursive: true });
           cb(null, tmpDir);
         },
@@ -144,7 +144,7 @@ export class CompaniesController {
 
     const normalizedEnv = env === SunatUploadEnvironment.PROD ? 'PROD' : 'BETA';
     const envFolder = env === SunatUploadEnvironment.PROD ? 'prod' : 'beta';
-    const finalDir = resolveBackendPath(
+    const finalDir = resolveStoragePath(
       'uploads',
       'sunat',
       String(id),
@@ -160,7 +160,7 @@ export class CompaniesController {
     fs.renameSync(file.path, finalPath);
 
     const relativePath = path
-      .relative(resolveBackendPath(), finalPath)
+      .relative(resolveStoragePath(), finalPath)
       .replace(/\\/g, '/');
 
     const context = tenant ?? this.tenantContextService.getContext();
@@ -178,7 +178,7 @@ export class CompaniesController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: (_req, _file, cb) => {
-          const tmpDir = resolveBackendPath('uploads', 'company-logos', 'tmp');
+          const tmpDir = resolveStoragePath('uploads', 'company-logos', 'tmp');
           fs.mkdirSync(tmpDir, { recursive: true });
           cb(null, tmpDir);
         },
@@ -211,7 +211,7 @@ export class CompaniesController {
 
     const orgFolder = `org-${company.organization.id}`;
     const companyFolder = `company-${id}`;
-    const finalDir = resolveBackendPath(
+    const finalDir = resolveStoragePath(
       'uploads',
       'company-logos',
       orgFolder,
@@ -231,7 +231,7 @@ export class CompaniesController {
     }
 
     const relativePath = path
-      .relative(resolveBackendPath(), finalPath)
+      .relative(resolveStoragePath(), finalPath)
       .replace(/\\/g, '/');
 
     try {
@@ -245,7 +245,7 @@ export class CompaniesController {
         const isExternal = /^https?:\/\//i.test(company.logoUrl);
         if (!isExternal) {
           const normalizedPrevious = company.logoUrl.replace(/^[/\\]+/, '');
-          const previousPath = resolveBackendPath(normalizedPrevious);
+          const previousPath = resolveStoragePath(normalizedPrevious);
           fs.unlink(previousPath, () => {});
         }
       }

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { resolveStoragePath } from './path-utils';
 
 /**
  * Writes SUNAT certificate and private key from environment variables to disk.
@@ -7,7 +8,7 @@ import * as path from 'path';
  * on each deploy. Set SUNAT_CERT_B64 and SUNAT_KEY_B64 in Railway env vars
  * with the base64-encoded contents of cert.pem and key.pem respectively.
  *
- * Files are written to: <backend-root>/sunat/prod/cert.pem and key.pem
+ * Files are written to: <storage-root>/sunat/prod/cert.pem and key.pem
  */
 export function bootstrapSunatCerts(): void {
   const certB64 = process.env.SUNAT_CERT_B64;
@@ -15,8 +16,7 @@ export function bootstrapSunatCerts(): void {
 
   if (!certB64 && !keyB64) return;
 
-  const root = process.cwd();
-  const targetDir = path.join(root, 'sunat', 'prod');
+  const targetDir = resolveStoragePath('sunat', 'prod');
 
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });

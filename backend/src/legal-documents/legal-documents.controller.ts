@@ -36,7 +36,9 @@ const LEGAL_ALLOWED_ROLES = [
   'SUPER_ADMIN_ORG',
 ];
 
-const UPLOAD_DEST = './uploads/legal-documents';
+import { resolveStoragePath } from 'src/utils/path-utils';
+
+const UPLOAD_DEST = resolveStoragePath('uploads', 'legal-documents');
 
 @Controller('legal-documents')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)

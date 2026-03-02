@@ -26,7 +26,7 @@ import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { Request } from 'express';
-import { resolveBackendPath } from 'src/utils/path-utils';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { convertJpegToPng, convertPngToSvg } from 'src/utils/image-utils';
 
 const JPEG_MIME_TYPES = ['image/jpeg', 'image/jpg'];
@@ -38,7 +38,7 @@ export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   private async processImage(file: Express.Multer.File) {
-    const uploadsDir = resolveBackendPath('uploads', 'brands');
+    const uploadsDir = resolveStoragePath('uploads', 'brands');
     if (JPEG_MIME_TYPES.includes(file.mimetype)) {
       const jpegPath = join(uploadsDir, file.filename);
       const pngFilename = file.filename.replace(/\.[^/.]+$/, '.png');
@@ -85,7 +85,7 @@ export class BrandsController {
       ],
       {
         storage: diskStorage({
-          destination: './uploads/brands',
+          destination: resolveStoragePath('uploads', 'brands'),
           filename: (req, file, cb) => {
             const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
             cb(null, `${unique}${extname(file.originalname)}`);
@@ -145,7 +145,7 @@ export class BrandsController {
       ],
       {
         storage: diskStorage({
-          destination: './uploads/brands',
+          destination: resolveStoragePath('uploads', 'brands'),
           filename: (req, file, cb) => {
             const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
             cb(null, `${unique}${extname(file.originalname)}`);
@@ -197,7 +197,7 @@ export class BrandsController {
     if (!brand?.logoPng) {
       throw new BadRequestException('La marca no tiene logo PNG');
     }
-    const uploadsDir = resolveBackendPath('uploads', 'brands');
+    const uploadsDir = resolveStoragePath('uploads', 'brands');
     const filename = brand.logoPng.split('/').pop() as string;
     const pngPath = join(uploadsDir, filename);
     const svgFilename = filename.replace(/\.[^/.]+$/, '.svg');
@@ -215,7 +215,7 @@ export class BrandsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/brands',
+        destination: resolveStoragePath('uploads', 'brands'),
         filename: (req, file, cb) => {
           const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, `${unique}${extname(file.originalname)}`);
