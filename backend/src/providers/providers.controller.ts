@@ -28,7 +28,7 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
 
-@ModulePermission(['inventory', 'purchases', 'providers'])
+@ModulePermission(['inventory', 'purchases', 'providers', 'products', 'sales'])
 @Controller('providers')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class ProvidersController {

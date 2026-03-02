@@ -580,7 +580,22 @@ export class ProductsService {
   async validateProductName(
     name: string,
     excludeId?: number,
-  ): Promise<{ nameAvailable: boolean }> {
+  ): Promise<{
+    nameAvailable: boolean;
+    existingProduct?: {
+      id: number;
+      name: string;
+      description: string | null;
+      price: any;
+      priceSell: any;
+      images: string[];
+      categoryId: number | null;
+      brandName: string | null;
+      brand: { id: number; name: string } | null;
+      category: { id: number; name: string } | null;
+      stock: { storeId: number; storeName: string; stock: number }[];
+    };
+  }> {
     const ctx = this.tenantContext.getContext();
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -596,8 +611,43 @@ export class ProductsService {
           name: { equals: trimmedName, mode: 'insensitive' },
           ...(excludeId ? { NOT: { id: excludeId } } : {}),
         },
+        include: {
+          brand: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true } },
+          inventory: {
+            include: {
+              storeOnInventory: {
+                include: { store: { select: { id: true, name: true } } },
+              },
+            },
+          },
+        },
       });
-      return { nameAvailable: !existing };
+      if (!existing) {
+        return { nameAvailable: true };
+      }
+      return {
+        nameAvailable: false,
+        existingProduct: {
+          id: existing.id,
+          name: existing.name,
+          description: existing.description,
+          price: existing.price,
+          priceSell: existing.priceSell,
+          images: existing.images,
+          categoryId: existing.categoryId,
+          brandName: existing.brandName,
+          brand: existing.brand,
+          category: existing.category,
+          stock: existing.inventory?.flatMap((inv) =>
+            inv.storeOnInventory.map((soi) => ({
+              storeId: soi.store.id,
+              storeName: soi.store.name,
+              stock: soi.stock,
+            })),
+          ) ?? [],
+        },
+      };
     } catch (error) {
       handlePrismaError(error);
     }

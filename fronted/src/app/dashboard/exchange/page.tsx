@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback } from "react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
@@ -79,6 +80,9 @@ import {
   getAllTipoCambio,
   getLatestExchangeRateByCurrency,
 } from "./exchange.api"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { EXCHANGE_GUIDE_STEPS } from "./exchange-guide-steps"
+import { queryKeys } from "@/lib/query-keys"
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -88,6 +92,9 @@ interface TipoCambio {
   moneda: string
   valor: number
 }
+
+// Stable empty array to prevent unstable references in hook dependencies.
+const STABLE_EMPTY: any[] = []
 
 type CurrencyCode = "USD" | "EUR"
 
@@ -120,18 +127,13 @@ function ChartTooltipContent({ active, payload, label }: any) {
 /* ── Main Page ────────────────────────────────────────────── */
 
 export default function ExchangeRatePage() {
-  const { version } = useTenantSelection()
-
-  // ─ History data
-  const [data, setData] = useState<TipoCambio[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
 
   // ─ Form state
   const [fecha, setFecha] = useState<Date>(new Date())
   const [moneda, setMoneda] = useState<CurrencyCode>("USD")
   const [valor, setValor] = useState("")
-  const [loadingRate, setLoadingRate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
 
@@ -141,51 +143,33 @@ export default function ExchangeRatePage() {
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined)
 
   // ─ Fetch all history
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
+  const { data = STABLE_EMPTY, isLoading: loading, error: historyError } = useQuery({
+    queryKey: [...queryKeys.exchange.root(selection.orgId, selection.companyId), "all"],
+    queryFn: async () => {
       const json = await getAllTipoCambio()
-      setData(Array.isArray(json) ? json : [])
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "No se pudo cargar el historial."
-      setError(msg)
-      setData([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      return Array.isArray(json) ? json as TipoCambio[] : []
+    },
+    enabled: selection.orgId !== null,
+  })
 
-  useEffect(() => {
-    void fetchData()
-  }, [fetchData, version])
+  const error = historyError
+    ? historyError instanceof Error ? historyError.message : "No se pudo cargar el historial."
+    : null
 
   // ─ Fetch latest rate when currency changes
-  const fetchLatestRate = useCallback(async (currency: string) => {
-    setLoadingRate(true)
-    try {
-      const latest = await getLatestExchangeRateByCurrency(currency)
+  const { isLoading: loadingRate } = useQuery({
+    queryKey: [...queryKeys.exchange.current(selection.orgId, selection.companyId), { moneda }],
+    queryFn: async () => {
+      const latest = await getLatestExchangeRateByCurrency(moneda)
       if (latest !== null) {
         setValor(latest.toFixed(4))
       } else {
         setValor("")
       }
-    } catch {
-      setValor("")
-    } finally {
-      setLoadingRate(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchLatestRate(moneda)
-  }, [moneda, version, fetchLatestRate])
-
-  // ─ Reset on tenant change
-  useEffect(() => {
-    setGlobalFilter("")
-    setSelectedDateRange(undefined)
-  }, [version])
+      return latest
+    },
+    enabled: selection.orgId !== null,
+  })
 
   // ─ Submit new rate
   const handleSubmit = async () => {
@@ -204,7 +188,9 @@ export default function ExchangeRatePage() {
       toast.success("Tipo de cambio registrado.")
       setValor("")
       setFecha(new Date())
-      void fetchData()
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.exchange.root(selection.orgId, selection.companyId),
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al registrar."
       toast.error(msg)
@@ -338,7 +324,10 @@ export default function ExchangeRatePage() {
           <ArrowRightLeft className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Tipo de Cambio</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">Tipo de Cambio</h1>
+            <PageGuideButton steps={EXCHANGE_GUIDE_STEPS} tooltipLabel="Guía de tipo de cambio" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Registra y consulta los tipos de cambio del día
           </p>
@@ -649,7 +638,7 @@ export default function ExchangeRatePage() {
           ) : error ? (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
               <p className="text-sm text-destructive">{error}</p>
-              <Button variant="outline" size="sm" onClick={() => void fetchData()}>
+              <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.exchange.root(selection.orgId, selection.companyId) })}>
                 Reintentar
               </Button>
             </div>

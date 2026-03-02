@@ -15,6 +15,7 @@ export async function createSale(data: {
   payments: { paymentMethodId: number; amount: number; currency: string }[];
   source?: 'POS' | 'WEB';
   referenceId?: string;
+  fechaEmision?: string;
 }) {
   const { orgId, companyId } = await getTenantSelection();
   const payload = {
@@ -67,7 +68,7 @@ export async function lookupSunatDocument(document: string): Promise<LookupRespo
 
   const isRuc = trimmed.length === 11
   const endpoint = isRuc
-    ? `${BACKEND_URL}/api/lookups/decolecta/ruc/${trimmed}`
+    ? `${BACKEND_URL}/api/lookups/ruc/${trimmed}`
     : `${BACKEND_URL}/api/lookups/dni/${trimmed}`
 
   const res = await authFetch(endpoint)
@@ -80,29 +81,36 @@ export async function lookupSunatDocument(document: string): Promise<LookupRespo
   }
 
   const data = await res.json()
+
   if (isRuc) {
-  return {
-    identifier: trimmed,
-    name: data?.razon_social ?? data?.nombre ?? "—",
-    address: data?.direccion ?? null,
-    status: data?.estado ?? null,
-    condition: data?.condicion ?? null,
-    type: "RUC",
+    // LookupResultDto format (name, address, status, condition, identifier)
+    return {
+      identifier: data?.identifier ?? trimmed,
+      name: data?.name ?? data?.razon_social ?? "—",
+      address: data?.address ?? data?.direccion ?? null,
+      status: data?.status ?? data?.estado ?? null,
+      condition: data?.condition ?? data?.condicion ?? null,
+      type: "RUC",
       raw: data,
     }
   }
 
-  const nombres = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
-    .filter((value: string | undefined) => !!value && value.trim().length > 0)
+  // DNI: backend /lookups/dni/:dni returns LookupResultDto { name, address, status, ... }
+  // Prioritize mapped DTO fields, fallback to raw API field names
+  const mappedName = data?.name
+  const rawNombres = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
+    .filter((v: string | undefined) => !!v && v.trim().length > 0)
     .join(" ")
     .trim()
 
   return {
-    identifier: trimmed,
-    name: nombres || data?.nombreCompleto || "—",
-    address: data?.direccion ?? null,
+    identifier: data?.identifier ?? trimmed,
+    name: (mappedName && mappedName !== "--") ? mappedName : rawNombres || data?.nombreCompleto || "—",
+    address: data?.address ?? data?.direccion ?? null,
+    status: data?.status ?? null,
+    condition: data?.condition ?? null,
     type: "DNI",
-    raw: data,
+    raw: data?.raw ?? data,
   }
 }
 
@@ -830,6 +838,66 @@ export async function deleteSale(id: number) {
   }
 }
 
+export async function annulSale(id: number) {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/${id}/annul`, {
+    method: 'PATCH',
+  });
+
+  if (!response.ok) {
+    let message = 'Error al anular la venta';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function sendInvoiceWhatsApp(saleId: number, phone?: string) {
+  const response = await fetch(`/api/whatsapp/send-invoice/${saleId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: phone || undefined }),
+  });
+
+  if (!response.ok) {
+    let message = 'Error al enviar por WhatsApp';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function getWhatsAppSendCounts(saleIds: number[]): Promise<Record<number, number>> {
+  if (saleIds.length === 0) return {};
+  try {
+    const response = await fetch('/api/whatsapp/invoice-send-counts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saleIds }),
+    });
+    if (!response.ok) return {};
+    const data = await response.json();
+    return data.counts ?? {};
+  } catch {
+    return {};
+  }
+}
+
 export async function getSaleById(id: number | string) {
   try {
     const res = await authFetch(`${BACKEND_URL}/api/sales/${id}`);
@@ -933,6 +1001,140 @@ export async function getProfitByDate(from: string, to: string) {
   } catch (error) {
     if (error instanceof UnauthenticatedError) {
       return []
+    }
+    throw error
+  }
+}
+
+export interface ProductProfitSummary {
+  productId: number
+  sku?: string
+  name: string
+  unitsSold: number
+  avgSalePrice: number
+  avgPurchasePrice: number
+  revenue: number
+  cost: number
+  profit: number
+  currentStock: number
+}
+
+export interface InvestmentRecommendation {
+  productId: number
+  name: string
+  sku?: string
+  score: number
+  priority: 'ALTA' | 'MEDIA' | 'BAJA'
+  profitMargin: number
+  rotationSpeed: number
+  stockLevel: number
+  reason: string
+}
+
+export interface MonthlyHistoryItem {
+  month: string
+  year: number
+  monthNumber: number
+  profit: number
+  changePercent: number
+}
+
+export interface MonthlyHistory {
+  months: MonthlyHistoryItem[]
+  bestMonth: MonthlyHistoryItem | null
+  worstMonth: MonthlyHistoryItem | null
+}
+
+export interface InventoryROI {
+  totalInventoryValue: number
+  monthlyProfit: number
+  roiPercent: number
+  status: 'critical' | 'warning' | 'healthy'
+  alertMessage?: string
+}
+
+export interface ROIHistoryItem {
+  month: string
+  year: number
+  monthNumber: number
+  roiPercent: number
+  changePercent: number
+  profit: number
+  inventoryValue: number
+  totalSales: number
+  totalPurchases: number
+}
+
+export interface ROIHistory {
+  months: ROIHistoryItem[]
+  bestMonth: ROIHistoryItem | null
+  worstMonth: ROIHistoryItem | null
+}
+
+export interface ProfitAnalysisResponse {
+  top50Profitable: ProductProfitSummary[]
+  top50Unprofitable: ProductProfitSummary[]
+  monthProjection: {
+    current: number
+    projected: number
+    confidence: number
+    trend: 'up' | 'down' | 'stable'
+    daysAnalyzed: number
+    daysRemaining: number
+    breakdown: {
+      last30Days: number
+      days30to60: number
+      days60to90: number
+    }
+  }
+  recommendations: InvestmentRecommendation[]
+  monthlyHistory: MonthlyHistory
+  inventoryROI: InventoryROI
+  roiHistory: ROIHistory
+}
+
+export async function getProfitAnalysis(from: string, to: string): Promise<ProfitAnalysisResponse> {
+  const qs = new URLSearchParams()
+  qs.append('from', from)
+  qs.append('to', to)
+
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/sales/analytics/profit-analysis?${qs.toString()}`)
+    if (!res.ok) {
+      throw new Error('Error al obtener análisis de utilidades')
+    }
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return {
+        top10Profitable: [],
+        top10Unprofitable: [],
+        monthProjection: {
+          current: 0,
+          projected: 0,
+          confidence: 0,
+          trend: 'stable',
+          daysAnalyzed: 0,
+          daysRemaining: 0,
+          breakdown: {
+            last30Days: 0,
+            days30to60: 0,
+            days60to90: 0,
+          },
+        },
+        recommendations: [],
+        monthlyHistory: {
+          months: [],
+          bestMonth: null,
+          worstMonth: null,
+        },
+        inventoryROI: {
+          totalInventoryValue: 0,
+          monthlyProfit: 0,
+          roiPercent: 0,
+          status: 'healthy',
+        },
+      }
     }
     throw error
   }

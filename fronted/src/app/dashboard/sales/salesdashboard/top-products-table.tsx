@@ -1,7 +1,9 @@
 "use client"
 
 import { useTenantSelection } from "@/context/tenant-selection-context";
-import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DateRange } from "react-day-picker";
 import { getTopProducts } from "../sales.api";
@@ -20,32 +22,23 @@ interface TopProduct {
 }
 
 export function TopProductsTable({ dateRange }: Props) {
-  const [data, setData] = useState<TopProduct[]>([]);
-  const [totalUnits, setTotalUnits] = useState(0);
-  const { selection, version } = useTenantSelection();
-  const selectionKey = useMemo(() => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`, [selection.orgId, selection.companyId, version]);
+  const { selection } = useTenantSelection();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        let res;
-        if (dateRange?.from && dateRange?.to) {
-          const from = dateRange.from.toISOString();
-          const to = dateRange.to.toISOString();
-          res = await getTopProducts({ from, to });
-        } else {
-          res = await getTopProducts({ type: "month" });
-        }
-        setData(res);
-        const total = res.reduce((sum: number, p: TopProduct) => sum + p.sales, 0);
-        setTotalUnits(total);
-      } catch (err) {
-        console.error("Error al obtener top productos:", err);
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to?.toISOString() ?? ""
+
+  const { data = [] } = useQuery<TopProduct[]>({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "topProductsTable", { from, to }],
+    queryFn: async () => {
+      if (dateRange?.from && dateRange?.to) {
+        return await getTopProducts({ from: dateRange.from.toISOString(), to: dateRange.to.toISOString() });
       }
-    };
+      return await getTopProducts({ type: "month" });
+    },
+    enabled: selection.orgId !== null,
+  });
 
-    fetchData();
-  }, [dateRange, selectionKey]);
+  const totalUnits = useMemo(() => data.reduce((sum, p) => sum + p.sales, 0), [data]);
 
   return (
     <div className="rounded-xl border bg-card shadow-md overflow-x-auto">

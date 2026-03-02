@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
@@ -15,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Clock } from "lucide-react"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 import { cn } from "@/lib/utils"
@@ -25,11 +26,16 @@ import {
   fetchSubscriptionPlans,
   requestPlanChange,
   grantComplimentarySubscription,
+  updatePlanTrialDays,
   type SubscriptionPlan,
 } from "../billing.api"
 import { useAccountAccessGuard } from "../use-account-access"
 import { listOrganizationsWithCompanies, type OrganizationCompaniesOverview } from "@/app/dashboard/tenancy/tenancy.api"
 import { useAuth } from "@/context/auth-context"
+import { queryKeys } from "@/lib/query-keys"
+
+// Stable empty array to prevent infinite re-render loops in bridge useEffects.
+const STABLE_EMPTY: any[] = []
 
 const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   TRIAL: "Periodo de prueba",
@@ -76,7 +82,8 @@ type UsageMetric = {
 
 export default function PlanUsagePage() {
   const accessReady = useAccountAccessGuard()
-  const { selection, version } = useTenantSelection()
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
   const { role } = useAuth()
   const searchParams = useSearchParams()
   const organizationId = selection?.orgId ?? null
@@ -94,10 +101,7 @@ export default function PlanUsagePage() {
     return focus === "plan"
   }, [searchParams])
 
-  const [summary, setSummary] = useState<SubscriptionSummary | null>(null)
-  const [summaryLoading, setSummaryLoading] = useState(true)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
-  const [plansLoading, setPlansLoading] = useState(true)
   const [planCode, setPlanCode] = useState("")
   const [planLockedToSummary, setPlanLockedToSummary] = useState(true)
   const [effectiveImmediately, setEffectiveImmediately] = useState(false)
@@ -119,6 +123,30 @@ export default function PlanUsagePage() {
   const [globalPage, setGlobalPage] = useState(1)
   const [globalSelectedOrgId, setGlobalSelectedOrgId] = useState<number | null>(null)
   const [globalSelectedSummary, setGlobalSelectedSummary] = useState<SubscriptionSummary | null>(null)
+  const [trialPlanCode, setTrialPlanCode] = useState("")
+  const [trialDays, setTrialDays] = useState("")
+  const [trialDaysSubmitting, setTrialDaysSubmitting] = useState(false)
+
+  // Subscription summary via useQuery
+  const { data: summary = null, isLoading: summaryLoading } = useQuery({
+    queryKey: queryKeys.subscriptions.plan(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      if (!organizationId) return null
+      const data = await fetchSubscriptionSummary(organizationId)
+      return data
+    },
+    enabled: accessReady && !!organizationId,
+  })
+
+  // Plans list via useQuery
+  const { data: plansData = STABLE_EMPTY, isLoading: plansLoading } = useQuery({
+    queryKey: [...queryKeys.subscriptions.root(selection.orgId, selection.companyId), "plans"],
+    queryFn: async () => {
+      const list = await fetchSubscriptionPlans()
+      return list
+    },
+    enabled: accessReady && (!!organizationId || isGlobalSuperAdmin),
+  })
 
   const targetOrgId = isGlobalSuperAdmin ? globalSelectedOrgId : organizationId
   const targetSummary = isGlobalSuperAdmin ? globalSelectedSummary : summary
@@ -126,48 +154,15 @@ export default function PlanUsagePage() {
     ? !!globalSelectedOrgId && !globalSelectedSummary
     : summaryLoading
 
-  const loadSummary = useCallback(async () => {
-    if (!organizationId) {
-      setSummary(null)
-      setSummaryLoading(false)
-      return
-    }
-    setSummaryLoading(true)
-    try {
-      const data = await fetchSubscriptionSummary(organizationId)
-      setSummary(data)
-    } catch (error) {
-      console.error(error)
-      toast.error("No pudimos obtener el estado actual del plan.")
-      setSummary(null)
-    } finally {
-      setSummaryLoading(false)
-    }
-  }, [organizationId])
-
-  const loadPlans = useCallback(async () => {
-    if (!organizationId && !isGlobalSuperAdmin) {
-      setPlans([])
-      setPlansLoading(false)
-      return
-    }
-    setPlansLoading(true)
-    try {
-      const list = await fetchSubscriptionPlans()
-      setPlans(list)
-      setPlanCode((current) => {
-        if (current) return current
-        if (targetSummary?.plan?.code) return targetSummary.plan.code
-        return list[0]?.code ?? ""
-      })
-    } catch (error) {
-      console.error(error)
-      toast.error("No pudimos cargar los planes disponibles.")
-      setPlans([])
-    } finally {
-      setPlansLoading(false)
-    }
-  }, [organizationId, targetSummary?.plan?.code, isGlobalSuperAdmin])
+  // Sync plans to local state for form interactions
+  useEffect(() => {
+    setPlans(plansData)
+    setPlanCode((current) => {
+      if (current) return current
+      if (targetSummary?.plan?.code) return targetSummary.plan.code
+      return plansData[0]?.code ?? ""
+    })
+  }, [plansData, targetSummary?.plan?.code])
 
   const refreshGlobalUsage = useCallback(async () => {
     if (!isGlobalSuperAdmin) return
@@ -198,19 +193,13 @@ export default function PlanUsagePage() {
   }, [isGlobalSuperAdmin])
 
   useEffect(() => {
-    if (!accessReady) return
-    void loadSummary()
-  }, [accessReady, loadSummary, version])
-
-  useEffect(() => {
-    if (!accessReady) return
-    void loadPlans()
-  }, [accessReady, loadPlans, version])
-
-  useEffect(() => {
     if (!accessReady || !isGlobalSuperAdmin) return
     void refreshGlobalUsage()
   }, [accessReady, isGlobalSuperAdmin, refreshGlobalUsage])
+
+  const loadSummary = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.plan(selection.orgId, selection.companyId) })
+  }, [queryClient, selection.orgId, selection.companyId])
 
   useEffect(() => {
     if (!accessReady || !isGlobalSuperAdmin) return
@@ -482,6 +471,28 @@ export default function PlanUsagePage() {
     }
   }
 
+  const handleTrialDaysUpdate = async () => {
+    if (!trialPlanCode) {
+      toast.error("Selecciona un plan para configurar los dias de prueba.")
+      return
+    }
+    const days = Number(trialDays)
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      toast.error("Los dias de prueba deben ser un numero entero entre 1 y 90.")
+      return
+    }
+    setTrialDaysSubmitting(true)
+    try {
+      await updatePlanTrialDays(trialPlanCode, days)
+      toast.success(`Dias de prueba actualizados a ${days} para el plan ${trialPlanCode}.`)
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : "No se pudo actualizar los dias de prueba.")
+    } finally {
+      setTrialDaysSubmitting(false)
+    }
+  }
+
   if (!accessReady) {
     return <PlanSkeleton />
   }
@@ -552,6 +563,92 @@ export default function PlanUsagePage() {
             </section>
 
             {isGlobalSuperAdmin ? (
+              <>
+              <Card className="border-indigo-100 shadow-sm dark:border-indigo-900/60 dark:bg-slate-900">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                    <Clock className="h-5 w-5 text-indigo-500" />
+                    Configuracion de Trial
+                  </CardTitle>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Ajusta la duracion del periodo de prueba para nuevas cuentas. Este cambio solo afecta a cuentas creadas despues de guardar.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="trial-plan-select">Plan</Label>
+                    <Select
+                      value={trialPlanCode}
+                      onValueChange={(value) => {
+                        setTrialPlanCode(value)
+                        const match = plans.find((p) => p.code === value)
+                        if (match && (match as any).trialDays) {
+                          setTrialDays(String((match as any).trialDays))
+                        }
+                      }}
+                      disabled={trialDaysSubmitting || plansLoading}
+                    >
+                      <SelectTrigger id="trial-plan-select">
+                        <SelectValue placeholder="Selecciona un plan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plans.map((plan) => (
+                          <SelectItem key={plan.code} value={plan.code}>
+                            {plan.name} ({plan.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="trial-days-input">Dias de prueba</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="trial-days-input"
+                        type="number"
+                        min={1}
+                        max={90}
+                        value={trialDays}
+                        onChange={(e) => setTrialDays(e.target.value)}
+                        disabled={trialDaysSubmitting}
+                        placeholder="14"
+                        className="w-24"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="cursor-pointer"
+                        onClick={() => setTrialDays("14")}
+                        disabled={trialDaysSubmitting}
+                      >
+                        14 dias
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="cursor-pointer"
+                        onClick={() => setTrialDays("30")}
+                        disabled={trialDaysSubmitting}
+                      >
+                        30 dias
+                      </Button>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Valor entre 1 y 90. Trials existentes no se modifican.
+                    </p>
+                  </div>
+
+                  <Button
+                    className="w-full cursor-pointer"
+                    onClick={handleTrialDaysUpdate}
+                    disabled={trialDaysSubmitting || !trialPlanCode || !trialDays}
+                  >
+                    {trialDaysSubmitting ? "Guardando..." : "Guardar dias de prueba"}
+                  </Button>
+                </CardContent>
+              </Card>
+
               <section className="grid gap-6 lg:grid-cols-2">
                 <Card className="border-emerald-100 shadow-sm dark:border-emerald-900/60 dark:bg-slate-900">
                   <CardHeader>
@@ -671,6 +768,7 @@ export default function PlanUsagePage() {
                   </CardContent>
                 </Card>
               </section>
+              </>
             ) : null}
 
             <section className="grid gap-6 lg:grid-cols-2">

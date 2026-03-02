@@ -191,7 +191,7 @@ export class JournalEntryService {
     // Crear asiento con líneas
     const entry = await this.prisma.journalEntry.create({
       data: {
-        journalId: 1, // TODO: Obtener journalId del sistema
+        journalId: 1, // FIXME: Hardcoded — debe obtenerse del libro diario activo de la organizacion
         periodId,
         date: data.date,
         description: data.description,

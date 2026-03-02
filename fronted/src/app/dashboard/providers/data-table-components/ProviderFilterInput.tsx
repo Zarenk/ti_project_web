@@ -9,10 +9,10 @@ interface ProviderFilterInputProps {
 export const ProviderFilterInput: React.FC<ProviderFilterInputProps> = ({ value, onChange }) => {
   return (
     <Input
-        placeholder="Filtrar por nombre de tienda..."
+        placeholder="Filtrar por nombre de proveedor..."
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full sm:w-1/3 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="h-9 w-full"
     />
   );
 };

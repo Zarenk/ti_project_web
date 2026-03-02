@@ -48,7 +48,8 @@ export class UsersService {
     'providers',
     'settings',
     'hidePurchaseCost',
-    'hideDeleteActions',
+    'hideDeleteForEmployees',
+    'hideDeleteForAdmins',
   ] as const;
 
   private readonly CONTEXT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -66,10 +67,17 @@ export class UsersService {
     private readonly quotaService: SubscriptionQuotaService,
   ) {}
 
+  // Pre-computed dummy hash to prevent timing attacks on user enumeration.
+  // bcrypt.compare against this takes the same time as a real comparison.
+  private static readonly DUMMY_HASH =
+    '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012';
+
   async validateUser(email: string, password: string, req?: Request) {
     let user = await this.prismaService.user.findUnique({ where: { email } });
 
     if (!user) {
+      // Spend the same time as a real bcrypt comparison to prevent timing attacks
+      await bcrypt.compare(password, UsersService.DUMMY_HASH);
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -158,9 +166,11 @@ export class UsersService {
     let message = 'Credenciales inválidas.';
 
     if (attempts >= 6) {
-      isPermanentlyLocked = true;
+      // Progressive temporary lockout — prevents DoS by malicious actors
+      // who could otherwise lock any account permanently with 6 guesses.
+      lockUntil = new Date(now.getTime() + 2 * 60 * 60 * 1000);
       message =
-        'Tu cuenta ha sido bloqueada por múltiples intentos fallidos. Comunícate con soporte para restaurar el acceso.';
+        'Tu cuenta se ha bloqueado por 2 horas debido a múltiples intentos fallidos.';
     } else if (attempts === 5) {
       lockUntil = new Date(now.getTime() + 60 * 60 * 1000);
       message =
@@ -241,7 +251,21 @@ export class UsersService {
       organizations: organizationIds,
       isPublicSignup: Boolean(user.isPublicSignup),
     };
-    const token = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '2h' });
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, tokenVersion: user.tokenVersion },
+      { expiresIn: '7d' },
+    );
+
+    // Store hash for refresh token rotation — only the latest token is valid
+    const refreshHash = createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+    await this.prismaService.user.update({
+      where: { id: user.id },
+      data: { refreshTokenHash: refreshHash },
+    });
+
     await this.activityService.log(
       {
         actorId: user.id,
@@ -254,7 +278,8 @@ export class UsersService {
       req,
     );
     return {
-      access_token: token,
+      access_token: accessToken,
+      refresh_token: refreshToken,
     };
   }
 
@@ -268,6 +293,29 @@ export class UsersService {
       summary: `User ${user.email} logged out`,
     });
     return { message: 'Logged out' };
+  }
+
+  /**
+   * Server-side logout: increments tokenVersion so ALL existing JWTs for
+   * this user become invalid immediately (JwtStrategy.validate checks it).
+   */
+  async serverLogout(userId: number) {
+    const user = await this.prismaService.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 }, refreshTokenHash: null },
+      select: { id: true, email: true, tokenVersion: true },
+    });
+
+    await this.activityService.log({
+      actorId: user.id,
+      actorEmail: user.email,
+      entityType: 'User',
+      entityId: user.id.toString(),
+      action: AuditAction.LOGOUT,
+      summary: `User ${user.email} logged out (server-side token invalidation)`,
+    });
+
+    return { message: 'Sesión cerrada. Todos los tokens han sido invalidados.' };
   }
 
   async register(

@@ -16,7 +16,7 @@ import { brandAssets } from '@/catalog/brandAssets'
 import { getBrands, getKeywords } from '../brands/brands.api'
 import { resolveImageUrl } from '@/lib/images'
 
-export type CatalogLayoutMode = 'grid' | 'list'
+export type CatalogLayoutMode = 'grid' | 'list' | 'magazine'
 
 interface Product {
   id: number
@@ -126,9 +126,40 @@ function computePreviousPrice(value: number, seedSource: number | undefined): nu
 
 const LOGO_DISPLAY_SIZE = 25
 const LOGO_RASTER_SCALE = 4
-const IMAGE_OVERLAY_COLOR = '#145DA0'
+const DEFAULT_ACCENT_COLOR = '#145DA0'
 const TECH_LABEL = 'TECNOLOGIA INFORMATICA'
 const COMPANY_LOGO_PATH = '/ti_logo_final_2024.png'
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  if (!m) return null
+  return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) }
+}
+
+function darkenHex(hex: string, factor = 0.15): string {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return hex
+  const d = (v: number) => Math.round(v * (1 - factor))
+  return `#${d(rgb.r).toString(16).padStart(2, '0')}${d(rgb.g).toString(16).padStart(2, '0')}${d(rgb.b).toString(16).padStart(2, '0')}`
+}
+
+function accentWithAlpha(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return hex
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`
+}
+
+/** Derive a full palette from a single accent hex */
+function deriveAccentPalette(accent: string) {
+  return {
+    primary: accent,
+    dark: darkenHex(accent, 0.2),
+    frame: darkenHex(accent, 0.1),
+    light: accentWithAlpha(accent, 0.65),
+    faint: accentWithAlpha(accent, 0.35),
+    border: accentWithAlpha(accent, 0.25),
+  }
+}
 
 const svgRasterCache = new Map<string, string>()
 const rasterLogoCache = new Map<string, string>()
@@ -144,8 +175,7 @@ const SPEC_CONFIG: Array<{ key: SpecKey; label: string }> = [
   { key: 'connectivity', label: 'Conectividad' }
 ]
 
-function renderSpecIcon(key: SpecKey) {
-  const color = IMAGE_OVERLAY_COLOR
+function renderSpecIcon(key: SpecKey, color = DEFAULT_ACCENT_COLOR) {
   switch (key) {
     case 'processor':
       return (
@@ -377,7 +407,7 @@ const styles = StyleSheet.create({
   badgeEdge: {
     width: 18,
     height: 22,
-    backgroundColor: IMAGE_OVERLAY_COLOR
+    backgroundColor: DEFAULT_ACCENT_COLOR
   },
   badgeEdgeLeft: { borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
   badgeEdgeRight: { borderTopRightRadius: 4, borderBottomRightRadius: 4 },
@@ -388,7 +418,7 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 10,
     height: 22,
-    backgroundColor: IMAGE_OVERLAY_COLOR
+    backgroundColor: DEFAULT_ACCENT_COLOR
   },
   badgeLogo: { width: 14, height: 14, marginRight: 4 },
   badgeText: { fontSize: 8, fontWeight: 'bold', color: 'white' },
@@ -415,7 +445,52 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textDecoration: 'line-through',
     marginRight: 6
-  }
+  },
+  magazineContainer: { display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingHorizontal: 6 },
+  magazineItem: {
+    width: '47.5%',
+    border: '1.5 solid #e2e8f0',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    position: 'relative',
+  },
+  magazineImageWrapper: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  magazineImage: { width: '100%', height: '100%', objectFit: 'contain' },
+  magazineBody: { padding: 10, gap: 4 },
+  magazineTitle: { fontSize: 12, fontWeight: 'bold', color: '#0f172a' },
+  magazineDescription: { fontSize: 9, color: '#64748b', maxLines: 2 },
+  magazineSpecRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  magazineSpecChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  magazineSpecChipText: { fontSize: 8, color: '#334155' },
+  magazineFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderTop: '1 solid #f1f5f9',
+  },
+  magazineLogos: { flexDirection: 'row', gap: 4 },
+  magazineLogo: { width: 24, height: 24, objectFit: 'contain' },
+  magazinePriceBlock: { alignItems: 'flex-end' },
+  magazinePriceBefore: { fontSize: 8, color: '#94a3b8', textDecoration: 'line-through' },
+  magazinePriceValue: { fontSize: 13, fontWeight: 'bold', color: '#0f172a' },
 })
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -435,6 +510,7 @@ function estimateItemComplexity(item: CatalogPdfItem): number {
 const GRID_COLUMNS = 3
 const GRID_MAX_ITEMS = 6
 const LIST_MAX_ITEMS = 3
+const MAGAZINE_MAX_ITEMS = 4
 
 function paginateGridItems(items: CatalogPdfItem[]): CatalogPdfItem[][] {
   if (items.length <= GRID_MAX_ITEMS) {
@@ -478,6 +554,9 @@ function paginateSectionItems(items: CatalogPdfItem[], layout: CatalogLayoutMode
     const result = paginateGridItems(items)
     return result.length ? result : chunk(items, GRID_MAX_ITEMS)
   }
+  if (layout === 'magazine') {
+    return chunk(items, MAGAZINE_MAX_ITEMS)
+  }
   const result = paginateListItems(items)
   return result.length ? result : chunk(items, LIST_MAX_ITEMS)
 }
@@ -490,6 +569,7 @@ function CatalogPdfDocument({
   selectionSummary,
   companyLogo,
   layout,
+  accentColor = DEFAULT_ACCENT_COLOR,
 }: {
   sections: CatalogSection[]
   coverImage?: string
@@ -498,7 +578,9 @@ function CatalogPdfDocument({
   selectionSummary?: string
   companyLogo: string
   layout: CatalogLayoutMode
+  accentColor?: string
 }) {
+  const palette = deriveAccentPalette(accentColor)
   const pages: { category: string; items: CatalogPdfItem[] }[] = []
 
   for (const section of sections) {
@@ -511,9 +593,9 @@ function CatalogPdfDocument({
   return (
     <Document>
       <Page key="cover" size="A4" style={styles.page}>
-        <View style={styles.pageFrame} fixed />
-        <View style={styles.pageAccentTop} fixed />
-        <View style={styles.pageAccentBottom} fixed />
+        <View style={[styles.pageFrame, { borderColor: palette.dark }]} fixed />
+        <View style={[styles.pageAccentTop, { backgroundColor: palette.light }]} fixed />
+        <View style={[styles.pageAccentBottom, { backgroundColor: palette.faint }]} fixed />
         {coverImage ? (
           <View style={styles.coverWithImage}>
             <View style={styles.coverImageRegion}>
@@ -547,18 +629,20 @@ function CatalogPdfDocument({
       </Page>
       {pages.map((page, index) => (
         <Page key={`page-${index}`} size="A4" style={styles.page}>
-          <View style={styles.pageFrame} fixed />
-          <View style={styles.pageAccentTop} fixed />
-          <View style={styles.pageAccentBottom} fixed />
+          <View style={[styles.pageFrame, { borderColor: palette.dark }]} fixed />
+          <View style={[styles.pageAccentTop, { backgroundColor: palette.light }]} fixed />
+          <View style={[styles.pageAccentBottom, { backgroundColor: palette.faint }]} fixed />
           <View style={styles.pageContent}>
             <Text style={styles.category}>{page.category}</Text>
-            <View style={styles.categorySeparator} />
-            <View style={layout === 'grid' ? styles.grid : styles.listContainer}>
+            <View style={[styles.categorySeparator, { backgroundColor: palette.primary }]} />
+            <View style={layout === 'grid' ? styles.grid : layout === 'magazine' ? styles.magazineContainer : styles.listContainer}>
               {page.items.map((item, idx) =>
                 layout === 'grid' ? (
-                  <GridItem key={idx} item={item} companyLogo={companyLogo} />
+                  <GridItem key={idx} item={item} companyLogo={companyLogo} accentColor={accentColor} />
+                ) : layout === 'magazine' ? (
+                  <MagazineItem key={idx} item={item} companyLogo={companyLogo} accentColor={accentColor} />
                 ) : (
-                  <ListItem key={idx} item={item} companyLogo={companyLogo} />
+                  <ListItem key={idx} item={item} companyLogo={companyLogo} accentColor={accentColor} />
                 )
               )}
             </View>
@@ -569,7 +653,7 @@ function CatalogPdfDocument({
   )
 }
 
-function GridItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: string }) {
+function GridItem({ item, companyLogo, accentColor = DEFAULT_ACCENT_COLOR }: { item: CatalogPdfItem; companyLogo: string; accentColor?: string }) {
   return (
     <View style={styles.item}>
       <PdfImage style={styles.companyLogo} src={companyLogo} />
@@ -581,12 +665,12 @@ function GridItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: st
         )}
       </View>
       <View style={styles.imageBadge}>
-        <View style={[styles.badgeEdge, styles.badgeEdgeLeft]} />
-        <View style={styles.badgeCenter}>
+        <View style={[styles.badgeEdge, styles.badgeEdgeLeft, { backgroundColor: accentColor }]} />
+        <View style={[styles.badgeCenter, { backgroundColor: accentColor }]}>
           <PdfImage style={styles.badgeLogo} src={companyLogo} />
           <Text style={styles.badgeText}>{TECH_LABEL}</Text>
         </View>
-        <View style={[styles.badgeEdge, styles.badgeEdgeRight]} />
+        <View style={[styles.badgeEdge, styles.badgeEdgeRight, { backgroundColor: accentColor }]} />
       </View>
       <Text style={styles.title}>{item.title}</Text>
       {item.description && <Text style={styles.description}>{item.description}</Text>}
@@ -604,7 +688,7 @@ function GridItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: st
         <View style={styles.specList}>
           {item.specs.map((spec, specIdx) => (
             <View key={specIdx} style={styles.specRow}>
-              {renderSpecIcon(spec.key)}
+              {renderSpecIcon(spec.key, accentColor)}
               <Text style={styles.specText}>
                 <Text style={styles.specLabel}>{spec.label}: </Text>
                 {spec.value}
@@ -624,10 +708,10 @@ function GridItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: st
   )
 }
 
-function ListItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: string }) {
+function ListItem({ item, companyLogo, accentColor = DEFAULT_ACCENT_COLOR }: { item: CatalogPdfItem; companyLogo: string; accentColor?: string }) {
   return (
     <View style={styles.listItem}>
-      <View style={styles.listItemDivider} />
+      <View style={[styles.listItemDivider, { borderTop: `3 solid ${accentColor}` }]} />
       <View style={styles.listImageWrapper}>
         {item.imageUrl ? (
           <PdfImage style={styles.listImage} src={item.imageUrl} />
@@ -647,7 +731,7 @@ function ListItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: st
           <View style={styles.listSpecList}>
             {item.specs.slice(0, 6).map((spec, idx) => (
               <View key={idx} style={styles.listSpecRow}>
-                {renderSpecIcon(spec.key)}
+                {renderSpecIcon(spec.key, accentColor)}
                 <Text style={styles.listSpecText}>
                   <Text style={styles.listSpecLabel}>{spec.label}: </Text>
                   {spec.value}
@@ -671,6 +755,60 @@ function ListItem({ item, companyLogo }: { item: CatalogPdfItem; companyLogo: st
             {item.logos.map((logo, id) => (
               <PdfImage key={id} style={styles.listLogo} src={logo} />
             ))}
+          </View>
+        )}
+      </View>
+    </View>
+  )
+}
+
+function MagazineItem({ item, companyLogo, accentColor = DEFAULT_ACCENT_COLOR }: { item: CatalogPdfItem; companyLogo: string; accentColor?: string }) {
+  return (
+    <View style={styles.magazineItem}>
+      <PdfImage style={styles.companyLogo} src={companyLogo} />
+      <View style={styles.magazineImageWrapper}>
+        {item.imageUrl ? (
+          <PdfImage style={styles.magazineImage} src={item.imageUrl} />
+        ) : (
+          <Text style={styles.imagePlaceholder}>Imagen no disponible</Text>
+        )}
+      </View>
+      <View style={styles.magazineBody}>
+        <Text style={styles.magazineTitle}>{item.title}</Text>
+        {item.description && (
+          <Text style={styles.magazineDescription}>{item.description}</Text>
+        )}
+        {item.specs && item.specs.length > 0 && (
+          <View style={styles.magazineSpecRow}>
+            {item.specs.slice(0, 4).map((spec, idx) => (
+              <View key={idx} style={styles.magazineSpecChip}>
+                {renderSpecIcon(spec.key, accentColor)}
+                <Text style={styles.magazineSpecChipText}>
+                  {spec.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+      <View style={styles.magazineFooter}>
+        {item.logos && item.logos.length > 0 ? (
+          <View style={styles.magazineLogos}>
+            {item.logos.map((logo, id) => (
+              <PdfImage key={id} style={styles.magazineLogo} src={logo} />
+            ))}
+          </View>
+        ) : (
+          <View />
+        )}
+        {(item.price || item.previousPrice) && (
+          <View style={styles.magazinePriceBlock}>
+            {item.previousPrice && (
+              <Text style={styles.magazinePriceBefore}>
+                Antes {item.previousPrice}
+              </Text>
+            )}
+            {item.price && <Text style={styles.magazinePriceValue}>{item.price}</Text>}
           </View>
         )}
       </View>
@@ -775,6 +913,7 @@ export async function generateCatalogPdf(
   coverImageUrl?: string,
   layout: CatalogLayoutMode = 'grid',
   companyLogoOverride?: string,
+  accentColor?: string,
 ): Promise<Blob> {
   const [{ data }, keywordRes] = await Promise.all([
     getBrands(1, 1000),
@@ -808,7 +947,7 @@ export async function generateCatalogPdf(
 
   for (const p of products) {
     const priceValue = p.priceSell ?? p.price
-    const raw = p.imageUrl ?? p.image ?? p.images?.[0]
+    const raw = p.image || p.images?.[0] || undefined
     const img = resolveImageUrl(raw)
     const proxied = img ? `/api/image?url=${encodeURIComponent(img)}` : undefined
 
@@ -893,6 +1032,7 @@ export async function generateCatalogPdf(
       selectionSummary={selectionSummary}
       companyLogo={companyLogo}
       layout={layout}
+      accentColor={accentColor}
     />
   )
 

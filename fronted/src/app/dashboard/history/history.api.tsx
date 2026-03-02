@@ -145,6 +145,8 @@ export async function getGlobalActivity(params?: {
   excludeContextUpdates?: boolean;
   sortBy?: string;
   sortDir?: string;
+  filterOrgId?: number;
+  filterCompanyId?: number;
 }) {
   const search = new URLSearchParams();
   if (params?.page) search.set("page", String(params.page));
@@ -159,6 +161,8 @@ export async function getGlobalActivity(params?: {
   if (params?.excludeContextUpdates) search.set("excludeContextUpdates", "true");
   if (params?.sortBy) search.set("sortBy", params.sortBy);
   if (params?.sortDir) search.set("sortDir", params.sortDir);
+  if (params?.filterOrgId) search.set("filterOrgId", String(params.filterOrgId));
+  if (params?.filterCompanyId) search.set("filterCompanyId", String(params.filterCompanyId));
 
   const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity${search.toString() ? `?${search.toString()}` : ""}`,
@@ -186,6 +190,8 @@ export async function exportGlobalActivity(params?: {
   excludeContextUpdates?: boolean;
   sortBy?: string;
   sortDir?: string;
+  filterOrgId?: number;
+  filterCompanyId?: number;
 }) {
   const search = new URLSearchParams();
   if (params?.q) search.set("q", params.q);
@@ -198,6 +204,8 @@ export async function exportGlobalActivity(params?: {
   if (params?.excludeContextUpdates) search.set("excludeContextUpdates", "true");
   if (params?.sortBy) search.set("sortBy", params.sortBy);
   if (params?.sortDir) search.set("sortDir", params.sortDir);
+  if (params?.filterOrgId) search.set("filterOrgId", String(params.filterOrgId));
+  if (params?.filterCompanyId) search.set("filterCompanyId", String(params.filterCompanyId));
 
   const res = await authFetchOrNull(
     `${BACKEND_URL}/api/activity/export${search.toString() ? `?${search.toString()}` : ""}`,
@@ -463,7 +471,7 @@ export async function getOrganizationActivitySummary(params?: {
     },
   );
 
-  if (!res) return []
+  if (!res) return {}
   if (!res.ok) {
     throw new Error("Error al obtener el resumen de la organizacion");
   }
@@ -557,7 +565,7 @@ export async function getOrganizationActivityBreakdown(params?: {
     },
   );
 
-  if (!res) return []
+  if (!res) return { actions: [], entities: [] }
   if (!res.ok) {
     throw new Error("Error al obtener el desglose de la organizacion");
   }
@@ -586,7 +594,7 @@ export async function getOrganizationActivityOptions(params?: {
     },
   );
 
-  if (!res) return []
+  if (!res) return { actions: [], entities: [] }
   if (!res.ok) {
     throw new Error("Error al obtener opciones de filtros de la organizacion");
   }

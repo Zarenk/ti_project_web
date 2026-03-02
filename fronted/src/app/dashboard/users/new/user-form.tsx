@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -80,7 +80,7 @@ const DEFAULT_VALUES: UserFormType = {
 
 export default function UserForm(): React.ReactElement {
   const router = useRouter();
-  const { version, selection } = useTenantSelection();
+  const { selection } = useTenantSelection();
   const [isUsersLoading, setIsUsersLoading] = useState(true);
   const [emailExists, setEmailExists] = useState<boolean | null>(null);
   const [usernameExists, setUsernameExists] = useState<boolean | null>(null);
@@ -106,9 +106,14 @@ export default function UserForm(): React.ReactElement {
   const debouncedEmail = useDebounce(normalizedEmail, 300);
   const debouncedUsername = useDebounce(normalizedUsername, 300);
 
+  const tenantKey = `${selection.orgId}-${selection.companyId}`;
+  const prevTenantRef = useRef(tenantKey);
+
   useEffect(() => {
+    if (prevTenantRef.current === tenantKey) return;
+    prevTenantRef.current = tenantKey;
     reset(DEFAULT_VALUES);
-  }, [reset, version]);
+  }, [tenantKey, reset]);
 
   useEffect(() => {
     let active = true;
@@ -150,7 +155,7 @@ export default function UserForm(): React.ReactElement {
     return () => {
       active = false;
     };
-  }, [debouncedEmail, debouncedUsername, version]);
+  }, [debouncedEmail, debouncedUsername]);
 
   const hasEmail =
     Boolean(emailValue.trim()) && !formState.errors.email && emailExists !== true;

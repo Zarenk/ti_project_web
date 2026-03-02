@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import sharp from 'sharp';
-import { PublishAdapter } from './adapters';
+import { PublishAdapter, PublishConfig } from './adapters';
 import { CustomWebhookAdapter } from './adapters/custom-webhook.adapter';
 import { InstagramAdapter } from './adapters/instagram.adapter';
 import { TiktokAdapter } from './adapters/tiktok.adapter';
@@ -50,6 +50,7 @@ export class PublishService {
     image: Buffer,
     caption: string,
     adapterName: string,
+    config?: PublishConfig,
   ): Promise<string | void> {
     await this.validate(image, caption);
     const adapter = this.adapters[adapterName];
@@ -57,7 +58,7 @@ export class PublishService {
       throw new PermanentError('Adapter not found');
     }
     try {
-      return await adapter.publish(image, caption);
+      return await adapter.publish(image, caption, config);
     } catch (err) {
       if (err instanceof TransientError) {
         this.logger.warn('Transient error, retrying');

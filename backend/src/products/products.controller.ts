@@ -24,7 +24,8 @@ import { ValidateProductNameDto } from './dto/validate-product-name.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
+import { processUploadedImage } from '../utils/image-processor';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
@@ -145,7 +146,7 @@ export class ProductsController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           return cb(
             new BadRequestException('Solo se permiten imagenes'),
             false,
@@ -155,13 +156,22 @@ export class ProductsController {
       },
     }),
   )
-  uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+  async uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
     if (!file) {
       throw new BadRequestException('No se proporcionó ninguna imagen');
     }
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-    return { url: `${baseUrl}/uploads/products/${file.filename}` };
+    const absolutePath = join(process.cwd(), 'uploads', 'products', file.filename);
+    const result = await processUploadedImage(
+      absolutePath,
+      'products',
+      file.mimetype,
+    );
+    return { url: `${baseUrl}${result.url}` };
   }
 
   @Get()

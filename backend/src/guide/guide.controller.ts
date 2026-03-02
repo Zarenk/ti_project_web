@@ -1,11 +1,11 @@
-﻿import {
+import {
   Controller,
+  Delete,
   Get,
+  Patch,
   Post,
   Body,
-  Patch,
   Param,
-  Delete,
   Res,
   StreamableFile,
   InternalServerErrorException,
@@ -15,76 +15,88 @@ import type { Response } from 'express';
 import { createReadStream } from 'fs';
 import { GuideService } from './guide.service';
 import { CreateGuideDto } from './dto/create-guide.dto';
-import { zipSignedXmlFromString } from './utils/zip-signed-xml';
-import { generateDespatchXML } from './utils/generate-despatch-xml';
-import { FirmadorJavaService } from './firmador-java.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 
 @Controller('guide')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class GuideController {
-  constructor(
-    private readonly guideService: GuideService,
-    private readonly firmadorJavaService: FirmadorJavaService,
-  ) {}
+  constructor(private readonly guideService: GuideService) {}
 
   @Post()
-  async generarGuia(@Body() dto: CreateGuideDto) {
-    return this.guideService.generarGuia(dto);
+  async generarGuia(
+    @Body() dto: CreateGuideDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.guideService.generarGuia(dto, organizationId, companyId);
   }
 
   @Post('validate')
-  async validarGuia(@Body() dto: CreateGuideDto) {
-    return this.guideService.validateGuide(dto);
-  }
-
-  @Post('send-rest')
-  async enviarGuiaRest(@Body() dto: CreateGuideDto) {
-    try {
-      const serie = dto.serie?.trim() || 'T001';
-      const correlativo = dto.correlativo?.trim() || '00012345';
-
-      const xml = generateDespatchXML(dto, serie, correlativo);
-      const xmlFirmado = await this.firmadorJavaService.firmarXmlConJava(xml);
-      const zipBuffer = zipSignedXmlFromString(
-        xmlFirmado,
-        dto.numeroDocumentoRemitente,
-        `${serie}-${correlativo}`,
-      );
-      const nombreArchivo = `${dto.numeroDocumentoRemitente}-09-${serie}-${correlativo}.zip`;
-
-      const resultado = await this.guideService.sendGuideToSunatRest(
-        zipBuffer,
-        nombreArchivo,
-      );
-      return resultado;
-    } catch (err: any) {
-      throw new InternalServerErrorException({
-        message: 'Error SUNAT',
-        detail: err?.message ?? err,
-        response: err?.response?.data ?? null,
-      });
-    }
+  async validarGuia(
+    @Body() dto: CreateGuideDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.guideService.validateGuide(dto, companyId, organizationId);
   }
 
   @Get('shipping-guides')
-  findAll() {
-    return this.guideService.findAllShippingGuides();
+  findAll(@CurrentTenant('organizationId') organizationId: number | null) {
+    return this.guideService.findAllShippingGuides(organizationId);
   }
 
   @Get(':id/status')
-  getStatus(@Param('id') id: string) {
-    return this.guideService.getGuideStatus(Number(id));
+  getStatus(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.guideService.getGuideStatus(Number(id), organizationId);
+  }
+
+  @Post(':id/refresh-status')
+  refreshStatus(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.guideService.refreshGuideStatus(
+      Number(id),
+      organizationId,
+      companyId,
+    );
+  }
+
+  @Delete(':id')
+  deleteGuide(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    return this.guideService.deleteGuide(Number(id), organizationId);
+  }
+
+  @Patch(':id/void')
+  voidGuide(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Body() body: { reason?: string },
+  ) {
+    return this.guideService.voidGuide(Number(id), organizationId, body?.reason);
   }
 
   @Get(':id/files/:type')
   async downloadFile(
     @Param('id') id: string,
     @Param('type') type: 'xml' | 'zip' | 'cdr',
+    @CurrentTenant('organizationId') organizationId: number | null,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const filePath = await this.guideService.getGuideFilePath(Number(id), type);
+    const filePath = await this.guideService.getGuideFilePath(
+      Number(id),
+      type,
+      organizationId,
+    );
     if (type === 'xml') {
       res.setHeader('Content-Type', 'application/xml');
     } else {
@@ -93,7 +105,3 @@ export class GuideController {
     return new StreamableFile(createReadStream(filePath));
   }
 }
-
-
-
-

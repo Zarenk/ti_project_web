@@ -12,6 +12,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ActivityService } from 'src/activity/activity.service';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class CategoryService {
@@ -146,7 +147,7 @@ export class CategoryService {
     // Verificar por organización
     return this.prismaService.category.findMany({
       where: {
-        organizationId: orgId,
+        ...buildOrganizationFilter(orgId),
         name: { in: names },
       },
       orderBy: { name: 'asc' },
@@ -171,7 +172,7 @@ export class CategoryService {
 
     const existing = await this.prismaService.category.findFirst({
       where: {
-        organizationId: orgId,
+        ...buildOrganizationFilter(orgId),
         name: { equals: trimmed, mode: 'insensitive' },
         ...(categoryId ? { id: { not: categoryId } } : {}),
       },
@@ -182,20 +183,17 @@ export class CategoryService {
   }
 
   findAll() {
-    const orgId = this.orgId();
     return this.prismaService.category.findMany({
-      where: { organizationId: orgId }, // 👈 FILTRO por organización
+      where: buildOrganizationFilter(this.orgId()),
       orderBy: { name: 'asc' },
     });
   }
 
   async findAllWithProductCount() {
-    const orgId = this.orgId();
-
     // Como Category es única por organización, basta con filtrar categorías por org.
     // Los productos asociados a esa categoría también pertenecen a la misma org.
     const categories = await this.prismaService.category.findMany({
-      where: { organizationId: orgId },
+      where: buildOrganizationFilter(this.orgId()),
       orderBy: { name: 'asc' },
       include: { _count: { select: { products: true } } },
     });
@@ -214,10 +212,9 @@ export class CategoryService {
     if (!id || typeof id !== 'number') {
       throw new BadRequestException('El ID proporcionado no es válido.');
     }
-    const orgId = this.orgId();
 
     const category = await this.prismaService.category.findFirst({
-      where: { id, organizationId: orgId }, // 👈 Validar pertenencia a la org
+      where: { id, ...buildOrganizationFilter(this.orgId()) },
     });
 
     if (!category) {
@@ -228,14 +225,12 @@ export class CategoryService {
   }
 
   async update(id: number, updateCategoryDto: UpdateCategoryDto, req: Request) {
-    const orgId = this.orgId();
-
     // Asegura que existe y pertenece a la org
     await this.findOne(id);
 
     try {
       const before = await this.prismaService.category.findFirst({
-        where: { id, organizationId: orgId },
+        where: { id, ...buildOrganizationFilter(this.orgId()) },
       });
 
       const categoryFound = await this.prismaService.category.update({
@@ -274,11 +269,11 @@ export class CategoryService {
   }
 
   async remove(id: number, req: Request) {
-    const orgId = this.orgId();
+    const orgFilter = buildOrganizationFilter(this.orgId());
 
     // Verificar si la categoría pertenece a la org
     const category = await this.prismaService.category.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, ...orgFilter },
     });
     if (!category) {
       throw new NotFoundException(`Categoria with id ${id} not found`);
@@ -286,7 +281,7 @@ export class CategoryService {
 
     // Verificar productos relacionados (de la misma org)
     const relatedProducts = await this.prismaService.product.findMany({
-      where: { categoryId: id, organizationId: orgId },
+      where: { categoryId: id, ...orgFilter },
       select: { id: true },
       take: 1,
     });
@@ -317,16 +312,17 @@ export class CategoryService {
   }
 
   async removes(ids: number[], req: Request) {
-    const orgId = this.orgId();
     if (!Array.isArray(ids) || ids.length === 0) {
       throw new NotFoundException(
         'No se proporcionaron IDs válidos para eliminar.',
       );
     }
 
+    const orgFilter = buildOrganizationFilter(this.orgId());
+
     // Verificar que todas las categorías pertenecen a la organización
     const existing = await this.prismaService.category.findMany({
-      where: { id: { in: ids }, organizationId: orgId },
+      where: { id: { in: ids }, ...orgFilter },
       select: { id: true },
     });
     if (existing.length !== ids.length) {
@@ -337,7 +333,7 @@ export class CategoryService {
 
     // Verificar si alguna tiene productos relacionados en esta organización
     const related = await this.prismaService.product.findMany({
-      where: { categoryId: { in: ids }, organizationId: orgId },
+      where: { categoryId: { in: ids }, ...orgFilter },
       select: { id: true },
       take: 1,
     });
@@ -349,7 +345,7 @@ export class CategoryService {
 
     try {
       const deletedCategories = await this.prismaService.category.deleteMany({
-        where: { id: { in: ids }, organizationId: orgId },
+        where: { id: { in: ids }, ...orgFilter },
       });
 
       if (deletedCategories.count === 0) {

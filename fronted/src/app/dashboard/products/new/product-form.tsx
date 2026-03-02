@@ -42,14 +42,18 @@ import {
   updateProduct,
   uploadProductImage,
   validateProductName,
+  type ExistingProductInfo,
 } from '../products.api'
 import { getBrands } from '../../brands/brands.api'
 import { createCategory, getCategories } from '../../categories/categories.api'
 import { getStores } from '../../stores/stores.api'
 import { getProviders } from '../../providers/providers.api'
+import { createEntry } from '../../entries/entries.api'
 import { ProductSerialsDialog } from '../../entries/components/quick-entry/serials-dialog'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 import { IconName, icons } from '@/lib/icons'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 import { resolveImageUrl } from '@/lib/images'
@@ -66,6 +70,11 @@ import { ProductComputerSpecs } from './components/product-computer-specs'
 import { ProductImagesSection } from './components/product-images-section'
 import { ProductBatchPanel } from './components/product-batch-panel'
 import { ProductGuideButton } from './components/product-guide-dialog'
+
+// Stable empty array to prevent infinite re-render loops in bridge useEffects.
+// Inline `= []` defaults create a new reference on every render when query data
+// is undefined, which triggers useEffect → setState → re-render → new [] → loop.
+const STABLE_EMPTY: any[] = []
 
 const normalizeImagePath = (input?: string): string => {
   const raw = input?.trim() ?? ''
@@ -118,6 +127,10 @@ type BatchCartItem = {
   name: string
   payload: any
   initialStock: number
+  addStockMode?: boolean
+  existingProductId?: number
+  existingProductPrice?: number
+  existingProductPriceSell?: number | null
 }
 
 const BATCH_CART_STORAGE_KEY = "product-batch-cart:v1"
@@ -164,6 +177,12 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
   onCreateWithStock,
   onCreateWithoutStock,
 }: BatchOnlyAssignDialogProps) {
+  // Only items with stock > 0 need store/provider assignment
+  const itemsWithStock = useMemo(
+    () => batchCart.filter((item) => item.initialStock > 0),
+    [batchCart],
+  )
+
   const [globalStoreId, setGlobalStoreId] = useState('')
   const [globalProviderId, setGlobalProviderId] = useState('')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
@@ -178,44 +197,41 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
       return
     }
 
-    // --- Single store: auto-assign to every item missing it ---
+    // --- Single store: auto-assign to every item with stock ---
     if (stores.length === 1) {
       const storeId = String(stores[0].id)
       setGlobalStoreId(storeId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
         if (!curr?.storeId || curr.storeId !== storeId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             storeId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     }
 
-    // --- Single provider: auto-assign to every item missing it ---
+    // --- Single provider: auto-assign to every item with stock ---
     if (providers.length === 1) {
       const providerId = String(providers[0].id)
       setGlobalProviderId(providerId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
         if (!curr?.providerId || curr.providerId !== providerId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             providerId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     }
 
     // --- Fix items with quantity=0 that already have store/provider ---
-    for (const item of batchCart) {
+    for (const item of itemsWithStock) {
       const curr = batchAssignments[item.id]
       if (curr && (curr.storeId || curr.providerId) && (!curr.quantity || curr.quantity <= 0)) {
-        const qty = item.initialStock > 0 ? item.initialStock : 1
-        updateBatchAssignment(item.id, { quantity: qty })
+        updateBatchAssignment(item.id, { quantity: item.initialStock })
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,44 +240,41 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
   const applyGlobalStore = useCallback(
     (storeId: string) => {
       setGlobalStoreId(storeId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
-        // Only override items not individually customized or unassigned
         if (!curr?.storeId || curr.storeId === globalStoreId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             storeId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     },
-    [batchAssignments, batchCart, globalStoreId, updateBatchAssignment],
+    [batchAssignments, itemsWithStock, globalStoreId, updateBatchAssignment],
   )
 
   const applyGlobalProvider = useCallback(
     (providerId: string) => {
       setGlobalProviderId(providerId)
-      for (const item of batchCart) {
+      for (const item of itemsWithStock) {
         const curr = batchAssignments[item.id]
         if (!curr?.providerId || curr.providerId === globalProviderId) {
-          const qty = item.initialStock > 0 ? item.initialStock : 1
           updateBatchAssignment(item.id, {
             providerId,
-            quantity: curr?.quantity || qty,
+            quantity: curr?.quantity || item.initialStock,
           })
         }
       }
     },
-    [batchAssignments, batchCart, globalProviderId, updateBatchAssignment],
+    [batchAssignments, itemsWithStock, globalProviderId, updateBatchAssignment],
   )
 
-  const allAssigned = batchCart.every((item) => {
+  const allAssigned = itemsWithStock.length > 0 && itemsWithStock.every((item) => {
     const a = batchAssignments[item.id]
     return a && a.storeId && a.providerId && a.quantity > 0
   })
 
-  const assignedCount = batchCart.filter((item) => {
+  const assignedCount = itemsWithStock.filter((item) => {
     const a = batchAssignments[item.id]
     return a && a.storeId && a.providerId && a.quantity > 0
   }).length
@@ -277,15 +290,15 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+        <DialogHeader className="w-full min-w-0 overflow-hidden">
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg w-full min-w-0 pr-6">
             <Package className="h-5 w-5 shrink-0" />
-            <span>Crear productos agregados ({batchCart.length})</span>
+            <span className="truncate min-w-0">Crear productos agregados ({batchCart.length}){itemsWithStock.length < batchCart.length && ` · ${itemsWithStock.length} con stock`}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 sm:space-y-4">
+        <div className="space-y-3 sm:space-y-4 w-full min-w-0 overflow-hidden">
           <p className="text-xs sm:text-sm text-muted-foreground">
             Asigna tienda y proveedor para crear los productos con stock inicial.
           </p>
@@ -369,12 +382,12 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
                 variant={allAssigned ? 'default' : 'secondary'}
                 className="text-[10px]"
               >
-                {assignedCount}/{batchCart.length} listos
+                {assignedCount}/{itemsWithStock.length} listos
               </Badge>
             </div>
 
-            <div className="max-h-[30vh] sm:max-h-[35vh] overflow-y-auto space-y-1.5 rounded-lg border border-border/40 p-1.5 sm:p-2">
-              {batchCart.map((item) => {
+            <div className="max-h-[30vh] sm:max-h-[35vh] overflow-y-auto overflow-x-hidden space-y-1.5 rounded-lg border border-border/40 p-1.5 sm:p-2">
+              {itemsWithStock.map((item) => {
                 const assignment = batchAssignments[item.id]
                 const hasStore = !!assignment?.storeId
                 const hasProvider = !!assignment?.providerId
@@ -517,12 +530,12 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-col mt-1">
-          <div className="flex w-full flex-col sm:flex-row gap-2">
+        <DialogFooter className="flex-col gap-2 sm:flex-col mt-1 w-full min-w-0">
+          <div className="flex w-full flex-col sm:flex-row gap-2 min-w-0">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 text-xs sm:text-sm"
+              className="flex-1 min-w-0 text-xs sm:text-sm"
               onClick={() => onOpenChange(false)}
               disabled={isProcessing}
             >
@@ -530,16 +543,16 @@ const BatchOnlyAssignDialog = memo(function BatchOnlyAssignDialog({
             </Button>
             <Button
               type="button"
-              className="flex-1 text-xs sm:text-sm"
+              className="flex-1 min-w-0 text-xs sm:text-sm"
               onClick={onCreateWithStock}
               disabled={isProcessing || !allAssigned}
             >
               {isProcessing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" />
               ) : (
-                <CheckCircle2 className="mr-2 h-4 w-4" />
+                <CheckCircle2 className="mr-2 h-4 w-4 shrink-0" />
               )}
-              Crear con stock ({assignedCount}/{batchCart.length})
+              <span className="truncate">Crear con stock ({assignedCount}/{itemsWithStock.length})</span>
             </Button>
           </div>
           {!showSkipOption ? (
@@ -746,6 +759,8 @@ export function ProductForm({
   const [dragOverStoreId, setDragOverStoreId] = useState<string | null>(null)
   const [dragOverProviderId, setDragOverProviderId] = useState<string | null>(null)
   const [hoveredBatchId, setHoveredBatchId] = useState<string | null>(null)
+  const [addStockMode, setAddStockMode] = useState(false)
+  const [existingProduct, setExistingProduct] = useState<ExistingProductInfo | null>(null)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null)
   const [isBatchDragActive, setIsBatchDragActive] = useState(false)
   const [batchDragCursor, setBatchDragCursor] = useState<{ x: number; y: number } | null>(null)
@@ -835,6 +850,17 @@ export function ProductForm({
     return field?.options ?? []
   }, [schemaFields])
 
+  const optionLabels: Record<string, string> = useMemo(() => ({
+    GRILL: 'Parrilla',
+    FRY: 'Freidora',
+    COLD: 'Fria',
+    BAKERY: 'Horno / Panaderia',
+    VEGAN: 'Vegano',
+    GLUTEN_FREE: 'Sin Gluten',
+    LACTOSE_FREE: 'Sin Lactosa',
+    SPICY: 'Picante',
+  }), [])
+
   const renderSchemaField = (field: (typeof schemaFields)[number]) => {
     const value = getFieldValue(field.key)
     switch (field.type) {
@@ -912,7 +938,7 @@ export function ProductForm({
               <div className="space-y-2">
                 {ingredientRows.map((row, index) => (
                   <div
-                    key={`${row.name}-${index}`}
+                    key={`ingredient-${index}`}
                     className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1.5fr_1fr_1fr_auto]"
                   >
                     <Input
@@ -985,7 +1011,7 @@ export function ProductForm({
             <SelectContent>
               {(field.options ?? []).map((option) => (
                 <SelectItem key={option} value={option}>
-                  {option}
+                  {optionLabels[option] ?? option}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1008,7 +1034,7 @@ export function ProductForm({
                       handleFieldChange(field.key, next)
                     }}
                   />
-                  <span>{option}</span>
+                  <span>{optionLabels[option] ?? option}</span>
                 </label>
               )
             })}
@@ -1107,6 +1133,13 @@ export function ProductForm({
     return { value: Object.keys(normalized).length ? normalized : null }
   }, [extraAttributes, schemaFields, isRetail, isRestaurant])
 
+  // Normalize any value to a finite number (handles strings, NaN, undefined, null)
+  const safeNumber = (v: unknown): number => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    const parsed = Number(v)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
   const buildPayload = useCallback(
     (data: ProductType) => {
       const {
@@ -1145,6 +1178,8 @@ export function ProductForm({
 
       const payload: any = {
         ...productData,
+        price: safeNumber(productData.price),
+        priceSell: safeNumber(productData.priceSell),
         brand: brand || undefined,
         images: cleanedImages,
         categoryId: Number(productData.categoryId),
@@ -1446,6 +1481,43 @@ const VariantRowItem = memo(function VariantRowItem({
     remove: removeFeature,
   } = useFieldArray<ProductType, 'features'>({ control, name: 'features' });
 
+  const NUMERIC_FIELD_NAMES = ['price', 'priceSell', 'initialStock'] as const
+
+  // Read actual DOM <input> values for numeric fields and push them into form state.
+  // Fixes a react-hook-form + React 19 desync where form.getValues() can return
+  // stale values that don't match what the user sees in the DOM.
+  const syncNumericFieldsFromDOM = useCallback(() => {
+    for (const name of NUMERIC_FIELD_NAMES) {
+      const el = document.querySelector<HTMLInputElement>(`input[name="${name}"]`)
+      if (el) {
+        const raw = el.value
+        if (raw === '') {
+          form.setValue(name, undefined as any, { shouldValidate: false, shouldDirty: false })
+        } else {
+          const n = Number(raw.replace(',', '.'))
+          if (Number.isFinite(n)) {
+            form.setValue(name, n, { shouldValidate: false, shouldDirty: false })
+          }
+        }
+      }
+    }
+  }, [form])
+
+  // Force-set DOM <input> values to match form state after form.reset().
+  // Works around a react-hook-form issue where reset() updates internal state
+  // but fails to update the DOM for <input type="number"> fields.
+  const flushNumericFieldsToDOM = useCallback(() => {
+    requestAnimationFrame(() => {
+      for (const name of NUMERIC_FIELD_NAMES) {
+        const el = document.querySelector<HTMLInputElement>(`input[name="${name}"]`)
+        if (el) {
+          const v = form.getValues(name)
+          el.value = (v != null && Number(v) !== 0) ? String(v) : ''
+        }
+      }
+    })
+  }, [form])
+
   const router = useRouter();
   const params = useParams();
   const rawRouteId = params?.id;
@@ -1469,9 +1541,13 @@ const VariantRowItem = memo(function VariantRowItem({
   const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
-  const { version } = useTenantSelection();
-  const tenantFetchRef = useRef(true);
-  const versionResetRef = useRef(true);
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
+  const invalidateProducts = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) });
+    // Product creation with initial stock also affects inventory
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) });
+  };
   const [isLoadingBrands, setIsLoadingBrands] = useState(false);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   // Estado para manejar el error del nombre si se repite
@@ -1518,15 +1594,15 @@ const VariantRowItem = memo(function VariantRowItem({
   const hasBrand = useMemo(() => Boolean(watchedBrand?.trim()), [watchedBrand])
   const hasDescription = useMemo(() => Boolean(watchedDescription?.trim()), [watchedDescription])
   const hasPrice = useMemo(
-    () => typeof watchedPrice === 'number' && Number.isFinite(watchedPrice) && watchedPrice > 0,
+    () => { const n = Number(watchedPrice); return Number.isFinite(n) && n > 0 },
     [watchedPrice]
   )
   const hasPriceSell = useMemo(
-    () => typeof watchedPriceSell === 'number' && Number.isFinite(watchedPriceSell) && watchedPriceSell > 0,
+    () => { const n = Number(watchedPriceSell); return Number.isFinite(n) && n > 0 },
     [watchedPriceSell]
   )
   const hasInitialStock = useMemo(
-    () => typeof watchedInitialStock === 'number' && Number.isFinite(watchedInitialStock) && watchedInitialStock > 0,
+    () => { const n = Number(watchedInitialStock); return Number.isFinite(n) && n > 0 },
     [watchedInitialStock]
   )
   const hasImages = useMemo(
@@ -1586,8 +1662,11 @@ const VariantRowItem = memo(function VariantRowItem({
             status: "invalid",
             message: "Ya existe un producto con ese nombre.",
           })
+          setExistingProduct(result.existingProduct ?? null)
         } else {
           setNameValidation({ status: "valid", message: undefined })
+          setExistingProduct(null)
+          if (addStockMode) setAddStockMode(false)
         }
       })
       .catch((error) => {
@@ -1599,7 +1678,7 @@ const VariantRowItem = memo(function VariantRowItem({
     return () => {
       active = false
     }
-  }, [debouncedNameValidation, currentProductId])
+  }, [debouncedNameValidation, currentProductId, addStockMode])
   const debouncedCategoryId = useDebounce(watchedCategoryId ?? '', 250)
   // Optimized: Use single debounced value instead of creating a separate one
   const normalizedDraftName = String(debouncedNameValidation ?? '').trim().toLowerCase()
@@ -1617,7 +1696,9 @@ const VariantRowItem = memo(function VariantRowItem({
     batchCount > 0 ? batchCount + draftCount : 0
   const batchMissingAssignmentsCount = useMemo(() => {
     if (!batchCart.length) return 0
+    // Only count items that have stock — items with initialStock=0 are product-only (no inventory)
     return batchCart.filter((item) => {
+      if (item.initialStock <= 0) return false
       const assignment = batchAssignments[item.id]
       return !assignment || !assignment.storeId || !assignment.providerId || assignment.quantity <= 0
     }).length
@@ -1698,125 +1779,50 @@ const VariantRowItem = memo(function VariantRowItem({
     setIsLoadingCategories(false)
   }, [categories])
 
+  const { data: categoriesFromQuery = STABLE_EMPTY, isLoading: categoriesQueryLoading } = useQuery({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: () => getCategories(),
+    enabled: selection.orgId !== null,
+  })
   useEffect(() => {
-    let cancelled = false
-    const skipClear = tenantFetchRef.current
-    tenantFetchRef.current = false
+    setCategoryOptions(Array.isArray(categoriesFromQuery) ? categoriesFromQuery : [])
+    setIsLoadingCategories(categoriesQueryLoading)
+  }, [categoriesFromQuery, categoriesQueryLoading])
 
-    const loadCategories = async () => {
-      if (!skipClear) {
-        setCategoryOptions([])
-      }
-      setIsLoadingCategories(true)
-      try {
-        const freshCategories = await getCategories()
-        if (!cancelled) {
-          setCategoryOptions(Array.isArray(freshCategories) ? freshCategories : [])
-        }
-      } catch {
-        if (!cancelled) {
-          setCategoryOptions([])
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingCategories(false)
-        }
-      }
-    }
-
-    void loadCategories()
-
-    return () => {
-      cancelled = true
-    }
-  }, [version])
-
+  const { data: brandsFromQuery = STABLE_EMPTY, isLoading: brandsQueryLoading } = useQuery({
+    queryKey: queryKeys.brands.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const response = await getBrands(1, 1000)
+      return Array.isArray(response?.data)
+        ? response.data.map((brand: any) => ({ id: brand.id, name: brand.name }))
+        : Array.isArray(response)
+          ? response
+          : []
+    },
+    enabled: selection.orgId !== null,
+  })
   useEffect(() => {
-    let cancelled = false
+    setBrands(brandsFromQuery)
+    setIsLoadingBrands(brandsQueryLoading)
+  }, [brandsFromQuery, brandsQueryLoading])
 
-    const loadBrands = async () => {
-      setIsLoadingBrands(true)
-      try {
-        const response = await getBrands(1, 1000)
-        const normalizedBrands = Array.isArray(response?.data)
-          ? response.data.map((brand: any) => ({ id: brand.id, name: brand.name }))
-          : Array.isArray(response)
-            ? response
-            : []
-        if (!cancelled) {
-          setBrands(normalizedBrands)
-        }
-      } catch (error) {
-        console.error('Error al obtener las marcas:', error)
-        if (!cancelled) {
-          setBrands([])
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingBrands(false)
-        }
-      }
-    }
-
-    setBrands([])
-    void loadBrands()
-
-    return () => {
-      cancelled = true
-    }
-  }, [version])
-
+  const { data: storesFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  })
   useEffect(() => {
-    let cancelled = false
+    setStores(Array.isArray(storesFromQuery) ? storesFromQuery : [])
+  }, [storesFromQuery])
 
-    const loadStores = async () => {
-      try {
-        const storesResponse = await getStores()
-        if (!cancelled) {
-          setStores(Array.isArray(storesResponse) ? storesResponse : [])
-        }
-      } catch (error) {
-        console.error('Error al obtener las tiendas:', error)
-        if (!cancelled) {
-          setStores([])
-        }
-      }
-    }
-
-    setStores([])
-    setStockStoreId('')
-    void loadStores()
-
-    return () => {
-      cancelled = true
-    }
-  }, [version])
-
+  const { data: providersFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.providers.list(selection.orgId, selection.companyId),
+    queryFn: () => getProviders(),
+    enabled: selection.orgId !== null,
+  })
   useEffect(() => {
-    let cancelled = false
-
-    const loadProviders = async () => {
-      try {
-        const providersResponse = await getProviders()
-        if (!cancelled) {
-          setProviders(Array.isArray(providersResponse) ? providersResponse : [])
-        }
-      } catch (error) {
-        console.error('Error al obtener los proveedores:', error)
-        if (!cancelled) {
-          setProviders([])
-        }
-      }
-    }
-
-    setProviders([])
-    setStockProviderId('')
-    void loadProviders()
-
-    return () => {
-      cancelled = true
-    }
-  }, [version])
+    setProviders(Array.isArray(providersFromQuery) ? providersFromQuery : [])
+  }, [providersFromQuery])
 
   // ── Centralized batch cleanup helpers ──────────────────────────────
   const resetBatchState = useCallback(() => {
@@ -1876,13 +1882,13 @@ const VariantRowItem = memo(function VariantRowItem({
   // ── End centralized batch cleanup ────────────────────────────────
 
   // Clear batch cart when organization/company changes
+  const tenantKey = `${selection.orgId}-${selection.companyId}`
+  const prevTenantRef = useRef(tenantKey)
   useEffect(() => {
-    if (versionResetRef.current) {
-      versionResetRef.current = false
-      return
-    }
+    if (prevTenantRef.current === tenantKey) return
+    prevTenantRef.current = tenantKey
     resetBatchState()
-  }, [version, resetBatchState])
+  }, [tenantKey, resetBatchState])
 
   const handleCreateCategory = async () => {
     const trimmedName = newCategoryName.trim()
@@ -1996,6 +2002,70 @@ const VariantRowItem = memo(function VariantRowItem({
 
         const payload = buildResult.payload
         const normalizedName = String(payload?.name ?? "").trim().toLowerCase()
+
+        // --- ADD STOCK MODE (individual): skip duplicate checks, go straight to stock dialog ---
+        if (addStockMode && existingProduct && !currentProductId) {
+          const stockQuantity = safeNumber(data.initialStock)
+          if (stockQuantity <= 0) {
+            toast.error("Ingresa una cantidad mayor a 0")
+            setIsProcessing(false)
+            return
+          }
+          if (!userId) {
+            toast.error("No se pudo identificar al usuario")
+            setIsProcessing(false)
+            return
+          }
+          // Update prices if changed
+          const newPrice = safeNumber(data.price)
+          const newPriceSell = safeNumber(data.priceSell)
+          const priceChanged = newPrice !== Number(existingProduct.price ?? 0)
+          const priceSellChanged = newPriceSell !== Number(existingProduct.priceSell ?? 0)
+          if (priceChanged || priceSellChanged) {
+            try {
+              await updateProduct(String(existingProduct.id), {
+                price: newPrice,
+                priceSell: newPriceSell,
+              })
+            } catch (err: any) {
+              console.error("Error al actualizar precios:", err)
+            }
+          }
+          // Open stock dialog for store/provider selection
+          setPendingStockPayload(null) // Not used for creating product
+          setPendingStockQuantity(stockQuantity)
+          setStockStoreId('')
+          setStockProviderId('')
+          setStockDialogError(null)
+          if (providers.length === 0) {
+            getProviders()
+              .then((res) => {
+                if (Array.isArray(res)) {
+                  setProviders(res)
+                  if (res.length === 1) setStockProviderId(String(res[0].id))
+                }
+              })
+              .catch(() => {})
+          } else if (providers.length === 1) {
+            setStockProviderId(String(providers[0].id))
+          }
+          if (stores.length === 0) {
+            getStores()
+              .then((res) => {
+                if (Array.isArray(res)) {
+                  setStores(res)
+                  if (res.length === 1) setStockStoreId(String(res[0].id))
+                }
+              })
+              .catch(() => {})
+          } else if (stores.length === 1) {
+            setStockStoreId(String(stores[0].id))
+          }
+          setIsStockDialogOpen(true)
+          setIsProcessing(false)
+          return
+        }
+
         if (normalizedName && nameValidation.status === "checking") {
           const message = "Aun estamos validando el nombre del producto."
           setNameError(message)
@@ -2003,7 +2073,7 @@ const VariantRowItem = memo(function VariantRowItem({
           setIsProcessing(false)
           return
         }
-        if (normalizedName && nameValidation.status === "invalid") {
+        if (normalizedName && nameValidation.status === "invalid" && !addStockMode) {
           const message =
             nameValidation.message ?? "Ya existe un producto con ese nombre."
           setNameError(message)
@@ -2011,7 +2081,7 @@ const VariantRowItem = memo(function VariantRowItem({
           setIsProcessing(false)
           return
         }
-        if (!currentProductId && normalizedName) {
+        if (!currentProductId && normalizedName && !addStockMode) {
           if (existingProductNames.has(normalizedName)) {
             const message = "Ya existe un producto con ese nombre."
             setNameError(message)
@@ -2034,10 +2104,7 @@ const VariantRowItem = memo(function VariantRowItem({
           currentProductId != null ? String(currentProductId) : undefined
         const targetProductId = formProductId ?? undefined
 
-        const initialStockValue =
-          typeof data.initialStock === 'number' && Number.isFinite(data.initialStock)
-            ? data.initialStock
-            : 0
+        const initialStockValue = safeNumber(data.initialStock)
 
         if (!targetProductId && batchCart.length > 0) {
             if (initialStockValue > 0) {
@@ -2062,6 +2129,31 @@ const VariantRowItem = memo(function VariantRowItem({
             setStockStoreId('')
             setStockProviderId('')
             setStockDialogError(null)
+            // Re-fetch providers/stores if they failed to load initially
+            if (providers.length === 0) {
+              getProviders()
+                .then((res) => {
+                  if (Array.isArray(res)) {
+                    setProviders(res)
+                    if (res.length === 1) setStockProviderId(String(res[0].id))
+                  }
+                })
+                .catch(() => {})
+            } else if (providers.length === 1) {
+              setStockProviderId(String(providers[0].id))
+            }
+            if (stores.length === 0) {
+              getStores()
+                .then((res) => {
+                  if (Array.isArray(res)) {
+                    setStores(res)
+                    if (res.length === 1) setStockStoreId(String(res[0].id))
+                  }
+                })
+                .catch(() => {})
+            } else if (stores.length === 1) {
+              setStockStoreId(String(stores[0].id))
+            }
             setIsStockDialogOpen(true)
             setIsProcessing(false)
             return
@@ -2069,17 +2161,21 @@ const VariantRowItem = memo(function VariantRowItem({
 
         if (targetProductId) {
             savedProduct = await updateProduct(targetProductId, payload)
-            toast.success("Producto actualizado correctamente."); // Notificaci??n de ?xito
+            toast.success("Producto actualizado correctamente.");
             if (!onSuccess) {
+                invalidateProducts();
                 router.push("/dashboard/products");
-                router.refresh();
             }
         } else {
             savedProduct = await createProduct(payload);
-            toast.success("Producto creado correctamente."); // Notificaci??n de ?xito
+            toast.success("Producto creado correctamente.");
             if (!onSuccess) {
-                router.push("/dashboard/products");
-                router.refresh();
+                invalidateProducts();
+                if (savedProduct?.id) {
+                    router.push(`/dashboard/products/${savedProduct.id}/promote`);
+                } else {
+                    router.push("/dashboard/products");
+                }
             }
         }
 
@@ -2111,8 +2207,9 @@ const VariantRowItem = memo(function VariantRowItem({
       setIsBatchConfirmOpen(false)
       return
     }
+    // Only check non-addStock items for duplicates
     const duplicateInExisting = batchCart.find((item) =>
-      existingProductNames.has(item.name.trim().toLowerCase()),
+      !item.addStockMode && existingProductNames.has(item.name.trim().toLowerCase()),
     )
     if (duplicateInExisting) {
       toast.error(`Ya existe un producto con el nombre "${duplicateInExisting.name}".`)
@@ -2126,6 +2223,11 @@ const VariantRowItem = memo(function VariantRowItem({
       const savedProduct = await createProduct(pendingBatchPayload)
       createdCount.push(1)
       for (const item of batchCart) {
+        if (item.addStockMode) {
+          // Skip add-stock items here — they're handled in batch stock creation
+          createdCount.push(1)
+          continue
+        }
         await createProduct(item.payload)
         createdCount.push(1)
       }
@@ -2134,8 +2236,8 @@ const VariantRowItem = memo(function VariantRowItem({
       if (onSuccess) {
         await onSuccess(savedProduct)
       } else {
+        invalidateProducts();
         router.push("/dashboard/products")
-        router.refresh()
       }
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || "Error al crear productos."
@@ -2156,6 +2258,58 @@ const VariantRowItem = memo(function VariantRowItem({
   }, [batchCart, existingProductNames, onSuccess, pendingBatchPayload, router])
 
   const handleConfirmInitialStock = useCallback(async () => {
+    // --- ADD STOCK MODE: create entry for existing product ---
+    if (addStockMode && existingProduct) {
+      if (!stockStoreId || !stockProviderId) {
+        setStockDialogError("Selecciona una tienda y un proveedor.")
+        return
+      }
+      if (!userId) {
+        setStockDialogError("No se pudo identificar al usuario.")
+        return
+      }
+      setIsProcessing(true)
+      setStockDialogError(null)
+      try {
+        const purchasePrice = safeNumber(form.getValues('price'))
+        await createEntry({
+          storeId: Number(stockStoreId),
+          userId,
+          providerId: Number(stockProviderId),
+          date: new Date(),
+          description: `Stock adicional - ${existingProduct.name}`,
+          tipoMoneda: 'PEN',
+          details: [{
+            productId: existingProduct.id,
+            quantity: pendingStockQuantity,
+            price: purchasePrice,
+            priceInSoles: purchasePrice,
+          }],
+          referenceId: `add-stock:${existingProduct.id}:${Date.now()}`,
+        })
+        toast.success(`Stock agregado: ${pendingStockQuantity} unidades de ${existingProduct.name}`)
+        setPendingStockQuantity(0)
+        setStockStoreId('')
+        setStockProviderId('')
+        setIsStockDialogOpen(false)
+        setAddStockMode(false)
+        setExistingProduct(null)
+        if (onSuccess) {
+          await onSuccess(null)
+        } else {
+          invalidateProducts();
+          router.push('/dashboard/products')
+        }
+      } catch (error: any) {
+        const message = error?.response?.data?.message || error?.message || "Error al agregar stock"
+        toast.error(message)
+      } finally {
+        setIsProcessing(false)
+      }
+      return
+    }
+
+    // --- Normal flow: create product with stock ---
     if (!pendingStockPayload) {
       setIsStockDialogOpen(false)
       return
@@ -2190,8 +2344,8 @@ const VariantRowItem = memo(function VariantRowItem({
       if (onSuccess) {
         await onSuccess(result.product)
       } else {
+        invalidateProducts();
         router.push("/dashboard/products")
-        router.refresh()
       }
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || "Error al crear el producto con stock"
@@ -2199,7 +2353,7 @@ const VariantRowItem = memo(function VariantRowItem({
     } finally {
       setIsProcessing(false)
     }
-  }, [onSuccess, pendingStockPayload, pendingStockQuantity, router, stockProviderId, stockStoreId, userId])
+  }, [addStockMode, existingProduct, form, onSuccess, pendingStockPayload, pendingStockQuantity, router, stockProviderId, stockStoreId, userId])
 
   const updateBatchAssignment = useCallback(
     (id: string, next: Partial<{ storeId: string; providerId: string; quantity: number; price: number; currency: 'PEN' | 'USD' }>) => {
@@ -2236,7 +2390,7 @@ const VariantRowItem = memo(function VariantRowItem({
   const handleCreateBatchWithAssignments = useCallback(async () => {
     if (!batchCart.length) return
     if (batchMissingAssignmentsCount > 0) {
-      toast.error("Completa la asignación de stock para todos los productos antes de crear.")
+      toast.error("Completa la asignación de stock para los productos con cantidad antes de crear.")
       return
     }
     if (!userId) {
@@ -2247,7 +2401,63 @@ const VariantRowItem = memo(function VariantRowItem({
     setBatchStockError(null)
     const successIds: string[] = []
     try {
+      // Phase 1: Create new products + collect add-stock items
+      const createdWithStock: {
+        cartId: string
+        productId: number
+        assignment: NonNullable<typeof batchAssignments[string]>
+      }[] = []
+      // Collect add-stock items separately (no product creation needed)
+      const addStockItems: {
+        cartId: string
+        productId: number
+        assignment: NonNullable<typeof batchAssignments[string]>
+        existingProductPrice: number
+        existingProductPriceSell: number | null | undefined
+        payload: any
+      }[] = []
+
       for (const item of batchCart) {
+        if (item.addStockMode && item.existingProductId) {
+          // Add-stock item: update prices if changed, then collect for entry creation
+          successIds.push(item.id)
+          const assignment = batchAssignments[item.id]
+          const newPrice = Number(item.payload?.price ?? 0)
+          const newPriceSell = Number(item.payload?.priceSell ?? 0)
+          const priceChanged = newPrice !== Number(item.existingProductPrice ?? 0)
+          const priceSellChanged = newPriceSell !== Number(item.existingProductPriceSell ?? 0)
+          if (priceChanged || priceSellChanged) {
+            try {
+              await updateProduct(String(item.existingProductId), {
+                price: newPrice,
+                priceSell: newPriceSell,
+              })
+            } catch (err: any) {
+              console.error("Error al actualizar precios:", err)
+            }
+          }
+          if (
+            assignment &&
+            assignment.storeId &&
+            assignment.providerId &&
+            assignment.quantity > 0
+          ) {
+            addStockItems.push({
+              cartId: item.id,
+              productId: item.existingProductId,
+              assignment,
+              existingProductPrice: item.existingProductPrice ?? 0,
+              existingProductPriceSell: item.existingProductPriceSell,
+              payload: item.payload,
+            })
+          }
+          continue
+        }
+
+        // Normal new product creation
+        const product = await createProduct(item.payload)
+        successIds.push(item.id)
+
         const assignment = batchAssignments[item.id]
         if (
           assignment &&
@@ -2255,28 +2465,119 @@ const VariantRowItem = memo(function VariantRowItem({
           assignment.providerId &&
           assignment.quantity > 0
         ) {
-          const purchasePrice = Number(assignment.price ?? item.payload?.price ?? 0)
-          const itemSerials = batchSerials[item.id]
-          await createProductWithStock(item.payload, {
-            storeId: Number(assignment.storeId),
-            userId,
-            providerId: Number(assignment.providerId),
-            quantity: assignment.quantity,
+          createdWithStock.push({
+            cartId: item.id,
+            productId: product.id,
+            assignment,
+          })
+        }
+      }
+
+      // Phase 2: Group products with stock by (storeId + providerId + currency)
+      // so we create ONE entry per provider instead of one per product
+      if (createdWithStock.length > 0) {
+        const entryGroups = new Map<string, {
+          storeId: number
+          providerId: number
+          tipoMoneda: string
+          details: { productId: number; quantity: number; price: number; priceInSoles: number; series?: string[] }[]
+        }>()
+
+        for (const cp of createdWithStock) {
+          const a = cp.assignment
+          const currency = a.currency || 'PEN'
+          const key = `${a.storeId}-${a.providerId}-${currency}`
+
+          if (!entryGroups.has(key)) {
+            entryGroups.set(key, {
+              storeId: Number(a.storeId),
+              providerId: Number(a.providerId),
+              tipoMoneda: currency,
+              details: [],
+            })
+          }
+
+          const purchasePrice = Number(a.price ?? 0)
+          const itemSerials = batchSerials[cp.cartId]
+
+          entryGroups.get(key)!.details.push({
+            productId: cp.productId,
+            quantity: a.quantity,
             price: purchasePrice,
             priceInSoles: purchasePrice,
-            tipoMoneda: assignment.currency,
             series: itemSerials?.length ? itemSerials : undefined,
           })
-        } else {
-          await createProduct(item.payload)
         }
-        successIds.push(item.id)
+
+        // Phase 3: Create one entry per provider group (new products)
+        for (const [, group] of entryGroups) {
+          await createEntry({
+            storeId: group.storeId,
+            userId,
+            providerId: group.providerId,
+            date: new Date(),
+            description: group.details.length > 1
+              ? `Stock inicial (${group.details.length} productos)`
+              : 'Stock inicial',
+            tipoMoneda: group.tipoMoneda,
+            details: group.details,
+            referenceId: `batch-stock:${Date.now()}:s${group.storeId}:p${group.providerId}`,
+          })
+        }
       }
-      toast.success("Productos y stock inicial registrados.")
+
+      // Phase 4: Create entries for add-stock items (existing products)
+      if (addStockItems.length > 0) {
+        const stockEntryGroups = new Map<string, {
+          storeId: number
+          providerId: number
+          tipoMoneda: string
+          details: { productId: number; quantity: number; price: number; priceInSoles: number }[]
+        }>()
+
+        for (const item of addStockItems) {
+          const a = item.assignment
+          const currency = a.currency || 'PEN'
+          const key = `stock-${a.storeId}-${a.providerId}-${currency}`
+
+          if (!stockEntryGroups.has(key)) {
+            stockEntryGroups.set(key, {
+              storeId: Number(a.storeId),
+              providerId: Number(a.providerId),
+              tipoMoneda: currency,
+              details: [],
+            })
+          }
+
+          stockEntryGroups.get(key)!.details.push({
+            productId: item.productId,
+            quantity: a.quantity,
+            price: Number(a.price ?? 0),
+            priceInSoles: Number(a.price ?? 0),
+          })
+        }
+
+        for (const [, group] of stockEntryGroups) {
+          await createEntry({
+            storeId: group.storeId,
+            userId,
+            providerId: group.providerId,
+            date: new Date(),
+            description: group.details.length > 1
+              ? `Stock adicional (${group.details.length} productos)`
+              : 'Stock adicional',
+            tipoMoneda: group.tipoMoneda,
+            details: group.details,
+            referenceId: `add-stock-batch:${Date.now()}:s${group.storeId}:p${group.providerId}`,
+          })
+        }
+      }
+
+      toast.success("Productos y stock registrados.")
       resetBatchState()
       if (!onSuccess) {
+        invalidateProducts();
         router.push("/dashboard/products")
-        router.refresh()
       }
     } catch (error: any) {
       // Remove successfully created items from cart so user doesn't re-create them
@@ -2303,20 +2604,21 @@ const VariantRowItem = memo(function VariantRowItem({
 
 
   const handleAddAnother = useCallback(async () => {
-    if (currentProductId) {
-      return
-    }
-    const isValid = await form.trigger()
-    if (!isValid) {
+    if (currentProductId) return
+
+    // Sync DOM → form state for numeric fields before reading values.
+    // Prevents desync where user sees one value but form state has another.
+    syncNumericFieldsFromDOM()
+
+    const valid = await form.trigger()
+    if (!valid) {
       toast.error("Revisa los campos obligatorios antes de continuar.")
       return
     }
-    const formValues = form.getValues()
-    const stockValue =
-      typeof formValues.initialStock === 'number' && Number.isFinite(formValues.initialStock)
-        ? formValues.initialStock
-        : 0
-    const buildResult = buildPayload(formValues)
+
+    const data = form.getValues()
+    const stockValue = safeNumber(data.initialStock)
+    const buildResult = buildPayload(data)
     if (buildResult.error) {
       setExtraFieldError(buildResult.error)
       toast.error(buildResult.error)
@@ -2324,21 +2626,25 @@ const VariantRowItem = memo(function VariantRowItem({
     }
     const payload = buildResult.payload
     const normalizedName = String(payload?.name ?? "").trim().toLowerCase()
-    if (normalizedName) {
+    const isAddStockItem = addStockMode && existingProduct
+    if (normalizedName && !isAddStockItem) {
       if (existingProductNames.has(normalizedName)) {
         toast.error("Ya existe un producto con ese nombre.")
         return
       }
       const nameAlreadyAdded = batchCart.some((item) => {
-        if (editingBatchId && item.id === editingBatchId) {
-          return false
-        }
+        if (editingBatchId && item.id === editingBatchId) return false
         return item.name.trim().toLowerCase() === normalizedName
       })
       if (nameAlreadyAdded) {
         toast.error("Ese producto ya fue agregado al lote.")
         return
       }
+    }
+    // For add-stock items, require quantity > 0
+    if (isAddStockItem && stockValue <= 0) {
+      toast.error("Ingresa una cantidad mayor a 0 para agregar stock.")
+      return
     }
     if (editingBatchId) {
       setBatchCart((prev) =>
@@ -2349,51 +2655,64 @@ const VariantRowItem = memo(function VariantRowItem({
                 name: payload?.name ?? "Producto sin nombre",
                 payload,
                 initialStock: stockValue,
+                addStockMode: isAddStockItem ? true : undefined,
+                existingProductId: isAddStockItem ? existingProduct!.id : undefined,
+                existingProductPrice: isAddStockItem ? existingProduct!.price : undefined,
+                existingProductPriceSell: isAddStockItem ? existingProduct!.priceSell : undefined,
               }
             : entry,
         ),
       )
       setEditingBatchId(null)
-      setVariantRows([])
-      setIngredientRows([])
-      setExtraAttributes({})
-      form.reset({
-        ...emptyProductValues,
-        status: form.getValues("status") ?? "Activo",
-        categoryId: form.getValues("categoryId") ?? "",
-      })
-      toast.success("Producto actualizado en el lote.")
-      return
+      toast.success(isAddStockItem ? "Stock actualizado en el lote." : "Producto actualizado en el lote.")
+    } else {
+      const itemId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}`
+      setBatchCart((prev) => [
+        ...prev,
+        {
+          id: itemId,
+          name: payload?.name ?? "Producto sin nombre",
+          payload,
+          initialStock: stockValue,
+          addStockMode: isAddStockItem ? true : undefined,
+          existingProductId: isAddStockItem ? existingProduct!.id : undefined,
+          existingProductPrice: isAddStockItem ? existingProduct!.price : undefined,
+          existingProductPriceSell: isAddStockItem ? existingProduct!.priceSell : undefined,
+        },
+      ])
+      toast.success(isAddStockItem ? "Stock agregado al lote." : "Producto agregado al lote.")
     }
-    const itemId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}`
-    setBatchCart((prev) => [
-      ...prev,
-      {
-        id: itemId,
-        name: payload?.name ?? "Producto sin nombre",
-        payload,
-        initialStock: stockValue,
-      },
-    ])
     setVariantRows([])
     setIngredientRows([])
     setExtraAttributes({})
+    // Reset add-stock mode after adding to cart
+    if (addStockMode) {
+      setAddStockMode(false)
+      setExistingProduct(null)
+    }
+
     form.reset({
       ...emptyProductValues,
       status: form.getValues("status") ?? "Activo",
       categoryId: form.getValues("categoryId") ?? "",
     })
-    toast.success("Producto agregado al lote.")
+    // Force-clear numeric inputs in DOM after reset
+    flushNumericFieldsToDOM()
   }, [
+    addStockMode,
     batchCart,
     buildPayload,
     currentProductId,
     editingBatchId,
+    existingProduct,
     existingProductNames,
     form,
+    syncNumericFieldsFromDOM,
+    flushNumericFieldsToDOM,
+    emptyProductValues,
   ])
 
   const startBatchEditFromCart = useCallback(
@@ -2438,13 +2757,15 @@ const VariantRowItem = memo(function VariantRowItem({
         features: Array.isArray(payload.features) ? payload.features : [],
         initialStock: item.initialStock ?? 0,
       })
+      // Sync numeric fields to DOM after reset (loads cart item values into inputs)
+      flushNumericFieldsToDOM()
       requestAnimationFrame(() => {
         nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
         nameInputRef.current?.focus()
       })
       toast.message("Producto listo para actualizar.")
     },
-    [form],
+    [form, flushNumericFieldsToDOM],
   )
 
   const handleCreateBatch = useCallback(async () => {
@@ -2457,8 +2778,8 @@ const VariantRowItem = memo(function VariantRowItem({
       toast.success("Productos creados correctamente.")
       resetBatchState()
       if (!onSuccess) {
+        invalidateProducts();
         router.push("/dashboard/products")
-        router.refresh()
       }
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || "Error al crear productos."
@@ -2470,6 +2791,9 @@ const VariantRowItem = memo(function VariantRowItem({
 
   const handleSubmitWithBatchGuard = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
+      // Sync DOM → form state for numeric fields before any submission
+      syncNumericFieldsFromDOM()
+
       if (!batchCart.length || currentProductId) {
         return onSubmit(event)
       }
@@ -2499,7 +2823,7 @@ const VariantRowItem = memo(function VariantRowItem({
 
       return onSubmit()
     },
-    [batchCart.length, currentProductId, form, handleCreateBatch, onSubmit],
+    [batchCart.length, currentProductId, form, handleCreateBatch, onSubmit, syncNumericFieldsFromDOM],
   )
 
   const handleConfirmCreateOnly = useCallback(async () => {
@@ -2521,8 +2845,8 @@ const VariantRowItem = memo(function VariantRowItem({
       if (onSuccess) {
         await onSuccess(savedProduct)
       } else {
+        invalidateProducts();
         router.push("/dashboard/products")
-        router.refresh()
       }
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || "Error al crear el producto."
@@ -2557,6 +2881,11 @@ const VariantRowItem = memo(function VariantRowItem({
       }
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) {
+        const safeNum = (v: unknown): number => {
+          if (typeof v === 'number' && Number.isFinite(v)) return v
+          const p = Number(v)
+          return Number.isFinite(p) ? p : 0
+        }
         const deduped = parsed.filter((item, index, self) => {
           const normalized = String(item?.name ?? '').trim().toLowerCase()
           if (!normalized) return false
@@ -2564,7 +2893,15 @@ const VariantRowItem = memo(function VariantRowItem({
             self.findIndex((entry) => String(entry?.name ?? '').trim().toLowerCase() === normalized) ===
             index
           )
-        })
+        }).map((item) => ({
+          ...item,
+          initialStock: safeNum(item.initialStock),
+          payload: item.payload ? {
+            ...item.payload,
+            price: safeNum(item.payload.price),
+            priceSell: safeNum(item.payload.priceSell),
+          } : item.payload,
+        }))
         setBatchCart(deduped)
       }
     } catch (error) {
@@ -2800,20 +3137,20 @@ const VariantRowItem = memo(function VariantRowItem({
               <Package className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold">
-                {currentProductId ? 'Actualizar Producto' : 'Crear Producto'}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold">
+                  {currentProductId ? 'Actualizar Producto' : 'Crear Producto'}
+                </h1>
+                <ProductGuideButton />
+              </div>
               <p className="text-xs text-muted-foreground">
                 Completa los campos para {currentProductId ? 'actualizar' : 'registrar'} un producto
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ProductGuideButton />
-            <Badge variant="outline" className="text-xs">
-              {verticalInfo?.config?.displayName ?? verticalName}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-xs">
+            {verticalInfo?.config?.displayName ?? verticalName}
+          </Badge>
         </div>
       </div>
 
@@ -2843,6 +3180,23 @@ const VariantRowItem = memo(function VariantRowItem({
                 clearErrors={clearErrors}
                 isProcessing={isProcessing}
                 suppressInlineErrors={suppressInlineErrors}
+                addStockMode={addStockMode}
+                existingProduct={existingProduct}
+                onEnterAddStockMode={() => {
+                  if (!existingProduct) return
+                  setAddStockMode(true)
+                  setValue('description', existingProduct.description ?? '')
+                  setValue('categoryId', String(existingProduct.categoryId ?? ''))
+                  setValue('price', existingProduct.price ?? 0)
+                  setValue('priceSell', existingProduct.priceSell ?? 0)
+                  setValue('initialStock', 0)
+                }}
+                onCancelAddStockMode={() => {
+                  setAddStockMode(false)
+                  setExistingProduct(null)
+                  setNameValidation({ status: 'idle', message: undefined })
+                  form.reset()
+                }}
                 nameValidation={nameValidation}
                 nameError={nameError}
                 nameInputRef={nameInputRef}
@@ -2872,10 +3226,12 @@ const VariantRowItem = memo(function VariantRowItem({
                 clearErrors={clearErrors}
                 isProcessing={isProcessing}
                 suppressInlineErrors={suppressInlineErrors}
+                addStockMode={addStockMode}
                 brands={brands}
                 isLoadingBrands={isLoadingBrands}
                 hasBrand={hasBrand}
                 hasDescription={hasDescription}
+                hideBrand={isRestaurant}
                 OptionalChip={OptionalChip}
               />
             </div>
@@ -2884,9 +3240,9 @@ const VariantRowItem = memo(function VariantRowItem({
           {/* ── Sección 2: Precios y stock ── */}
           <div className="rounded-lg border bg-card p-4 shadow-sm">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <DollarSign className="h-4 w-4" /> Precios y stock
+              <DollarSign className="h-4 w-4" /> {isRestaurant ? 'Precios' : 'Precios y stock'}
             </h3>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_1fr_1.35fr]">
+            <div className={`grid grid-cols-1 gap-4 ${isRestaurant ? 'lg:grid-cols-2' : 'lg:grid-cols-[1fr_1fr_1fr_1.35fr]'}`}>
               <ProductPricingFields
                 form={form}
                 register={register}
@@ -2895,26 +3251,30 @@ const VariantRowItem = memo(function VariantRowItem({
                 clearErrors={clearErrors}
                 isProcessing={isProcessing}
                 suppressInlineErrors={suppressInlineErrors}
+                addStockMode={addStockMode}
                 hasPrice={hasPrice}
                 hasPriceSell={hasPriceSell}
                 hasInitialStock={hasInitialStock}
                 isEditing={Boolean(currentProductId)}
+                hideStock={isRestaurant}
                 OptionalChip={OptionalChip}
               />
-              <ProductFeaturesSection
-                form={form}
-                register={register}
-                control={control}
-                setValue={setValue}
-                clearErrors={clearErrors}
-                isProcessing={isProcessing}
-                suppressInlineErrors={suppressInlineErrors}
-                featureFields={featureFields}
-                appendFeature={appendFeature}
-                removeFeature={removeFeature}
-                hasFeatures={hasFeatures}
-                OptionalChip={OptionalChip}
-              />
+              {!isRestaurant && (
+                <ProductFeaturesSection
+                  form={form}
+                  register={register}
+                  control={control}
+                  setValue={setValue}
+                  clearErrors={clearErrors}
+                  isProcessing={isProcessing}
+                  suppressInlineErrors={suppressInlineErrors}
+                  featureFields={featureFields}
+                  appendFeature={appendFeature}
+                  removeFeature={removeFeature}
+                  hasFeatures={hasFeatures}
+                  OptionalChip={OptionalChip}
+                />
+              )}
             </div>
           </div>
 
@@ -2998,11 +3358,13 @@ const VariantRowItem = memo(function VariantRowItem({
                 className="cursor-pointer transition-colors hover:bg-primary/90 hover:shadow-sm"
                 disabled={isProcessing || Boolean(editingBatchId)}
               >
-                {currentProductId
-                  ? 'Actualizar Producto'
-                  : batchCount > 0
-                    ? `Crear Productos (${createProductsCount || batchCount})`
-                    : 'Crear Producto'}
+                {addStockMode && batchCount === 0
+                  ? 'Agregar Stock'
+                  : currentProductId
+                    ? 'Actualizar Producto'
+                    : batchCount > 0
+                      ? `Crear Productos (${createProductsCount || batchCount})`
+                      : 'Crear Producto'}
               </Button>
               {!currentProductId && (
                 <Button
@@ -3052,6 +3414,8 @@ const VariantRowItem = memo(function VariantRowItem({
                     connectivity: "",
                     features: [],
                   })
+                  // Force-clear numeric inputs in DOM after reset
+                  flushNumericFieldsToDOM()
                 }}
               >
                 Limpiar
@@ -3183,31 +3547,31 @@ const VariantRowItem = memo(function VariantRowItem({
             </span>{" "}
             unidad(es) de stock inicial.
           </p>
-          <div className="mt-4 space-y-3">
-            <div className="space-y-1">
+          <div className="mt-4 space-y-4">
+            <div className="space-y-2">
               <Label>Tienda de destino</Label>
               <Select value={stockStoreId} onValueChange={setStockStoreId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full cursor-pointer">
                   <SelectValue placeholder="Selecciona una tienda" />
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store: any) => (
-                    <SelectItem key={store.id} value={String(store.id)}>
+                    <SelectItem key={store.id} value={String(store.id)} className="cursor-pointer">
                       {store.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label>Proveedor</Label>
               <Select value={stockProviderId} onValueChange={setStockProviderId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full cursor-pointer">
                   <SelectValue placeholder="Selecciona un proveedor" />
                 </SelectTrigger>
                 <SelectContent>
                   {providers.map((provider: any) => (
-                    <SelectItem key={provider.id} value={String(provider.id)}>
+                    <SelectItem key={provider.id} value={String(provider.id)} className="cursor-pointer">
                       {provider.name}
                     </SelectItem>
                   ))}
@@ -3218,16 +3582,17 @@ const VariantRowItem = memo(function VariantRowItem({
               <p className="text-xs text-rose-500">{stockDialogError}</p>
             )}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="mt-2 gap-3 sm:gap-3">
             <Button
               type="button"
               variant="outline"
+              className="cursor-pointer"
               onClick={() => setIsStockDialogOpen(false)}
               disabled={isProcessing}
             >
               Cancelar
             </Button>
-            <Button type="button" onClick={handleConfirmInitialStock} disabled={isProcessing}>
+            <Button type="button" className="cursor-pointer" onClick={handleConfirmInitialStock} disabled={isProcessing}>
               Registrar stock
             </Button>
           </DialogFooter>

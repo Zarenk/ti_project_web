@@ -1,0 +1,43 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
+async function resolveAuthToken(request: Request): Promise<string | undefined> {
+  const headerToken = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (headerToken) return headerToken;
+  const cookieStore = await cookies();
+  const cookieToken = cookieStore.get('token')?.value;
+  if (cookieToken) return cookieToken;
+  const cookieHeader = request.headers.get('cookie');
+  const match = cookieHeader?.match(/token=([^;]+)/);
+  return match?.[1];
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; type: string }> },
+) {
+  const { id, type } = await params;
+  const token = await resolveAuthToken(req);
+
+  const res = await fetch(`${BACKEND_URL}/api/guide/${id}/files/${type}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      Cookie: req.headers.get('cookie') || '',
+    },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Download failed' }));
+    return NextResponse.json(data, { status: res.status });
+  }
+
+  const blob = await res.blob();
+  const contentType = type === 'xml' ? 'application/xml' : 'application/zip';
+
+  return new NextResponse(blob, {
+    status: 200,
+    headers: { 'Content-Type': contentType },
+  });
+}

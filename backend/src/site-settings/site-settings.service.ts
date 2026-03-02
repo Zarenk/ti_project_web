@@ -153,7 +153,8 @@ const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
     providers: true,
     settings: true,
     hidePurchaseCost: false,
-    hideDeleteActions: false,
+    hideDeleteForEmployees: false,
+    hideDeleteForAdmins: false,
   },
 };
 

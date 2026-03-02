@@ -9,6 +9,9 @@ import { InvoiceTemplatesModule } from 'src/invoice-templates/invoice-templates.
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { SiteSettingsModule } from 'src/site-settings/site-settings.module';
 import { InventoryMetricsController } from './metrics.controller';
+import { InventorySnapshotService } from './inventory-snapshot.service';
+import { InventorySnapshotCron } from './inventory-snapshot.cron';
+import { HistoricalSnapshotService } from './historical-snapshot.service';
 
 @Module({
   imports: [
@@ -22,7 +25,14 @@ import { InventoryMetricsController } from './metrics.controller';
     InventoryMetricsController,
     InventoryPublicController,
   ],
-  providers: [InventoryService, PrismaService, AccountingHook],
-  exports: [InventoryService],
+  providers: [
+    InventoryService,
+    PrismaService,
+    AccountingHook,
+    InventorySnapshotService,
+    InventorySnapshotCron,
+    HistoricalSnapshotService,
+  ],
+  exports: [InventoryService, InventorySnapshotService, HistoricalSnapshotService],
 })
 export class InventoryModule {}

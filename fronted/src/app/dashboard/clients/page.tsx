@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 
@@ -28,12 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type ClientsState = {
-  data: ClientRow[];
-  loading: boolean;
-  error: string | null;
-};
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { CLIENTS_GUIDE_STEPS } from "./clients-guide-steps";
+import { queryKeys } from "@/lib/query-keys";
 
 const DOCUMENT_TYPES = [
   { value: "DNI", label: "DNI" },
@@ -44,11 +42,28 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function ClientsPage(): React.ReactElement {
-  const { version } = useTenantSelection();
-  const [{ data, loading, error }, setState] = useState<ClientsState>({
-    data: [],
-    loading: true,
-    error: null,
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
+
+  const { data: clientsData = [], isLoading, error } = useQuery<ClientRow[]>({
+    queryKey: queryKeys.clients.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const clients = await getClients();
+      return clients
+        .filter((client: any) => {
+          const username = client.user?.username?.trim() || "";
+          return !username.startsWith("generic_");
+        })
+        .map((client: any) => ({
+          id: client.id,
+          name: client.name || "-",
+          type: client.type || "-",
+          typeNumber: client.typeNumber || "-",
+          image: client.image,
+          createdAt: client.createdAt || "",
+        }));
+    },
+    enabled: selection.orgId !== null,
   });
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -57,63 +72,19 @@ export default function ClientsPage(): React.ReactElement {
   const [newClientType, setNewClientType] = useState("DNI");
   const [newClientTypeNumber, setNewClientTypeNumber] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
+  const invalidateClients = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.clients.root(selection.orgId, selection.companyId),
+    });
+  }, [queryClient, selection.orgId, selection.companyId]);
 
-    const loadClients = async () => {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
-      try {
-        const clients = await getClients();
-        if (!cancelled) {
-          // Filter out clients with generic users
-          const filteredClients = clients
-            .filter((client: any) => {
-              const username = client.user?.username?.trim() || "";
-              return !username.startsWith("generic_");
-            })
-            .map((client: any) => ({
-              id: client.id,
-              name: client.name || "-",
-              type: client.type || "-",
-              typeNumber: client.typeNumber || "-",
-              image: client.image,
-              createdAt: client.createdAt || "",
-            }));
+  const handleClientUpdated = useCallback(() => {
+    invalidateClients();
+  }, [invalidateClients]);
 
-          setState({ data: filteredClients, loading: false, error: null });
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "No se pudieron cargar los clientes.";
-        if (!cancelled) {
-          setState({ data: [], loading: false, error: message });
-          toast.error(message);
-        }
-      }
-    };
-
-    void loadClients();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
-
-  const handleClientUpdated = useCallback((updatedClient: ClientRow) => {
-    setState((prev) => ({
-      ...prev,
-      data: prev.data.map((client) =>
-        client.id === updatedClient.id ? updatedClient : client
-      ),
-    }));
-  }, []);
-
-  const handleClientDeleted = useCallback((id: number) => {
-    setState((prev) => ({
-      ...prev,
-      data: prev.data.filter((client) => client.id !== id),
-    }));
-  }, []);
+  const handleClientDeleted = useCallback(() => {
+    invalidateClients();
+  }, [invalidateClients]);
 
   const handleCreateClient = async () => {
     if (!newClientName.trim()) {
@@ -128,32 +99,18 @@ export default function ClientsPage(): React.ReactElement {
 
     setCreateLoading(true);
     try {
-      const newClient = await createClient({
+      await createClient({
         name: newClientName.trim(),
         type: newClientType,
         typeNumber: newClientTypeNumber.trim(),
       });
-
-      setState((prev) => ({
-        ...prev,
-        data: [
-          ...prev.data,
-          {
-            id: newClient.id,
-            name: newClient.name,
-            type: newClient.type || "-",
-            typeNumber: newClient.typeNumber || "-",
-            image: newClient.image,
-            createdAt: newClient.createdAt || new Date().toISOString(),
-          },
-        ],
-      }));
 
       toast.success("Cliente creado exitosamente");
       setShowCreateDialog(false);
       setNewClientName("");
       setNewClientType("DNI");
       setNewClientTypeNumber("");
+      invalidateClients();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al crear el cliente";
       toast.error(message);
@@ -167,7 +124,10 @@ export default function ClientsPage(): React.ReactElement {
     <div className="flex h-full flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+            <PageGuideButton steps={CLIENTS_GUIDE_STEPS} tooltipLabel="Guía de clientes" />
+          </div>
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Gestiona los clientes de tu sistema
           </p>
@@ -237,17 +197,21 @@ export default function ClientsPage(): React.ReactElement {
         </Dialog>
       </div>
 
-      {loading && data.length === 0 ? (
+      {isLoading && clientsData.length === 0 ? (
         <TablePageSkeleton title={false} filters={3} columns={5} rows={6} actions={false} />
       ) : (
         <ClientsDataTable
-          data={data}
+          data={clientsData}
           onClientUpdated={handleClientUpdated}
           onClientDeleted={handleClientDeleted}
         />
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600">
+          {error instanceof Error ? error.message : "No se pudieron cargar los clientes."}
+        </p>
+      )}
     </div>
   );
 }

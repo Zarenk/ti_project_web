@@ -72,4 +72,14 @@ export class QueryActivityDto {
   @IsInt()
   @Min(1)
   entityLimit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  filterOrgId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  filterCompanyId?: number;
 }

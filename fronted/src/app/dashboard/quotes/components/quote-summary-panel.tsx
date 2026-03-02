@@ -105,7 +105,7 @@ export const QuoteSummaryPanel = memo(function QuoteSummaryPanel({
 
   return (
     <>
-      <Card className="border border-slate-200/70 bg-white/90 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/70">
+      <Card className="border border-slate-200/70 bg-white/90 shadow-sm dark:border-slate-800/70 dark:bg-slate-900/70 w-full min-w-0 overflow-hidden">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm text-slate-900 dark:text-slate-100">
@@ -131,7 +131,7 @@ export const QuoteSummaryPanel = memo(function QuoteSummaryPanel({
             </div>
           )}
         </CardHeader>
-        <CardContent className="space-y-1.5 pb-24">
+        <CardContent className="space-y-1.5 pb-24 overflow-hidden">
           {summaryItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
               Selecciona componentes para ver el resumen.
@@ -144,7 +144,7 @@ export const QuoteSummaryPanel = memo(function QuoteSummaryPanel({
               return (
                 <div
                   key={item.id}
-                  className="group flex items-center gap-1.5 rounded-lg border border-slate-200/70 bg-white/80 px-2 py-1.5 text-xs text-slate-600 transition-all duration-200 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300 dark:hover:border-slate-700"
+                  className="group flex items-center gap-1.5 rounded-lg border border-slate-200/70 bg-white/80 px-2 py-1.5 text-xs text-slate-600 transition-all duration-200 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300 dark:hover:border-slate-700 w-full min-w-0 overflow-hidden"
                 >
                   {/* Remove button */}
                   {!isReadOnly && (
@@ -159,15 +159,25 @@ export const QuoteSummaryPanel = memo(function QuoteSummaryPanel({
                   )}
 
                   {/* Name + badges */}
-                  <span className="flex-1 truncate">
-                    {item.name}
-                    {(item.id === "service-assembly-free" ||
-                      item.id === "warranty-12-free") && (
-                      <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
-                        Incl.
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex-1 truncate min-w-0 cursor-default">
+                        {item.name}
+                        {(item.id === "service-assembly-free" ||
+                          item.id === "warranty-12-free") && (
+                          <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                            Incl.
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      className="max-w-xs text-xs font-medium"
+                    >
+                      {item.name}
+                    </TooltipContent>
+                  </Tooltip>
 
                   {/* Quantity controls */}
                   {isQuantityEditable(item) && !isReadOnly && (
@@ -232,7 +242,7 @@ export const QuoteSummaryPanel = memo(function QuoteSummaryPanel({
       {/* Sticky totals footer */}
       <footer className="sticky bottom-0 z-20 border-t border-slate-200/70 bg-white/90 backdrop-blur-lg dark:border-slate-800/60 dark:bg-slate-950/80">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
-          <div className="flex items-center gap-6 text-xs text-slate-600 dark:text-slate-300">
+          <div className="flex items-center gap-3 sm:gap-6 text-xs text-slate-600 dark:text-slate-300 min-w-0 flex-wrap">
             <span>
               Subtotal:{" "}
               <span className="font-semibold text-slate-800 dark:text-slate-100">
@@ -252,8 +262,8 @@ export const QuoteSummaryPanel = memo(function QuoteSummaryPanel({
               </span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Sparkles className="h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-300" />
             <span className="text-base font-bold text-slate-900 dark:text-slate-100">
               Total: {currency} {grossTotal.toFixed(2)}
             </span>

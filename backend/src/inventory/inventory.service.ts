@@ -502,8 +502,61 @@ export class InventoryService {
           organizationId,
         };
 
-        await tx.transfer.create({
+        const transferRecord = await tx.transfer.create({
           data: transferCreateData,
+        });
+
+        // ── Create transfer Entry + EntryDetail in destination store ──
+        let internalProvider = await tx.provider.findFirst({
+          where: {
+            organizationId,
+            documentNumber: 'TRASLADO-INTERNO',
+          },
+          select: { id: true },
+        });
+        if (!internalProvider) {
+          internalProvider = await tx.provider.create({
+            data: {
+              name: 'Traslado Interno',
+              description: 'Proveedor del sistema para entradas por traslado entre tiendas',
+              documentNumber: 'TRASLADO-INTERNO',
+              document: 'SISTEMA',
+              organizationId,
+            },
+          });
+        }
+
+        const originalDetail = await tx.entryDetail.findFirst({
+          where: { productId, entry: { storeId: sourceStoreId } },
+          orderBy: { createdAt: 'desc' },
+          select: { price: true, priceInSoles: true },
+        });
+
+        await tx.entry.create({
+          data: {
+            storeId: destinationStoreId,
+            userId,
+            providerId: internalProvider.id,
+            date: new Date(),
+            description: `TRASLADO — Transferencia desde ${sourceStore!.name}`,
+            tipoMoneda: 'PEN',
+            paymentMethod: 'CASH',
+            paymentTerm: 'CASH',
+            providerName: 'Traslado Interno',
+            totalGross: (originalDetail?.price ?? 0) * quantity,
+            igvRate: 0,
+            organizationId,
+            referenceId: `transfer-${transferRecord.id}`,
+            details: {
+              create: [{
+                productId,
+                quantity,
+                price: originalDetail?.price ?? 0,
+                priceInSoles: originalDetail?.priceInSoles ?? 0,
+                inventoryId: destinationInventoryId,
+              }],
+            },
+          },
         });
 
         // Registrar el evento en el historial de movimientos
@@ -558,7 +611,265 @@ export class InventoryService {
       handlePrismaError(error);
     }
   }
-  //
+
+  /**
+   * Transfer product between stores WITH series movement.
+   * Used by shipping guide inter-store flow.
+   * Returns the Transfer record ID for linking to ShippingGuide.
+   */
+  async transferProductWithSeries(transferDto: {
+    sourceStoreId: number;
+    destinationStoreId: number;
+    productId: number;
+    quantity: number;
+    serials?: string[];
+    description?: string;
+    userId: number;
+    organizationId?: number | null;
+    companyId?: number | null;
+    shippingGuideId?: number | null;
+    tx?: any; // Optional Prisma transaction client
+  }): Promise<number> {
+    const {
+      sourceStoreId,
+      destinationStoreId,
+      productId,
+      quantity,
+      serials,
+      description,
+      userId,
+      organizationId: inputOrganizationId,
+      companyId: inputCompanyId,
+      shippingGuideId,
+      tx: externalTx,
+    } = transferDto;
+
+    const runInTx = async (tx: any) => {
+      // Validate source stock
+      const sourceStoreInventory = await tx.storeOnInventory.findFirst({
+        where: { storeId: sourceStoreId, inventory: { productId } },
+      });
+
+      if (!sourceStoreInventory || sourceStoreInventory.stock < quantity) {
+        throw new BadRequestException(
+          `Stock insuficiente en la tienda de origen para el producto ${productId}. Disponible: ${sourceStoreInventory?.stock ?? 0}, solicitado: ${quantity}`,
+        );
+      }
+
+      // Validate series if provided
+      if (serials && serials.length > 0) {
+        if (serials.length !== quantity) {
+          throw new BadRequestException(
+            `La cantidad de series (${serials.length}) no coincide con la cantidad a transferir (${quantity}).`,
+          );
+        }
+
+        const activeSeries = await tx.entryDetailSeries.findMany({
+          where: {
+            serial: { in: serials },
+            organizationId: inputOrganizationId,
+            status: 'active',
+            storeId: sourceStoreId,
+          },
+          select: { serial: true },
+        });
+
+        const foundSerials = new Set(activeSeries.map((s: any) => s.serial));
+        const missing = serials.filter((s) => !foundSerials.has(s));
+        if (missing.length > 0) {
+          throw new BadRequestException(
+            `Series no encontradas o no activas en tienda origen: ${missing.join(', ')}`,
+          );
+        }
+      }
+
+      // Decrement source stock
+      await tx.storeOnInventory.update({
+        where: { id: sourceStoreInventory.id },
+        data: { stock: sourceStoreInventory.stock - quantity },
+      });
+
+      // Increment or create destination stock
+      const destStoreInventory = await tx.storeOnInventory.findFirst({
+        where: { storeId: destinationStoreId, inventory: { productId } },
+      });
+
+      let destinationInventoryId: number;
+
+      if (destStoreInventory) {
+        await tx.storeOnInventory.update({
+          where: { id: destStoreInventory.id },
+          data: { stock: destStoreInventory.stock + quantity },
+        });
+        destinationInventoryId = destStoreInventory.inventoryId;
+      } else {
+        let inventory = await tx.inventory.findFirst({
+          where: { productId },
+        });
+        if (!inventory) {
+          inventory = await tx.inventory.create({
+            data: {
+              productId,
+              storeId: destinationStoreId,
+              organizationId: inputOrganizationId,
+            },
+          });
+        }
+        await tx.storeOnInventory.create({
+          data: {
+            storeId: destinationStoreId,
+            inventoryId: inventory.id,
+            stock: quantity,
+          },
+        });
+        destinationInventoryId = inventory.id;
+      }
+
+      // Move series: update storeId from source to destination
+      if (serials && serials.length > 0) {
+        await tx.entryDetailSeries.updateMany({
+          where: {
+            serial: { in: serials },
+            organizationId: inputOrganizationId,
+            status: 'active',
+            storeId: sourceStoreId,
+          },
+          data: { storeId: destinationStoreId },
+        });
+      }
+
+      // Create Transfer record
+      const transfer = await tx.transfer.create({
+        data: {
+          sourceStoreId,
+          destinationStoreId,
+          productId,
+          quantity,
+          serials: serials && serials.length > 0 ? serials : [],
+          description: description || null,
+          organizationId: inputOrganizationId,
+          shippingGuideId: shippingGuideId || null,
+        },
+      });
+
+      // ── Create transfer Entry + EntryDetail in destination store ──
+      // Sales require an EntryDetail linked to the store where the sale happens.
+      // Without this, transferred products cannot be sold in the destination.
+      const sourceStore = await tx.store.findUnique({
+        where: { id: sourceStoreId },
+        select: { name: true },
+      });
+
+      // Get or create an internal "TRASLADO" provider for this organization
+      let internalProvider = await tx.provider.findFirst({
+        where: {
+          organizationId: inputOrganizationId,
+          documentNumber: 'TRASLADO-INTERNO',
+        },
+        select: { id: true },
+      });
+      if (!internalProvider) {
+        internalProvider = await tx.provider.create({
+          data: {
+            name: 'Traslado Interno',
+            description: 'Proveedor del sistema para entradas por traslado entre tiendas',
+            documentNumber: 'TRASLADO-INTERNO',
+            document: 'SISTEMA',
+            organizationId: inputOrganizationId,
+          },
+        });
+      }
+
+      // Find cost price from the original EntryDetail in the source store
+      const originalEntryDetail = await tx.entryDetail.findFirst({
+        where: {
+          productId,
+          entry: { storeId: sourceStoreId },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { price: true, priceInSoles: true },
+      });
+      const costPrice = originalEntryDetail?.price ?? 0;
+      const costPriceInSoles = originalEntryDetail?.priceInSoles ?? 0;
+
+      const transferEntry = await tx.entry.create({
+        data: {
+          storeId: destinationStoreId,
+          userId,
+          providerId: internalProvider.id,
+          date: new Date(),
+          description: `TRASLADO — Transferencia desde ${sourceStore?.name ?? `Tienda #${sourceStoreId}`}`,
+          tipoMoneda: 'PEN',
+          paymentMethod: 'CASH',
+          paymentTerm: 'CASH',
+          providerName: 'Traslado Interno',
+          totalGross: costPrice * quantity,
+          igvRate: 0,
+          organizationId: inputOrganizationId,
+          referenceId: `transfer-${transfer.id}`,
+          details: {
+            create: [{
+              productId,
+              quantity,
+              price: costPrice,
+              priceInSoles: costPriceInSoles,
+              inventoryId: destinationInventoryId,
+            }],
+          },
+        },
+        include: { details: true },
+      });
+
+      // Link transferred series to the new EntryDetail in destination
+      const newEntryDetail = transferEntry.details[0];
+      if (newEntryDetail && serials && serials.length > 0) {
+        await tx.entryDetailSeries.updateMany({
+          where: {
+            serial: { in: serials },
+            organizationId: inputOrganizationId,
+            storeId: destinationStoreId,
+          },
+          data: { entryDetailId: newEntryDetail.id },
+        });
+      }
+
+      // Create inventory history
+      await tx.inventoryHistory.createMany({
+        data: [
+          {
+            inventoryId: sourceStoreInventory.inventoryId,
+            action: 'transfer-out',
+            stockChange: -quantity,
+            previousStock: sourceStoreInventory.stock,
+            newStock: sourceStoreInventory.stock - quantity,
+            userId,
+            organizationId: inputOrganizationId,
+            companyId: inputCompanyId ?? null,
+          },
+          {
+            inventoryId: destinationInventoryId,
+            action: 'transfer-in',
+            stockChange: quantity,
+            previousStock: destStoreInventory ? destStoreInventory.stock : 0,
+            newStock: destStoreInventory
+              ? destStoreInventory.stock + quantity
+              : quantity,
+            userId,
+            organizationId: inputOrganizationId,
+            companyId: inputCompanyId ?? null,
+          },
+        ],
+      });
+
+      return transfer.id;
+    };
+
+    // Run inside external transaction if provided, otherwise create our own
+    if (externalTx) {
+      return runInTx(externalTx);
+    }
+    return this.prisma.$transaction(async (tx) => runInTx(tx));
+  }
 
   // Obtener el stock de un producto en una tienda específica
   async getSeriesByProductAndStore(
@@ -571,29 +882,26 @@ export class InventoryService {
 
     await this.ensureInventoryFeatureEnabled(resolvedCompanyId);
 
-    // Busca las series asociadas al producto en la tienda seleccionada
+    // Busca las series asociadas al producto en la tienda seleccionada.
+    // Usa EntryDetailSeries.storeId (actualizado por transferencias) en vez
+    // de entry.storeId (tienda donde se creó la entrada original).
     const series = await this.prisma.entryDetailSeries.findMany({
       where: {
         entryDetail: {
           productId,
-          entry: {
-            storeId,
-            ...(organizationId !== undefined
-              ? { organizationId: organizationId ?? null }
-              : {}),
-            ...(companyId !== undefined
-              ? { store: { companyId: resolvedCompanyId } }
-              : {}),
-          },
         },
-        status: 'active', // Filtrar solo series activas
+        storeId, // storeId directo en EntryDetailSeries (se actualiza en transferencias)
+        status: 'active',
+        ...(organizationId !== undefined
+          ? { organizationId: organizationId ?? null }
+          : {}),
       },
       select: {
-        serial: true, // Devuelve solo los números de serie
+        serial: true,
       },
     });
 
-    return series.map((serie) => serie.serial); // Devuelve un array de números de serie
+    return series.map((serie) => serie.serial);
   }
 
   // Obtener el stock de un producto en una tienda especÃ­fica
@@ -794,12 +1102,15 @@ export class InventoryService {
       companyId,
     );
 
-    // Agrupar los detalles por producto
+    // Agrupar los detalles por producto.
+    // Estrategia: usar stock REAL (StoreOnInventory) como fuente de verdad y
+    // las entradas brutas (sin descontar ventas) solo para determinar el RATIO
+    // PEN/USD. Esto evita errores cuando las ventas están concentradas en un
+    // solo EntryDetail (remaining negativo en un detalle, positivo en otros).
     const groupedDetails = inventory.reduce((acc: any, item) => {
       const productId = item.productId;
       const productName = item.product.name;
 
-      // Si el producto no existe en el acumulador, inicializarlo
       if (!acc[productId]) {
         acc[productId] = {
           productId,
@@ -809,21 +1120,12 @@ export class InventoryService {
         };
       }
 
-      // Acumular las cantidades totales por moneda
-      item.entryDetails.forEach((detail) => {
-        if (!detail.entry) return; // Skip if entry is null
-        const sold = detail.salesDetails.reduce((s, sd) => s + sd.quantity, 0);
-        const remaining = detail.quantity - sold;
-        const currency = detail.entry.tipoMoneda;
-        if (currency) {
-          acc[productId].totalByCurrency[currency] += remaining;
-        }
-      });
-
-      // Acumular las cantidades por tienda
+      // Por cada tienda, calcular el stock por moneda usando el ratio de
+      // entradas brutas aplicado al stock real de StoreOnInventory.
       item.storeOnInventory.forEach((storeInventory) => {
         const storeId = storeInventory.storeId;
         const storeName = storeInventory.store?.name ?? 'Tienda desconocida';
+        const actualStock = storeInventory.stock ?? 0;
 
         if (!acc[productId].stockByStoreAndCurrency[storeId]) {
           acc[productId].stockByStoreAndCurrency[storeId] = {
@@ -833,24 +1135,34 @@ export class InventoryService {
           };
         }
 
-        // Filtrar los detalles de entrada para esta tienda
-        const entryDetailsForStore = item.entryDetails.filter(
-          (detail) => detail.entry && detail.entry.storeId === storeId,
-        );
+        // Sumar entradas brutas por moneda para esta tienda (sin descontar ventas)
+        let grossPEN = 0;
+        let grossUSD = 0;
+        item.entryDetails
+          .filter((d) => d.entry && d.entry.storeId === storeId)
+          .forEach((d) => {
+            if (d.entry.tipoMoneda === 'PEN') grossPEN += d.quantity;
+            else if (d.entry.tipoMoneda === 'USD') grossUSD += d.quantity;
+          });
 
-        // Sumar las cantidades por moneda para esta tienda
-        entryDetailsForStore.forEach((detail) => {
-          const sold = detail.salesDetails.reduce(
-            (s, sd) => s + sd.quantity,
-            0,
-          );
-          const remaining = detail.quantity - sold;
-          const currency = detail.entry.tipoMoneda;
-          if (currency) {
-            acc[productId].stockByStoreAndCurrency[storeId][currency] +=
-              remaining;
-          }
-        });
+        const grossTotal = grossPEN + grossUSD;
+
+        let penStock: number;
+        let usdStock: number;
+        if (grossTotal > 0) {
+          const penRatio = grossPEN / grossTotal;
+          penStock = Math.round(actualStock * penRatio);
+          usdStock = actualStock - penStock;
+        } else {
+          // Sin entradas registradas: atribuir todo a PEN por defecto
+          penStock = actualStock;
+          usdStock = 0;
+        }
+
+        acc[productId].stockByStoreAndCurrency[storeId].PEN += penStock;
+        acc[productId].stockByStoreAndCurrency[storeId].USD += usdStock;
+        acc[productId].totalByCurrency.PEN += penStock;
+        acc[productId].totalByCurrency.USD += usdStock;
       });
 
       return acc;
@@ -1621,128 +1933,610 @@ export class InventoryService {
     storeId: number,
     categoryId?: number,
     storeName?: string,
+    organizationName?: string,
   ): Promise<Buffer> {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Inventario');
+    /* ── Color palette ── */
+    const C = {
+      navy: 'FF1B2A4A',
+      navyLight: 'FF2D4A7A',
+      teal: 'FF0891B2',
+      tealLight: 'FFE0F7FA',
+      white: 'FFFFFFFF',
+      offWhite: 'FFF8FAFC',
+      grayLight: 'FFF1F5F9',
+      grayMed: 'FFE2E8F0',
+      grayText: 'FF64748B',
+      dark: 'FF1E293B',
+      emerald: 'FF10B981',
+      emeraldBg: 'FFECFDF5',
+      amber: 'FFF59E0B',
+      amberBg: 'FFFFFBEB',
+      red: 'FFEF4444',
+      redBg: 'FFFEF2F2',
+      blueBg: 'FFEFF6FF',
+    };
 
-    const today = format(new Date(), 'dd/MM/yyyy', {
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: C.grayMed } },
+      bottom: { style: 'thin', color: { argb: C.grayMed } },
+      left: { style: 'thin', color: { argb: C.grayMed } },
+      right: { style: 'thin', color: { argb: C.grayMed } },
+    };
+
+    const currencyFmt = '#,##0.00';
+    const pctFmt = '0.0"%"';
+
+    const today = format(new Date(), 'dd/MM/yyyy HH:mm', {
+      timeZone: 'America/Lima',
+    });
+    const todayShort = format(new Date(), 'dd MMM yyyy', {
       timeZone: 'America/Lima',
     });
 
-    worksheet.addRow([
-      `Inventario generado para la tienda: ${storeName ?? 'Desconocida'}`,
-    ]);
-    worksheet.addRow([`Fecha de generación: ${today}`]);
-    worksheet.addRow([]);
-
-    worksheet.columns = [
-      { header: 'Producto', key: 'name', width: 30 },
-      { header: 'Categoría', key: 'category', width: 25 },
-      { header: 'Precio Compra', key: 'price', width: 15 },
-      { header: 'Precio Venta', key: 'priceSell', width: 15 },
-      { header: 'Stock', key: 'stock', width: 10 },
-      { header: 'Fecha Ingreso', key: 'createdAt', width: 20 },
-      { header: 'Series', key: 'series', width: 40 }, // ✅ NUEVA COLUMNA
-    ];
-
+    /* ── Data fetch ── */
     const categoryFilter = categoryId ? { categoryId } : {};
 
     const products = await this.prisma.storeOnInventory.findMany({
       where: {
         storeId,
-        inventory: {
-          product: categoryFilter,
-        },
+        inventory: { product: categoryFilter },
       },
       include: {
         inventory: {
           include: {
             product: {
-              include: { category: true },
+              include: { category: true, brand: true },
             },
           },
         },
       },
     });
 
+    // Batch-fetch all active series for this store
+    const allSeries = await this.prisma.entryDetailSeries.findMany({
+      where: {
+        entryDetail: { entry: { storeId } },
+        status: 'active',
+      },
+      select: { serial: true, entryDetail: { select: { productId: true } } },
+    });
+
+    const seriesByProduct = new Map<number, string[]>();
+    for (const s of allSeries) {
+      const pid = s.entryDetail.productId;
+      if (!seriesByProduct.has(pid)) seriesByProduct.set(pid, []);
+      seriesByProduct.get(pid)!.push(s.serial);
+    }
+
+    /* ── Compute KPIs ── */
+    const totalProducts = products.length;
+    const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
+    const totalCostValue = products.reduce(
+      (sum, p) => sum + p.stock * (p.inventory.product.price ?? 0),
+      0,
+    );
+    const totalSellValue = products.reduce(
+      (sum, p) => sum + p.stock * (p.inventory.product.priceSell ?? 0),
+      0,
+    );
+    const zeroStockCount = products.filter((p) => p.stock === 0).length;
+    const lowStockCount = products.filter(
+      (p) => p.stock > 0 && p.stock <= 5,
+    ).length;
+    const withSeriesCount = products.filter(
+      (p) =>
+        (seriesByProduct.get(p.inventory.product.id) ?? []).length > 0,
+    ).length;
+    const avgMargin =
+      totalProducts > 0
+        ? products.reduce((sum, p) => {
+            const cost = p.inventory.product.price ?? 0;
+            const sell = p.inventory.product.priceSell ?? 0;
+            return sum + (cost > 0 ? ((sell - cost) / cost) * 100 : 0);
+          }, 0) / totalProducts
+        : 0;
+
+    // Group by category
+    const groupedByCategory = new Map<
+      string,
+      typeof products
+    >();
+    for (const item of products) {
+      const cat =
+        item.inventory.product.category?.name || 'Sin categoría';
+      if (!groupedByCategory.has(cat)) groupedByCategory.set(cat, []);
+      groupedByCategory.get(cat)!.push(item);
+    }
+    const sortedCategories = Array.from(groupedByCategory.keys()).sort(
+      (a, b) => a.localeCompare(b),
+    );
+
+    /* ── Total columns: 10 ── */
+    const COL_COUNT = 10;
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = organizationName ?? 'Sistema de Inventario';
+    workbook.created = new Date();
+
+    const ws = workbook.addWorksheet('Inventario', {
+      properties: { defaultRowHeight: 18 },
+      pageSetup: {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: {
+          left: 0.4,
+          right: 0.4,
+          top: 0.6,
+          bottom: 0.6,
+          header: 0.3,
+          footer: 0.3,
+        },
+      },
+    });
+
+    // Column widths
+    ws.columns = [
+      { width: 5 },   // A: #
+      { width: 32 },  // B: Producto
+      { width: 18 },  // C: Marca
+      { width: 16 },  // D: Código
+      { width: 14 },  // E: P. Compra
+      { width: 14 },  // F: P. Venta
+      { width: 11 },  // G: Margen %
+      { width: 9 },   // H: Stock
+      { width: 16 },  // I: Valor Stock
+      { width: 38 },  // J: Series
+    ];
+
+    let currentRow = 0;
+
+    // ═══════════════════════════════════════
+    // SECTION 1: HEADER BANNER
+    // ═══════════════════════════════════════
+    // Row 1: Navy banner with org name
+    currentRow++;
+    const bannerRow = ws.addRow([]);
+    bannerRow.height = 36;
+    ws.mergeCells(currentRow, 1, currentRow, COL_COUNT);
+    const bannerCell = ws.getCell(currentRow, 1);
+    bannerCell.value = (organizationName ?? 'INVENTARIO').toUpperCase();
+    bannerCell.font = {
+      name: 'Calibri',
+      size: 18,
+      bold: true,
+      color: { argb: C.white },
+    };
+    bannerCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: C.navy },
+    };
+    bannerCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Row 2: Subtitle with store + date
+    currentRow++;
+    const subtitleRow = ws.addRow([]);
+    subtitleRow.height = 24;
+    ws.mergeCells(currentRow, 1, currentRow, COL_COUNT);
+    const subtitleCell = ws.getCell(currentRow, 1);
+    subtitleCell.value = `Reporte de Inventario — ${storeName ?? 'Tienda'} — ${todayShort}`;
+    subtitleCell.font = {
+      name: 'Calibri',
+      size: 11,
+      color: { argb: C.white },
+    };
+    subtitleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: C.navyLight },
+    };
+    subtitleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Row 3: Thin teal accent line
+    currentRow++;
+    const accentRow = ws.addRow([]);
+    accentRow.height = 4;
+    for (let col = 1; col <= COL_COUNT; col++) {
+      const cell = ws.getCell(currentRow, col);
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: C.teal },
+      };
+    }
+
+    // Row 4: Spacer
+    currentRow++;
+    ws.addRow([]).height = 8;
+
+    // ═══════════════════════════════════════
+    // SECTION 2: KPI DASHBOARD
+    // ═══════════════════════════════════════
+    const kpiLabelFont: Partial<ExcelJS.Font> = {
+      name: 'Calibri',
+      size: 9,
+      color: { argb: C.grayText },
+    };
+    const kpiValueFont: Partial<ExcelJS.Font> = {
+      name: 'Calibri',
+      size: 14,
+      bold: true,
+      color: { argb: C.dark },
+    };
+
+    // Helper to build a KPI block (2 rows × 2 cols merged)
+    const buildKpiBlock = (
+      startRow: number,
+      startCol: number,
+      label: string,
+      value: string,
+      bgColor: string,
+      accentColor: string,
+    ) => {
+      // Merge label row
+      ws.mergeCells(startRow, startCol, startRow, startCol + 1);
+      const labelCell = ws.getCell(startRow, startCol);
+      labelCell.value = label;
+      labelCell.font = kpiLabelFont;
+      labelCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: bgColor },
+      };
+      labelCell.alignment = { horizontal: 'center', vertical: 'bottom' };
+      labelCell.border = {
+        top: { style: 'thin', color: { argb: accentColor } },
+        left: { style: 'thin', color: { argb: accentColor } },
+        right: { style: 'thin', color: { argb: accentColor } },
+      };
+      // Fill second merged cell border
+      ws.getCell(startRow, startCol + 1).border = labelCell.border;
+
+      // Merge value row
+      ws.mergeCells(startRow + 1, startCol, startRow + 1, startCol + 1);
+      const valCell = ws.getCell(startRow + 1, startCol);
+      valCell.value = value;
+      valCell.font = { ...kpiValueFont, color: { argb: accentColor } };
+      valCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: bgColor },
+      };
+      valCell.alignment = { horizontal: 'center', vertical: 'top' };
+      valCell.border = {
+        bottom: { style: 'thin', color: { argb: accentColor } },
+        left: { style: 'thin', color: { argb: accentColor } },
+        right: { style: 'thin', color: { argb: accentColor } },
+      };
+      ws.getCell(startRow + 1, startCol + 1).border = valCell.border;
+    };
+
+    // KPI Row 1 (2 worksheet rows)
+    currentRow++;
+    ws.addRow([]).height = 20; // label row
+    currentRow++;
+    ws.addRow([]).height = 26; // value row
+
+    const kpiRow1 = currentRow - 1;
+    buildKpiBlock(kpiRow1, 1, 'TOTAL PRODUCTOS', totalProducts.toString(), C.blueBg, C.navyLight);
+    buildKpiBlock(kpiRow1, 3, 'STOCK TOTAL', totalStock.toLocaleString('es-PE'), C.emeraldBg, C.emerald);
+    buildKpiBlock(kpiRow1, 5, 'VALOR COSTO', `S/ ${totalCostValue.toLocaleString('es-PE', { minimumFractionDigits: 2 })}`, C.tealLight, C.teal);
+    buildKpiBlock(kpiRow1, 7, 'VALOR VENTA', `S/ ${totalSellValue.toLocaleString('es-PE', { minimumFractionDigits: 2 })}`, C.tealLight, C.teal);
+    buildKpiBlock(kpiRow1, 9, 'MARGEN PROM.', `${avgMargin.toFixed(1)}%`, C.emeraldBg, C.emerald);
+
+    // KPI Row 2 (2 worksheet rows)
+    currentRow++;
+    ws.addRow([]).height = 20;
+    currentRow++;
+    ws.addRow([]).height = 26;
+
+    const kpiRow2 = currentRow - 1;
+    buildKpiBlock(kpiRow2, 1, 'CATEGORIAS', sortedCategories.length.toString(), C.offWhite, C.grayText);
+    buildKpiBlock(kpiRow2, 3, 'SIN STOCK', zeroStockCount.toString(), zeroStockCount > 0 ? C.redBg : C.offWhite, zeroStockCount > 0 ? C.red : C.grayText);
+    buildKpiBlock(kpiRow2, 5, 'STOCK BAJO (<=5)', lowStockCount.toString(), lowStockCount > 0 ? C.amberBg : C.offWhite, lowStockCount > 0 ? C.amber : C.grayText);
+    buildKpiBlock(kpiRow2, 7, 'CON SERIES', withSeriesCount.toString(), C.offWhite, C.grayText);
+    buildKpiBlock(kpiRow2, 9, 'GANANCIA EST.', `S/ ${(totalSellValue - totalCostValue).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`, C.emeraldBg, C.emerald);
+
+    // Spacer
+    currentRow++;
+    ws.addRow([]).height = 12;
+
+    // ═══════════════════════════════════════
+    // SECTION 3: DATA TABLE
+    // ═══════════════════════════════════════
     if (products.length === 0) {
-      worksheet.addRow({ name: 'Sin productos disponibles para exportar' });
+      currentRow++;
+      ws.addRow([]);
+      ws.mergeCells(currentRow, 1, currentRow, COL_COUNT);
+      const emptyCell = ws.getCell(currentRow, 1);
+      emptyCell.value = 'No hay productos en inventario para esta tienda.';
+      emptyCell.font = { name: 'Calibri', size: 11, italic: true, color: { argb: C.grayText } };
+      emptyCell.alignment = { horizontal: 'center', vertical: 'middle' };
     } else {
-      products.sort((a, b) => {
-        const catA = a.inventory.product.category?.name || '';
-        const catB = b.inventory.product.category?.name || '';
-        const categoryCompare = catA.localeCompare(catB);
-        if (categoryCompare !== 0) return categoryCompare;
-        return a.inventory.product.name.localeCompare(b.inventory.product.name);
+      // Table header row (stored for autoFilter)
+      const headerLabels = [
+        '#',
+        'Producto',
+        'Marca',
+        'Código',
+        'P. Compra',
+        'P. Venta',
+        'Margen %',
+        'Stock',
+        'Valor Stock',
+        'Series',
+      ];
+      currentRow++;
+      const headerRow = ws.addRow(headerLabels);
+      headerRow.height = 22;
+      const tableHeaderStartRow = currentRow;
+
+      headerRow.eachCell((cell, colNumber) => {
+        cell.font = {
+          name: 'Calibri',
+          size: 10,
+          bold: true,
+          color: { argb: C.white },
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: C.navy },
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: colNumber >= 5 && colNumber <= 9 ? 'right' : 'left',
+          wrapText: false,
+        };
+        cell.border = {
+          bottom: { style: 'medium', color: { argb: C.teal } },
+        };
       });
 
-      const groupedByCategory = new Map<string, typeof products>();
-
-      products.forEach((item) => {
-        const category =
-          item.inventory.product.category?.name || 'Sin categoría';
-        if (!groupedByCategory.has(category)) {
-          groupedByCategory.set(category, []);
-        }
-        groupedByCategory.get(category)!.push(item);
-      });
-
-      const sortedCategories = Array.from(groupedByCategory.keys()).sort(
-        (a, b) => a.localeCompare(b),
-      );
+      let globalIdx = 0;
 
       for (const category of sortedCategories) {
         const items = groupedByCategory.get(category)!;
-
-        const row = worksheet.addRow([`=== Categoría: ${category} ===`]);
-        row.font = { bold: true };
-        worksheet.addRow([]);
-
-        for (const item of items.sort((a, b) =>
+        items.sort((a, b) =>
           a.inventory.product.name.localeCompare(b.inventory.product.name),
-        )) {
+        );
+
+        // Category separator row
+        currentRow++;
+        const catRow = ws.addRow([]);
+        catRow.height = 24;
+        ws.mergeCells(currentRow, 1, currentRow, COL_COUNT);
+        const catCell = ws.getCell(currentRow, 1);
+        catCell.value = `  ${category.toUpperCase()}  (${items.length} producto${items.length !== 1 ? 's' : ''})`;
+        catCell.font = {
+          name: 'Calibri',
+          size: 10,
+          bold: true,
+          color: { argb: C.navy },
+        };
+        catCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: C.grayLight },
+        };
+        catCell.alignment = { vertical: 'middle' };
+        catCell.border = {
+          left: { style: 'medium', color: { argb: C.teal } },
+          bottom: { style: 'thin', color: { argb: C.grayMed } },
+        };
+
+        // Category subtotals
+        let catStock = 0;
+        let catCostVal = 0;
+        let catSellVal = 0;
+
+        for (const item of items) {
+          globalIdx++;
           const product = item.inventory.product;
+          const cost = product.price ?? 0;
+          const sell = product.priceSell ?? 0;
+          const margin = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
+          const stockVal = item.stock * sell;
+          const serials = seriesByProduct.get(product.id) ?? [];
+          const seriesStr = serials.join(', ');
 
-          // 🔍 Obtener series activas para ese producto y tienda
-          const series = await this.prisma.entryDetailSeries.findMany({
-            where: {
-              entryDetail: {
-                productId: product.id,
-                entry: {
-                  storeId,
-                },
-              },
-              status: 'active',
-            },
-            select: { serial: true },
+          catStock += item.stock;
+          catCostVal += item.stock * cost;
+          catSellVal += stockVal;
+
+          const isEven = globalIdx % 2 === 0;
+          const rowBg = isEven ? C.offWhite : C.white;
+
+          currentRow++;
+          const dataRow = ws.addRow([
+            globalIdx,
+            product.name,
+            product.brand?.name ?? '—',
+            product.barcode ?? '—',
+            cost,
+            sell,
+            margin,
+            item.stock,
+            stockVal,
+            seriesStr,
+          ]);
+          dataRow.height = 20;
+
+          dataRow.eachCell((cell, colNumber) => {
+            cell.font = { name: 'Calibri', size: 10, color: { argb: C.dark } };
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: rowBg },
+            };
+            cell.border = thinBorder;
+            cell.alignment = {
+              vertical: 'middle',
+              horizontal: colNumber >= 5 && colNumber <= 9 ? 'right' : 'left',
+              wrapText: colNumber === 10,
+            };
           });
 
-          const seriesString = series.map((s) => s.serial).join(', ');
+          // Number formats
+          ws.getCell(currentRow, 1).alignment = { horizontal: 'center', vertical: 'middle' };
+          ws.getCell(currentRow, 1).font = { name: 'Calibri', size: 9, color: { argb: C.grayText } };
+          ws.getCell(currentRow, 5).numFmt = currencyFmt;
+          ws.getCell(currentRow, 6).numFmt = currencyFmt;
+          ws.getCell(currentRow, 7).numFmt = pctFmt;
+          ws.getCell(currentRow, 9).numFmt = currencyFmt;
 
-          const newRow = worksheet.addRow({
-            name: product.name,
-            category,
-            price: product.price,
-            priceSell: product.priceSell,
-            stock: item.stock,
-            createdAt: format(new Date(product.createdAt), 'dd/MM/yyyy', {
-              timeZone: 'America/Lima',
-            }),
-            series: seriesString,
-          });
+          // Stock conditional formatting
+          const stockCell = ws.getCell(currentRow, 8);
+          stockCell.font = { name: 'Calibri', size: 10, bold: true };
+          if (item.stock === 0) {
+            stockCell.font.color = { argb: C.red };
+            stockCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.redBg } };
+          } else if (item.stock <= 5) {
+            stockCell.font.color = { argb: C.amber };
+            stockCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.amberBg } };
+          } else {
+            stockCell.font.color = { argb: C.emerald };
+          }
 
-          // ✅ Resaltar la celda de la columna "series" con fondo amarillo claro
-          const seriesCell = newRow.getCell('series');
-          seriesCell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFFCC00' }, // Color amarillo claro (hex: #FFCC00)
-          };
-          seriesCell.font = { bold: true };
+          // Margin conditional formatting
+          const marginCell = ws.getCell(currentRow, 7);
+          if (margin < 10) {
+            marginCell.font = { name: 'Calibri', size: 10, color: { argb: C.red } };
+          } else if (margin < 25) {
+            marginCell.font = { name: 'Calibri', size: 10, color: { argb: C.amber } };
+          } else {
+            marginCell.font = { name: 'Calibri', size: 10, color: { argb: C.emerald } };
+          }
+
+          // Series cell styling
+          if (seriesStr) {
+            const sCell = ws.getCell(currentRow, 10);
+            sCell.font = {
+              name: 'Consolas',
+              size: 9,
+              color: { argb: C.navyLight },
+            };
+          }
         }
 
-        worksheet.addRow([]);
+        // Category subtotal row
+        currentRow++;
+        const subRow = ws.addRow([
+          '',
+          '',
+          '',
+          `Subtotal ${category}`,
+          '',
+          '',
+          '',
+          catStock,
+          catSellVal,
+          '',
+        ]);
+        subRow.height = 20;
+        subRow.eachCell((cell, colNumber) => {
+          cell.font = {
+            name: 'Calibri',
+            size: 10,
+            bold: true,
+            color: { argb: C.navy },
+          };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: C.grayLight },
+          };
+          cell.border = {
+            top: { style: 'thin', color: { argb: C.navy } },
+            bottom: { style: 'double', color: { argb: C.navy } },
+          };
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: colNumber >= 5 ? 'right' : 'left',
+          };
+        });
+        ws.getCell(currentRow, 9).numFmt = currencyFmt;
       }
+
+      // ═══════════════════════════════════════
+      // GRAND TOTAL ROW
+      // ═══════════════════════════════════════
+      currentRow++;
+      ws.addRow([]).height = 4;
+      currentRow++;
+      const grandRow = ws.addRow([
+        '',
+        '',
+        '',
+        'TOTAL GENERAL',
+        '',
+        '',
+        '',
+        totalStock,
+        totalSellValue,
+        '',
+      ]);
+      grandRow.height = 26;
+      grandRow.eachCell((cell, colNumber) => {
+        cell.font = {
+          name: 'Calibri',
+          size: 12,
+          bold: true,
+          color: { argb: C.white },
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: C.navy },
+        };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: colNumber >= 5 ? 'right' : 'left',
+        };
+      });
+      ws.getCell(currentRow, 9).numFmt = currencyFmt;
+
+      // ═══════════════════════════════════════
+      // SECTION 4: FOOTER / LEGEND
+      // ═══════════════════════════════════════
+      currentRow++;
+      ws.addRow([]).height = 16;
+
+      // Stock legend
+      currentRow++;
+      const legendRow = ws.addRow([]);
+      ws.mergeCells(currentRow, 1, currentRow, COL_COUNT);
+      const legendCell = ws.getCell(currentRow, 1);
+      legendCell.value =
+        'Stock:  \u25CF Verde = Disponible (>5)    \u25CF Amarillo = Bajo (1-5)    \u25CF Rojo = Agotado (0)        Margen:  \u25CF Verde >= 25%    \u25CF Amarillo 10-25%    \u25CF Rojo < 10%';
+      legendCell.font = { name: 'Calibri', size: 9, color: { argb: C.grayText } };
+      legendCell.alignment = { horizontal: 'left', vertical: 'middle' };
+
+      // Generation info
+      currentRow++;
+      const footerRow = ws.addRow([]);
+      ws.mergeCells(currentRow, 1, currentRow, COL_COUNT);
+      const footerCell = ws.getCell(currentRow, 1);
+      footerCell.value = `Generado: ${today} | Tienda: ${storeName ?? 'N/A'} | ${categoryId ? 'Filtro de categoría aplicado' : 'Todas las categorías'} | ${totalProducts} productos`;
+      footerCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: C.grayText } };
+      footerCell.alignment = { horizontal: 'left', vertical: 'middle' };
+
+      // Auto-filter on the table header
+      ws.autoFilter = {
+        from: { row: tableHeaderStartRow, column: 1 },
+        to: { row: currentRow - 2, column: COL_COUNT },
+      };
+
+      // Freeze panes: freeze header rows + table header
+      ws.views = [
+        {
+          state: 'frozen',
+          ySplit: tableHeaderStartRow,
+          activeCell: `A${tableHeaderStartRow + 1}`,
+        },
+      ];
     }
 
     const buffer = await workbook.xlsx.writeBuffer();

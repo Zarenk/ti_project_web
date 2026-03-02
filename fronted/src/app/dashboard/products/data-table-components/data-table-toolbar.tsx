@@ -70,14 +70,15 @@ export function DataTableToolbar<TData>({
 
     
 
-    <div className="flex flex-wrap items-center justify-between">
+    <div className="flex w-full flex-wrap items-center justify-between">
 
-      <div className="flex flex-1 flex-wrap items-center gap-2">
+      <div className="flex w-full flex-1 flex-wrap items-center gap-2 sm:w-auto">
         {table.getColumn("category_name") && (
           <DataTableFacetedFilter
             column={table.getColumn("category_name")}
             title="Categoria"
             options={categories}
+            className="w-full sm:w-auto"
             onChange={(selectedValue) => {
                 //console.log("Valor seleccionado:", selectedValue);
                 // Si no hay valores seleccionados, elimina el filtro

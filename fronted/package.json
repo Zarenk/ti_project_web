@@ -13,6 +13,10 @@
     "start": "next start -p $PORT",
     "lint": "next lint",
     "test": "vitest run",
+    "test:critical": "powershell -ExecutionPolicy Bypass -File ../scripts/test-critical.ps1",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "cypress:critical": "cypress run --spec 'cypress/e2e/critical/**/*.cy.ts'",
     "postinstall": "npm rebuild lightningcss --update-binary || true && npm rebuild @next/swc-linux-x64-gnu || true"
   },
   "dependencies": {
@@ -42,6 +46,9 @@
     "@react-pdf/renderer": "^4.3.0",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
+    "@remotion/player": "^4.0.428",
+    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-query-devtools": "^5.91.3",
     "@tanstack/react-table": "^8.21.2",
     "accordion": "^3.0.2",
     "add": "^2.0.6",
@@ -57,6 +64,7 @@
     "jose": "^6.0.12",
     "jsonwebtoken": "^9.0.2",
     "jwt-decode": "^4.0.0",
+    "konva": "^10.2.0",
     "lightningcss": "^1.26.0",
     "lucide-react": "^0.483.0",
     "next": "^15.5.12",
@@ -71,9 +79,11 @@
     "react-dom": "19.0.0",
     "react-google-recaptcha": "^3.1.0",
     "react-hook-form": "^7.56.1",
+    "react-konva": "^19.2.2",
     "react-to-print": "^2.14.13",
     "react-tsparticles": "^2.12.0",
     "recharts": "^2.15.0",
+    "remotion": "^4.0.428",
     "shadcn": "^2.7.0",
     "socket.io-client": "^4.8.1",
     "sonner": "^2.0.2",
@@ -101,6 +111,7 @@
     "jsdom": "^27.2.0",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "ubigeo-peru": "^2.0.2",
     "vitest": "^1.5.0"
   },
   "optionalDependencies": {

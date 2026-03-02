@@ -1,5 +1,6 @@
 
 import { toast } from "sonner";
+import type { ExtractedProduct } from "./series-batch-validator";
 
 // Listas de patrones para identificar proveedores por diseño de comprobante
 // Se pueden agregar más nombres o RUCs en cada lista para extender el soporte
@@ -100,10 +101,9 @@ function extractProviderDetails(text: string, setValue: Function): string | null
 
 export function processExtractedText(
   text: string,
-  setSelectedProducts: Function,
   setValue: Function,
   setCurrency: Function
-) {
+): ExtractedProduct[] {
   console.log("Procesando texto extraído:", text);
 
   const lines = text.split("\n").map((line) => line.trim());
@@ -258,23 +258,23 @@ export function processExtractedText(
 
   console.log("Productos extraídos:", products);
   const applyIgv = /GRUPO\s+DELTRON\s+S\.A\.?/i.test(text);
+  let result: ExtractedProduct[] = [];
   if (products.length > 0) {
-    setSelectedProducts(
-      products.map((product, index) => {
-        const basePrice = parseFloat(product.unitPrice.toFixed(2));
-        const finalPrice = applyIgv
-          ? parseFloat((basePrice * 1.18).toFixed(2))
-          : basePrice;
+    result = products.map((product, index) => {
+      const basePrice = parseFloat(product.unitPrice.toFixed(2));
+      const finalPrice = applyIgv
+        ? parseFloat((basePrice * 1.18).toFixed(2))
+        : basePrice;
 
-        return {
-          id: index+1,
-          name: product.name,
-          quantity: product.quantity,
-          price: finalPrice,
-          category_name: "Sin categoria",
-        };
-      })
-    );
+      return {
+        id: index+1,
+        name: product.name,
+        quantity: product.quantity,
+        price: finalPrice,
+        priceSell: 0,
+        category_name: "Sin categoria",
+      };
+    });
   } else {
     toast.warning("No se encontraron productos en el archivo PDF.");
   }
@@ -322,15 +322,16 @@ export function processExtractedText(
     }
   }
 
-  if (totalMatch) setValue("total_comprobante", totalMatch[1].trim()); 
+  if (totalMatch) setValue("total_comprobante", totalMatch[1].trim());
+
+  return result;
 }
 
 export function processInvoiceText(
   text: string,
-  setSelectedProducts: Function,
   setValue: Function,
   setCurrency: Function
-) {
+): ExtractedProduct[] {
   const lines = text
     .split("\n")
     .map((line) =>
@@ -422,23 +423,23 @@ export function processInvoiceText(
   }
 
   const applyIgv = /GRUPO\s+DELTRON\s+S\.A\.?/i.test(text);
+  let result: ExtractedProduct[] = [];
   if (products.length > 0) {
-    setSelectedProducts(
-      products.map((product, index) => {
-        const basePrice = parseFloat(product.unitPrice.toFixed(2));
-        const finalPrice = applyIgv
-          ? parseFloat((basePrice * 1.18).toFixed(2))
-          : basePrice;
+    result = products.map((product, index) => {
+      const basePrice = parseFloat(product.unitPrice.toFixed(2));
+      const finalPrice = applyIgv
+        ? parseFloat((basePrice * 1.18).toFixed(2))
+        : basePrice;
 
-        return {
-          id: index + 1,
-          name: product.name,
-          quantity: product.quantity,
-          price: finalPrice,
-          category_name: "Sin categoria",
-        };
-      })
-    );
+      return {
+        id: index + 1,
+        name: product.name,
+        quantity: product.quantity,
+        price: finalPrice,
+        priceSell: 0,
+        category_name: "Sin categoria",
+      };
+    });
   } else {
     toast.warning("No se encontraron productos en el archivo PDF.");
   }
@@ -465,14 +466,15 @@ export function processInvoiceText(
     setValue("fecha_emision_comprobante", fechaMatch[1].trim());
   if (totalMatch)
     setValue("total_comprobante", totalMatch[1].replace(/[\s,]/g, ""));
+
+  return result;
 }
 
 export function processGuideText(
   text: string,
-  setSelectedProducts: Function,
   setValue: Function,
   setCurrency: Function
-) {
+): ExtractedProduct[] {
   const normalized = text.replace(/\u00a0/g, " ");
   const lines = normalized
     .split("\n")
@@ -949,19 +951,18 @@ export function processGuideText(
   }
 
   if (items.length > 0) {
-    setSelectedProducts(
-      items.map((item, index) => ({
-        id: index + 1,
-        name: item.name,
-        quantity: item.quantity,
-        price: 0,
-        priceSell: 0,
-        category_name: "Sin categoria",
-        series: item.series ?? [],
-      }))
-    );
+    return items.map((item, index) => ({
+      id: index + 1,
+      name: item.name,
+      quantity: item.quantity,
+      price: 0,
+      priceSell: 0,
+      category_name: "Sin categoria",
+      series: item.series ?? [],
+    }));
   } else {
     toast.warning("No se encontraron productos en la guia de remision.");
+    return [];
   }
 }
 
@@ -973,10 +974,9 @@ export function processGuideText(
 
 export function processDeltronGuideText(
   text: string,
-  setSelectedProducts: Function,
   setValue: Function,
   setCurrency: Function
-) {
+): ExtractedProduct[] {
   const normalized = text.replace(/\u00a0/g, " ");
   const lines = normalized
     .split(/\r?\n/)
@@ -1250,19 +1250,18 @@ export function processDeltronGuideText(
 
   // --- SET PRODUCTS ---
   if (items.length > 0) {
-    setSelectedProducts(
-      items.map((item, index) => ({
-        id: index + 1,
-        name: item.name,
-        quantity: item.quantity,
-        price: 0,
-        priceSell: 0,
-        category_name: "Sin categoria",
-        series: item.series ?? [],
-      }))
-    );
+    return items.map((item, index) => ({
+      id: index + 1,
+      name: item.name,
+      quantity: item.quantity,
+      price: 0,
+      priceSell: 0,
+      category_name: "Sin categoria",
+      series: item.series ?? [],
+    }));
   } else {
     toast.warning("No se encontraron productos en la guía de remisión DELTRON.");
+    return [];
   }
 }
 
@@ -1274,10 +1273,9 @@ export function processDeltronGuideText(
 
 export function processIngramInvoiceText(
   text: string,
-  setSelectedProducts: Function,
   setValue: Function,
   setCurrency: Function
-) {
+): ExtractedProduct[] {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -1431,16 +1429,16 @@ export function processIngramInvoiceText(
   }
 
   // --- SET PRODUCTS ---
+  let result: ExtractedProduct[] = [];
   if (items.length > 0) {
-    setSelectedProducts(
-      items.map((item, index) => ({
-        id: index + 1,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        category_name: "Sin categoria",
-      }))
-    );
+    result = items.map((item, index) => ({
+      id: index + 1,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      priceSell: 0,
+      category_name: "Sin categoria",
+    }));
   } else {
     toast.warning(
       "No se encontraron productos en la factura de Ingram Micro."
@@ -1465,6 +1463,8 @@ export function processIngramInvoiceText(
       setValue("total_comprobante", maxVal.toFixed(2));
     }
   }
+
+  return result;
 }
 
 // =====================================================================
@@ -1475,10 +1475,9 @@ export function processIngramInvoiceText(
 
 export function processNexsysInvoiceText(
   text: string,
-  setSelectedProducts: Function,
   setValue: Function,
   setCurrency: Function
-) {
+): ExtractedProduct[] {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
@@ -1686,16 +1685,16 @@ export function processNexsysInvoiceText(
   }
 
   // --- SET PRODUCTS ---
+  let result: ExtractedProduct[] = [];
   if (items.length > 0) {
-    setSelectedProducts(
-      items.map((item, index) => ({
-        id: index + 1,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        category_name: "Sin categoria",
-      }))
-    );
+    result = items.map((item, index) => ({
+      id: index + 1,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      priceSell: 0,
+      category_name: "Sin categoria",
+    }));
   } else {
     toast.warning("No se encontraron productos en la factura de Nexsys.");
   }
@@ -1709,4 +1708,6 @@ export function processNexsysInvoiceText(
   if (total > 0) {
     setValue("total_comprobante", total.toFixed(2));
   }
+
+  return result;
 }

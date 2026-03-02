@@ -33,6 +33,7 @@ import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenanc
 import { SunatService } from 'src/sunat/sunat.service';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
 import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
+import { ProfitAnalysisService } from './services/profit-analysis.service';
 
 @Injectable()
 export class SalesService {
@@ -55,6 +56,7 @@ export class SalesService {
     private readonly sunatService: SunatService,
     private readonly quotaService: SubscriptionQuotaService,
     private readonly verticalConfig: VerticalConfigService,
+    private readonly profitAnalysisService: ProfitAnalysisService,
   ) {}
 
   private async ensureSalesFeatureEnabled(
@@ -93,6 +95,7 @@ export class SalesService {
     companyId?: number | null;
     referenceId?: string;
     isSuperAdmin?: boolean;
+    fechaEmision?: string;
   }) {
     try {
       const {
@@ -108,6 +111,7 @@ export class SalesService {
         companyId: inputCompanyId,
         referenceId,
         isSuperAdmin = false,
+        fechaEmision,
       } = data;
 
       this.logger.debug(`[createSale] Received data - isSuperAdmin=${isSuperAdmin}, inputOrganizationId=${inputOrganizationId}`);
@@ -228,6 +232,7 @@ export class SalesService {
         organizationId,
         companyId,
         referenceId: referenceId ?? null,
+        fechaEmision,
         onSalePosted: async (id) => {
           try {
             await this.accountingHook.postSale(id);
@@ -240,7 +245,7 @@ export class SalesService {
       const invoice = await this.prisma.invoiceSales.findFirst({
         where: { salesId: sale.id },
         orderBy: { createdAt: 'desc' },
-        select: { serie: true, nroCorrelativo: true, tipoComprobante: true },
+        select: { serie: true, nroCorrelativo: true, tipoComprobante: true, verificationCode: true, fechaEmision: true },
       });
 
       const salePayments = await this.prisma.salePayment.findMany({
@@ -269,6 +274,8 @@ export class SalesService {
         action: AuditAction.CREATED,
         summary: `Venta ${sale.id} por ${sale.total} realizada por ${user?.username ?? 'ID ' + userId}`,
         diff: { after: sale } as any,
+        organizationId: organizationId ?? null,
+        companyId: companyId ?? null,
       });
 
       await this.triggerSunatIfNeeded({
@@ -279,7 +286,7 @@ export class SalesService {
         tipoComprobante,
       });
 
-      return sale;
+      return { ...sale, invoice: invoice ?? null };
     } catch (error) {
       handlePrismaError(error);
     }
@@ -291,6 +298,7 @@ export class SalesService {
       serie: string | null | undefined;
       nroCorrelativo: string | null | undefined;
       tipoComprobante: string | null | undefined;
+      tipoMoneda?: string | null;
     } | null;
     tipoComprobante?: string;
     companyId: number | null;
@@ -308,6 +316,34 @@ export class SalesService {
     }
 
     try {
+      // Fetch full sale data needed for SUNAT XML
+      const sale = await this.prisma.sales.findUnique({
+        where: { id: saleId },
+        select: {
+          total: true,
+          igvTotal: true,
+          client: {
+            select: { name: true, typeNumber: true, type: true },
+          },
+          salesDetails: {
+            select: {
+              quantity: true,
+              price: true,
+              entryDetail: {
+                select: { product: { select: { name: true } } },
+              },
+            },
+          },
+        },
+      });
+
+      if (!sale) {
+        this.logger.error(`Venta ${saleId} no encontrada para envio SUNAT.`);
+        return;
+      }
+
+      // Totals are derived from items inside xml-generator (SUNAT requires header = sum of lines).
+      // Do NOT pass explicit subtotal/igv/total — they could mismatch line calculations.
       await this.sunatService.sendDocument({
         companyId,
         documentType:
@@ -318,7 +354,21 @@ export class SalesService {
         documentData: {
           serie: invoice?.serie,
           correlativo: invoice?.nroCorrelativo,
-          emisor: { razonSocial: params.storeName },
+          fechaEmision: new Date().toISOString(),
+          tipoMoneda: invoice?.tipoMoneda ?? 'PEN',
+          tipoOperacion: '0101',
+          cliente: {
+            tipoDocumento: sale.client?.type ?? '1',
+            numeroDocumento: sale.client?.typeNumber ?? '00000000',
+            razonSocial: sale.client?.name ?? 'CLIENTE',
+          },
+          items: sale.salesDetails.map((d) => ({
+            descripcion: d.entryDetail?.product?.name ?? 'Producto',
+            cantidad: d.quantity,
+            precioUnitario: d.price,
+            total: (d.quantity ?? 0) * (d.price ?? 0),
+            unitCode: 'NIU',
+          })),
         },
         saleId,
       });
@@ -364,6 +414,38 @@ export class SalesService {
               },
             },
           },
+          payments: {
+            include: {
+              paymentMethod: true,
+            },
+          },
+          invoices: true,
+          creditNotes: {
+            select: {
+              id: true,
+              status: true,
+              serie: true,
+              correlativo: true,
+              motivo: true,
+              codigoMotivo: true,
+              total: true,
+              fechaEmision: true,
+              createdAt: true,
+              sunatTransmissions: {
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  id: true,
+                  status: true,
+                  environment: true,
+                  errorMessage: true,
+                  cdrCode: true,
+                  cdrDescription: true,
+                  createdAt: true,
+                  updatedAt: true,
+                },
+              },
+            },
+          },
           sunatTransmissions: {
             orderBy: { createdAt: 'desc' },
             take: 1,
@@ -373,6 +455,8 @@ export class SalesService {
               ticket: true,
               environment: true,
               errorMessage: true,
+              cdrCode: true,
+              cdrDescription: true,
               updatedAt: true,
               createdAt: true,
             },
@@ -380,9 +464,23 @@ export class SalesService {
         },
       });
 
-      return sales.map((sale) =>
-        this.mapSaleWithSunatStatus(sale, { includeHistory: false }),
-      );
+      return sales.map((sale) => {
+        const mapped = this.mapSaleWithSunatStatus(sale, { includeHistory: false });
+        const invoice = (sale as any).invoices ?? null;
+        return {
+          ...mapped,
+          invoices: invoice
+            ? {
+                serie: invoice.serie,
+                nroCorrelativo: invoice.nroCorrelativo,
+                tipoComprobante: invoice.tipoComprobante,
+                tipoMoneda: invoice.tipoMoneda,
+                total: invoice.total,
+                fechaEmision: invoice.fechaEmision,
+              }
+            : null,
+        };
+      });
     } catch (error) {
       handlePrismaError(error);
     }
@@ -443,7 +541,8 @@ export class SalesService {
         include: {
           user: { select: { username: true } },
           store: { select: { name: true } },
-          client: { select: { name: true } },
+          client: { select: { name: true, type: true, typeNumber: true } },
+          company: { select: { sunatRuc: true } },
           salesDetails: {
             include: {
               entryDetail: { include: { product: true } },
@@ -452,6 +551,32 @@ export class SalesService {
           },
           payments: { include: { paymentMethod: true } },
           invoices: true,
+          creditNotes: {
+            select: {
+              id: true,
+              status: true,
+              serie: true,
+              correlativo: true,
+              motivo: true,
+              codigoMotivo: true,
+              total: true,
+              fechaEmision: true,
+              createdAt: true,
+              sunatTransmissions: {
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  id: true,
+                  status: true,
+                  environment: true,
+                  errorMessage: true,
+                  cdrCode: true,
+                  cdrDescription: true,
+                  createdAt: true,
+                  updatedAt: true,
+                },
+              },
+            },
+          },
           sunatTransmissions: {
             orderBy: { createdAt: 'desc' },
           },
@@ -487,6 +612,19 @@ export class SalesService {
 
       if (!saleOwnership) {
         throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
+      }
+
+      // Bloquear eliminacion de ventas con comprobante (factura/boleta)
+      const hasInvoice = await this.prisma.invoiceSales.findFirst({
+        where: { salesId: id },
+        select: { id: true },
+      });
+
+      if (hasInvoice) {
+        throw new ConflictException(
+          `No se puede eliminar la venta ${id}: tiene un comprobante asociado. ` +
+            `Use la opcion de anulacion en su lugar.`,
+        );
       }
 
       // Validar que la venta no tenga transmisiones SUNAT aceptadas
@@ -685,6 +823,8 @@ export class SalesService {
           action: AuditAction.DELETED,
           summary: `Venta ${sale.id} eliminada y stock revertido`,
           diff: { before: beforeData } as any,
+          organizationId: organizationId ?? null,
+          companyId: companyId ?? null,
         });
       } catch (err) {
         this.logger.warn(
@@ -727,6 +867,248 @@ export class SalesService {
       }
 
       return deletedSale;
+    } catch (error) {
+      handlePrismaError(error);
+    }
+  }
+
+  /**
+   * Anula una venta con comprobante SUNAT.
+   * Revierte stock, pagos, series y caja — pero MANTIENE la venta y su comprobante
+   * para auditoria SUNAT. Requiere nota de credito ACCEPTED previamente.
+   */
+  async annulSale(
+    id: number,
+    actorId?: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    try {
+      await this.ensureSalesFeatureEnabled(companyId ?? null);
+
+      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+
+      // 1. Verificar existencia y ownership
+      const existing = await this.prisma.sales.findFirst({
+        where: { id, ...organizationFilter },
+        select: { id: true, status: true },
+      });
+
+      if (!existing) {
+        throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
+      }
+
+      if (existing.status === 'ANULADA') {
+        throw new ConflictException(`La venta ${id} ya fue anulada.`);
+      }
+
+      // 2. Verificar que tiene nota de credito ACCEPTED
+      const acceptedCN = await this.prisma.creditNote.findFirst({
+        where: { originalSaleId: id, status: 'ACCEPTED' },
+        select: { id: true, serie: true, correlativo: true },
+      });
+
+      if (!acceptedCN) {
+        throw new BadRequestException(
+          `No se puede anular la venta ${id}: debe tener una nota de credito aceptada por SUNAT.`,
+        );
+      }
+
+      // 3. Transaccion atomica — revertir operaciones pero mantener venta e invoice
+      const { sale } = await this.prisma.$transaction(async (prismaTx) => {
+        const sale = await prismaTx.sales.findFirst({
+          where: { id, ...organizationFilter },
+          include: {
+            user: { select: { id: true, username: true } },
+            store: { select: { id: true, name: true } },
+            client: {
+              select: { id: true, name: true, type: true, typeNumber: true },
+            },
+            salesDetails: {
+              include: {
+                entryDetail: {
+                  include: {
+                    product: { select: { id: true, name: true } },
+                  },
+                },
+                storeOnInventory: true,
+              },
+            },
+            payments: {
+              include: {
+                paymentMethod: { select: { id: true, name: true } },
+                cashTransaction: {
+                  select: {
+                    id: true,
+                    cashRegisterId: true,
+                    amount: true,
+                  },
+                },
+              },
+            },
+            shippingGuides: { select: { id: true } },
+            order: { select: { id: true } },
+          },
+        });
+
+        if (!sale) {
+          throw new NotFoundException(`No se encontro la venta con ID ${id}.`);
+        }
+
+        const saleOrganizationId =
+          (sale as { organizationId?: number | null }).organizationId ?? null;
+
+        // Restaurar stock por cada detalle de venta
+        for (const detail of sale.salesDetails) {
+          const inventoryRecord = await prismaTx.storeOnInventory.findUnique({
+            where: { id: detail.storeOnInventoryId },
+          });
+
+          if (!inventoryRecord) {
+            throw new NotFoundException(
+              `No se encontro el registro de inventario para el detalle de venta (storeOnInventoryId: ${detail.storeOnInventoryId}).`,
+            );
+          }
+
+          await prismaTx.storeOnInventory.update({
+            where: { id: inventoryRecord.id },
+            data: { stock: { increment: detail.quantity } },
+          });
+
+          const inventoryHistoryData: InventoryHistoryUncheckedCreateInputWithOrganization =
+            {
+              inventoryId: inventoryRecord.inventoryId,
+              userId: actorId ?? sale.userId,
+              action: 'sale_annulled',
+              description: `Reversion por anulacion de venta ${sale.id} en ${sale.store.name}`,
+              stockChange: detail.quantity,
+              previousStock: inventoryRecord.stock,
+              newStock: inventoryRecord.stock + detail.quantity,
+              organizationId: saleOrganizationId,
+            };
+
+          await prismaTx.inventoryHistory.create({
+            data: inventoryHistoryData,
+          });
+
+          // Restaurar series a estado activo
+          if (detail.series && detail.series.length > 0) {
+            await prismaTx.entryDetailSeries.updateMany({
+              where: {
+                serial: { in: detail.series },
+                entryDetailId: detail.entryDetailId,
+                organizationId: saleOrganizationId,
+              },
+              data: { status: 'active' },
+            });
+          }
+        }
+
+        // Reversar movimientos de caja
+        for (const payment of sale.payments) {
+          if (payment.cashTransaction) {
+            await prismaTx.cashTransactionPaymentMethod.deleteMany({
+              where: { cashTransactionId: payment.cashTransaction.id },
+            });
+
+            await prismaTx.cashRegister.update({
+              where: { id: payment.cashTransaction.cashRegisterId },
+              data: {
+                currentBalance: {
+                  decrement: new Prisma.Decimal(payment.amount),
+                },
+              },
+            });
+
+            await prismaTx.cashTransaction.delete({
+              where: { id: payment.cashTransaction.id },
+            });
+          }
+        }
+
+        await prismaTx.salePayment.deleteMany({ where: { salesId: sale.id } });
+
+        // Desvincular guias de remision
+        if (sale.shippingGuides.length > 0) {
+          await prismaTx.shippingGuide.updateMany({
+            where: { ventaId: sale.id },
+            data: { ventaId: null },
+          });
+        }
+
+        // Restaurar orden a estado PENDING
+        if (sale.order) {
+          await prismaTx.orders.update({
+            where: { id: sale.order.id },
+            data: { salesId: null, status: OrderStatus.PENDING },
+          });
+        }
+
+        // Marcar la venta como ANULADA (NO eliminar)
+        await prismaTx.sales.update({
+          where: { id: sale.id },
+          data: { status: 'ANULADA', annulledAt: new Date() },
+        });
+
+        return { sale };
+      });
+
+      // 4. Registrar auditoria (no-critico)
+      try {
+        await this.activityService.log({
+          actorId: actorId ?? sale.userId,
+          entityType: 'Sale',
+          entityId: sale.id.toString(),
+          action: AuditAction.UPDATED,
+          summary: `Venta ${sale.id} anulada (NC ${acceptedCN.serie}-${acceptedCN.correlativo}), stock revertido`,
+          diff: { before: { status: 'ACTIVE' }, after: { status: 'ANULADA' } } as any,
+          organizationId: organizationId ?? null,
+          companyId: companyId ?? null,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `No se pudo registrar la actividad para la anulacion de la venta ${id}`,
+          err,
+        );
+      }
+
+      // 5. Anular asientos contables asociados (no-critico)
+      const invoiceData = await this.prisma.invoiceSales.findFirst({
+        where: { salesId: id },
+        select: { serie: true, nroCorrelativo: true },
+      });
+
+      if (invoiceData?.serie && invoiceData?.nroCorrelativo) {
+        try {
+          const accEntry = await this.prisma.accEntry.findFirst({
+            where: {
+              serie: invoiceData.serie,
+              correlativo: invoiceData.nroCorrelativo,
+              status: { not: 'VOID' },
+              ...(organizationId !== undefined && { organizationId }),
+              ...(companyId !== undefined && { companyId }),
+            },
+            select: { id: true },
+          });
+
+          if (accEntry) {
+            await this.prisma.accEntry.update({
+              where: { id: accEntry.id },
+              data: { status: 'VOID' },
+            });
+            this.logger.log(
+              `Asiento contable ${accEntry.id} anulado por anulacion de venta ${id}`,
+            );
+          }
+        } catch (err) {
+          this.logger.warn(
+            `No se pudo anular el asiento contable para la venta ${id}`,
+            err,
+          );
+        }
+      }
+
+      return { id, status: 'ANULADA', annulledAt: new Date() };
     } catch (error) {
       handlePrismaError(error);
     }
@@ -1787,7 +2169,7 @@ export class SalesService {
       });
 
       return sales.map((sale) => {
-        const invoice = sale.invoices?.[0];
+        const invoice = sale.invoices ?? null;
         return {
           id: sale.id,
           user: sale.user.username,
@@ -1882,7 +2264,7 @@ export class SalesService {
           totalAmount: g._sum.total ?? 0,
           salesCount: g._count._all ?? 0,
           sales: clientSales.map((s) => {
-            const invoice = s.invoices?.[0];
+            const invoice = s.invoices ?? null;
             return {
               id: s.id,
               total: s.total,
@@ -1959,7 +2341,7 @@ export class SalesService {
       });
 
       return sales.map((sale) => {
-        const invoice = sale.invoices?.[0];
+        const invoice = sale.invoices ?? null;
         const sunatStatus = this.extractSunatStatus(
           sale.sunatTransmissions?.[0] ?? null,
         );
@@ -2026,6 +2408,8 @@ export class SalesService {
       ticket: string | null;
       environment?: string | null;
       errorMessage?: string | null;
+      cdrCode?: string | null;
+      cdrDescription?: string | null;
       updatedAt?: Date;
       createdAt?: Date;
     } | null,
@@ -2040,6 +2424,8 @@ export class SalesService {
       ticket: transmission.ticket ?? null,
       environment: transmission.environment ?? null,
       errorMessage: transmission.errorMessage ?? null,
+      cdrCode: transmission.cdrCode ?? null,
+      cdrDescription: transmission.cdrDescription ?? null,
       updatedAt: transmission.updatedAt ?? transmission.createdAt ?? null,
     };
   }
@@ -2194,5 +2580,19 @@ export class SalesService {
     } catch (error) {
       handlePrismaError(error);
     }
+  }
+
+  async getProfitAnalysis(
+    from: Date,
+    to: Date,
+    organizationId?: number,
+    companyId?: number,
+  ) {
+    return this.profitAnalysisService.getProfitAnalysis(
+      from,
+      to,
+      organizationId,
+      companyId,
+    );
   }
 }

@@ -18,6 +18,7 @@ type QuotePdfData = {
   companyAddress: string
   companyPhone: string
   companyEmail?: string
+  companyRuc?: string
   clientName: string
   contactName: string
   clientDocType?: string
@@ -396,6 +397,9 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
               ) : null}
               <View style={s.brandText}>
                 <Text style={s.companyName}>{data.companyName}</Text>
+                {data.companyRuc ? (
+                  <Text style={s.companyDetail}>RUC: {data.companyRuc}</Text>
+                ) : null}
                 {data.companyAddress ? (
                   <Text style={s.companyDetail}>{data.companyAddress}</Text>
                 ) : null}

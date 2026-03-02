@@ -4,7 +4,13 @@ import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Ban, CheckCircle2, Clock, RefreshCw, Send, XCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +34,8 @@ export type SaleSunatStatus = {
   environment?: string | null;
   updatedAt?: string | null;
   errorMessage?: string | null;
+  cdrCode?: string | null;
+  cdrDescription?: string | null;
 };
 
 export type SaleSunatTransmission = SaleSunatStatus & {
@@ -36,10 +44,13 @@ export type SaleSunatTransmission = SaleSunatStatus & {
 
 export type Sale = {
   id: number;
+  status?: string;
+  annulledAt?: string | null;
   user: { username: string };
   store: { name: string };
   client: {
     name: string;
+    type?: string;
     documentNumber?: string;
     dni?: string;
     ruc?: string;
@@ -71,8 +82,39 @@ export type Sale = {
     product_sku?: string;
     series?: (string | { number?: string })[];
   }[];
+  invoices?: {
+    serie?: string;
+    nroCorrelativo?: string;
+    tipoComprobante?: string;
+    tipoMoneda?: string;
+    total?: number;
+    fechaEmision?: string;
+    companyId?: number;
+  } | null;
+  companyRuc?: string;
   sunatStatus?: SaleSunatStatus | null;
   sunatTransmissions?: SaleSunatTransmission[];
+  creditNotes?: {
+    id: number;
+    status: string;
+    serie: string;
+    correlativo: string;
+    motivo: string;
+    codigoMotivo: string;
+    total: number;
+    fechaEmision?: string | null;
+    createdAt: string;
+    sunatTransmissions?: {
+      id: number;
+      status: string;
+      environment?: string | null;
+      errorMessage?: string | null;
+      cdrCode?: string | null;
+      cdrDescription?: string | null;
+      createdAt?: string | null;
+      updatedAt?: string | null;
+    }[];
+  }[];
 };
 
 export function createSalesColumns(
@@ -92,7 +134,17 @@ export function createSalesColumns(
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <span>{row.original.id}</span>,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5">
+          <span>{row.original.id}</span>
+          {row.original.status === "ANULADA" && (
+            <Badge variant="destructive" className="text-[10px] px-1 py-0 leading-tight">
+              <Ban className="h-3 w-3 mr-0.5" />
+              ANULADA
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       accessorKey: "user.username",
@@ -148,7 +200,11 @@ export function createSalesColumns(
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <span>S/. {row.original.total.toFixed(2)}</span>,
+      cell: ({ row }) => (
+        <span className={row.original.status === "ANULADA" ? "line-through text-muted-foreground" : ""}>
+          S/. {row.original.total.toFixed(2)}
+        </span>
+      ),
     },
     {
       accessorKey: "createdAt",
@@ -168,9 +224,19 @@ export function createSalesColumns(
     },
     {
       accessorKey: "sunatStatus",
-      header: "SUNAT",
+      header: "Estado",
       enableSorting: false,
-      cell: ({ row }) => renderSunatStatusBadge(row.original.sunatStatus),
+      cell: ({ row }) => {
+        if (row.original.status === "ANULADA") {
+          return (
+            <Badge variant="destructive" className="gap-1 text-[10px]">
+              <Ban className="h-3 w-3" />
+              ANULADA
+            </Badge>
+          );
+        }
+        return renderSunatStatusBadge(row.original.sunatStatus);
+      },
     },
     {
       accessorKey: "actions",
@@ -213,18 +279,39 @@ export function createSalesColumns(
             >
               Ver Detalles
             </Button>
-            <DeleteActionsGuard>
-              <Button
-                variant="destructive"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsDialogOpen(true);
-                }}
-                disabled={isDeleting}
-              >
-                {isDeleting ? "Eliminando..." : "Eliminar"}
-              </Button>
-            </DeleteActionsGuard>
+            {sale.invoices ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button
+                        variant="destructive"
+                        disabled
+                        className="opacity-50 cursor-not-allowed"
+                      >
+                        Eliminar
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Esta venta tiene comprobante. Use anulacion desde el detalle.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <DeleteActionsGuard>
+                <Button
+                  variant="destructive"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsDialogOpen(true);
+                  }}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Eliminando..." : "Eliminar"}
+                </Button>
+              </DeleteActionsGuard>
+            )}
           </div>
 
           <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -256,13 +343,14 @@ export function createSalesColumns(
  ];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  SENT: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  SENDING: "bg-blue-100 text-blue-800 border-blue-200",
-  PENDING: "bg-amber-100 text-amber-800 border-amber-200",
-  FAILED: "bg-red-100 text-red-800 border-red-200",
-  ERROR: "bg-red-100 text-red-800 border-red-200",
-  RETRYING: "bg-indigo-100 text-indigo-800 border-indigo-200",
+const SUNAT_TABLE_STATUS: Record<string, { label: string; icon: typeof CheckCircle2; colorClass: string }> = {
+  ACCEPTED: { label: "Aceptado", icon: CheckCircle2, colorClass: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  SENT: { label: "Enviado", icon: Send, colorClass: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  SENDING: { label: "Enviando", icon: RefreshCw, colorClass: "bg-blue-100 text-blue-800 border-blue-200" },
+  PENDING: { label: "Pendiente", icon: Clock, colorClass: "bg-amber-100 text-amber-800 border-amber-200" },
+  FAILED: { label: "Rechazado", icon: XCircle, colorClass: "bg-red-100 text-red-800 border-red-200" },
+  ERROR: { label: "Error", icon: XCircle, colorClass: "bg-red-100 text-red-800 border-red-200" },
+  RETRYING: { label: "Reintentando", icon: RefreshCw, colorClass: "bg-indigo-100 text-indigo-800 border-indigo-200" },
 };
 
 function renderSunatStatusBadge(status?: SaleSunatStatus | null) {
@@ -271,10 +359,17 @@ function renderSunatStatusBadge(status?: SaleSunatStatus | null) {
   }
 
   const normalized = status.status?.toUpperCase() ?? "DESCONOCIDO";
-  const colorClass = STATUS_COLORS[normalized] ?? "bg-slate-100 text-slate-800 border-slate-200";
+  const config = SUNAT_TABLE_STATUS[normalized];
+  const colorClass = config?.colorClass ?? "bg-slate-100 text-slate-800 border-slate-200";
+  const label = config?.label ?? normalized;
+  const Icon = config?.icon ?? null;
+  const isSpinning = normalized === "SENDING" || normalized === "RETRYING";
+
   const tooltipParts: string[] = [];
   if (status.environment) tooltipParts.push(`Ambiente: ${status.environment}`);
   if (status.ticket) tooltipParts.push(`Ticket: ${status.ticket}`);
+  if (status.cdrCode) tooltipParts.push(`Código CDR: ${status.cdrCode}`);
+  if (status.cdrDescription) tooltipParts.push(`CDR: ${status.cdrDescription}`);
   if (status.errorMessage) tooltipParts.push(`Último error: ${status.errorMessage}`);
   const title = tooltipParts.join(" • ");
 
@@ -282,9 +377,10 @@ function renderSunatStatusBadge(status?: SaleSunatStatus | null) {
     <Badge
       variant="outline"
       title={title || undefined}
-      className={`text-xs font-medium ${colorClass}`}
+      className={`text-xs font-medium gap-1 ${colorClass}`}
     >
-      {normalized}
+      {Icon && <Icon className={`h-3 w-3${isSpinning ? " animate-spin" : ""}`} />}
+      {label}
     </Badge>
   );
 }

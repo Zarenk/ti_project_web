@@ -1,19 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { sendMessage, getClients, getMessages } from './messages.api';
+import { getClients, getMessages } from './messages.api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Eye, X, Paperclip, ArrowLeft } from 'lucide-react';
+import { Eye, X, Paperclip, ArrowLeft, MessageSquare, ChevronUp, Loader2 } from 'lucide-react';
 import ClientList from './client-list';
 import socket, { cn } from '@/lib/utils';
 import TypingIndicator from '@/components/TypingIndicator';
 import { useMessages } from '@/context/messages-context';
 import EditableMessage from './EditableMessage';
+import { groupMessages } from '@/lib/chat-utils';
 import { toast } from 'sonner';
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { MESSAGES_GUIDE_STEPS } from "./messages-guide-steps";
 
 interface Message {
   id: number;
@@ -23,6 +26,7 @@ interface Message {
   createdAt: string;
   seenAt?: string | null;
   file?: string;
+  tempId?: number;
 }
 
 interface ChatClient {
@@ -69,11 +73,17 @@ export default function Page() {
   const [clientTyping, setClientTyping] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileList, setShowMobileList] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const prevScrollHeightRef = useRef(0);
+  const isLoadingOlderRef = useRef(false);
+  const pendingTempIds = useRef<Set<number>>(new Set());
+  const historyLoadedRef = useRef(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
-      setFile(selected);
       const reader = new FileReader();
       reader.onload = () => setPreview(reader.result as string);
       reader.readAsDataURL(selected);
@@ -144,18 +154,49 @@ export default function Page() {
     if (selected === null) return;
 
     setHistory([]); // Reset history when switching clients
+    setHasMore(false);
+    setLoadingOlder(false);
+    isLoadingOlderRef.current = false;
+    historyLoadedRef.current = false;
+    pendingTempIds.current.clear();
     setPendingCounts((prev) => ({ ...prev, [selected]: 0 }));
     setClientTyping(false);
 
     const receiveHandler = (msg: Message) => {
       if (msg.clientId === selected) {
-        setHistory((prev) =>
-          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
-        );
+        // Reconcile optimistic message via tempId
+        if (msg.tempId && pendingTempIds.current.has(msg.tempId)) {
+          pendingTempIds.current.delete(msg.tempId);
+          setHistory((prev) =>
+            prev.map((m) => (m.tempId === msg.tempId ? { ...msg } : m)),
+          );
+        } else {
+          setHistory((prev) =>
+            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
+          );
+        }
       }
     };
-    const historyHandler = (msgs: Message[]) => {
-      setHistory(msgs); // Replace history with server response
+    const historyHandler = (
+      data: Message[] | { messages: Message[]; hasMore: boolean },
+    ) => {
+      // Guard: only accept the first history response per selection
+      // to prevent stale responses from overwriting recently sent messages
+      if (historyLoadedRef.current) return;
+      historyLoadedRef.current = true;
+      if (Array.isArray(data)) {
+        setHistory(data);
+        setHasMore(false);
+      } else {
+        setHistory(data.messages);
+        setHasMore(data.hasMore);
+      }
+    };
+    const olderHandler = (data: { messages: Message[]; hasMore: boolean }) => {
+      isLoadingOlderRef.current = true;
+      setHistory((prev) => [...data.messages, ...prev]);
+      setHasMore(data.hasMore);
+      setLoadingOlder(false);
     };
     const seenHandler = ({ clientId, viewerId, seenAt }: SeenPayload) => {
       if (clientId !== selected) return;
@@ -193,10 +234,11 @@ export default function Page() {
       toast.error(payload?.message || 'Error en tiempo real de chat.');
     };
 
-    socket.emit('chat:history', { clientId: selected });
+    socket.emit('chat:history', { clientId: selected, limit: 50 });
     socket.emit('chat:seen', { clientId: selected, viewerId: userId });
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:history', historyHandler);
+    socket.on('chat:history:older', olderHandler);
     socket.on('chat:seen', seenHandler);
     socket.on('chat:typing', typingHandler);
     socket.on('chat:error', errorHandler);
@@ -206,6 +248,7 @@ export default function Page() {
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:history', historyHandler);
+      socket.off('chat:history:older', olderHandler);
       socket.off('chat:seen', seenHandler);
       socket.off('chat:typing', typingHandler);
       socket.off('chat:error', errorHandler);
@@ -230,7 +273,16 @@ export default function Page() {
     };
   }, [text, selected, userId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (isLoadingOlderRef.current) {
+      isLoadingOlderRef.current = false;
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTop =
+          container.scrollHeight - prevScrollHeightRef.current;
+      }
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
 
@@ -240,25 +292,44 @@ export default function Page() {
     );
   };
 
-  const handleSend = async () => {
-    if (!userId || selected === null || (!text.trim() && !preview)) return;
-    try {
-      const msg = await sendMessage({
-        clientId: selected,
-        senderId: userId,
-        text,
-        file: preview || undefined,
-      });
-      setHistory((prev) =>
-        prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
-      );
-      setLastMessages((prev) => ({ ...prev, [selected]: msg }));
-      setText('');
-      setPreview(null);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'No se pudo enviar el mensaje.';
-      toast.error(message);
+  const handleLoadMore = useCallback(() => {
+    if (!selected || !hasMore || loadingOlder || history.length === 0) return;
+    const container = scrollContainerRef.current;
+    if (container) {
+      prevScrollHeightRef.current = container.scrollHeight;
     }
+    setLoadingOlder(true);
+    socket.emit('chat:history', {
+      clientId: selected,
+      limit: 50,
+      beforeId: history[0].id,
+    });
+  }, [selected, hasMore, loadingOlder, history]);
+
+  const handleSend = () => {
+    if (!userId || selected === null || (!text.trim() && !preview)) return;
+    const tempId = Date.now();
+    const optimistic: Message = {
+      id: tempId,
+      tempId,
+      clientId: selected,
+      senderId: userId,
+      text,
+      createdAt: new Date().toISOString(),
+      file: preview || undefined,
+    };
+    setHistory((prev) => [...prev, optimistic]);
+    pendingTempIds.current.add(tempId);
+    setLastMessages((prev) => ({ ...prev, [selected]: optimistic }));
+    socket.emit('chat:send', {
+      clientId: selected,
+      senderId: userId,
+      text,
+      tempId,
+      ...(preview ? { file: preview } : {}),
+    });
+    setText('');
+    setPreview(null);
   };
 
   const clientMap = useMemo(
@@ -270,6 +341,7 @@ export default function Page() {
     [clients, selected],
   );
   const isActive = clientInfo?.status === 'Activo';
+  const groupedHistory = useMemo(() => groupMessages(history), [history]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -315,7 +387,10 @@ export default function Page() {
   return (
     <section className="p-4 space-y-4 h-[calc(100vh-8rem)] flex flex-col">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Mensajes</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Mensajes</h1>
+          <PageGuideButton steps={MESSAGES_GUIDE_STEPS} tooltipLabel="Guía de mensajes" />
+        </div>
         {isMobile && !showMobileList && (
           <Button variant="outline" size="sm" onClick={() => setShowMobileList(true)}>
             Conversaciones
@@ -343,10 +418,16 @@ export default function Page() {
         )}
         <div className={chatContainerClasses}>
           {selected === null ? (
-            <Card className="h-96 flex items-center justify-center p-4">
-              <p className="text-muted-foreground">
-                Selecciona un cliente para ver la conversación.
-              </p>
+            <Card className="h-full flex flex-col items-center justify-center gap-3 p-6">
+              <div className="rounded-full bg-muted p-4">
+                <MessageSquare className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="text-sm font-medium">Selecciona una conversación</p>
+                <p className="text-xs text-muted-foreground max-w-[220px]">
+                  Elige un cliente de la lista para ver los mensajes.
+                </p>
+              </div>
             </Card>
           ) : (
             <Card className="h-full flex flex-col overflow-hidden">
@@ -411,20 +492,55 @@ export default function Page() {
                   </Button>
                 </div>
               </header>
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {history.map((m) => (
-                  <EditableMessage
-                    key={m.id}
-                    message={m}
-                    isSender={m.senderId === userId}
-                    userId={userId!}
-                    displayName={
-                      m.senderId === userId
-                        ? userName || 'Tú'
-                        : clientMap.get(m.clientId) || 'Usuario'
-                    }
-                    onEdit={handleEditMessage}
-                  />
+              <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-2 bg-slate-50/50 dark:bg-slate-950/30">
+                {hasMore && (
+                  <div className="flex justify-center py-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLoadMore}
+                      disabled={loadingOlder}
+                      className="text-xs text-muted-foreground gap-1.5 cursor-pointer"
+                    >
+                      {loadingOlder ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <ChevronUp className="h-3 w-3" />
+                      )}
+                      {loadingOlder ? 'Cargando...' : 'Cargar mensajes anteriores'}
+                    </Button>
+                  </div>
+                )}
+                {groupedHistory.map((m) => (
+                  <Fragment key={m.tempId ?? m.id}>
+                    {m.showDateSeparator && (
+                      <div className="flex items-center gap-3 my-4">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] text-muted-foreground font-medium bg-background px-2.5 py-0.5 rounded-full shadow-sm border">
+                          {m.showDateSeparator}
+                        </span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                    )}
+                    <EditableMessage
+                      message={m}
+                      isSender={m.senderId === userId}
+                      userId={userId!}
+                      displayName={
+                        m.senderId === userId
+                          ? userName || 'Tú'
+                          : clientMap.get(m.clientId) || 'Usuario'
+                      }
+                      avatarUrl={
+                        m.senderId !== userId
+                          ? clientInfo?.image || undefined
+                          : undefined
+                      }
+                      onEdit={handleEditMessage}
+                      isFirst={m.isFirst}
+                      isLast={m.isLast}
+                    />
+                  </Fragment>
                 ))}
                 {clientTyping && (
                   <TypingIndicator

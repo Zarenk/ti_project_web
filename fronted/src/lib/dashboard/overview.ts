@@ -79,3 +79,80 @@ export async function fetchDashboardSparklines(days = 30): Promise<DashboardSpar
     pendingOrders: Array.isArray(p?.pendingOrders) ? p.pendingOrders : [],
   }
 }
+
+// ── Employee KPIs ──────────────────────────────────────────────────────────
+
+export type EmployeeKPIPeriod = "month" | "quarter" | "year"
+
+export type EmployeePeriodStats = {
+  salesCount: number
+  totalRevenue: number
+  avgTicket: number
+  itemsSold: number
+}
+
+export type EmployeeMonthPoint = {
+  month: string
+  salesCount: number
+  revenue: number
+  itemsSold: number
+}
+
+export type EmployeeRanking = {
+  position: number
+  totalSellers: number
+  topSellerRevenue: number
+  myRevenue: number
+}
+
+export type EmployeeTopProduct = {
+  productId: number
+  productName: string
+  quantity: number
+  salesCount: number
+}
+
+export type EmployeeKPIData = {
+  currentPeriod: EmployeePeriodStats
+  previousPeriod: EmployeePeriodStats
+  growth: {
+    salesCount: number | null
+    totalRevenue: number | null
+    avgTicket: number | null
+    itemsSold: number | null
+  }
+  monthlySeries: EmployeeMonthPoint[]
+  ranking: EmployeeRanking
+  topProducts: EmployeeTopProduct[]
+}
+
+const EMPTY_EMPLOYEE_KPIS: EmployeeKPIData = {
+  currentPeriod: { salesCount: 0, totalRevenue: 0, avgTicket: 0, itemsSold: 0 },
+  previousPeriod: { salesCount: 0, totalRevenue: 0, avgTicket: 0, itemsSold: 0 },
+  growth: { salesCount: null, totalRevenue: null, avgTicket: null, itemsSold: null },
+  monthlySeries: [],
+  ranking: { position: 0, totalSellers: 0, topSellerRevenue: 0, myRevenue: 0 },
+  topProducts: [],
+}
+
+export async function fetchEmployeeKPIs(
+  period: EmployeeKPIPeriod = "month",
+): Promise<EmployeeKPIData> {
+  const res = await authFetch(
+    `${BACKEND_URL}/api/dashboard/employee-kpis?period=${period}`,
+    { credentials: "include" },
+  )
+
+  if (res.status === 403) return EMPTY_EMPLOYEE_KPIS
+  if (!res.ok) return EMPTY_EMPLOYEE_KPIS
+
+  const p = await res.json()
+  return {
+    currentPeriod: p?.currentPeriod ?? EMPTY_EMPLOYEE_KPIS.currentPeriod,
+    previousPeriod: p?.previousPeriod ?? EMPTY_EMPLOYEE_KPIS.previousPeriod,
+    growth: p?.growth ?? EMPTY_EMPLOYEE_KPIS.growth,
+    monthlySeries: Array.isArray(p?.monthlySeries) ? p.monthlySeries : [],
+    ranking: p?.ranking ?? EMPTY_EMPLOYEE_KPIS.ranking,
+    topProducts: Array.isArray(p?.topProducts) ? p.topProducts : [],
+  }
+}

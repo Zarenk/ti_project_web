@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, FileDown, Filter, ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,8 +41,11 @@ import {
   JournalEntryFilters,
 } from "./journals.api";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { JournalEntryForm } from "./JournalEntryForm";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { JOURNALS_GUIDE_STEPS } from "./journals-guide-steps";
 
 type PeriodView = "day" | "month" | "year";
 
@@ -188,9 +192,8 @@ function ModernTooltip({ children, content }: { children: React.ReactNode; conte
 }
 
 export default function JournalsPage() {
-  const { version } = useTenantSelection();
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
   const [periodView, setPeriodView] = useState<PeriodView>("day");
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -202,31 +205,6 @@ export default function JournalsPage() {
   });
   const [filters, setFilters] = useState<JournalEntryFilters>({});
   const [formOpen, setFormOpen] = useState(false);
-
-  useEffect(() => {
-    loadEntries();
-  }, [version, selectedDate, periodView, filters]);
-
-  const loadEntries = async () => {
-    setLoading(true);
-    try {
-      const from = getDateRange().from;
-      const to = getDateRange().to;
-
-      const result = await getJournalEntries({
-        from,
-        to,
-        ...filters,
-      });
-
-      setEntries(result.data);
-    } catch (error) {
-      console.error("Error loading journal entries:", error);
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getDateRange = () => {
     // Parse la fecha seleccionada en hora local
@@ -250,6 +228,28 @@ export default function JournalsPage() {
 
     return { from, to };
   };
+
+  const dateRange = useMemo(() => getDateRange(), [selectedDate, periodView]);
+
+  const {
+    data: entries = [],
+    isLoading: loading,
+  } = useQuery({
+    queryKey: [
+      ...queryKeys.accounting.root(selection.orgId, selection.companyId),
+      "journals",
+      { selectedDate, periodView, ...filters },
+    ],
+    queryFn: async () => {
+      const result = await getJournalEntries({
+        from: dateRange.from,
+        to: dateRange.to,
+        ...filters,
+      });
+      return result.data;
+    },
+    enabled: selection.orgId !== null,
+  });
 
   const toggleExpanded = (id: number) => {
     const newExpanded = new Set(expandedEntries);
@@ -292,7 +292,10 @@ export default function JournalsPage() {
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <CardTitle className="leading-tight">Libro Diario</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="leading-tight">Libro Diario</CardTitle>
+                <PageGuideButton steps={JOURNALS_GUIDE_STEPS} tooltipLabel="Guía del libro diario" />
+              </div>
               <p className="text-sm text-muted-foreground mt-1">
                 Registro cronológico de asientos contables
               </p>
@@ -627,7 +630,9 @@ export default function JournalsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         onSuccess={() => {
-          loadEntries();
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.accounting.root(selection.orgId, selection.companyId),
+          });
           setFormOpen(false);
         }}
       />

@@ -18,6 +18,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SUNAT_GUIDE_STEPS } from "./sunat-guide-steps"
 import { getCompanyDetail } from "@/app/dashboard/tenancy/tenancy.api"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -148,7 +150,10 @@ export default function SUNATPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">SUNAT</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">SUNAT</h1>
+            <PageGuideButton steps={SUNAT_GUIDE_STEPS} tooltipLabel="Guía de SUNAT" />
+          </div>
           <p className="text-muted-foreground mt-1">
             Cumplimiento tributario y exportaciones PLE
           </p>

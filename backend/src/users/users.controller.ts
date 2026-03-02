@@ -29,6 +29,7 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateLastContextDto } from './dto/update-last-context.dto';
 import { ValidateContextDto } from './dto/validate-context.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('users')
 export class UsersController {
@@ -36,7 +37,8 @@ export class UsersController {
 
   @Post('login')
   async login(
-    @Body() body: { email: string; password: string },
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    body: LoginDto,
     @Request() req: ExpressRequest,
   ) {
     const user = await this.usersService.validateUser(
@@ -143,6 +145,12 @@ export class UsersController {
     },
   ) {
     return this.usersService.publicRegister(body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout(@Request() req) {
+    return this.usersService.serverLogout(req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)

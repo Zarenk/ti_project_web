@@ -2,6 +2,8 @@
 
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { createSalesColumns, Sale } from "./columns";
 import { DataTable } from "./data-table";
 import { getSaleById, getSales } from "./sales.api";
@@ -18,9 +20,19 @@ import {
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { DateRange } from "react-day-picker";
 import Link from "next/link";
-import { BarChart3, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Ban, BarChart3, CheckCircle2, CircleDot, FileSpreadsheet, LayoutGrid, List, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { TablePageSkeleton } from "@/components/table-page-skeleton";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { SALES_LIST_GUIDE_STEPS } from "./sales-list-guide-steps";
+import { SalesGallery } from "./sales-gallery";
+import { ManualPagination } from "@/components/data-table-pagination";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
 
@@ -75,6 +87,8 @@ const normalizeSunatStatus = (value: any) => {
     ticket: value.ticket ?? null,
     environment: typeof value.environment === "string" ? value.environment : null,
     errorMessage: value.errorMessage ?? null,
+    cdrCode: value.cdrCode ?? value.cdr_code ?? null,
+    cdrDescription: value.cdrDescription ?? value.cdr_description ?? null,
     updatedAt: normalizeSunatTimestamp(value.updatedAt ?? value.updated_at),
   };
 };
@@ -91,6 +105,8 @@ const normalizeSunatTransmissions = (value: any): Sale["sunatTransmissions"] => 
       ticket: item.ticket ?? null,
       environment: typeof item.environment === "string" ? item.environment : null,
       errorMessage: item.errorMessage ?? null,
+      cdrCode: item.cdrCode ?? item.cdr_code ?? null,
+      cdrDescription: item.cdrDescription ?? item.cdr_description ?? null,
       updatedAt: normalizeSunatTimestamp(item.updatedAt ?? item.updated_at),
       createdAt: normalizeSunatTimestamp(item.createdAt ?? item.created_at),
     }))
@@ -219,6 +235,8 @@ const normalizeApiSale = (sale: any): Sale => {
   );
 
   const clientDocumentCandidate =
+    sale.client?.typeNumber ??
+    sale.client?.type_number ??
     sale.client?.documentNumber ??
     sale.client?.document_number ??
     sale.client?.document ??
@@ -299,10 +317,13 @@ const normalizeApiSale = (sale: any): Sale => {
 
   return {
     id: sale.id,
+    status: sale.status ?? "ACTIVE",
+    annulledAt: sale.annulledAt ?? null,
     user: { username: sale.user?.username ?? sale.user?.name ?? "—" },
     store: { name: sale.store?.name ?? sale.storeName ?? "—" },
     client: {
       name: sale.client?.name ?? sale.clientName ?? "—",
+      type: sale.client?.type ?? sale.client?.documentType ?? sale.client?.tipoDocumento ?? undefined,
       documentNumber: normalizedClientDocument,
       dni: normalizedClientDni,
       ruc: normalizedClientRuc,
@@ -314,14 +335,64 @@ const normalizeApiSale = (sale: any): Sale => {
     tipoMoneda: sale.tipoMoneda ?? sale.tipo_moneda ?? undefined,
     payments,
     details,
+    invoices: (() => {
+      const raw = sale.invoices ?? sale.invoice ?? null;
+      if (!raw) return null;
+      // Handle Prisma array (from findOne) vs flat object (from findAllSales)
+      const inv = Array.isArray(raw) ? raw[0] : raw;
+      if (!inv) return null;
+      return {
+        serie: inv.serie ?? undefined,
+        nroCorrelativo: inv.nroCorrelativo ?? undefined,
+        tipoComprobante: inv.tipoComprobante ?? undefined,
+        tipoMoneda: inv.tipoMoneda ?? undefined,
+        total: inv.total ?? undefined,
+        fechaEmision: inv.fechaEmision ?? undefined,
+        companyId: inv.companyId ?? undefined,
+      };
+    })(),
+    companyRuc: sale.company?.ruc ?? sale.company?.sunatRuc ?? sale.companyRuc ?? sale.company_ruc ?? undefined,
     sunatStatus,
     sunatTransmissions,
+    creditNotes: Array.isArray(sale.creditNotes)
+      ? sale.creditNotes.map((cn: any) => ({
+          id: cn.id,
+          status: cn.status ?? "DRAFT",
+          serie: cn.serie ?? "",
+          correlativo: cn.correlativo ?? "",
+          motivo: cn.motivo ?? "",
+          codigoMotivo: cn.codigoMotivo ?? "01",
+          total: cn.total ?? 0,
+          fechaEmision: cn.fechaEmision ?? null,
+          createdAt: cn.createdAt ?? new Date().toISOString(),
+          sunatTransmissions: Array.isArray(cn.sunatTransmissions)
+            ? cn.sunatTransmissions.map((t: any) => ({
+                id: t.id,
+                status: String(t.status ?? "PENDING").toUpperCase(),
+                environment: t.environment ?? null,
+                errorMessage: t.errorMessage ?? null,
+                cdrCode: t.cdrCode ?? null,
+                cdrDescription: t.cdrDescription ?? null,
+                createdAt: t.createdAt ?? null,
+                updatedAt: t.updatedAt ?? null,
+              }))
+            : [],
+        }))
+      : [],
   };
 };
 
 export default function Page() {
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [salesLoading, setSalesLoading] = useState(true);
+  type ViewMode = "table" | "gallery"
+  const SALES_VIEW_MODE_KEY = "sales-view-mode"
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "table"
+    return (localStorage.getItem(SALES_VIEW_MODE_KEY) as ViewMode) || "table"
+  })
+  const [galleryPage, setGalleryPage] = useState(1)
+  const [galleryPageSize, setGalleryPageSize] = useState(12)
+
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -332,40 +403,41 @@ export default function Page() {
   const [minTotal, setMinTotal] = useState("");
   const [maxTotal, setMaxTotal] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("ALL");
+  const [selectedSunatFilter, setSelectedSunatFilter] = useState("ALL");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const { selection, version } = useTenantSelection();
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
+  const { selection } = useTenantSelection();
+
+  const queryClient = useQueryClient();
+  const salesQueryKey = queryKeys.sales.list(selection.orgId, selection.companyId);
+
+  const { data: sales = [], isLoading: salesLoading } = useQuery<Sale[]>({
+    queryKey: salesQueryKey,
+    queryFn: async () => {
+      const data = await getSales();
+      return data
+        .map(normalizeApiSale)
+        .sort(
+          (a: Sale, b: Sale) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+    },
+    enabled: selection.orgId !== null,
+  });
+
+  const invalidateSales = useCallback(
+    () => {
+      queryClient.invalidateQueries({ queryKey: salesQueryKey });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) });
+    },
+    [queryClient, salesQueryKey, selection.orgId, selection.companyId],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    const fetchData = async () => {
-      setSalesLoading(true);
-      try {
-        const data = await getSales();
-        if (cancelled) return;
-        const mapped: Sale[] = data
-          .map(normalizeApiSale)
-          .sort(
-            (a: Sale, b: Sale) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          );
-        setSales(mapped);
-      } catch (error) {
-        console.error("Error al obtener las ventas:", error);
-      } finally {
-        if (!cancelled) setSalesLoading(false);
-      }
-    };
-    fetchData();
-    return () => { cancelled = true; };
-  }, [selectionKey]);
-
-  const handleDeleted = useCallback((id: number) => {
-    setSales((prev) => prev.filter((sale) => sale.id !== id));
-  }, []);
+  const handleDeleted = useCallback(
+    (_id: number) => { invalidateSales(); },
+    [invalidateSales],
+  );
 
   const handleViewDetail = useCallback(
     async (sale: Sale) => {
@@ -377,8 +449,8 @@ export default function Page() {
         const detailedSale = await getSaleById(sale.id);
         const normalizedSale = normalizeApiSale(detailedSale);
         setSelectedSale(normalizedSale);
-        setSales((prev) =>
-          prev.map((item) => (item.id === normalizedSale.id ? normalizedSale : item)),
+        queryClient.setQueryData<Sale[]>(salesQueryKey, (prev) =>
+          prev?.map((item) => (item.id === normalizedSale.id ? normalizedSale : item)),
         );
       } catch (error) {
         console.error("Error al obtener el detalle de la venta:", error);
@@ -387,8 +459,24 @@ export default function Page() {
         setIsDetailLoading(false);
       }
     },
-    [],
+    [queryClient, salesQueryKey],
   );
+
+  const handleRefreshSale = useCallback(async (saleId: number) => {
+    setIsDetailLoading(true);
+    try {
+      const detailedSale = await getSaleById(saleId);
+      const normalizedSale = normalizeApiSale(detailedSale);
+      setSelectedSale(normalizedSale);
+      queryClient.setQueryData<Sale[]>(salesQueryKey, (prev) =>
+        prev?.map((item) => (item.id === normalizedSale.id ? normalizedSale : item)),
+      );
+    } catch (error) {
+      console.error("Error al refrescar la venta:", error);
+    } finally {
+      setIsDetailLoading(false);
+    }
+  }, [queryClient, salesQueryKey]);
 
   const handleDetailVisibility = useCallback((open: boolean) => {
     setIsDetailOpen(open);
@@ -503,17 +591,42 @@ export default function Page() {
         }
       }
 
+      if (selectedStatusFilter !== "ALL") {
+        const saleStatus = (sale.status ?? "ACTIVE").toUpperCase();
+        if (saleStatus !== selectedStatusFilter) return false;
+      }
+
+      if (selectedSunatFilter !== "ALL") {
+        const latestStatus = (
+          sale.sunatStatus?.status ??
+          sale.sunatTransmissions?.[0]?.status ??
+          ""
+        ).toUpperCase();
+
+        if (selectedSunatFilter === "NOT_SENT") {
+          if (latestStatus) return false;
+        } else if (selectedSunatFilter === "PENDING") {
+          if (!["PENDING", "SENDING", "SENT", "RETRYING"].includes(latestStatus)) return false;
+        } else if (selectedSunatFilter === "HAS_NC") {
+          if (!sale.creditNotes?.length) return false;
+        } else {
+          if (latestStatus !== selectedSunatFilter) return false;
+        }
+      }
+
       return true;
     });
-  }, [sales, storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, dateRange]);
+  }, [sales, storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, dateRange, selectedSunatFilter, selectedStatusFilter]);
 
   const totalSalesAmount = useMemo(
     () =>
-      sales.reduce(
-        (acc, sale) =>
-          acc + (Number.isFinite(Number(sale.total)) ? Number(sale.total) : 0),
-        0,
-      ),
+      sales
+        .filter((sale) => (sale.status ?? "ACTIVE") !== "ANULADA")
+        .reduce(
+          (acc, sale) =>
+            acc + (Number.isFinite(Number(sale.total)) ? Number(sale.total) : 0),
+          0,
+        ),
     [sales],
   );
 
@@ -535,10 +648,12 @@ export default function Page() {
           minTotal.trim() ||
           maxTotal.trim() ||
           selectedPaymentMethod !== "ALL" ||
+          selectedSunatFilter !== "ALL" ||
+          selectedStatusFilter !== "ALL" ||
           dateRange?.from ||
           dateRange?.to,
       ),
-    [storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, dateRange],
+    [storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, selectedSunatFilter, selectedStatusFilter, dateRange],
   );
 
   const handleResetFilters = useCallback(() => {
@@ -547,8 +662,27 @@ export default function Page() {
     setMinTotal("");
     setMaxTotal("");
     setSelectedPaymentMethod("ALL");
+    setSelectedSunatFilter("ALL");
+    setSelectedStatusFilter("ALL");
     setDateRange(undefined);
   }, []);
+
+  const handleViewChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem(SALES_VIEW_MODE_KEY, mode)
+    setGalleryPage(1)
+  }, [])
+
+  // Reset gallery page when filters change
+  useEffect(() => {
+    setGalleryPage(1)
+  }, [storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, selectedSunatFilter, selectedStatusFilter, dateRange])
+
+  const galleryTotalPages = Math.ceil(filteredSales.length / galleryPageSize) || 1
+  const galleryPaginatedData = useMemo(() => {
+    const start = (galleryPage - 1) * galleryPageSize
+    return filteredSales.slice(start, start + galleryPageSize)
+  }, [filteredSales, galleryPage, galleryPageSize])
 
   const escapeHtml = useCallback((value: string | number | null | undefined) => {
     if (value === null || value === undefined) return "";
@@ -1120,11 +1254,14 @@ export default function Page() {
     <>
       <section className="py-2 sm:py-6">
         <div className="container mx-auto px-1 sm:px-6 lg:px-8">
-          <h1 className="px-5 text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6">
-            Historial de Ventas
-          </h1>
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between px-5 mb-4">
-            <div className="space-y-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 px-5 mb-2 sm:mb-6">
+            <h1 className="text-xl sm:text-3xl lg:text-4xl font-bold">
+              Historial de Ventas
+            </h1>
+            <PageGuideButton steps={SALES_LIST_GUIDE_STEPS} tooltipLabel="Guía de ventas" />
+          </div>
+          <div className="flex items-center justify-between gap-2 px-5 mb-4">
+            <div className="min-w-0 text-sm text-muted-foreground">
               <p>
                 Total acumulado:{" "}
                 <span className="font-semibold text-foreground">
@@ -1133,15 +1270,59 @@ export default function Page() {
               </p>
               {isFiltered && (
                 <p className="text-xs text-muted-foreground">
-                  Total general sin filtros: {formatCurrency(totalSalesAmount)}
+                  Sin filtros: {formatCurrency(totalSalesAmount)}
                 </p>
               )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
+
+            {/* Mobile: icon-only buttons */}
+            <TooltipProvider delayDuration={300}>
+              <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleExportSummary}
+                      disabled={isExportingSummary}
+                      size="icon"
+                      className="h-9 w-9 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {isExportingSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom"><p className="text-xs">Exportar resumen</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleExportDetailed}
+                      disabled={isExportingDetailed}
+                      size="icon"
+                      className="h-9 w-9 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {isExportingDetailed ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom"><p className="text-xs">Exportar detalle</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button asChild size="icon" className="h-9 w-9 cursor-pointer bg-purple-600 hover:bg-purple-700 text-white">
+                      <Link href="/dashboard/sales/product-report" prefetch={false}>
+                        <BarChart3 className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom"><p className="text-xs">Reporte de productos</p></TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+
+            {/* Desktop: full buttons */}
+            <div className="hidden sm:flex sm:flex-row gap-3">
               <Button
                 onClick={handleExportSummary}
                 disabled={isExportingSummary}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {isExportingSummary ? (
                   <span className="flex items-center gap-2">
@@ -1149,14 +1330,14 @@ export default function Page() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <FileSpreadsheet className="h-4 w-4" /> Exportar ventas (resumen)
+                    <FileSpreadsheet className="h-4 w-4" /> Exportar resumen
                   </span>
                 )}
               </Button>
               <Button
                 onClick={handleExportDetailed}
                 disabled={isExportingDetailed}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isExportingDetailed ? (
                   <span className="flex items-center gap-2">
@@ -1164,11 +1345,11 @@ export default function Page() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <FileSpreadsheet className="h-4 w-4" /> Exportar ventas (detalle)
+                    <FileSpreadsheet className="h-4 w-4" /> Exportar detalle
                   </span>
                 )}
               </Button>
-              <Button asChild className="bg-purple-600 hover:bg-purple-700 text-white">
+              <Button asChild className="cursor-pointer bg-purple-600 hover:bg-purple-700 text-white">
                 <Link href="/dashboard/sales/product-report" prefetch={false}>
                   <span className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4" /> Reporte de productos
@@ -1177,78 +1358,182 @@ export default function Page() {
               </Button>
             </div>
           </div>
-          <div className="px-5">
-            <div className="space-y-4 rounded-2xl bg-card p-4 shadow-sm">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+          <div className="px-3 sm:px-5">
+            <div className="space-y-2.5 sm:space-y-4 rounded-xl sm:rounded-2xl bg-card p-3 sm:p-4 shadow-sm">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
                     Tienda
                   </p>
                   <Input
                     type="search"
                     value={storeQuery}
                     onChange={(event) => setStoreQuery(event.target.value)}
-                    placeholder="Buscar por tienda"
-                    className="h-10"
+                    placeholder="Buscar tienda"
+                    className="h-9 sm:h-10 text-sm"
                   />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
                     Cliente
                   </p>
                   <Input
                     type="search"
                     value={clientQuery}
                     onChange={(event) => setClientQuery(event.target.value)}
-                    placeholder="Nombre o documento"
-                    className="h-10"
+                    placeholder="Cliente / doc."
+                    className="h-9 sm:h-10 text-sm"
                   />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="col-span-2 sm:col-span-1 space-y-1">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
                     Monto total (S/)
                   </p>
-                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <Input
                       value={minTotal}
                       onChange={(event) => setMinTotal(event.target.value)}
-                      placeholder="Mínimo"
-                      className="h-10"
+                      placeholder="S/ Mín."
+                      className="h-9 sm:h-10 text-sm"
                       inputMode="decimal"
                     />
                     <Input
                       value={maxTotal}
                       onChange={(event) => setMaxTotal(event.target.value)}
-                      placeholder="Máximo"
-                      className="h-10"
+                      placeholder="S/ Máx."
+                      className="h-9 sm:h-10 text-sm"
                       inputMode="decimal"
                     />
                   </div>
                 </div>
                 <div className="space-y-1 flex flex-col justify-center">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
                     Método de pago
                   </p>
                   <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                    <SelectTrigger className="h-10 w-full">
-                      <SelectValue placeholder="Todos los métodos" />
+                    <SelectTrigger className="h-9 sm:h-10 w-full cursor-pointer text-sm">
+                      <SelectValue placeholder="Método de pago" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ALL">Todos los métodos</SelectItem>
+                      <SelectItem value="ALL" className="cursor-pointer">Todos los métodos</SelectItem>
                       {paymentMethodOptions.map((method) => (
-                        <SelectItem key={method} value={method}>
+                        <SelectItem key={method} value={method} className="cursor-pointer">
                           {method}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1 flex flex-col justify-center">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                    Estado Venta
+                  </p>
+                  <Select value={selectedStatusFilter} onValueChange={setSelectedStatusFilter}>
+                    <SelectTrigger
+                      className={`h-9 sm:h-10 w-full cursor-pointer text-sm transition-colors duration-200 ${
+                        selectedStatusFilter === "ANULADA"
+                          ? "border-rose-400 bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-700"
+                          : selectedStatusFilter === "ACTIVE"
+                          ? "border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700"
+                          : ""
+                      }`}
+                    >
+                      <SelectValue placeholder="Estado Venta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CircleDot className="h-3.5 w-3.5 text-muted-foreground" />
+                          Todas
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ACTIVE" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          Activas
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ANULADA" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <Ban className="h-3.5 w-3.5 text-rose-500" />
+                          Anuladas
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 flex flex-col justify-center">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                    Estado SUNAT
+                  </p>
+                  <Select value={selectedSunatFilter} onValueChange={setSelectedSunatFilter}>
+                    <SelectTrigger
+                      className={`h-9 sm:h-10 w-full cursor-pointer text-sm transition-colors duration-200 ${
+                        selectedSunatFilter === "ACCEPTED"
+                          ? "border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700"
+                          : selectedSunatFilter === "REJECTED" || selectedSunatFilter === "FAILED"
+                          ? "border-red-400 bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-300 dark:border-red-700"
+                          : selectedSunatFilter === "PENDING"
+                          ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-700"
+                          : selectedSunatFilter === "HAS_NC"
+                          ? "border-violet-400 bg-violet-50 text-violet-800 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-700"
+                          : ""
+                      }`}
+                    >
+                      <SelectValue placeholder="Estado SUNAT" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CircleDot className="h-3.5 w-3.5 text-muted-foreground" />
+                          Todos los estados
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ACCEPTED" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          Aceptado
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="REJECTED" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <XCircle className="h-3.5 w-3.5 text-red-500" />
+                          Rechazado
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="PENDING" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 text-amber-500" />
+                          Pendiente
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="FAILED" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <XCircle className="h-3.5 w-3.5 text-red-400" />
+                          Error
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="NOT_SENT" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CircleDot className="h-3.5 w-3.5 text-slate-400" />
+                          Sin envío
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="HAS_NC" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <FileSpreadsheet className="h-3.5 w-3.5 text-violet-500" />
+                          Con nota de crédito
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-1 sm:col-span-2 lg:col-span-1 xl:col-span-2 2xl:col-span-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
                     Rango de fechas
                   </p>
                   <CalendarDatePicker
-                    className="h-10 w-full justify-between"
+                    className="h-9 sm:h-10 w-full justify-between text-sm"
                     variant="outline"
                     date={dateRange ?? { from: undefined, to: undefined }}
                     onDateSelect={({ from, to }) => setDateRange({ from, to })}
@@ -1278,17 +1563,75 @@ export default function Page() {
                       Limpiar filtros
                     </Button>
                   )}
+
+                  {/* View toggle */}
+                  <TooltipProvider delayDuration={300}>
+                    <div className="ml-auto flex shrink-0 rounded-lg border p-0.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={viewMode === "table" ? "secondary" : "ghost"}
+                            size="icon"
+                            className="h-7 w-7 cursor-pointer"
+                            onClick={() => handleViewChange("table")}
+                          >
+                            <List className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">Vista de tabla</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={viewMode === "gallery" ? "secondary" : "ghost"}
+                            size="icon"
+                            className="h-7 w-7 cursor-pointer"
+                            onClick={() => handleViewChange("gallery")}
+                          >
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">Vista de galería</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                 </div>
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <DataTable
-              columns={columns}
-              data={filteredSales}
-              onRowClick={handleViewDetail}
-            />
-          </div>
+
+          {viewMode === "table" ? (
+            <div className="overflow-x-auto">
+              <DataTable
+                columns={columns}
+                data={filteredSales}
+                onRowClick={handleViewDetail}
+              />
+            </div>
+          ) : (
+            <div className="px-5">
+              <SalesGallery
+                data={galleryPaginatedData}
+                onViewDetail={handleViewDetail}
+                onDeleted={handleDeleted}
+              />
+              <div className="py-4">
+                <ManualPagination
+                  currentPage={galleryPage}
+                  totalPages={galleryTotalPages}
+                  pageSize={galleryPageSize}
+                  totalItems={filteredSales.length}
+                  onPageChange={setGalleryPage}
+                  onPageSizeChange={setGalleryPageSize}
+                  pageSizeOptions={[12, 24, 48]}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1297,6 +1640,7 @@ export default function Page() {
           open={isDetailOpen}
           onOpenChange={handleDetailVisibility}
           loading={isDetailLoading}
+          onRefresh={handleRefreshSale}
       />
     </>
   );

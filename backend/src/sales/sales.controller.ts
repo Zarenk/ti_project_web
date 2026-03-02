@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   ParseIntPipe,
@@ -374,6 +375,24 @@ export class SalesController {
     )
   }
 
+  @Get('analytics/profit-analysis')
+  async getProfitAnalysis(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException('Los parámetros from y to son requeridos');
+    }
+    return this.salesService.getProfitAnalysis(
+      new Date(from),
+      new Date(to),
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
   @Get('transactions')
   getSalesTransactions(
     @Query('from') from?: string,
@@ -427,6 +446,25 @@ export class SalesController {
   ) {
     return this.salesService.findOne(
       id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Patch(':id/annul')
+  @UseGuards(EntityOwnershipGuard)
+  @EntityModel('sales')
+  @EntityIdParam('id')
+  async annulSale(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const userId = req?.user?.userId;
+    return this.salesService.annulSale(
+      id,
+      userId,
       organizationId ?? undefined,
       companyId ?? undefined,
     );

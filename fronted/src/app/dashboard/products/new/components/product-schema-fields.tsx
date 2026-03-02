@@ -82,6 +82,16 @@ export const ProductSchemaFields = memo(function ProductSchemaFields({
                 Define estaciones y tiempos de preparacion para la cocina.
               </p>
             )}
+            {groupKey === "nutrition" && (
+              <p className="text-xs text-muted-foreground">
+                Informacion nutricional y dietetica del plato.
+              </p>
+            )}
+            {groupKey === "trazabilidad" && (
+              <p className="text-xs text-muted-foreground">
+                Control de lotes y fechas de vencimiento.
+              </p>
+            )}
           </div>
           {fields.map((field: any) => (
             <div key={field.key} className="space-y-2">

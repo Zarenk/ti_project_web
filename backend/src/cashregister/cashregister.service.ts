@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { logOrganizationContext } from 'src/tenancy/organization-context.logger';
 import {
+  buildOrganizationFilter,
   resolveCompanyId as resolveCompanyIdUtil,
   resolveOrganizationId,
 } from 'src/tenancy/organization.utils';
@@ -87,13 +88,6 @@ export class CashregisterService {
         Boolean(entry && entry.trim().length > 0),
       );
   }
-  private buildOrganizationFilter(organizationId?: number | null) {
-    if (organizationId === undefined) {
-      return {};
-    }
-    return { organizationId };
-  }
-
   private buildStoreCompanyFilter(companyId?: number | null) {
     if (companyId === undefined) {
       return {};
@@ -181,7 +175,7 @@ export class CashregisterService {
     const existingWhere: Prisma.CashRegisterWhereInput = {
       storeId,
       status: 'ACTIVE',
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -222,7 +216,7 @@ export class CashregisterService {
   ) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const organizationFilter = this.buildOrganizationFilter(
+    const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashRegisterWhereInput;
     if (options?.companyId !== undefined) {
@@ -253,12 +247,12 @@ export class CashregisterService {
   ) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const organizationFilter = this.buildOrganizationFilter(
+    const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashTransactionWhereInput;
     const cashRegisterFilter: Prisma.CashRegisterWhereInput = {
       storeId,
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -311,12 +305,12 @@ export class CashregisterService {
         createdAt: 'desc',
       },
     });
-    const closureOrganizationFilter = this.buildOrganizationFilter(
+    const closureOrganizationFilter = buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashClosureWhereInput;
     const closureCashRegisterFilter: Prisma.CashRegisterWhereInput = {
       storeId,
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -433,7 +427,7 @@ export class CashregisterService {
     const where: Prisma.CashRegisterWhereInput = {
       storeId,
       status: 'ACTIVE',
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -462,7 +456,7 @@ export class CashregisterService {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
     const where: Prisma.CashRegisterWhereInput = {
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -490,7 +484,7 @@ export class CashregisterService {
 
     const where: Prisma.CashRegisterWhereInput = {
       id,
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -793,7 +787,7 @@ export class CashregisterService {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
     const where: Prisma.CashTransactionWhereInput = {
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashTransactionWhereInput),
     };
@@ -823,7 +817,7 @@ export class CashregisterService {
 
     const where: Prisma.CashTransactionWhereInput = {
       cashRegisterId,
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashTransactionWhereInput),
     };
@@ -854,7 +848,7 @@ export class CashregisterService {
       const cashRegisterWhere: Prisma.CashRegisterWhereInput = {
         id: data.cashRegisterId,
         status: 'ACTIVE',
-        ...(this.buildOrganizationFilter(
+        ...(buildOrganizationFilter(
           providedOrganizationId,
         ) as Prisma.CashRegisterWhereInput),
       };
@@ -1017,12 +1011,12 @@ export class CashregisterService {
   ) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const organizationFilter = this.buildOrganizationFilter(
+    const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashClosureWhereInput;
     const cashRegisterFilter: Prisma.CashRegisterWhereInput = {
       storeId,
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -1059,12 +1053,12 @@ export class CashregisterService {
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    const organizationFilter = this.buildOrganizationFilter(
+    const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
     ) as Prisma.CashClosureWhereInput;
     const cashRegisterFilter: Prisma.CashRegisterWhereInput = {
       storeId,
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashRegisterWhereInput),
     };
@@ -1095,7 +1089,7 @@ export class CashregisterService {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
     const where: Prisma.CashClosureWhereInput = {
-      ...(this.buildOrganizationFilter(
+      ...(buildOrganizationFilter(
         options?.organizationId,
       ) as Prisma.CashClosureWhereInput),
     };

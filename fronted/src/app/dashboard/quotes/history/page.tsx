@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { cn } from "@/lib/utils"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { QUOTES_HISTORY_GUIDE_STEPS } from "./quotes-history-guide-steps"
 import { QuotePdfDocument } from "../QuotePdfDocument"
 import {
   createQuoteDraft,
@@ -317,7 +319,10 @@ export default function QuotesHistoryPage() {
       <div className="mx-auto flex max-w-6xl items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Ventas</p>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Historial de Cotizaciones</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Historial de Cotizaciones</h1>
+            <PageGuideButton steps={QUOTES_HISTORY_GUIDE_STEPS} tooltipLabel="Guía del historial" />
+          </div>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Todas las cotizaciones emitidas, borradores y canceladas.
           </p>

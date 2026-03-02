@@ -19,6 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { INGREDIENTS_GUIDE_STEPS } from "./ingredients-guide-steps"
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   IN: "Entrada",
@@ -158,9 +160,12 @@ export default function IngredientsPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
-              Insumos y existencias
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                Insumos y existencias
+              </h1>
+              <PageGuideButton steps={INGREDIENTS_GUIDE_STEPS} tooltipLabel="Guía de insumos" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Controla ingredientes, stock minimo y costos por unidad.
             </p>

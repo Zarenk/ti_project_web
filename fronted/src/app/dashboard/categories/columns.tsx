@@ -19,6 +19,9 @@ import Link from "next/link"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { deleteCategory } from './categories.api';
 
 import { toast } from 'sonner';
@@ -105,14 +108,14 @@ export const columns: ColumnDef<Categories>[] = [
         const category = row.original
         const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-        const router = useRouter(); // Usa useRouter dentro del componente React
+        const router = useRouter();
+        const queryClient = useQueryClient();
+        const { selection } = useTenantSelection();
         const handleRemoveCategory = async (id: string) => {
           try {
-            //console.log(id)
-            await deleteCategory(id); // Llama a la API para eliminar el producto
-            toast.success("Categoría eliminada correctamente."); // Notificación de éxito
-            router.refresh(); // Refresca los datos de la página}
-            
+            await deleteCategory(id);
+            toast.success("Categoría eliminada correctamente.");
+            queryClient.invalidateQueries({ queryKey: queryKeys.categories.root(selection.orgId, selection.companyId) });
           } catch (error) {
             toast.error(errorMessage|| "No se pudo eliminar la categoria porque esta relacionada con un producto")
           }

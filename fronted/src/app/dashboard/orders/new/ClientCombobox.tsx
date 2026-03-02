@@ -22,10 +22,11 @@ export type ClientComboboxProps = {
   clients: Client[];
   selectedId: number | null;
   selectedLabel: string;
-  onPick: (c: Client) => void;
+  onPick: (c: Client | null) => void;
+  showPublicOption?: boolean;
 };
 
-export default function ClientCombobox({ clients, selectedId, selectedLabel, onPick }: ClientComboboxProps) {
+export default function ClientCombobox({ clients, selectedId, selectedLabel, onPick, showPublicOption }: ClientComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -69,7 +70,18 @@ export default function ClientCombobox({ clients, selectedId, selectedLabel, onP
           <CommandInput placeholder="Buscar por nombre, DNI o RUC..." value={search} onValueChange={setSearch} />
           <CommandEmpty>Sin resultados</CommandEmpty>
           <CommandList>
-            <CommandGroup>
+            {showPublicOption && (
+              <CommandGroup heading="Acceso rápido">
+                <CommandItem value="__public__" onSelect={() => { onPick(null); setOpen(false); }}>
+                  <div className="flex flex-col">
+                    <span className="font-medium">Público en general</span>
+                    <span className="text-xs text-muted-foreground">Sin datos de cliente</span>
+                  </div>
+                  <Check className={cn("ml-auto h-4 w-4", selectedId === null ? "opacity-100" : "opacity-0")} />
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup heading={showPublicOption ? "Clientes registrados" : undefined}>
               {filtered.map((c) => (
                 <CommandItem key={c.id} value={`${c.id}`} onSelect={() => { onPick(c); setOpen(false); }}>
                   <div className="flex flex-col">

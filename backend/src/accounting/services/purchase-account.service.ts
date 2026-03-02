@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntryLine } from '../entries.service';
+import { IGV_FACTOR, round2 } from '../accounting.constants';
 
 export interface PurchaseEntryLine extends EntryLine {}
 
@@ -17,13 +18,11 @@ export interface PurchaseData {
   products?: PurchaseProduct[];
 }
 
-const round2 = (n: number) => Number(n.toFixed(2));
-
 @Injectable()
 export class PurchaseAccountingService {
   buildEntryFromPurchase(purchase: PurchaseData): PurchaseEntryLine[] {
     const total = round2(purchase.total || 0);
-    const subtotal = round2(total / 1.18);
+    const subtotal = round2(total / IGV_FACTOR);
     const igv = round2(total - subtotal);
 
     const creditAccount = purchase.isCredit ? '4211' : '1011';

@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { ALERTS_GUIDE_STEPS } from "./alerts-guide-steps";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { queryKeys } from "@/lib/query-keys";
 import {
   getInventoryAlerts,
   getInventoryMetrics,
@@ -23,84 +27,60 @@ interface InventoryMetrics {
 }
 
 export default function InventoryAlertsPage() {
-  const { selection, version, loading: tenantLoading } = useTenantSelection();
+  const { selection, loading: tenantLoading } = useTenantSelection();
   const tenantReady = !tenantLoading && !!selection.companyId;
-  const selectionKey = useMemo(
-    () => `${selection.companyId ?? "none"}-${version}`,
-    [selection.companyId, version],
-  );
+  const queryClient = useQueryClient();
 
-  const [metrics, setMetrics] = useState<InventoryMetrics | null>(null);
-  const [alerts, setAlerts] = useState<InventoryAlertsPayload | null>(null);
-  const [summary, setSummary] = useState<InventoryAlertSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [headerIssue, setHeaderIssue] = useState<string | null>(null);
   const [reviewingTemplateId, setReviewingTemplateId] = useState<number | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const fetchAlertsData = useCallback(async () => {
-    if (!tenantReady || !selection.companyId) {
-      setError("Selecciona una empresa para consultar alertas.");
-      return;
-    }
+  const alertsQueryKey = [...queryKeys.inventory.root(selection.orgId, selection.companyId), "alerts"] as const;
 
-    setLoading(true);
-    setError(null);
-    setHeaderIssue(null);
-
-    try {
+  const { data: alertsData, isLoading: loading, error: queryError } = useQuery({
+    queryKey: alertsQueryKey,
+    queryFn: async () => {
       const [metricsResponse, alertsResponse, summaryResponse] = await Promise.all([
-        getInventoryMetrics({ companyId: selection.companyId }),
-        getInventoryAlerts({ companyId: selection.companyId }),
-        getInventoryAlertSummary({ companyId: selection.companyId }),
+        getInventoryMetrics({ companyId: selection.companyId! }),
+        getInventoryAlerts({ companyId: selection.companyId! }),
+        getInventoryAlertSummary({ companyId: selection.companyId! }),
       ]);
-
-      setMetrics(metricsResponse);
-      setAlerts(alertsResponse);
-      setSummary(summaryResponse);
-    } catch (err: any) {
-      const message = err?.message || "No se pudieron cargar las alertas.";
-      setError(message);
-      if (message.includes("Validation failed")) {
-        setHeaderIssue(
-          "No se pudo validar el tenant (x-org-id/x-company-id). Revisa la seleccion o las cabeceras.",
-        );
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [tenantReady, selection.companyId]);
-
-  useEffect(() => {
-    if (!tenantReady) {
-      return;
-    }
-    void fetchAlertsData();
-  }, [tenantReady, selectionKey, fetchAlertsData]);
-
-  const handleTemplateReview = useCallback(
-    async (templateId: number) => {
-      try {
-        setError(null);
-        setReviewingTemplateId(templateId);
-        await reviewTemplateAlert(templateId);
-        await fetchAlertsData();
-      } catch (err: any) {
-        const message = err?.message || "No se pudo marcar la plantilla como revisada.";
-        setError(message);
-      } finally {
-        setReviewingTemplateId(null);
-      }
+      return { metrics: metricsResponse, alerts: alertsResponse, summary: summaryResponse };
     },
-    [fetchAlertsData],
-  );
+    enabled: tenantReady && selection.companyId !== null,
+  });
+
+  const metrics = alertsData?.metrics ?? null;
+  const alerts = alertsData?.alerts ?? null;
+  const summary = alertsData?.summary ?? null;
+
+  const error = mutationError ?? (queryError
+    ? (queryError instanceof Error ? queryError.message : "No se pudieron cargar las alertas.")
+    : (!tenantReady ? "Selecciona una empresa para consultar alertas." : null));
+
+  const handleTemplateReview = async (templateId: number) => {
+    try {
+      setMutationError(null);
+      setReviewingTemplateId(templateId);
+      await reviewTemplateAlert(templateId);
+      queryClient.invalidateQueries({ queryKey: alertsQueryKey });
+    } catch (err: any) {
+      const message = err?.message || "No se pudo marcar la plantilla como revisada.";
+      setMutationError(message);
+    } finally {
+      setReviewingTemplateId(null);
+    }
+  };
 
   return (
     <section className="py-4 sm:py-6">
       <div className="container mx-auto px-3 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold sm:text-3xl">Alertas de inventario</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold sm:text-3xl">Alertas de inventario</h1>
+              <PageGuideButton steps={ALERTS_GUIDE_STEPS} tooltipLabel="Guía de alertas" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Revisa metricas de extraccion y plantillas que necesitan atencion.
             </p>
@@ -115,7 +95,7 @@ export default function InventoryAlertsPage() {
             <Button
               type="button"
               className="inline-flex items-center gap-2"
-              onClick={() => fetchAlertsData()}
+              onClick={() => queryClient.invalidateQueries({ queryKey: alertsQueryKey })}
               disabled={loading || !tenantReady}
             >
               <RefreshCw className="size-4" />
@@ -166,7 +146,7 @@ export default function InventoryAlertsPage() {
                   <p className="text-xs uppercase text-muted-foreground">Alertas</p>
                   {metrics.lowConfidenceSamples.length > 0 ? (
                     <ul className="text-xs space-y-1">
-                      {metrics.lowConfidenceSamples.slice(0, 3).map((sample) => (
+                      {metrics.lowConfidenceSamples.slice(0, 3).map((sample: { id: number; mlConfidence: number }) => (
                         <li key={sample.id}>
                           <span className="font-semibold text-destructive">Muestra #{sample.id}</span> ({sample.mlConfidence.toFixed(2)})
                         </li>

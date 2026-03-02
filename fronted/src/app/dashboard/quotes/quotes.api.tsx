@@ -41,6 +41,7 @@ export type QuoteCompanyMeta = {
   address: string
   phone: string
   email: string
+  ruc: string
 }
 
 export type QuoteMeta = {
@@ -127,6 +128,7 @@ const DEFAULT_META: QuoteMeta = {
     address: "Dirección no disponible",
     phone: "",
     email: "",
+    ruc: "",
   },
   currencyOptions: ["PEN", "USD"],
   validityOptions: ["7 días", "15 días", "30 días"],
@@ -512,7 +514,8 @@ export async function getQuoteMeta(companyId?: number | null): Promise<QuoteMeta
       logoUrl: normalizeCompanyLogo(detail.logoUrl),
       address: detail.sunatAddress || "Dirección no registrada",
       phone: detail.sunatPhone || "",
-      email: detail.sunatBusinessName || detail.sunatRuc || "",
+      email: detail.sunatBusinessName || "",
+      ruc: detail.sunatRuc || "",
     },
     currencyOptions: DEFAULT_META.currencyOptions,
     validityOptions: DEFAULT_META.validityOptions,

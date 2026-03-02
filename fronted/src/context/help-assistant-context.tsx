@@ -10,31 +10,25 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { authFetch } from "@/utils/auth-fetch"
+import { parseIntent } from "@/data/help/intents/intent-parser"
+import { resolveEntities, type ResolvedProduct } from "@/data/help/tools/entity-resolver"
+import { executeTool, getTool } from "@/data/help/tools/tool-registry"
+import type { ToolContext } from "@/data/help/tools/tool-types"
+import type { ParsedIntent } from "@/data/help/intents/intent-types"
 import {
   resolveSection,
   getSectionById,
-  allHelpEntries,
   type ChatMessage,
   type HelpSection,
 } from "@/data/help"
-import { courtesySection } from "@/data/help/sections/courtesy"
-import { findMatchingEntries } from "@/data/help/enhanced-matcher"
 import {
-  getContextualHelp,
   detectUrgency,
   detectUserType,
-  detectFrustration,
-  adaptResponseToContext,
   expandQueryWithEntity,
 } from "@/data/help/contextual-helper"
-import {
-  analyzeConversationContext,
-  contextAwareSearch,
-  formatContextAwareResponse,
-  type ContextMatch,
-} from "@/data/help/context-memory"
+import { matchLocalEnhanced } from "@/context/help-local-matcher"
 import {
   trackSectionVisit,
   trackQuestionAsked,
@@ -72,6 +66,7 @@ import {
   getPromotedAnswer,
   analyzePatternsAndSuggest,
   cleanupAnalysisWorker,
+  registerBackendSender,
   type LearningSession,
 } from "@/data/help/adaptive-learning"
 import {
@@ -86,7 +81,6 @@ import {
   getSectionDisplayName,
   generateContextualGreeting,
   getContextualSuggestions,
-  prioritizeCurrentSection,
   type RouteContext,
 } from "@/data/help/route-detection"
 import { useChatUserId } from "@/hooks/use-chat-user-id"
@@ -96,6 +90,7 @@ import {
   getMostAskedUnmatched,
 } from "@/data/help/learning-system"
 import { autoCorrect } from "@/data/help/fuzzy-matcher"
+import { fetchSSE } from "@/lib/sse-fetch"
 
 type MascotState = "idle" | "waving" | "thinking" | "responding"
 
@@ -120,6 +115,9 @@ interface HelpAssistantContextType {
   /** Mascot minimized state — shared so other floating elements can avoid overlap */
   isMascotMinimized: boolean
   setIsMascotMinimized: (minimized: boolean) => void
+  /** Tool confirmation handlers */
+  confirmToolAction: (messageId: string) => Promise<void>
+  cancelToolAction: (messageId: string) => void
 }
 
 const HelpAssistantContext = createContext<HelpAssistantContextType | undefined>(
@@ -157,75 +155,6 @@ function generateUniqueMessageId(): string {
   }
   // Fallback: timestamp + random para garantizar unicidad
   return `local-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-}
-
-/**
- * 🚀 OPTIMIZACIÓN: Cache de resultados de búsqueda
- * TTL de 30 segundos para consultas idénticas
- */
-interface CachedResult {
-  result: {
-    answer: string;
-    steps?: Array<{ text: string; image?: string }>;
-    score: number;
-    prefix?: string;
-    quickAction?: string;
-    contextMatch?: any;
-  } | null;
-  timestamp: number;
-}
-
-const queryCache = new Map<string, CachedResult>();
-// FIX #3: Aumentar TTL de 30s a 2 minutos (queries rara vez cambian)
-const CACHE_TTL_MS = 120000; // 2 minutos
-
-function getCacheKey(query: string, section: string): string {
-  return `${query.toLowerCase().trim()}|${section}`;
-}
-
-function getCachedResult(query: string, section: string): CachedResult['result'] | undefined {
-  const key = getCacheKey(query, section);
-  const cached = queryCache.get(key);
-
-  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-    return cached.result;
-  }
-
-  // Limpiar cache expirado
-  if (cached) {
-    queryCache.delete(key);
-  }
-
-  return undefined;
-}
-
-function setCachedResult(query: string, section: string, result: CachedResult['result']): void {
-  const key = getCacheKey(query, section);
-  queryCache.set(key, { result, timestamp: Date.now() });
-
-  // Limitar tamaño del cache a 100 entradas
-  if (queryCache.size > 100) {
-    const firstKey = queryCache.keys().next().value;
-    if (firstKey) queryCache.delete(firstKey);
-  }
-}
-
-/**
- * FIX #3: Invalidación manual del cache por sección
- * Útil cuando se actualiza contenido de ayuda
- */
-function invalidateQueryCache(section?: string): void {
-  if (section) {
-    // Invalidar solo queries de una sección específica
-    for (const [key] of queryCache) {
-      if (key.endsWith(`|${section}`)) {
-        queryCache.delete(key);
-      }
-    }
-  } else {
-    // Invalidar todo el cache
-    queryCache.clear();
-  }
 }
 
 /**
@@ -269,198 +198,7 @@ function trackInteraction(params: {
     isContextual: params.isContextual,
   })
 
-  // TODO: Enviar al backend de forma asíncrona (batch cada X segundos)
-  // Esta parte se implementaría más adelante con un buffer que envía
-  // múltiples sesiones en un solo request para optimizar
-}
-
-/** Fast exact alias match for courtesy entries (no network needed) */
-function matchCourtesy(text: string): string | null {
-  const norm = text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim()
-  for (const entry of courtesySection.entries) {
-    for (const alias of [entry.question, ...entry.aliases]) {
-      const normAlias = alias
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s]/g, "")
-        .trim()
-      if (normAlias === norm) return entry.answer
-    }
-  }
-  return null
-}
-
-/**
- * Enhanced local matching with contextual awareness AND conversation memory (FASE 3).
- * Detects user type, urgency, and frustration to adapt the response.
- * Now also considers conversation history for follow-up questions.
- * Returns answer and steps if a good match is found (score >= 0.6).
- *
- * 🚀 OPTIMIZADO: Cache + paralelización de operaciones independientes
- * 🔧 FIX 1: Acepta validación de query para evitar respuestas de cortesía incorrectas
- * 🔧 FIX 2: Acepta routeContext para priorizar por ruta exacta
- */
-function matchLocalEnhanced(
-  text: string,
-  currentSection: string,
-  conversationHistory: ChatMessage[],
-  queryValidation?: { isComplaint: boolean; isSectionQuestion: boolean; isGreeting: boolean; isTooVague: boolean },
-  currentRoute?: string
-): {
-  answer: string;
-  steps?: Array<{ text: string; image?: string }>;
-  score: number;
-  prefix?: string; // Contextual prefix (empathy, urgency)
-  quickAction?: string; // Suggested quick action
-  contextMatch?: ContextMatch; // FASE 3: Conversation context
-} | null {
-  // 🚀 OPTIMIZACIÓN: Verificar cache primero (respuestas instantáneas)
-  const cachedResult = getCachedResult(text, currentSection);
-  if (cachedResult !== undefined) {
-    return cachedResult;
-  }
-
-  // 🚀 OPTIMIZACIÓN: Ejecutar detecciones de contexto en paralelo
-  // Estas operaciones son independientes y pueden ejecutarse simultáneamente
-  const urgency = detectUrgency(text);
-  const userType = detectUserType(text);
-  const frustration = detectFrustration(text);
-
-  // FASE 3: Analyze conversation context
-  const contextAnalysis = analyzeConversationContext(text, conversationHistory, allHelpEntries)
-
-  // FASE 3: If it's a follow-up question, use context-aware search
-  if (contextAnalysis.isFollowUp && contextAnalysis.relatedEntries.length > 0) {
-    const topRelated = contextAnalysis.relatedEntries[0]
-    const formatted = formatContextAwareResponse(
-      topRelated.answer,
-      topRelated.steps,
-      contextAnalysis
-    )
-
-    const result = {
-      answer: formatted.answer,
-      steps: formatted.steps,
-      score: 0.9, // High confidence for context-based matches
-      contextMatch: contextAnalysis,
-    };
-    setCachedResult(text, currentSection, result);
-    return result;
-  }
-
-  // Try contextual matching first (understands real-world scenarios)
-  const contextualMatch = getContextualHelp(text, allHelpEntries)
-  if (contextualMatch && contextualMatch.confidence >= 0.7) {
-    // Adapt response based on context
-    const adapted = adaptResponseToContext(
-      contextualMatch.entry,
-      contextualMatch.userType,
-      contextualMatch.urgency,
-    )
-
-    let prefix = ""
-    if (frustration.isFrustrated && frustration.empathy) {
-      prefix = `${frustration.empathy}\n\n`
-    } else if (urgency === "critical") {
-      prefix = "🚨 **RESPUESTA RÁPIDA**\n\n"
-    } else if (userType === "beginner") {
-      prefix = "Te voy a guiar paso a paso:\n\n"
-    }
-
-    // FASE 3: Apply conversation context formatting
-    const formatted = formatContextAwareResponse(
-      adapted.answer,
-      contextualMatch.entry.steps,
-      contextAnalysis
-    )
-
-    const result = {
-      answer: prefix + formatted.answer,
-      steps: formatted.steps,
-      score: contextualMatch.confidence,
-      prefix,
-      quickAction: contextualMatch.quickActions?.[0]?.text, // Usar primera quick action
-      contextMatch: contextAnalysis,
-    };
-    setCachedResult(text, currentSection, result);
-    return result;
-  }
-
-  // Fallback to enhanced matcher with expanded vocabulary
-  let results = findMatchingEntries(text, allHelpEntries, 0.6, currentSection)
-
-  if (results.length === 0) {
-    setCachedResult(text, currentSection, null);
-    return null;
-  }
-
-  // 🚀 FIX: Removido sort redundante - findMatchingEntries ya retorna ordenado
-  // results.sort((a, b) => b.score - a.score) ← ELIMINADO
-
-  // ⭐ NUEVO: Priorizar sección actual (da boost de +0.3 a entries de la sección actual)
-  // 🔧 FIX 2: Ahora también prioriza por ruta exacta (boost +0.5)
-  results = prioritizeCurrentSection(results, currentSection, 0.3, currentRoute)
-
-  const topMatch = results[0]
-  const adjustedScore = topMatch.score
-
-  // Only return if we have a strong match (>=0.6 after adjustment)
-  if (adjustedScore >= 0.6) {
-    // Apply contextual adaptation even for standard matches
-    let prefix = ""
-    if (frustration.isFrustrated && frustration.empathy) {
-      prefix = `${frustration.empathy}\n\n`
-    } else if (urgency === "critical") {
-      prefix = "🚨 Necesitas esto urgente. Aquí está:\n\n"
-    } else if (userType === "beginner") {
-      prefix = "No te preocupes, te explico:\n\n"
-    }
-
-    // FASE 3: Apply conversation context formatting
-    const formatted = formatContextAwareResponse(
-      topMatch.entry.answer,
-      topMatch.entry.steps,
-      contextAnalysis
-    )
-
-    const result = {
-      answer: prefix + formatted.answer,
-      steps: formatted.steps,
-      score: adjustedScore,
-      prefix: prefix || undefined,
-      contextMatch: contextAnalysis,
-    };
-    setCachedResult(text, currentSection, result);
-    return result;
-  }
-
-  // 🔧 FIX: Courtesy matching as FINAL FALLBACK (solo si no hay match contextual)
-  // Esto previene respuestas incorrectas como "Perfecto!" cuando el usuario se está quejando
-  const shouldTryCourtesy = !queryValidation || (
-    !queryValidation.isComplaint &&
-    !queryValidation.isSectionQuestion &&
-    !queryValidation.isTooVague
-  );
-
-  if (shouldTryCourtesy) {
-    // Try exact courtesy match as last resort
-    const courtesyAnswer = matchCourtesy(text)
-    if (courtesyAnswer) {
-      const result = { answer: courtesyAnswer, score: 1.0 };
-      setCachedResult(text, currentSection, result);
-      return result;
-    }
-  }
-
-  // No match - cachear null para evitar recalcular
-  setCachedResult(text, currentSection, null);
-  return null
+  // Backend sync is handled by registerBackendSender() in flushPendingSessions()
 }
 
 interface BackendMessage {
@@ -497,6 +235,7 @@ function backendToChat(msg: BackendMessage): ChatMessage {
 
 export function HelpAssistantProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
 
   // NUEVA DETECCIÓN AUTOMÁTICA: Detecta sección desde la URL
   const routeContext = useMemo<RouteContext>(() => detectCurrentSection(pathname), [pathname])
@@ -534,6 +273,15 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
 
   // FASE 3: Initialize offline support + FASE 2: Semantic search on mount
   useEffect(() => {
+    // Register backend sender for adaptive learning sessions
+    registerBackendSender(async (sessions) => {
+      await authFetch("/help/learning/sessions/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessions }),
+      })
+    })
+
     // Initialize offline DB
     initOfflineDB().then(() => {
       // Preload help data for offline use
@@ -677,6 +425,177 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
     setMascotState("idle")
   }, [])
 
+  // ════════════════════════════════════════════════════════════════════════
+  // OPERATIONAL TOOL SYSTEM
+  // ════════════════════════════════════════════════════════════════════════
+
+  /** Build tool context for executing tools */
+  const buildToolContext = useCallback((): ToolContext => ({
+    authFetch,
+    organizationId: null, // Resolved automatically by authFetch tenant headers
+    companyId: null,
+    userId: chatUserId ?? null,
+    router,
+    currentStoreId: undefined, // TODO: get from tenant context when available
+  }), [chatUserId, router])
+
+  /** Execute a tool intent (query = direct, mutation = confirmation card) */
+  const executeToolIntent = useCallback(async (
+    intent: ParsedIntent,
+    userMsgId: string,
+  ) => {
+    const tool = getTool(intent.intent)
+    if (!tool) {
+      setMessages(prev => [...prev, {
+        id: generateUniqueMessageId(),
+        role: "assistant",
+        content: "No encontré la herramienta para esa acción.",
+        source: "tool",
+        timestamp: Date.now(),
+        toolResult: { type: "error", title: "Error", message: "Herramienta no disponible" },
+      }])
+      setMascotState("responding")
+      setTimeout(() => setMascotState("idle"), 2000)
+      return
+    }
+
+    // Resolve entities (product names → IDs, etc.)
+    const resolvedEntities = await resolveEntities(intent.entities, authFetch)
+
+    // Build params from resolved entities
+    const params: Record<string, unknown> = {}
+    for (const entity of resolvedEntities) {
+      if (entity.type === "product" && entity.resolved) {
+        const p = entity.resolved as ResolvedProduct
+        params.productId = p.id
+        params.productName = p.name
+        params.price = p.priceSell || p.price
+      } else if (entity.type === "client" && entity.resolved) {
+        const c = entity.resolved as { id: number; name: string }
+        params.clientId = c.id
+      } else if (entity.type === "quantity") {
+        params.quantity = entity.value
+      } else if (entity.type === "period") {
+        params.period = entity.value
+      } else if (entity.type === "section") {
+        params.section = entity.raw
+      } else if (entity.type === "product" && !entity.resolved) {
+        // Product not found — use raw text as search query
+        params.query = entity.raw
+      }
+    }
+
+    // MUTATION: Show confirmation card first
+    if (tool.type === "mutation") {
+      const productName = params.productName ?? params.query ?? "?"
+      const quantity = params.quantity ?? "?"
+
+      // Check if product was resolved
+      if (intent.entities.some(e => e.type === "product") && !params.productId) {
+        setMessages(prev => [...prev, {
+          id: generateUniqueMessageId(),
+          role: "assistant",
+          content: `No encontré un producto que coincida con "${params.query ?? ""}". Intenta con un nombre más específico.`,
+          source: "tool",
+          timestamp: Date.now(),
+          toolResult: { type: "error", title: "Producto no encontrado", message: "Intenta con otro nombre" },
+        }])
+        setMascotState("responding")
+        setTimeout(() => setMascotState("idle"), 2000)
+        return
+      }
+
+      const confirmationFields = [
+        ...(params.productName ? [{ label: "Producto", value: String(params.productName) }] : []),
+        ...(params.quantity != null ? [{ label: "Cantidad", value: String(params.quantity) }] : []),
+        ...(params.price != null ? [{ label: "Precio", value: `S/ ${Number(params.price).toFixed(2)}` }] : []),
+      ]
+
+      const confirmMsg: ChatMessage = {
+        id: generateUniqueMessageId(),
+        role: "assistant",
+        content: `Confirma la acción: ${tool.name}`,
+        source: "tool",
+        timestamp: Date.now(),
+        toolConfirmation: {
+          toolId: tool.id,
+          title: tool.name,
+          description: `${quantity}x ${productName}`,
+          fields: confirmationFields,
+          params,
+        },
+      }
+      setMessages(prev => [...prev, confirmMsg])
+      setMascotState("responding")
+      return
+    }
+
+    // QUERY or NAVIGATION: Execute directly
+    const ctx = buildToolContext()
+    const result = await executeTool(tool.id, params, ctx)
+
+    const assistantMsg: ChatMessage = {
+      id: generateUniqueMessageId(),
+      role: "assistant",
+      content: result.message ?? result.title,
+      source: "tool",
+      timestamp: Date.now(),
+      toolResult: {
+        type: result.type as "table" | "stats" | "message" | "navigation" | "error",
+        title: result.title,
+        data: result.data,
+        message: result.message,
+      },
+    }
+    setMessages(prev => [...prev, assistantMsg])
+    setMascotState("responding")
+    setTimeout(() => setMascotState("idle"), 2000)
+  }, [buildToolContext])
+
+  /** Confirm a pending mutation (called from ToolConfirmationCard) */
+  const confirmToolAction = useCallback(async (messageId: string) => {
+    const msg = messages.find(m => m.id === messageId)
+    if (!msg?.toolConfirmation) return
+
+    const { toolId, params } = msg.toolConfirmation
+    const ctx = buildToolContext()
+    const result = await executeTool(toolId, params, ctx)
+
+    // Update the confirmation message with resolved state
+    setMessages(prev => prev.map(m =>
+      m.id === messageId
+        ? {
+            ...m,
+            toolConfirmation: {
+              ...m.toolConfirmation!,
+              resolved: true,
+              resolvedMessage: result.success
+                ? result.message ?? "Acción completada"
+                : `Error: ${result.message}`,
+            },
+          }
+        : m,
+    ))
+    setMascotState("responding")
+    setTimeout(() => setMascotState("idle"), 2000)
+  }, [messages, buildToolContext])
+
+  /** Cancel a pending mutation */
+  const cancelToolAction = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(m =>
+      m.id === messageId
+        ? {
+            ...m,
+            toolConfirmation: {
+              ...m.toolConfirmation!,
+              resolved: true,
+              resolvedMessage: "Acción cancelada",
+            },
+          }
+        : m,
+    ))
+  }, [])
+
   const sendMessage = useCallback(
     async (text: string) => {
       // FASE 3: Track question for behavior analysis
@@ -721,6 +640,19 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
       }
       setMessages((prev) => [...prev, userMsg])
       setMascotState("thinking")
+
+      // ═══ OPERATIONAL INTENT DETECTION (runs BEFORE Q&A pipeline) ═══
+      try {
+        const intent = parseIntent(text, currentSection)
+        if (intent) {
+          console.log("[CHATBOT] Operational intent detected:", intent.intent, "confidence:", intent.confidence)
+          await executeToolIntent(intent, tempId)
+          return // Skip Q&A pipeline entirely
+        }
+      } catch (err) {
+        console.error("[CHATBOT] Intent parser error (falling through to Q&A):", err)
+        // Fall through to Q&A pipeline on error
+      }
 
       // FIX CRÍTICO: Validar query antes de procesar (con sección actual)
       // 🔧 FIX: Pasar pathname para respuestas específicas de sub-secciones
@@ -1101,104 +1033,193 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
             })
           }
         } else {
-          // Weak or no local match - use backend (semantic embeddings + AI)
+          // Weak or no local match - use backend with SSE streaming
           const startTime = Date.now()
+          const streamMsgId = generateUniqueMessageId()
+
+          // Create a placeholder streaming message
+          const streamingMsg: ChatMessage = {
+            id: streamMsgId,
+            role: "assistant",
+            content: "",
+            source: "ai",
+            timestamp: Date.now(),
+            isStreaming: true,
+          }
+          setMessages((prev) => [...prev, streamingMsg])
 
           try {
-            const res = await authFetch("/help/ask", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              question: text,
-              section: currentSection,
-              route: pathname,
-            }),
-          })
+            await new Promise<void>((resolve, reject) => {
+              const abortCtrl = fetchSSE(
+                "/help/ask/stream",
+                { question: text, section: currentSection, route: pathname },
+                {
+                  onChunk: (chunkText) => {
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamMsgId
+                          ? { ...msg, content: msg.content + chunkText }
+                          : msg,
+                      ),
+                    )
+                    setMascotState("responding")
+                  },
+                  onDone: (data) => {
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamMsgId
+                          ? {
+                              ...msg,
+                              id: `db-${data.messageId}`,
+                              content: data.fullText || msg.content,
+                              source: data.source as "ai" | "static" | "promoted",
+                              isStreaming: false,
+                            }
+                          : msg,
+                      ),
+                    )
+                    setMascotState("responding")
 
-          if (!res.ok) throw new Error("Error al consultar el asistente")
+                    trackInteraction({
+                      query: queryToProcess,
+                      section: currentSection,
+                      matchFound: true,
+                      matchedEntryId: `db-${data.messageId}`,
+                      source: data.source as "ai" | "static" | "promoted",
+                      responseTimeMs: Date.now() - startTime,
+                      hasSteps: false,
+                    })
+                    resolve()
+                  },
+                  onMessage: (data) => {
+                    // Non-streamed response (static/promoted from embeddings)
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === streamMsgId
+                          ? {
+                              ...msg,
+                              id: `db-${data.messageId}`,
+                              content: data.answer,
+                              source: data.source as "ai" | "static" | "promoted",
+                              isStreaming: false,
+                            }
+                          : msg,
+                      ),
+                    )
+                    setMascotState("responding")
 
-          const data = (await res.json()) as AskResponse
-          const assistantMsg: ChatMessage = {
-            id: `db-${data.messageId}`,
-            role: "assistant",
-            content: data.answer,
-            source: data.source,
-            steps: data.steps,
-            timestamp: Date.now(),
-          }
-          setMessages((prev) => [...prev, assistantMsg])
-          setMascotState("responding")
+                    trackInteraction({
+                      query: queryToProcess,
+                      section: currentSection,
+                      matchFound: true,
+                      matchedEntryId: `db-${data.messageId}`,
+                      source: data.source as "ai" | "static" | "promoted",
+                      responseTimeMs: Date.now() - startTime,
+                      hasSteps: false,
+                    })
+                    resolve()
+                  },
+                  onError: (error) => {
+                    reject(new Error(error))
+                  },
+                },
+              )
 
-          // 🧠 TRACK: Backend/AI response
-          trackInteraction({
-            query: queryToProcess,
-            section: currentSection,
-            matchFound: true,
-            matchedEntryId: `db-${data.messageId}`,
-            source: data.source as "ai" | "static" | "promoted",
-            responseTimeMs: Date.now() - startTime,
-            hasSteps: Boolean(data.steps && data.steps.length > 0),
-          })
-        } catch {
-          // MEDIUM-TERM OPTIMIZATION #1: On failure, add to retry queue for eventual persistence
-          syncQueue.add("/help/ask", {
-            question: text,
-            section: currentSection,
-            route: pathname,
-          }).catch(() => {/* Queue will retry */})
-
-          // Fallback to local match if backend fails and we have any match
-          if (localMatch) {
-            const fullAnswer = [
-              localMatch.prefix || "",
-              localMatch.answer,
-              localMatch.quickAction ? `\n\n⚡ **Acción rápida:** ${localMatch.quickAction}` : "",
-            ].filter(Boolean).join("")
-
-            const assistantMsg: ChatMessage = {
-              id: generateUniqueMessageId(),
-              role: "assistant",
-              content: fullAnswer,
-              source: "static",
-              steps: localMatch.steps,
-              timestamp: Date.now(),
-            }
-            setMessages((prev) => [...prev, assistantMsg])
-            setMascotState("responding")
-
-            // 🧠 TRACK: Backend error - fallback to local match
-            trackInteraction({
-              query: queryToProcess,
-              section: currentSection,
-              matchFound: true,
-              matchScore: localMatch.score,
-              source: "static",
-              responseTimeMs: Date.now() - startTime,
-              hasSteps: Boolean(localMatch.steps && localMatch.steps.length > 0),
+              // Timeout: abort after 30 seconds
+              setTimeout(() => {
+                abortCtrl.abort()
+                reject(new Error("Stream timeout"))
+              }, 30_000)
             })
-          } else {
-            const assistantMsg: ChatMessage = {
-              id: generateUniqueMessageId(),
-              role: "assistant",
-              content:
-                "Lo siento, no pude conectar con el asistente. Intenta de nuevo en unos segundos.",
-              source: "static",
-              timestamp: Date.now(),
-            }
-            setMessages((prev) => [...prev, assistantMsg])
-            setMascotState("responding")
-
-            // 🧠 TRACK: Backend error - no fallback
-            trackInteraction({
-              query: queryToProcess,
-              section: currentSection,
-              matchFound: false,
-              source: "static",
-              responseTimeMs: Date.now() - startTime,
-              hasSteps: false,
+          } catch {
+            // Remove the streaming placeholder if it has no content
+            setMessages((prev) => {
+              const streamMsg = prev.find((m) => m.id === streamMsgId)
+              if (streamMsg && !streamMsg.content) {
+                // Remove empty streaming msg and try fallback
+                return prev.filter((m) => m.id !== streamMsgId)
+              }
+              // If it has partial content, keep it and mark as done
+              return prev.map((m) =>
+                m.id === streamMsgId ? { ...m, isStreaming: false } : m,
+              )
             })
+
+            // Fallback: try non-streaming endpoint
+            try {
+              const res = await authFetch("/help/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  question: text,
+                  section: currentSection,
+                  route: pathname,
+                }),
+              })
+
+              if (res.ok) {
+                const data = (await res.json()) as AskResponse
+                const assistantMsg: ChatMessage = {
+                  id: `db-${data.messageId}`,
+                  role: "assistant",
+                  content: data.answer,
+                  source: data.source,
+                  steps: data.steps,
+                  timestamp: Date.now(),
+                }
+                setMessages((prev) => [...prev, assistantMsg])
+                setMascotState("responding")
+
+                trackInteraction({
+                  query: queryToProcess,
+                  section: currentSection,
+                  matchFound: true,
+                  matchedEntryId: `db-${data.messageId}`,
+                  source: data.source as "ai" | "static" | "promoted",
+                  responseTimeMs: Date.now() - startTime,
+                  hasSteps: Boolean(data.steps && data.steps.length > 0),
+                })
+              } else {
+                throw new Error("Non-streaming fallback failed")
+              }
+            } catch {
+              // Final fallback: local match or generic error
+              if (localMatch) {
+                const fullAnswer = [
+                  localMatch.prefix || "",
+                  localMatch.answer,
+                  localMatch.quickAction ? `\n\n⚡ **Acción rápida:** ${localMatch.quickAction}` : "",
+                ].filter(Boolean).join("")
+
+                setMessages((prev) => [...prev, {
+                  id: generateUniqueMessageId(),
+                  role: "assistant" as const,
+                  content: fullAnswer,
+                  source: "static" as const,
+                  steps: localMatch.steps,
+                  timestamp: Date.now(),
+                }])
+              } else {
+                setMessages((prev) => [...prev, {
+                  id: generateUniqueMessageId(),
+                  role: "assistant" as const,
+                  content: "Lo siento, no pude conectar con el asistente. Intenta de nuevo en unos segundos.",
+                  source: "static" as const,
+                  timestamp: Date.now(),
+                }])
+              }
+              setMascotState("responding")
+
+              trackInteraction({
+                query: queryToProcess,
+                section: currentSection,
+                matchFound: Boolean(localMatch),
+                source: "static",
+                responseTimeMs: Date.now() - startTime,
+                hasSteps: false,
+              })
+            }
           }
-        }
         } // Close the else block for isOffline check
       }
 
@@ -1288,6 +1309,8 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
       loadOlderMessages,
       isMascotMinimized,
       setIsMascotMinimized,
+      confirmToolAction,
+      cancelToolAction,
     }),
     [
       currentSection,
@@ -1306,6 +1329,8 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
       loadOlderMessages,
       isMascotMinimized,
       setIsMascotMinimized,
+      confirmToolAction,
+      cancelToolAction,
     ],
   )
 

@@ -11,10 +11,12 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { HelpService } from './help.service';
 
@@ -42,6 +44,16 @@ interface RecordSessionDto {
   matchedEntryId?: string;
   userFeedback?: 'POSITIVE' | 'NEGATIVE';
   section: string;
+  // Enhanced tracking fields
+  source?: 'static' | 'ai' | 'promoted' | 'offline';
+  responseTimeMs?: number;
+  isMetaQuestion?: boolean;
+  isInvalidQuery?: boolean;
+  hasSteps?: boolean;
+  userType?: 'beginner' | 'intermediate' | 'advanced';
+  urgency?: 'normal' | 'high' | 'critical';
+  isContextual?: boolean;
+  timestamp?: number;
 }
 
 interface ApproveAliasDto {
@@ -103,6 +115,47 @@ export class HelpController {
     });
   }
 
+  @Post('ask/stream')
+  @UseGuards(JwtAuthGuard)
+  async askStream(
+    @Body() body: AskDto,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const { question, section, route } = body;
+
+    if (!question || typeof question !== 'string' || question.trim().length < 2) {
+      throw new BadRequestException('La pregunta es requerida (minimo 2 caracteres).');
+    }
+
+    const userId = req.user?.userId ?? req.user?.sub;
+    if (!userId) throw new BadRequestException('Usuario no identificado.');
+
+    this.enforceRateLimit(userId);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    try {
+      for await (const { event, data } of this.helpService.askStream({
+        question: question.trim(),
+        section: section || 'general',
+        route: route || '/dashboard',
+        userId,
+        userRole: req.user?.role,
+      })) {
+        res.write(`event: ${event}\ndata: ${data}\n\n`);
+      }
+    } catch (error) {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: 'Error interno del asistente.' })}\n\n`);
+    }
+
+    res.end();
+  }
+
   @Post('feedback')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
@@ -125,6 +178,15 @@ export class HelpController {
   async getAnalytics(@Req() req: any) {
     this.ensureSuperAdmin(req);
     return this.helpService.getAnalytics();
+  }
+
+  @Get('admin/performance')
+  @UseGuards(JwtAuthGuard)
+  async getPerformance(@Query('days') days: string, @Req() req: any) {
+    this.ensureSuperAdmin(req);
+    return this.helpService.getPerformanceMetrics(
+      Math.min(Number(days) || 7, 90),
+    );
   }
 
   @Patch('admin/candidates/:id')
@@ -169,6 +231,34 @@ export class HelpController {
     });
 
     return { ok: true };
+  }
+
+  @Post('learning/sessions/batch')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  async recordLearningSessionsBatch(
+    @Body('sessions') sessions: RecordSessionDto[],
+    @Req() req: any,
+  ) {
+    const userId = req.user?.userId ?? req.user?.sub;
+    if (!userId) throw new BadRequestException('Usuario no identificado.');
+
+    if (!Array.isArray(sessions) || sessions.length === 0) {
+      throw new BadRequestException('sessions[] es requerido y no puede estar vacío.');
+    }
+
+    // Cap at 100 sessions per batch to prevent abuse
+    const batch = sessions.slice(0, 100);
+
+    for (const session of batch) {
+      await this.helpService.recordLearningSession({
+        ...session,
+        userId,
+        timestamp: session.timestamp || Date.now(),
+      });
+    }
+
+    return { ok: true, recorded: batch.length };
   }
 
   @Get('learning/sessions')

@@ -37,6 +37,9 @@ import { Button } from "@/components/ui/button"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { DateRange } from "react-day-picker"; // Asegúrate de que este tipo esté disponible
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
@@ -82,6 +85,12 @@ details: { product_name: string; quantity: number; price: number; series?: strin
 }, TValue>({
   data,
 }: DataTableProps<TData, TValue>) {
+  const queryClient = useQueryClient();
+  const { selection } = useTenantSelection();
+  const invalidateEntries = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.entries.root(selection.orgId, selection.companyId),
+    });
 
   const [columnVisibility, setColumnVisibility] =
   React.useState<VisibilityState>({})
@@ -216,7 +225,7 @@ details: { product_name: string; quantity: number; price: number; series?: strin
       //alert('Productos eliminados correctamente');
       toast.success("Registro(s) eliminado(s) correctamente."); // Notificación de éxito
       table.resetRowSelection(); // Limpia la selección después de eliminar
-      location.reload(); // Refresca la página para actualizar los datos
+      invalidateEntries(); // Refresca datos via React Query
     } catch (error: any) {
       console.error("Error al eliminar los registros:", error)
       toast.error(error.message || "No se pudieron eliminar los registros...");

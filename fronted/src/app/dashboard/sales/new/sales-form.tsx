@@ -10,9 +10,10 @@ import { z } from 'zod'
 import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Banknote, Barcode, CalendarIcon, Check, ChevronsUpDown, CreditCard, Landmark, Layers, Loader2, Plus, Save, Search, Smartphone, X } from 'lucide-react'
+import { Banknote, Barcode, Building2, CalendarIcon, Check, ChevronsUpDown, CreditCard, Landmark, Layers, Loader2, MapPin, Plus, Save, Search, Smartphone, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { BACKEND_URL, cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
+import { isDraftExpired } from '@/lib/draft-utils'
 import React from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -26,25 +27,32 @@ import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
 import { es } from "date-fns/locale";
 import AddClientDialog from '../components/AddClientDialog'
-import { createSale, fetchSeriesByProductAndStore, generarYEnviarDocumento, getPaymentMethods, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, lookupSunatDocument, type LookupResponse, sendInvoiceToSunat } from '../sales.api'
+import { createSale, fetchSeriesByProductAndStore, getPaymentMethods, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, lookupSunatDocument, type LookupResponse, sendInvoiceToSunat } from '../sales.api'
 import { AddSeriesDialog } from '../components/AddSeriesDialog'
 import { SeriesModal } from '../components/SeriesModal'
 import { StoreChangeDialog } from '../components/StoreChangeDialog'
-import { getRegisteredClients } from '../../clients/clients.api'
+import { getRegisteredClients, createClient, checkClientExists } from '../../clients/clients.api'
 import { updateProductPriceSell } from '../../inventory/inventory.api'
 import { InvoiceDocument } from '../components/pdf/InvoiceDocument'
+import { TicketInvoiceDocument } from '../components/pdf/TicketInvoiceDocument'
+import { useSiteSettings } from '@/context/site-settings-context'
 import QRCode from 'qrcode';
 import { numeroALetrasCustom } from '../components/utils/numeros-a-letras'
 import { pdf } from '@react-pdf/renderer';
 import { PaymentMethodsModal } from '../components/PaymentMethodsSelector'
 import { ProductDetailModal } from '../components/ProductDetailModal'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 import { useAuth } from '@/context/auth-context'
 import { getCompanyDetail, type CompanyDetail } from '../../tenancy/tenancy.api'
 import { UnauthenticatedError } from '@/utils/auth-fetch'
 import { BrandLogo } from '@/components/BrandLogo'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 // @ts-ignore
+// Stable empty array to prevent infinite re-render loops in bridge useEffects.
+const STABLE_EMPTY: any[] = []
+
 const Numalet = require('numalet');
 
 // Función para obtener el userId del token JWT almacenado en localStorage
@@ -94,6 +102,7 @@ type SalesDraft = {
   showOutOfStock: boolean;
   autoSyncPayment: boolean;
   quickPaymentMethodId: number | null;
+  savedAt?: number;
 };
 type PaymentMethodOption = { id: number; name: string };
 const defaultPaymentMethods: PaymentMethodOption[] = [
@@ -194,8 +203,16 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
   useEffect(() => {
     form.reset(initialValues);
   }, [form, initialValues]);
-  const { selection, version } = useTenantSelection();
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
+  const invalidateSales = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.sales.root(selection.orgId, selection.companyId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) });
+  };
   const { userId } = useAuth();
+  const { settings } = useSiteSettings();
+  const receiptFormat = settings.company.receiptFormat ?? "a4";
 
   // Extraer funciones y estados del formulario
   const { handleSubmit, register, setValue, formState: {errors} } = form;
@@ -652,62 +669,24 @@ const getSaleReferenceId = () => {
       cancelled = true;
     };
   }, []);
+  const { data: categoriesFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: () => getCategories(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let cancelled = false;
-    setCategoriesState([]);
-    async function fetchCategoriesByTenant() {
-      try {
-        const nextCategories = await getCategories();
-        if (!cancelled) {
-          setCategoriesState(Array.isArray(nextCategories) ? nextCategories : []);
-        }
-      } catch (error) {
-        console.error("Error al obtener las categorías:", error);
-        if (!cancelled) {
-          setCategoriesState([]);
-        }
-      }
-    }
-    fetchCategoriesByTenant();
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+    setCategoriesState(Array.isArray(categoriesFromQuery) ? categoriesFromQuery : []);
+  }, [categoriesFromQuery]);
 
+  const { data: activeCompanyFromQuery = null, isLoading: isCompanyQueryLoading } = useQuery({
+    queryKey: [...queryKeys.stores.root(selection.orgId, selection.companyId), "companyDetail"],
+    queryFn: () => getCompanyDetail(selection.companyId!),
+    enabled: selection.companyId !== null,
+  });
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadActiveCompany() {
-      if (!selection?.companyId) {
-        setActiveCompany(null);
-        setIsCompanyLoading(false);
-        return;
-      }
-
-      setIsCompanyLoading(true);
-      try {
-        const details = await getCompanyDetail(selection.companyId);
-        if (!cancelled) {
-          setActiveCompany(details);
-        }
-      } catch (error) {
-        console.error("Error al obtener la empresa seleccionada:", error);
-        if (!cancelled) {
-          setActiveCompany(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsCompanyLoading(false);
-        }
-      }
-    }
-
-    loadActiveCompany();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selection?.companyId, version]);
+    setActiveCompany(activeCompanyFromQuery);
+    setIsCompanyLoading(isCompanyQueryLoading);
+  }, [activeCompanyFromQuery, isCompanyQueryLoading]);
 
   const getCommandValue = (raw: unknown) =>
     typeof raw === "string" ? raw.trim() : raw != null ? String(raw) : "";
@@ -757,20 +736,137 @@ const getSaleReferenceId = () => {
         error instanceof Error
           ? error.message
           : "No se pudo consultar el documento.";
-      setSunatSearchError(message);
-      setSunatSearchResults([]);
+      const isNotFound =
+        message.toLowerCase().includes("no se encontraron") ||
+        message.toLowerCase().includes("not found");
+      if (isNotFound) {
+        // DNI/RUC no encontrado en la API — permitir usar el número manualmente
+        const isRuc = documentValue.length === 11;
+        setSunatSearchResults([
+          {
+            identifier: documentValue,
+            name: "(No registrado en la base de datos)",
+            address: null,
+            status: null,
+            type: isRuc ? "RUC" : "DNI",
+            raw: {},
+          },
+        ]);
+        setSunatSearchError(
+          "El documento no fue encontrado en la base de datos externa. Puedes usar el resultado de abajo e ingresar el nombre manualmente.",
+        );
+      } else {
+        setSunatSearchError(message);
+        setSunatSearchResults([]);
+      }
     } finally {
       setSunatSearchLoading(false);
     }
   };
 
-  const handleSelectSunatResult = (result: LookupResponse) => {
-    form.setValue("client_name", result.name ?? "");
-    form.setValue("client_type", result.type === "RUC" ? "RUC" : "DNI");
-    form.setValue("client_typeNumber", result.identifier ?? "");
-    toast.success("Datos del cliente cargados desde SUNAT.");
-    setIsSunatDialogOpen(false);
-    resetSunatDialog();
+  const handleSelectSunatResult = async (result: LookupResponse) => {
+    const isPlaceholder = !result.name || result.name.startsWith("(");
+    const clientName = isPlaceholder ? "" : result.name;
+    const clientType = result.type === "RUC" ? "RUC" : "DNI";
+    const clientTypeNumber = result.identifier ?? "";
+
+    // Para placeholder o sin nombre: cerrar inmediatamente y llenar campos
+    if (isPlaceholder || !clientName) {
+      setIsSunatDialogOpen(false);
+      resetSunatDialog();
+      form.setValue("client_name", clientName);
+      form.setValue("client_type", clientType);
+      form.setValue("client_typeNumber", clientTypeNumber);
+      toast.info("Documento aplicado. Ingresa el nombre del cliente manualmente.");
+      return;
+    }
+
+    // Verificar si el cliente ya existe en la lista local
+    const existingLocal = clients.find((c) => c.typeNumber === clientTypeNumber);
+    if (existingLocal) {
+      setIsSunatDialogOpen(false);
+      resetSunatDialog();
+      // Primero cambiar tipo de comprobante SIN limpiar cliente
+      if (clientType === "RUC") {
+        handleTipoComprobanteChange("FACTURA", { skipClientReset: true });
+      } else {
+        handleTipoComprobanteChange("BOLETA", { skipClientReset: true });
+      }
+      // Luego establecer datos del cliente
+      form.setValue("client_name", existingLocal.name);
+      form.setValue("client_type", existingLocal.type);
+      form.setValue("client_typeNumber", existingLocal.typeNumber);
+      setValueClient(existingLocal.name);
+      toast.success("Cliente encontrado en el sistema.");
+      return;
+    }
+
+    // Auto-registrar al cliente — mantener dialog abierto con loading
+    setSunatSearchLoading(true);
+    setSunatSearchError(null);
+
+    const applyClient = (name: string, type: string, typeNumber: string) => {
+      // Primero cambiar el tipo de comprobante SIN limpiar campos de cliente
+      if (type === "RUC") {
+        handleTipoComprobanteChange("FACTURA", { skipClientReset: true });
+      } else {
+        handleTipoComprobanteChange("BOLETA", { skipClientReset: true });
+      }
+      // Luego establecer los datos del cliente
+      form.setValue("client_name", name);
+      form.setValue("client_type", type);
+      form.setValue("client_typeNumber", typeNumber);
+      setValueClient(name);
+    };
+
+    try {
+      const createdClient = await createClient({
+        name: clientName,
+        type: clientType,
+        typeNumber: clientTypeNumber,
+      });
+
+      if (createdClient?.id) {
+        setClients((prev) => [...prev, createdClient]);
+        applyClient(createdClient.name, createdClient.type, createdClient.typeNumber);
+        if (typeof createdClient.id === "number") {
+          recordRecentClient(createdClient.id);
+        }
+        toast.success("Cliente registrado y seleccionado automaticamente.");
+      }
+    } catch (error: any) {
+      // Si el cliente ya existe en el backend (409 Conflict), buscarlo
+      const isConflict = error?.response?.status === 409 ||
+        error?.response?.data?.statusCode === 409;
+
+      if (isConflict) {
+        try {
+          const allClients = await getRegisteredClients();
+          const found = allClients?.find?.((c: any) => c.typeNumber === clientTypeNumber);
+          if (found) {
+            setClients((prev) => {
+              if (prev.some((c) => c.typeNumber === clientTypeNumber)) return prev;
+              return [...prev, found];
+            });
+            applyClient(found.name, found.type, found.typeNumber);
+            toast.success("Cliente encontrado y seleccionado.");
+          } else {
+            applyClient(clientName, clientType, clientTypeNumber);
+            toast.info("Cliente aplicado. Verifica los datos.");
+          }
+        } catch {
+          applyClient(clientName, clientType, clientTypeNumber);
+        }
+      } else {
+        // Otro error: al menos llenar los campos del formulario y combobox
+        applyClient(clientName, clientType, clientTypeNumber);
+        toast.error("No se pudo registrar el cliente automaticamente. Intenta crearlo manualmente.");
+      }
+    } finally {
+      setSunatSearchLoading(false);
+      setIsSunatDialogOpen(false);
+      resetSunatDialog();
+    }
   };
 
   const normalizedSelectedProductValue = useMemo(() => normalizeOptionValue(value), [value]);
@@ -981,7 +1077,7 @@ const getSaleReferenceId = () => {
           window.localStorage.removeItem(salesDraftKey);
           return;
         }
-        window.localStorage.setItem(salesDraftKey, JSON.stringify(draft));
+        window.localStorage.setItem(salesDraftKey, JSON.stringify({ ...draft, savedAt: Date.now() }));
       } catch (error) {
         console.warn("No se pudo guardar el borrador de venta:", error);
       }
@@ -1157,33 +1253,15 @@ const getSaleReferenceId = () => {
         }));
 
         let comprobante: string | null = null;
-        let serieInvoice: string | null = null;
-        let correlativoInvoice: string | null = null;
 
         if (data.tipoComprobante === "FACTURA") {
           comprobante = "invoice";
         } else if (data.tipoComprobante === "BOLETA") {
           comprobante = "boleta";
         } else if (data.tipoComprobante === "SIN COMPROBANTE") {
-          // Si el tipo de comprobante es "SIN COMPROBANTE", no hacer nada
           console.log("No se requiere comprobante para 'SIN COMPROBANTE'.");
         } else {
-          // Si el tipo de comprobante no es válido, lanzar un error
           throw new Error("El tipo de comprobante no es válido.");
-        }
-        
-        // Verificar si comprobante es válido antes de llamar a generarYEnviarDocumento
-        if (comprobante) {
-          const { respuesta } = await generarYEnviarDocumento({ documentType: comprobante });
-          if (!respuesta) {
-            throw new Error("La respuesta del backend no contiene los datos esperados.");
-          }
-          serieInvoice = respuesta.serie; // Obtén la serie de la respuesta o del formulario
-          correlativoInvoice = respuesta.correlativo;
-
-          console.log("Serie:", serieInvoice, "Correlativo:", correlativoInvoice);
-        } else {
-          console.log("No se generó ningún documento porque el tipo de comprobante es 'SIN COMPROBANTE'.");
         }
 
         let tipoDocumentoFormatted;
@@ -1194,7 +1272,7 @@ const getSaleReferenceId = () => {
           tipoDocumentoFormatted = data.client_type;
         }
 
-        const payload = {         
+        const payload = {
           userId,
           storeId,
           clientId,
@@ -1205,6 +1283,7 @@ const getSaleReferenceId = () => {
           tipoMoneda: data.tipo_moneda,
           source: 'POS',
           referenceId: getSaleReferenceId(),
+          fechaEmision: selectedDate ? selectedDate.toISOString() : new Date().toISOString(),
           ...(data.tipoComprobante !== "SIN COMPROBANTE" && { // Solo incluir si no es "SIN COMPROBANTE"
             tipoComprobante: data.tipoComprobante,
           }),
@@ -1215,6 +1294,13 @@ const getSaleReferenceId = () => {
 
         if (!createdSale || !createdSale.id) {
           throw new Error("No se pudo obtener el ID de la venta creada.");
+        }
+
+        // Obtener serie/correlativo de la respuesta de createSale (fuente única de verdad)
+        const serieInvoice = createdSale.invoice?.serie ?? null;
+        const correlativoInvoice = createdSale.invoice?.nroCorrelativo ?? null;
+        if (comprobante && serieInvoice && correlativoInvoice) {
+          console.log("Serie:", serieInvoice, "Correlativo:", correlativoInvoice);
         }
 
         const paymentMethodIds = payments
@@ -1310,15 +1396,31 @@ const getSaleReferenceId = () => {
               primaryColor: activeCompany?.primaryColor ?? null,
               secondaryColor: activeCompany?.secondaryColor ?? null,
             },
-            items: selectedProducts.map((product) => ({
-              cantidad: Number(product.quantity),
-              descripcion: product.name,
-              series: product.series || [], // Pasar las series al documento
-              precioUnitario: Number(product.price),
-              subtotal: Number((product.price * product.quantity) / 1.18), // Subtotal sin IGV
-              igv: Number((product.price * product.quantity) - (product.price * product.quantity) / 1.18), // IGV
-              total: Number(product.price * product.quantity), // Total con IGV
-            })),
+            items: selectedProducts.map((product) => {
+              const lineTotal = Math.round(Number(product.price) * Number(product.quantity) * 100) / 100
+              const lineSubtotal = Math.round((lineTotal / 1.18) * 100) / 100
+              const lineIgv = Math.round((lineTotal - lineSubtotal) * 100) / 100
+              return {
+                cantidad: Number(product.quantity),
+                descripcion: product.name,
+                series: product.series || [],
+                precioUnitario: Number(product.price),
+                subtotal: lineSubtotal,
+                igv: lineIgv,
+                total: lineTotal,
+              }
+            }),
+            pagos: payments
+              .filter((p) => p.paymentMethodId != null)
+              .map((p) => {
+                const method = paymentMethodsList.find((m) => m.id === p.paymentMethodId)
+                  ?? defaultPaymentMethods.find((m) => m.id === p.paymentMethodId)
+                return {
+                  metodo: method?.name || "OTRO",
+                  monto: p.amount,
+                  moneda: p.currency || "PEN",
+                }
+              }),
           };
 
           console.log("Payload para SUNAT:", invoicePayload);
@@ -1330,30 +1432,31 @@ const getSaleReferenceId = () => {
           const totalTexto = numeroALetrasCustom(total, 'PEN'); // 'PEN' | 'USD'
           console.log("Importe en letras:", totalTexto); // Verificar el resultado
 
-          // Generar el código QR
-          const qrData = `Representación impresa de la ${data.tipoComprobante.toUpperCase()} ELECTRÓNICA\nN° ${data.serie}-${data.nroCorrelativo}`;
+          // Generar el código QR con URL de verificación pública
+          const verificationCode = createdSale.invoice?.verificationCode;
+          const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+          const qrData = verificationCode
+            ? `${baseUrl}/verify/${verificationCode}`
+            : `Representación impresa de la ${data.tipoComprobante.toUpperCase()} ELECTRÓNICA\nN° ${data.serie}-${data.nroCorrelativo}`;
           const qrCode = await QRCode.toDataURL(qrData);
 
           // ✅ Mostrar el PDF en nueva ventana
-          await openPDFInNewWindow(
-            <InvoiceDocument
-              data={{ ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice }}
-              qrCode={qrCode}
-              importeEnLetras={totalTexto}
-            />
-          );
+          const invoiceProps = {
+            data: { ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice },
+            qrCode,
+            importeEnLetras: totalTexto,
+          };
+          const invoiceDoc = receiptFormat === "ticket"
+            ? <TicketInvoiceDocument {...invoiceProps} />
+            : <InvoiceDocument {...invoiceProps} />;
 
-          const blob = await pdf(
-            <InvoiceDocument
-              data={{ ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice }}
-              qrCode={qrCode}
-              importeEnLetras={totalTexto}
-            />
-          ).toBlob();
+          await openPDFInNewWindow(invoiceDoc);
+
+          const blob = await pdf(invoiceDoc).toBlob();
           
           await uploadPdfToServer({
             blob,
-            ruc: 20519857538,
+            ruc: emitterRuc || "00000000000",
             tipoComprobante: comprobante ?? "SIN_COMPROBANTE", // "boleta" o "invoice"
             serie: serieInvoice!,
             correlativo: correlativoInvoice!,
@@ -1370,8 +1473,8 @@ const getSaleReferenceId = () => {
           }
         }
 
+        invalidateSales();
         router.push("/dashboard/sales");
-        router.refresh();
     }
     catch(error: any){
       if (error instanceof UnauthenticatedError) {
@@ -1394,7 +1497,9 @@ const getSaleReferenceId = () => {
   //
 
   // Manejar el cambio en el combobox de tipoComprobante
-  const handleTipoComprobanteChange = (currentValue: string) => {
+  // skipClientReset: cuando se llama desde auto-registro SUNAT, no limpiar
+  // los campos del cliente porque ya se acaban de establecer
+  const handleTipoComprobanteChange = (currentValue: string, { skipClientReset = false } = {}) => {
     if (!currentValue) {
       return;
     }
@@ -1418,11 +1523,13 @@ const getSaleReferenceId = () => {
       setIsClientDisabled(false); // Habilita el combobox de clientes
     }
 
-    // Limpiar los campos relacionados con el cliente
-    setValueClient(""); // Limpia el valor del combobox de cliente
-    form.setValue("client_name", ""); // Limpia el nombre del cliente
-    form.setValue("client_type", ""); // Limpia el tipo de documento
-    form.setValue("client_typeNumber", ""); // Limpia el número de documento
+    // Limpiar los campos relacionados con el cliente (solo si cambia manualmente)
+    if (!skipClientReset) {
+      setValueClient(""); // Limpia el valor del combobox de cliente
+      form.setValue("client_name", ""); // Limpia el nombre del cliente
+      form.setValue("client_type", ""); // Limpia el tipo de documento
+      form.setValue("client_typeNumber", ""); // Limpia el número de documento
+    }
   };
   //
 
@@ -1697,64 +1804,29 @@ const getSaleReferenceId = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedStoreId, version]); // Ejecutar cuando cambie la tienda seleccionada    
+  }, [selectedStoreId]); // Ejecutar cuando cambie la tienda seleccionada
   //
 
-  // Cargar los clientes según el tenant
+  // Cargar los clientes via useQuery
+  const { data: clientsFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.clients.list(selection.orgId, selection.companyId),
+    queryFn: () => getRegisteredClients(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let cancelled = false;
-
-    async function fetchClients() {
-      try {
-        const response = await getRegisteredClients();
-        if (!cancelled) {
-          setClients(Array.isArray(response) ? response : []);
-        }
-      } catch (error) {
-        console.error('Error al obtener los clientes:', error);
-        if (!cancelled) {
-          setClients([]);
-        }
-      }
-    }
-
-    setClients([]);
-    setValueClient('');
-    fetchClients();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+    setClients(Array.isArray(clientsFromQuery) ? clientsFromQuery : []);
+  }, [clientsFromQuery]);
   //
 
-  // Cargar tiendas según el tenant
+  // Cargar tiendas via useQuery
+  const { data: storesFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let cancelled = false;
-
-    async function fetchStoresData() {
-      try {
-        const storesResponse = await getStores();
-        if (!cancelled) {
-          setStores(Array.isArray(storesResponse) ? storesResponse : []);
-        }
-      } catch (error) {
-        console.error('Error al obtener las tiendas:', error);
-        if (!cancelled) {
-          setStores([]);
-        }
-      }
-    }
-
-    setStores([]);
-    setValueStore('');
-    setSelectedStoreId(null);
-    fetchStoresData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+    setStores(Array.isArray(storesFromQuery) ? storesFromQuery : []);
+  }, [storesFromQuery]);
 
   // Actualizar el valor del formulario cuando cambie el estado local
   useEffect(() => {
@@ -1762,7 +1834,11 @@ const getSaleReferenceId = () => {
   }, [currency, form]);
   //
 
+  const tenantKey = `${selection.orgId}-${selection.companyId}`;
+  const prevTenantRef = useRef(tenantKey);
   useEffect(() => {
+    if (prevTenantRef.current === tenantKey) return;
+    prevTenantRef.current = tenantKey;
     setShowPDF(false);
     setPdfData(null);
     setPayments([]);
@@ -1811,7 +1887,7 @@ const getSaleReferenceId = () => {
       product: false,
       payment: false,
     };
-  }, [version, form]);
+  }, [tenantKey, form]);
 
   useEffect(() => {
     lastInvoiceTypeRef.current = lastInvoiceType;
@@ -1933,7 +2009,7 @@ const getSaleReferenceId = () => {
       const raw = window.localStorage.getItem(salesDraftKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as SalesDraft;
-      if (!parsed || parsed.version !== 1 || !isDraftMeaningful(parsed)) {
+      if (!parsed || parsed.version !== 1 || !isDraftMeaningful(parsed) || isDraftExpired(parsed.savedAt)) {
         window.localStorage.removeItem(salesDraftKey);
         return;
       }
@@ -2195,10 +2271,11 @@ const getSaleReferenceId = () => {
                       </div>
                       <div className="flex gap-1">                                                                     
                         <Popover open={openCalendar} onOpenChange={setOpenCalendar}>
-                          <PopoverTrigger asChild>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <PopoverTrigger asChild>
                                 <Button
+                                  type="button"
                                   variant={"outline"}
                                   className={cn(
                                     "w-full justify-start text-left font-normal cursor-pointer",
@@ -2210,19 +2287,24 @@ const getSaleReferenceId = () => {
                                 ? format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: es }) // Mostrar la fecha en español
                                 : "Selecciona una fecha"}
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">Define la fecha de emisión del comprobante</TooltipContent>
-                            </Tooltip>
-                          </PopoverTrigger>
+                              </PopoverTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">Define la fecha de emisión del comprobante</TooltipContent>
+                          </Tooltip>
                           <PopoverContent className="w-auto p-0">
                             <Calendar
                               mode="single"
                               selected={selectedDate || undefined}
                               onSelect={(date) => {
-                                setSelectedDate(date || null); // Actualiza la fecha seleccionada
-                                setCreatedAt(date || null); // Actualiza el estado de createdAt
-                                setValue("createdAt", date ? date.toISOString() : ""); // Actualiza el formulario
-                                setOpenCalendar(false); // Cierra el Popover
+                                if (date) {
+                                  // Combinar fecha seleccionada con la hora actual
+                                  const now = new Date();
+                                  date.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+                                }
+                                setSelectedDate(date || null);
+                                setCreatedAt(date || null);
+                                setValue("createdAt", date ? date.toISOString() : "");
+                                setOpenCalendar(false);
                               }}
                               locale={es}
                               disabled={(date) => {
@@ -2486,7 +2568,7 @@ const getSaleReferenceId = () => {
                             setClients={setClients}
                             setValue={form.setValue} // Pasar la función para actualizar el formulario principal
                             updateTipoComprobante={(tipoComprobante: string) => {
-                              handleTipoComprobanteChange(tipoComprobante);
+                              handleTipoComprobanteChange(tipoComprobante, { skipClientReset: true });
                             }}
                             />   
                             <Dialog
@@ -2498,19 +2580,23 @@ const getSaleReferenceId = () => {
                                 }
                               }}
                             >
-                              <DialogContent className="sm:max-w-lg">
+                              <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
                                 <DialogHeader>
-                                  <DialogTitle>Buscar clientes en SUNAT</DialogTitle>
+                                  <DialogTitle className="flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+                                    Consulta SUNAT
+                                  </DialogTitle>
                                   <DialogDescription>
-                                    Ingresa un DNI (8 dígitos) o RUC (11 dígitos) para obtener los datos oficiales y doble clic en el resultado para aplicarlos.
+                                    Ingresa un DNI (8 dígitos) o RUC (11 dígitos). Doble clic en el resultado para aplicar.
                                   </DialogDescription>
                                 </DialogHeader>
-                                <div className="space-y-4">
+                                <div className="space-y-3 w-full min-w-0">
                                   <div className="flex gap-2">
                                     <Input
                                       value={sunatSearchValue}
                                       onChange={(event) => setSunatSearchValue(event.target.value)}
-                                      placeholder="DNI o RUC"
+                                      placeholder="Ej: 20519857538"
+                                      className="font-mono"
                                       autoFocus
                                       onKeyDown={(event) => {
                                         if (event.key === "Enter") {
@@ -2523,52 +2609,82 @@ const getSaleReferenceId = () => {
                                       type="button"
                                       onClick={handleSunatSearch}
                                       disabled={sunatSearchLoading}
+                                      className="cursor-pointer flex-shrink-0"
                                     >
                                       {sunatSearchLoading ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <>
-                                          <Search className="h-4 w-4 mr-2" />
-                                          Buscar
-                                        </>
+                                        <Search className="h-4 w-4" />
                                       )}
                                     </Button>
                                   </div>
+
                                   {sunatSearchError ? (
-                                    <p className="text-sm text-destructive">{sunatSearchError}</p>
+                                    <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 w-full min-w-0 overflow-hidden">
+                                      <X className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                                      <p className="text-sm text-destructive break-words">{sunatSearchError}</p>
+                                    </div>
                                   ) : null}
-                                  <div className="border rounded-md max-h-64 overflow-y-auto">
+
+                                  {sunatSearchLoading && sunatSearchResults.length > 0 ? (
+                                    <div className="flex items-center justify-center gap-2 p-4 rounded-lg border bg-muted/30">
+                                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                      <span className="text-sm font-medium">Registrando cliente...</span>
+                                    </div>
+                                  ) : null}
+
+                                  <div className="max-h-72 overflow-y-auto w-full min-w-0">
                                     {sunatSearchResults.length === 0 ? (
-                                      <p className="p-4 text-sm text-muted-foreground">
-                                        Ingresa un documento y presiona Buscar para ver resultados.
-                                      </p>
+                                      <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border border-dashed text-center">
+                                        <Search className="h-8 w-8 text-muted-foreground/40" />
+                                        <p className="text-sm text-muted-foreground">
+                                          Ingresa un documento y presiona buscar.
+                                        </p>
+                                      </div>
                                     ) : (
-                                      <Table>
-                                        <TableHeader>
-                                          <TableRow>
-                                            <TableHead>Documento</TableHead>
-                                            <TableHead>Nombre o Razón Social</TableHead>
-                                            <TableHead>Dirección</TableHead>
-                                            <TableHead>Estado</TableHead>
-                                          </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                          {sunatSearchResults.map((result) => (
-                                            <TableRow
-                                              key={result.identifier}
-                                              className="cursor-pointer hover:bg-muted/60"
-                                              onDoubleClick={() => handleSelectSunatResult(result)}
-                                            >
-                                              <TableCell className="whitespace-nowrap font-medium">
-                                                {result.identifier}
-                                              </TableCell>
-                                              <TableCell>{result.name}</TableCell>
-                                              <TableCell>{result.address ?? "—"}</TableCell>
-                                              <TableCell>{result.status ?? "—"}</TableCell>
-                                            </TableRow>
-                                          ))}
-                                        </TableBody>
-                                      </Table>
+                                      <div className="space-y-2">
+                                        {sunatSearchResults.map((result) => (
+                                          <div
+                                            key={result.identifier}
+                                            className={cn(
+                                              "p-3 rounded-lg border cursor-pointer w-full min-w-0 overflow-hidden",
+                                              "transition-all duration-200 ease-out",
+                                              "hover:bg-primary/5 hover:border-primary/30 hover:shadow-sm",
+                                              "active:scale-[0.98]",
+                                              "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                                              sunatSearchLoading && "pointer-events-none opacity-50",
+                                            )}
+                                            onDoubleClick={() => handleSelectSunatResult(result)}
+                                          >
+                                            <div className="flex items-start justify-between gap-2 w-full min-w-0">
+                                              <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
+                                                <p className="text-sm font-semibold break-words leading-snug">
+                                                  {result.name}
+                                                </p>
+                                                <p className="text-xs font-mono text-muted-foreground">
+                                                  {result.type === "RUC" ? "RUC" : "DNI"}: {result.identifier}
+                                                </p>
+                                              </div>
+                                              <span className={cn(
+                                                "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 tracking-wide",
+                                                result.status === "ACTIVO"
+                                                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                                  : "bg-red-500/15 text-red-600 dark:text-red-400",
+                                              )}>
+                                                {result.status ?? "—"}
+                                              </span>
+                                            </div>
+                                            {result.address && result.address !== "—" ? (
+                                              <div className="flex items-start gap-1.5 mt-2 pt-2 border-t w-full min-w-0 overflow-hidden">
+                                                <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                                <p className="text-xs text-muted-foreground break-words leading-relaxed">
+                                                  {result.address}
+                                                </p>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -2576,7 +2692,7 @@ const getSaleReferenceId = () => {
                             </Dialog>
                           </div>
                           <Label className="text-sm font-medium py-2">Nombre del Cliente</Label>
-                          <Input {...register("client_name")} readOnly></Input>     
+                          <Input {...register("client_name")} placeholder="Nombre o razón social"></Input>     
                           <div className="flex justify-between gap-1">
                             <div className="flex flex-col flex-grow">
                               <Label className="text-sm font-medium py-2">Tipo de Documento</Label>
@@ -2675,7 +2791,7 @@ const getSaleReferenceId = () => {
                           <Label className="text-sm font-medium py-2">Direccion de la tienda</Label>
                           <Input {...register("store_adress")} readOnly></Input>        
                         </div>
-                        <div className='min-w-0 flex-col overflow-hidden border border-gray-600 rounded-md p-2 md:col-span-2'>
+                        <div className='min-w-0 flex flex-col overflow-hidden border border-gray-600 rounded-md p-2'>
                           <Label htmlFor="product-combobox" className="text-sm font-medium mb-2">
                             <div className="flex items-center">
                               <span>Ingrese un producto:</span>
@@ -3196,23 +3312,7 @@ const getSaleReferenceId = () => {
                           <Button className="cursor-pointer bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                           type="button" // Evita que el bot?n env?e el formulario
                           onClick={() => {
-                        form.reset({
-                            name: "",
-                            description: "",
-                            price: 1,
-                            quantity: 1,
-                            category_name: "",
-                            client_name: "",
-                            client_type: "",
-                            client_typeNumber: "",
-                            store_name: "",
-                            store_adress: "",
-                            ruc: "",
-                            fecha_emision_comprobante: "",
-                            tipoComprobante: "",
-                            serie: "",
-                            total_comprobante: "",
-                        })
+                        form.reset(buildDefaultSaleValues())
 
                         // Limpia productos y stock
                         setSelectedProducts([]);

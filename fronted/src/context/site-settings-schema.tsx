@@ -110,8 +110,11 @@ export const siteSettingsSchema = z.object({
     marketing: z.boolean(),
     providers: z.boolean(),
     settings: z.boolean(),
+    legal: z.boolean(),
+    whatsapp: z.boolean(),
     hidePurchaseCost: z.boolean(),
-    hideDeleteActions: z.boolean(),
+    hideDeleteForEmployees: z.boolean(),
+    hideDeleteForAdmins: z.boolean(),
   }),
 });
 
@@ -239,8 +242,11 @@ export const defaultSiteSettings: SiteSettings = {
     marketing: true,
     providers: true,
     settings: true,
+    legal: true,
+    whatsapp: true,
     hidePurchaseCost: false,
-    hideDeleteActions: false,
+    hideDeleteForEmployees: false,
+    hideDeleteForAdmins: false,
   },
 };
 

@@ -9,11 +9,23 @@ interface Entry {
 @Injectable()
 export class RateLimitMiddleware implements NestMiddleware {
   private hits = new Map<string, Entry>();
-  private readonly limit = 5;
+  // In test/e2e mode, allow many more requests to avoid 429s during Cypress runs
+  private readonly limit = process.env.NODE_ENV === 'test' ? 500 : 5;
   private readonly windowMs = 60_000; // 1 minute
 
+  private getClientIp(req: Request): string {
+    // Behind a reverse proxy (Railway, nginx) req.ip may be the proxy IP.
+    // X-Forwarded-For contains the real client IP as the first entry.
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') {
+      const first = forwarded.split(',')[0]?.trim();
+      if (first) return first;
+    }
+    return req.ip ?? '0.0.0.0';
+  }
+
   use(req: Request, res: Response, next: NextFunction) {
-    const key = req.ip + req.path;
+    const key = this.getClientIp(req) + req.path;
     const now = Date.now();
     const entry = this.hits.get(key);
     if (entry && now - entry.timestamp < this.windowMs) {

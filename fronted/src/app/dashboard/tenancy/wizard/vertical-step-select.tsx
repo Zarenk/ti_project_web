@@ -7,6 +7,8 @@ import {
   UtensilsCrossed,
   Briefcase,
   Factory,
+  Scale,
+  Dumbbell,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +29,8 @@ const ICON_MAP: Record<VerticalName, React.ElementType> = {
   RESTAURANTS: UtensilsCrossed,
   SERVICES: Briefcase,
   MANUFACTURING: Factory,
+  LAW_FIRM: Scale,
+  GYM: Dumbbell,
 }
 
 type Props = {

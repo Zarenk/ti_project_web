@@ -18,8 +18,10 @@ const MODULE_PERMISSION_KEYS: ModulePermissionKey[] = [
   "marketing",
   "providers",
   "settings",
+  "whatsapp",
   "hidePurchaseCost",
-  "hideDeleteActions",
+  "hideDeleteForEmployees",
+  "hideDeleteForAdmins",
 ]
 
 function normalizeUserPermissions(value: unknown): UserPermissionsMap | null {

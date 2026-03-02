@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -17,13 +17,11 @@ import {
   } from "@tanstack/react-table"
 import React, { useEffect, useMemo, useState } from "react";
 import InventoryModal from "./data-table-components/InventoryModal";
-import { DataTablePagination } from "@/components/data-table-pagination";
+import { DataTablePagination, ManualPagination } from "@/components/data-table-pagination";
 import TransferModal from "./data-table-components/TransferModal";
 import { useDebounce } from "@/app/hooks/useDebounce";
-import { useRouter, useSearchParams } from "next/navigation";
-import OutOfStockDialog from "./data-table-components/OutOfStockDialog";
-import { BookOpenIcon, FilterIcon, StoreIcon } from "lucide-react";
-import { getCategoriesFromInventory, getAllStores } from "./inventory.api";
+import { useRouter } from "next/navigation";
+import { FilterIcon, StoreIcon, LayoutGrid, List } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -33,12 +31,30 @@ import {
 } from "@/components/ui/select"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useAuth } from "@/context/auth-context"
+import { InventoryGallery } from "./inventory-gallery"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
+type ViewMode = "table" | "gallery"
+const VIEW_MODE_KEY = "inventory-view-mode"
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[]
     data: TData[]
     inStockOnly?: boolean
+    // Lifted filter state
+    globalFilter: string
+    onGlobalFilterChange: (value: string) => void
+    selectedCategory: string
+    onCategoryChange: (value: string) => void
+    categoryOptions: string[]
+    selectedStore: string
+    onStoreChange: (value: string) => void
+    storeOptions: { id: number; name: string }[]
   }
 
 const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
@@ -57,21 +73,16 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
     columns,
     data,
     inStockOnly = false,
+    globalFilter,
+    onGlobalFilterChange,
+    selectedCategory,
+    onCategoryChange,
+    categoryOptions,
+    selectedStore,
+    onStoreChange,
+    storeOptions,
   }: DataTableProps<TData, TValue>) {
-    // ROUTER PARA MANEJAR LA NAVEGACION
     const router = useRouter();
-    const searchParams = useSearchParams();
-
-    // ESTADO PARA MANEJAR EL MODAL DE PRODUCTOS SIN STOCK
-    const [isOutOfStockDialogOpen, setIsOutOfStockDialogOpen] = useState(false);
-
-    // Abrir el modal de productos sin stock si viene por query param
-    useEffect(() => {
-      const open = searchParams?.get('outOfStock');
-      if (open && (open === '1' || open.toLowerCase() === 'true')) {
-        setIsOutOfStockDialogOpen(true);
-      }
-    }, [searchParams]);
 
     const { settings } = useSiteSettings()
     const { role } = useAuth()
@@ -97,6 +108,21 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
       })
     }, [columns, hidePurchaseCost])
 
+    // View mode: table or gallery
+    const [viewMode, setViewMode] = useState<ViewMode>(() => {
+      if (typeof window === "undefined") return "table"
+      return (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) || "table"
+    })
+    const handleViewChange = (mode: ViewMode) => {
+      setViewMode(mode)
+      localStorage.setItem(VIEW_MODE_KEY, mode)
+      setGalleryPage(1)
+    }
+
+    // Gallery pagination
+    const [galleryPage, setGalleryPage] = useState(1)
+    const [galleryPageSize, setGalleryPageSize] = useState(12)
+
     // ESTADO PARA MANEJAR FILTROS DE LA COLUMNA
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [sorting, setSorting] = React.useState<SortingState>([
@@ -107,23 +133,13 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
     })
 
     // ESTADO PARA MANEJAR LOS MODALS
-    const [isModalOpen, setIsModalOpen] = React.useState(false); // Estado del modal
-    const [selectedProduct, setSelectedProduct] = React.useState<TData | null>(null); // Producto seleccionado
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [selectedProduct, setSelectedProduct] = React.useState<TData | null>(null);
     const [isTransferModalOpen, setIsTransferModalOpen] = React.useState(false);
 
-    // ESTADO PARA MANEJAR EL FILTRO DE CATEGORIAS
-    const [selectedCategory, setSelectedCategory] = useState('all');
-    const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
-
-    // ESTADO PARA MANEJAR EL FILTRO DE TIENDAS
-    const [selectedStore, setSelectedStore] = useState('all');
-    const [storeOptions, setStoreOptions] = useState<{id:number; name:string}[]>([]);
-
-    const [globalFilter, setGlobalFilter] = useState("")
     const debouncedGlobalFilter = useDebounce(globalFilter, 600)
-    //
 
-    // ESTADOS DE LA TABLA
+    // ESTADOS DE LA TABLA — filtered by store
     const filteredData = React.useMemo(() => {
       if (selectedStore === 'all') return data;
       return data
@@ -145,7 +161,7 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
         onColumnFiltersChange: setColumnFilters,
         onSortingChange: setSorting,
         onColumnVisibilityChange: setColumnVisibility,
-        onGlobalFilterChange: setGlobalFilter,
+        onGlobalFilterChange: onGlobalFilterChange,
         getFilteredRowModel: getFilteredRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getCoreRowModel: getCoreRowModel(),
@@ -158,6 +174,33 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
         },
       })
 
+    // Gallery data — apply same filters as table (search + category)
+    const galleryData = useMemo(() => {
+      let result = filteredData as any[];
+
+      const searchTerm = debouncedGlobalFilter.toLowerCase();
+      if (searchTerm) {
+        result = result.filter((item: any) => {
+          const name = item.product?.name?.toLowerCase() || "";
+          const serials: string[] = Array.isArray(item.serialNumbers) ? item.serialNumbers : [];
+          return name.includes(searchTerm) || serials.some((sn: string) => sn.toLowerCase().includes(searchTerm));
+        });
+      }
+
+      if (selectedCategory !== 'all') {
+        result = result.filter((item: any) => item.product?.category === selectedCategory);
+      }
+
+      return result;
+    }, [filteredData, debouncedGlobalFilter, selectedCategory]);
+
+    // Gallery pagination
+    const galleryTotalPages = Math.ceil(galleryData.length / galleryPageSize) || 1
+    const galleryPaginatedData = useMemo(() => {
+      const start = (galleryPage - 1) * galleryPageSize
+      return galleryData.slice(start, start + galleryPageSize)
+    }, [galleryData, galleryPage, galleryPageSize])
+
     // CONTADOR DE FILAS SELECCIONADAS PARA DATOS GLOBALES DEL DATATABLE
     const [globalRowSelection, setGlobalRowSelection] = React.useState({});
     const [rowSelection, setRowSelection] = React.useState({})
@@ -165,84 +208,68 @@ const globalFilterFn: FilterFn<any> = (row, _columnId, filterValue) => {
     React.useEffect(() => {
         setGlobalRowSelection((prev) => {
           const updatedSelection = { ...prev } as Record<string, boolean>;;
-      
+
           // Agregar las nuevas selecciones
           Object.keys(rowSelection).forEach((key) => {
             if ((rowSelection as Record<string, any>)[key]) {
               updatedSelection[key] = true;
             }
           });
-      
+
           // Eliminar las filas deseleccionadas
           Object.keys(prev).forEach((key) => {
             if (!(rowSelection as Record<string, any>)[key]) {
               delete updatedSelection[key];
             }
           });
-      
+
           return updatedSelection;
         });
       }, [rowSelection]);
 
     const totalSelectedRows = Object.keys(globalRowSelection).length;
-    //
 
-  // Cargar las categorÃ­as desde el backend
-  useEffect(() => {
-    async function loadCategories() {
-      try {
-        const categories = await getCategoriesFromInventory();
-        setCategoryOptions(Array.isArray(categories) ? categories : []);
-      } catch (error) {
-        console.error('Error al cargar las categorías:', error);
-        setCategoryOptions([]);
-      }
-    }
-    async function loadStores() {
-      try {
-        const stores = await getAllStores();
-        setStoreOptions(Array.isArray(stores) ? stores : []);
-      } catch (error) {
-        console.error('Error al cargar las tiendas:', error);
-        setStoreOptions([]);
-      }
-    }
-    loadCategories();
-    loadStores();
-  }, []);
-  
-  // Actualiza el filtro cuando cambia la categoría
+  // Sync category filter with table column
   useEffect(() => {
     table.getColumn("product.category")?.setFilterValue(
       selectedCategory === "all" ? undefined : selectedCategory
     );
   }, [selectedCategory, table])
-  //
+
+  // Reset gallery page when filters change
+  useEffect(() => {
+    setGalleryPage(1);
+  }, [globalFilter, selectedCategory, selectedStore])
 
 
 return (
-    <div className="flex w-full max-w-full flex-col gap-4">
-        <div className="flex w-full flex-wrap items-center gap-4 py-4">
-          <Input
-            placeholder="Filtrar por producto o serie..."
-            value={globalFilter}
-            onChange={(event) => setGlobalFilter(event.target.value)}
-            className="w-full sm:max-w-sm"
-          />
+    <div className="flex w-full max-w-full flex-col gap-3">
+        {/* ── Filters toolbar (hidden on lg+ where page.tsx renders them inline) ─── */}
+        <div className="flex flex-col gap-2 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 lg:hidden">
+          {/* Search input */}
+          <div className="w-full sm:max-w-xs">
+            <Input
+              placeholder="Filtrar por producto o serie..."
+              value={globalFilter}
+              onChange={(event) => onGlobalFilterChange(event.target.value)}
+              className="h-8 w-full text-xs"
+            />
+          </div>
 
-          <div className="w-full sm:w-[250px]">
+          {/* Category + Store selects */}
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <Select
               value={selectedCategory}
-              onValueChange={(value) => setSelectedCategory(value)}
+              onValueChange={onCategoryChange}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona una categoría" />
+              <SelectTrigger className="h-8 w-full text-xs sm:w-[180px]">
+                <SelectValue placeholder="Categoría" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">
                   <div className="flex items-center gap-2 font-semibold text-muted-foreground">
-                    <FilterIcon className="w-4 h-4" />
-                    Todas las categorias
+                    <FilterIcon className="w-3.5 h-3.5" />
+                    Todas las categorías
                   </div>
                 </SelectItem>
                 {categoryOptions.map((cat) => (
@@ -252,20 +279,18 @@ return (
                 ))}
               </SelectContent>
             </Select>
-          </div>
 
-          <div className="w-full sm:w-[250px]">
             <Select
               value={selectedStore}
-              onValueChange={(value) => setSelectedStore(value)}
+              onValueChange={onStoreChange}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecciona una tienda" />
+              <SelectTrigger className="h-8 w-full text-xs sm:w-[180px]">
+                <SelectValue placeholder="Tienda" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">
                   <div className="flex items-center gap-2 font-semibold text-muted-foreground">
-                    <StoreIcon className="w-4 h-4" />
+                    <StoreIcon className="w-3.5 h-3.5" />
                     Todas las tiendas
                   </div>
                 </SelectItem>
@@ -277,115 +302,158 @@ return (
               </SelectContent>
             </Select>
           </div>
-          <div className="flex w-full justify-between sm:w-auto sm:items-center">
-            <Button
-              className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto"
-              onClick={() => setIsOutOfStockDialogOpen(true)}
-            >
-              Ver Productos Sin Stock
-              <BookOpenIcon className="h-6 w-6" />
-            </Button>  
-            {/* Otros componentes de la pÃ¡gina */}
-            <OutOfStockDialog
-              isOpen={isOutOfStockDialogOpen}
-              onClose={() => setIsOutOfStockDialogOpen(false)}
-            />
-          </div>
-          <div className="flex w-full justify-between sm:w-auto sm:items-center">
-            <Button
-            className="w-full bg-blue-600 text-white hover:bg-blue-700 sm:w-auto"
-            onClick={() => router.push("/dashboard/inventory/products-by-store")}
-            >
-              Ver Productos por Tienda
-              <StoreIcon className="h-6 w-6" />
-            </Button>
-          </div>            
-        </div>
-        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-            <label>
-                Total de datos: {table.getRowModel().rows.length}
-                </label>
-                <label className="pb-2 sm:pb-0">
-                {totalSelectedRows} de{" "}
-                {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
-            </label>
-        </div>
-        <div className="table-scroll w-full overflow-x-auto rounded-md border">
-        <Table className="min-w-[900px]">
-            <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                    return (
-                    <TableHead key={header.id}>
-                        {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                            )}
-                    </TableHead>
-                    )
-                })}
-                </TableRow>
-            ))}
-            </TableHeader>
-            <TableBody>
-            {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                    onDoubleClick={() => router.push(`/dashboard/inventory/product-details/${(row.original as any).id}`)}
-                    className="cursor-pointer"
-                >
-                    {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                    ))}
-                    <TableCell>
-                    <Button
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
-                      onClick={() => {
-                        setSelectedProduct(row.original); // Establecer el producto seleccionado
-                        router.push(`/dashboard/inventory/product-details/${row.original.id}`); // Redirigir a la nueva pÃ¡gina
-                      }}
-                    >
-                      Ver Informacion
-                    </Button>
-                    <Button
-                    className="bg-green-800 hover:bg-green-900 text-white px-2 py-1 rounded ml-2"
-                    onClick={() => {
-                    setSelectedProduct(row.original); // Establecer el producto seleccionado
-                    setIsTransferModalOpen(true); // Abrir el modal de Transferencia
-                    }}
-                    >
-                    Transferir
-                    </Button>
-                  </TableCell>
-                </TableRow>
-                ))
-            ) : (
-                <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                    No results.
-                </TableCell>
-                </TableRow>
-            )}
-            </TableBody>
-        </Table>
         </div>
 
-        <div className="py-4">
-              <DataTablePagination table={table} />
+        {/* Data counters + view toggle */}
+        <div className="flex flex-wrap items-center gap-2 pt-4 text-xs text-muted-foreground">
+            <label>
+                Total: {viewMode === "table" ? table.getRowModel().rows.length : galleryData.length}
+            </label>
+            <label>
+                {totalSelectedRows} de{" "}
+                {table.getFilteredRowModel().rows.length} seleccionadas.
+            </label>
+
+            {/* View toggle */}
+            <TooltipProvider delayDuration={300}>
+              <div className="ml-auto flex shrink-0 rounded-lg border p-0.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={viewMode === "table" ? "secondary" : "ghost"}
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleViewChange("table")}
+                    >
+                      <List className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">Vista de tabla</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={viewMode === "gallery" ? "secondary" : "ghost"}
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleViewChange("gallery")}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">Vista de galería</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
         </div>
+
+        {viewMode === "table" ? (
+          <>
+            {/* Table */}
+            <div className="table-scroll w-full overflow-x-auto rounded-md border">
+            <Table className="min-w-[900px]">
+                <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => {
+                        return (
+                        <TableHead key={header.id}>
+                            {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                                )}
+                        </TableHead>
+                        )
+                    })}
+                    </TableRow>
+                ))}
+                </TableHeader>
+                <TableBody>
+                {table.getRowModel().rows?.length ? (
+                    table.getRowModel().rows.map((row) => (
+                    <TableRow
+                        key={row.id}
+                        data-state={row.getIsSelected() && "selected"}
+                        onDoubleClick={() => router.push(`/dashboard/inventory/product-details/${(row.original as any).id}`)}
+                        className="cursor-pointer"
+                    >
+                        {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                        ))}
+                        <TableCell>
+                        <Button
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
+                          onClick={() => {
+                            setSelectedProduct(row.original);
+                            router.push(`/dashboard/inventory/product-details/${row.original.id}`);
+                          }}
+                        >
+                          Ver Informacion
+                        </Button>
+                        <Button
+                        className="bg-green-800 hover:bg-green-900 text-white px-2 py-1 rounded ml-2"
+                        onClick={() => {
+                        setSelectedProduct(row.original);
+                        setIsTransferModalOpen(true);
+                        }}
+                        >
+                        Transferir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    ))
+                ) : (
+                    <TableRow>
+                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                        No results.
+                    </TableCell>
+                    </TableRow>
+                )}
+                </TableBody>
+            </Table>
+            </div>
+
+            <div className="py-4">
+                  <DataTablePagination table={table} />
+            </div>
+          </>
+        ) : (
+          /* ── Gallery view ─────────────────────────── */
+          <div>
+            <InventoryGallery
+              data={galleryPaginatedData as any}
+              onTransferProduct={(item) => {
+                setSelectedProduct(item as any);
+                setIsTransferModalOpen(true);
+              }}
+            />
+            <div className="py-4">
+              <ManualPagination
+                currentPage={galleryPage}
+                totalPages={galleryTotalPages}
+                pageSize={galleryPageSize}
+                totalItems={galleryData.length}
+                onPageChange={setGalleryPage}
+                onPageSizeChange={setGalleryPageSize}
+                pageSizeOptions={[12, 24, 48]}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Usar el componente InventoryModal */}
         <InventoryModal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            product={selectedProduct as any} // Pasar el producto seleccionado
+            product={selectedProduct as any}
         />
         <TransferModal
         isOpen={isTransferModalOpen}

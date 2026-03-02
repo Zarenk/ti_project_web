@@ -24,6 +24,8 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { KITCHEN_GUIDE_STEPS } from "./kitchen-guide-steps"
 
 export default function KitchenPage() {
   const { info: verticalInfo } = useVerticalConfig()
@@ -314,9 +316,12 @@ export default function KitchenPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
-              Comanda y cocina
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                Comanda y cocina
+              </h1>
+              <PageGuideButton steps={KITCHEN_GUIDE_STEPS} tooltipLabel="Guía de cocina" />
+            </div>
             <p className="text-sm text-muted-foreground">
               Coordina estaciones y prepara pedidos con visibilidad en tiempo real.
             </p>
@@ -597,49 +602,48 @@ export default function KitchenPage() {
                               <div
                                 key={item.id}
                                 className={cn(
-                                  "rounded-xl border border-white/10 bg-muted/20 p-3 transition-all",
+                                  "rounded-xl border border-white/10 bg-muted/20 p-3 transition-all space-y-2",
                                   flashItemId === item.id && "ring-2 ring-primary/50",
                                 )}
                               >
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div>
-                                    <p className="text-sm font-medium">{item.product?.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {item.quantity} x {item.unitPrice.toFixed(2)}
+                                <div>
+                                  <p className="text-sm font-medium">{item.product?.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {item.quantity} &times; {item.unitPrice.toFixed(2)}
+                                  </p>
+                                  {item.station?.name && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      Estacion: {item.station.name}
                                     </p>
-                                    {item.station?.name && (
-                                      <p className="text-[11px] text-muted-foreground">
-                                        Estacion: {item.station.name}
-                                      </p>
+                                  )}
+                                  {item.notes && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {item.notes}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "border-white/10 text-xs",
+                                      status === "PENDING" && "border-amber-500/40 text-amber-200 bg-amber-500/10",
+                                      status === "COOKING" && "border-orange-500/40 text-orange-200 bg-orange-500/10",
+                                      status === "READY" && "border-emerald-500/40 text-emerald-200 bg-emerald-500/10",
+                                      status === "SERVED" && "border-sky-500/40 text-sky-200 bg-sky-500/10",
                                     )}
-                                    {item.notes && (
-                                      <p className="text-xs text-muted-foreground">
-                                        {item.notes}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "border-white/10 text-xs",
-                                        status === "PENDING" && "border-amber-500/40 text-amber-200 bg-amber-500/10",
-                                        status === "COOKING" && "border-orange-500/40 text-orange-200 bg-orange-500/10",
-                                        status === "READY" && "border-emerald-500/40 text-emerald-200 bg-emerald-500/10",
-                                        status === "SERVED" && "border-sky-500/40 text-sky-200 bg-sky-500/10",
-                                      )}
-                                    >
-                                      {meta.label}
-                                    </Badge>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={item.status === "SERVED"}
-                                      onClick={() => handleAdvanceStatus(item.id, item.status)}
-                                    >
-                                      {meta.action}
-                                    </Button>
-                                  </div>
+                                  >
+                                    {meta.label}
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="cursor-pointer"
+                                    disabled={item.status === "SERVED"}
+                                    onClick={() => handleAdvanceStatus(item.id, item.status)}
+                                  >
+                                    {meta.action}
+                                  </Button>
                                 </div>
                               </div>
                             ))}

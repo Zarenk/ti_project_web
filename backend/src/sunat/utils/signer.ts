@@ -1,122 +1,81 @@
 import * as fs from 'fs';
-import * as crypto from 'crypto';
-import { create } from 'xmlbuilder2';
+import { SignedXml } from 'xml-crypto';
 
 /**
- * Genera el DigestValue del XML.
- */
-function generateDigest(xml: string): string {
-  const hash = crypto.createHash('sha256');
-  hash.update(xml);
-  return hash.digest('base64');
-}
-
-/**
- * Construye el nodo SignedInfo.
- */
-function buildSignedInfoXml(digestValue: string, referenceId: string): string {
-  return create()
-    .ele('ds:SignedInfo', { xmlns: 'http://www.w3.org/2000/09/xmldsig#' })
-    .ele('ds:CanonicalizationMethod', {
-      Algorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
-    })
-    .up()
-    .ele('ds:SignatureMethod', {
-      Algorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
-    })
-    .up()
-    .ele('ds:Reference', { URI: `#${referenceId}` })
-    .ele('ds:Transforms')
-    .ele('ds:Transform', {
-      Algorithm: 'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
-    })
-    .up()
-    .up()
-    .ele('ds:DigestMethod', {
-      Algorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
-    })
-    .up()
-    .ele('ds:DigestValue')
-    .txt(digestValue)
-    .up()
-    .up()
-    .end({ headless: true });
-}
-
-/**
- * Firma el SignedInfo con la clave privada.
- */
-function signWithPrivateKey(
-  signedInfo: string,
-  privateKeyPath: string,
-): string {
-  const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(signedInfo);
-  signer.end();
-  return signer.sign(privateKey, 'base64');
-}
-
-/**
- * Firma un documento UBL 2.1 (factura, boleta, nota de crédito).
+ * Firma un documento UBL 2.1 (factura, boleta, nota de crédito) usando xml-crypto.
+ * Implementa XML-DSIG con C14N canonicalization, enveloped-signature transform,
+ * SHA-256 digest y RSA-SHA256 signing — compatible con SUNAT.
  */
 export async function firmarDocumentoUBL(
   xml: string,
   privateKeyPath: string,
   certificatePath: string,
 ): Promise<string> {
+  // 1. Detectar el nodo raíz (Invoice, CreditNote, etc.)
   const rootMatch = xml.match(/<([A-Za-z0-9:]+)([^>]*)>/);
   if (!rootMatch) {
-    throw new Error('No se pudo detectar el nodo raiz del XML.');
+    throw new Error('No se pudo detectar el nodo raíz del XML.');
   }
   const rootTag = rootMatch[1].includes(':')
     ? rootMatch[1].split(':')[1]
     : rootMatch[1];
-  const referenceId = rootTag;
 
-  const rootPattern = new RegExp(`<${rootMatch[1]}([^>]*)>`);
-  xml = xml.replace(rootPattern, (_match, attrs) => {
-    if (attrs.includes('Id=')) {
-      return `<${rootMatch[1]}${attrs}>`;
-    }
-    return `<${rootMatch[1]}${attrs} Id="${referenceId}">`;
-  });
-
+  // 2. Reemplazar el placeholder de firma con ExtensionContent vacío
   const placeholder = '<__raw><!-- Firma digital no disponible --></__raw>';
-
   if (!xml.includes(placeholder)) {
     throw new Error('El marcador de firma no fue encontrado en el XML');
   }
+  xml = xml.replace(placeholder, '');
 
-  const [inicioDigest, finDigest] = xml.split(placeholder);
-  const xmlSinFirma = `${inicioDigest}<ext:ExtensionContent></ext:ExtensionContent>${finDigest}`;
-  const digestValue = generateDigest(xmlSinFirma);
-
-  const signedInfoXml = buildSignedInfoXml(digestValue, referenceId);
-  const signatureValue = signWithPrivateKey(signedInfoXml, privateKeyPath);
-
+  // 3. Leer clave privada y certificado
+  const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
   const cert = fs
     .readFileSync(certificatePath, 'utf8')
     .replace('-----BEGIN CERTIFICATE-----', '')
     .replace('-----END CERTIFICATE-----', '')
     .replace(/\r?\n|\r/g, '');
 
-  const signedInfoNode = create(signedInfoXml).root();
-
-  const firmaDoc = create().ele('ds:Signature', {
-    xmlns: 'http://www.w3.org/2000/09/xmldsig#',
-    Id: 'SignatureKG',
+  // 4. Configurar xml-crypto con los algoritmos requeridos por SUNAT
+  const sig = new SignedXml({
+    privateKey,
+    signatureAlgorithm:
+      'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+    canonicalizationAlgorithm:
+      'http://www.w3.org/2001/10/xml-exc-c14n#',
+    getKeyInfoContent: (args) => {
+      const p = args?.prefix ? `${args.prefix}:` : '';
+      return `<${p}X509Data><${p}X509Certificate>${cert}</${p}X509Certificate></${p}X509Data>`;
+    },
   });
 
-  firmaDoc.import(signedInfoNode);
-  firmaDoc.ele('ds:SignatureValue').txt(signatureValue);
-  const keyInfo = firmaDoc.ele('ds:KeyInfo');
-  const x509 = keyInfo.ele('ds:X509Data');
-  x509.ele('ds:X509Certificate').txt(cert);
+  // 5. Agregar referencia con URI vacío (SUNAT error 2090).
+  //    Dos transforms obligatorios:
+  //    - enveloped-signature: remueve el nodo ds:Signature antes de computar el digest
+  //    - exc-c14n: canonicaliza el XML (xml-crypto NO aplica C14N automáticamente,
+  //      solo ejecuta los transforms listados y luego llama .toString())
+  sig.addReference({
+    xpath: `//*[local-name()='${rootTag}']`,
+    transforms: [
+      'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+      'http://www.w3.org/2001/10/xml-exc-c14n#',
+    ],
+    digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+    uri: '',
+    isEmptyUri: true,
+  });
 
-  const firmaXml = firmaDoc.end({ headless: true });
+  // 6. Computar firma y colocarla dentro de <ext:ExtensionContent>
+  sig.computeSignature(xml, {
+    prefix: 'ds',
+    attrs: { Id: 'SignatureKG' },
+    location: {
+      reference: "//*[local-name()='ExtensionContent']",
+      action: 'append',
+    },
+    existingPrefixes: {
+      ds: 'http://www.w3.org/2000/09/xmldsig#',
+    },
+  });
 
-  const xmlFirmado = `${inicioDigest}${firmaXml}${finDigest}`;
-
-  return xmlFirmado;
+  return sig.getSignedXml();
 }

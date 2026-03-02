@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { UsersDataTable } from "./data-table";
@@ -12,60 +13,33 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HelpAdminTab } from "./help-admin-tab";
 import { HelpTestingPanel } from "./help-testing";
 import { HelpLearningDashboard } from "./help-learning";
-
-type UsersState = {
-  data: DashboardUser[];
-  loading: boolean;
-  error: string | null;
-};
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { USERS_LIST_GUIDE_STEPS } from "./users-guide-steps";
+import { queryKeys } from "@/lib/query-keys";
 
 export default function UsersPage(): React.ReactElement {
-  const { version, selection } = useTenantSelection();
+  const { selection } = useTenantSelection();
   const { role } = useAuth();
-  const [{ data, loading, error }, setState] = useState<UsersState>({
-    data: [],
-    loading: true,
-    error: null,
+  const queryClient = useQueryClient();
+
+  const { data = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: queryKeys.users.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const users = await getUsers();
+      return users;
+    },
+    enabled: selection.orgId !== null,
   });
 
-  useEffect(() => {
-    let cancelled = false;
+  const error = queryError
+    ? queryError instanceof Error ? queryError.message : "No se pudieron cargar los usuarios."
+    : null;
 
-    const loadUsers = async () => {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
-      try {
-        const users = await getUsers();
-        if (!cancelled) {
-          setState({ data: users, loading: false, error: null });
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "No se pudieron cargar los usuarios.";
-        if (!cancelled) {
-          setState({ data: [], loading: false, error: message });
-          toast.error(message);
-        }
-      }
-    };
-
-    void loadUsers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
-
-  const handleUserUpdated = useCallback(
-    (updatedUser: DashboardUser) => {
-      setState((prev) => ({
-        ...prev,
-        data: prev.data.map((user) =>
-          user.id === updatedUser.id ? { ...user, role: updatedUser.role, status: updatedUser.status } : user,
-        ),
-      }));
-    },
-    [],
-  );
+  const handleUserUpdated = (updatedUser: DashboardUser) => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.users.root(selection.orgId, selection.companyId),
+    });
+  };
 
   const normalizedRole = role?.trim().toUpperCase() ?? "";
   const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL";
@@ -111,7 +85,10 @@ export default function UsersPage(): React.ReactElement {
     <section className="py-6">
       <div className="container mx-auto px-4">
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold">Usuarios</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Usuarios</h1>
+            <PageGuideButton steps={USERS_LIST_GUIDE_STEPS} tooltipLabel="Guía de usuarios" />
+          </div>
           {loading ? (
             <span className="text-sm text-muted-foreground">Actualizando...</span>
           ) : error ? (

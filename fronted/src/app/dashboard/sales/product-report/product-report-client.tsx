@@ -28,6 +28,8 @@ import { DatePickerWithRange } from "../salesdashboard/date-range-picker";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import ProductCombobox from "@/components/sales/ProductCombobox";
 import { getProductSalesReport } from "../sales.api";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { PRODUCT_REPORT_GUIDE_STEPS } from "./product-report-guide-steps";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -239,7 +241,10 @@ export default function ProductReportClient({ products }: ProductReportClientPro
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reporte de productos</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Reporte de productos</h1>
+            <PageGuideButton steps={PRODUCT_REPORT_GUIDE_STEPS} tooltipLabel="Guía del reporte" />
+          </div>
           <p className="text-muted-foreground">
             Analiza el rendimiento historico de un producto especifico y descubre oportunidades de venta.
           </p>

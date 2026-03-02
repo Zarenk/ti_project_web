@@ -12,6 +12,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import EntriesForm from "./entries.form"
 import { QuickEntryView } from "./quick-entry-view"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { ENTRY_FORM_GUIDE_STEPS } from "./entry-form-guide-steps"
 
 type EntryTabsProps = {
   categories: any
@@ -95,9 +97,12 @@ export function EntryTabs({ categories }: EntryTabsProps) {
       <TabsContent value="full" forceMount className="data-[state=inactive]:hidden">
         <Card className="shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="pt-5 text-center text-xl font-bold">
-              Ingresar nuevo registro
-            </CardTitle>
+            <div className="flex items-center justify-center gap-2 pt-5">
+              <CardTitle className="text-center text-xl font-bold">
+                Ingresar nuevo registro
+              </CardTitle>
+              <PageGuideButton steps={ENTRY_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
+            </div>
           </CardHeader>
           <CardContent className="px-0 sm:px-6">
             <EntriesForm entries={null} categories={categories} />

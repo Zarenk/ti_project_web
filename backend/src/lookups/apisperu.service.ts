@@ -1,8 +1,10 @@
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -135,17 +137,28 @@ export class ApisPeruService {
         }),
       );
       if (response?.data?.success === false) {
-        throw new BadRequestException(
-          response.data.message ?? 'La solicitud a ApisPeru es invalida.',
-        );
+        const msg = response.data.message ?? 'No se encontraron resultados.';
+        throw new NotFoundException(msg);
       }
       return response.data;
     } catch (error: any) {
+      // Re-throw NestJS HttpExceptions directly (e.g. from success===false check above)
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       const status = error?.response?.status;
+      const responseData = error?.response?.data;
+      console.error(
+        `[ApisPeru] Error en request a ${url} — status=${status}, data=`,
+        responseData,
+        'message=',
+        error?.message,
+      );
       if (status === 400 || status === 404) {
         const message =
-          error?.response?.data?.message ??
-          error?.response?.data?.error ??
+          responseData?.message ??
+          responseData?.error ??
           'La solicitud a ApisPeru es invalida.';
         throw new BadRequestException(message);
       }
@@ -154,8 +167,13 @@ export class ApisPeruService {
           'El token de ApisPeru es invalido o ha expirado.',
         );
       }
+      if (status === 422 || status === 429) {
+        const message =
+          responseData?.message ?? responseData?.error ?? `ApisPeru respondio con status ${status}.`;
+        throw new BadRequestException(message);
+      }
       throw new InternalServerErrorException(
-        'No se pudo obtener informacion desde ApisPeru.',
+        `No se pudo obtener informacion desde ApisPeru (status=${status ?? 'unknown'}).`,
       );
     }
   }

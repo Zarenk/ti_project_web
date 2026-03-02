@@ -11,7 +11,8 @@ import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 @Controller('accounting/hooks/sale-posted')
-// TODO: Re-enable guards after adding auth headers to AccountingHookService
+// FIXME: Guards disabled — hooks llamados internamente sin headers de auth.
+// Re-habilitar cuando AccountingHookService propague JWT en llamadas internas.
 // @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class SalePostedController {
   private readonly logger = new Logger(SalePostedController.name);

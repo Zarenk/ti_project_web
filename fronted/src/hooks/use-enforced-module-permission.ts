@@ -18,6 +18,7 @@ export const MODULE_PERMISSION_LABELS: Record<ModulePermissionKey, string> = {
   accounting: "Contabilidad",
   marketing: "Marketing",
   ads: "Publicidad",
+  whatsapp: "WhatsApp",
   settings: "Configuraciones",
 }
 

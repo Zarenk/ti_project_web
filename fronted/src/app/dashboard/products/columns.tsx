@@ -3,9 +3,12 @@
 import { useMemo, useState } from 'react'
 import Link from "next/link"
 import { ColumnDef } from '@tanstack/react-table';
-import { ArrowUpDown, Loader2, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, Loader2, Megaphone, MoreHorizontal } from "lucide-react"
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
+import { useTenantSelection } from '@/context/tenant-selection-context';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from "@/components/ui/checkbox"
@@ -76,6 +79,8 @@ export type ProductTableOptions = {
 
 export function useProductColumns(options: ProductTableOptions = {}) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const schemaFields = options.productSchema?.fields ?? []
@@ -180,7 +185,7 @@ export function useProductColumns(options: ProductTableOptions = {}) {
           return <div className="font-medium">{category?.name || 'Sin categoria'}</div>
         },
         filterFn: (row, _columnId, filterValue) => {
-          return filterValue.includes(row.original.category?.id)
+          return filterValue.includes(row.getValue("category_name"))
         },
       },
       {
@@ -311,6 +316,12 @@ export function useProductColumns(options: ProductTableOptions = {}) {
                       Editar
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/dashboard/products/${product.id}/promote`}>
+                      <Megaphone className="mr-2 h-4 w-4" />
+                      Promocionar
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -338,7 +349,7 @@ export function useProductColumns(options: ProductTableOptions = {}) {
                               try {
                                 await deleteProduct(product.id)
                                 toast.success("Producto eliminado.")
-                                router.refresh()
+                                queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
                               } catch (error) {
                                 const message =
                                   error instanceof Error ? error.message : "No se pudo eliminar el producto."

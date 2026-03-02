@@ -26,6 +26,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { ACCOUNT_GUIDE_STEPS } from "./account-guide-steps"
 import { getLastAccessFromToken, isTokenValid, getUserDataFromToken } from "@/lib/auth"
 import { getProfile, updateProfile, changePassword, uploadProfileImage } from "./account.api"
 import Actividad from "./Actividad"
@@ -324,7 +326,10 @@ export default function Page() {
                 />
               </div>
               <div className="animate-in fade-in slide-in-from-left-1">
-                <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 md:text-2xl">{user.nombre}</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 md:text-2xl">{user.nombre}</h1>
+                  <PageGuideButton steps={ACCOUNT_GUIDE_STEPS} tooltipLabel="Guía de mi cuenta" />
+                </div>
                 <div className="mt-1 flex items-center gap-2">
                   <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100 dark:bg-slate-700 dark:text-slate-200">
                     {user.rol}

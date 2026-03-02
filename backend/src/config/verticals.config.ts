@@ -188,6 +188,7 @@ const RESTAURANTS_PRODUCT_SCHEMA: VerticalProductSchema = {
       label: 'Ingredientes',
       type: 'json',
       required: true,
+      group: 'general',
     },
     {
       key: 'ingredient_unit',
@@ -195,12 +196,14 @@ const RESTAURANTS_PRODUCT_SCHEMA: VerticalProductSchema = {
       type: 'select',
       options: ['UNIDAD', 'KG', 'GR', 'LT', 'ML'],
       required: true,
+      group: 'general',
     },
     {
       key: 'prep_time',
       label: 'Tiempo de preparacion (min)',
       type: 'number',
       required: true,
+      group: 'kitchen',
     },
     {
       key: 'kitchen_station',
@@ -208,27 +211,32 @@ const RESTAURANTS_PRODUCT_SCHEMA: VerticalProductSchema = {
       type: 'select',
       options: ['GRILL', 'FRY', 'COLD', 'BAKERY'],
       required: true,
+      group: 'kitchen',
     },
     {
       key: 'dietary_info',
       label: 'Informacion dietetica',
       type: 'multi-select',
       options: ['VEGAN', 'GLUTEN_FREE', 'LACTOSE_FREE', 'SPICY'],
+      group: 'nutrition',
     },
     {
       key: 'allergens',
       label: 'Alergenos',
       type: 'text',
+      group: 'nutrition',
     },
     {
       key: 'expiration_date',
       label: 'Fecha de caducidad',
       type: 'date',
+      group: 'trazabilidad',
     },
     {
       key: 'lot_number',
       label: 'Numero de lote',
       type: 'text',
+      group: 'trazabilidad',
     },
   ],
 };
@@ -278,6 +286,57 @@ const SERVICES_PRODUCT_SCHEMA: VerticalProductSchema = {
   ],
 };
 
+const LAW_FIRM_PRODUCT_SCHEMA: VerticalProductSchema = {
+  inventoryTracking: 'by_product',
+  pricingModel: 'uniform',
+  fields: [
+    {
+      key: 'service_type',
+      label: 'Tipo de servicio legal',
+      type: 'select',
+      options: [
+        'CONSULTA',
+        'ASESORIA',
+        'PATROCINIO',
+        'TRAMITE',
+        'DILIGENCIA',
+        'REDACCION',
+      ],
+      required: true,
+      group: 'general',
+    },
+    {
+      key: 'legal_area',
+      label: 'Area legal',
+      type: 'select',
+      options: [
+        'CIVIL',
+        'PENAL',
+        'LABORAL',
+        'COMERCIAL',
+        'TRIBUTARIO',
+        'ADMINISTRATIVO',
+        'CONSTITUCIONAL',
+        'FAMILIA',
+      ],
+      required: true,
+      group: 'general',
+    },
+    {
+      key: 'billable_rate',
+      label: 'Tarifa por hora (PEN)',
+      type: 'number',
+      group: 'billing',
+    },
+    {
+      key: 'flat_fee',
+      label: 'Honorario fijo (PEN)',
+      type: 'number',
+      group: 'billing',
+    },
+  ],
+};
+
 const MANUFACTURING_PRODUCT_SCHEMA: VerticalProductSchema = {
   inventoryTracking: 'by_product',
   pricingModel: 'uniform',
@@ -297,6 +356,41 @@ const MANUFACTURING_PRODUCT_SCHEMA: VerticalProductSchema = {
       key: 'lead_time_days',
       label: 'Tiempo de produccion (dias)',
       type: 'number',
+    },
+  ],
+};
+
+const GYM_PRODUCT_SCHEMA: VerticalProductSchema = {
+  inventoryTracking: 'by_product',
+  pricingModel: 'uniform',
+  fields: [
+    {
+      key: 'membership_type',
+      label: 'Tipo de membresia',
+      type: 'select',
+      options: ['MENSUAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL', 'PASE_DIARIO'],
+      required: true,
+      group: 'membership',
+    },
+    {
+      key: 'duration_days',
+      label: 'Duracion (dias)',
+      type: 'number',
+      required: true,
+      group: 'membership',
+    },
+    {
+      key: 'max_freezes',
+      label: 'Congelaciones permitidas',
+      type: 'number',
+      group: 'membership',
+    },
+    {
+      key: 'includes_classes',
+      label: 'Incluye clases grupales',
+      type: 'select',
+      options: ['SI', 'NO'],
+      group: 'benefits',
     },
   ],
 };
@@ -495,6 +589,77 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
     isActive: true,
     version: '1.0.0',
   },
+  [BusinessVertical.LAW_FIRM]: {
+    name: BusinessVertical.LAW_FIRM,
+    displayName: 'Estudio de Abogados',
+    description:
+      'Vertical especializado para estudios juridicos con gestion de expedientes, documentos legales, plazos procesales y control de horas.',
+    icon: 'scale',
+    features: {
+      sales: true,
+      inventory: false,
+      production: false,
+      reservations: false,
+      appointments: true,
+      multiWarehouse: false,
+      lotTracking: false,
+      serialNumbers: false,
+      tableManagement: false,
+      kitchenDisplay: false,
+      workOrders: false,
+      projectTracking: true,
+      posIntegration: false,
+      ecommerceIntegration: false,
+      deliveryPlatforms: false,
+      accounting: true,
+      cashRegister: false,
+      quotes: true,
+    },
+    ui: {
+      theme: 'services',
+      dashboardLayout: 'production-focused',
+      templates: {
+        invoice: 'service-invoice',
+        receipt: 'standard-receipt',
+        report: 'project-report',
+      },
+      customMenuItems: [
+        {
+          label: 'Expedientes',
+          path: '/dashboard/legal',
+          icon: 'briefcase',
+        },
+        {
+          label: 'Nuevo Expediente',
+          path: '/dashboard/legal/new',
+          icon: 'file-plus',
+        },
+        {
+          label: 'Calendario',
+          path: '/dashboard/legal/calendar',
+          icon: 'calendar',
+        },
+        {
+          label: 'Documentos',
+          path: '/dashboard/legal/documents',
+          icon: 'file-text',
+        },
+      ],
+    },
+    productSchema: LAW_FIRM_PRODUCT_SCHEMA,
+    fiscal: {
+      taxCalculation: 'service',
+      requiredFields: ['tax_id'],
+      invoiceFormat: 'detailed',
+      taxCategories: ['services'],
+    },
+    migrations: {
+      onActivate: ['create_legal_matter_tables'],
+    },
+    requiresDataMigration: false,
+    isActive: true,
+    version: '1.0.0',
+  },
   [BusinessVertical.SERVICES]: {
     name: BusinessVertical.SERVICES,
     displayName: 'Servicios Profesionales',
@@ -589,6 +754,87 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
     },
     requiresDataMigration: true,
     isActive: false,
+    version: '1.0.0',
+  },
+  [BusinessVertical.GYM]: {
+    name: BusinessVertical.GYM,
+    displayName: 'Gimnasio',
+    description:
+      'Vertical especializado para gimnasios con membresias, check-in, clases y entrenadores.',
+    icon: 'dumbbell',
+    features: {
+      sales: true,
+      inventory: true,
+      production: false,
+      reservations: true,
+      appointments: true,
+      multiWarehouse: false,
+      lotTracking: false,
+      serialNumbers: false,
+      tableManagement: false,
+      kitchenDisplay: false,
+      workOrders: false,
+      projectTracking: false,
+      posIntegration: true,
+      ecommerceIntegration: false,
+      deliveryPlatforms: false,
+      accounting: true,
+      cashRegister: true,
+      quotes: false,
+    },
+    ui: {
+      theme: 'default',
+      dashboardLayout: 'sales-focused',
+      templates: {
+        invoice: 'standard-invoice',
+        receipt: 'standard-receipt',
+        report: 'sales-report',
+      },
+      customMenuItems: [
+        {
+          label: 'Dashboard',
+          path: '/dashboard/gym',
+          icon: 'dashboard',
+        },
+        {
+          label: 'Miembros',
+          path: '/dashboard/gym/members',
+          icon: 'members',
+        },
+        {
+          label: 'Membresias',
+          path: '/dashboard/gym/memberships',
+          icon: 'membership',
+        },
+        {
+          label: 'Check-in',
+          path: '/dashboard/gym/checkin',
+          icon: 'checkin',
+        },
+        {
+          label: 'Clases',
+          path: '/dashboard/gym/classes',
+          icon: 'classes',
+        },
+        {
+          label: 'Entrenadores',
+          path: '/dashboard/gym/trainers',
+          icon: 'trainers',
+        },
+      ],
+    },
+    productSchema: GYM_PRODUCT_SCHEMA,
+    fiscal: {
+      taxCalculation: 'service',
+      requiredFields: ['tax_id'],
+      invoiceFormat: 'simplified',
+      taxCategories: ['services'],
+    },
+    migrations: {
+      onActivate: ['setup_gym_defaults', 'setup_gym_classes'],
+    },
+    requiresDataMigration: false,
+    isActive: true,
     version: '1.0.0',
   },
 };

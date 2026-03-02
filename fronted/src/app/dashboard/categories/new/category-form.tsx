@@ -1,6 +1,6 @@
 "use client"
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
@@ -20,6 +20,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { resolveImageUrl } from '@/lib/images'
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { useTenantSelection } from '@/context/tenant-selection-context'
 
 import { createCategory, updateCategory, validateCategoryName } from '../categories.api'
@@ -90,7 +92,10 @@ export function CategoryForm({ product }: any) {
     [],
   )
 
-  const { version } = useTenantSelection()
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
+  const invalidateCategories = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.categories.root(selection.orgId, selection.companyId) })
 
   const form = useForm<CategoryType>({
     resolver: zodResolver(categorySchema),
@@ -109,7 +114,9 @@ export function CategoryForm({ product }: any) {
     message?: string
   }>({})
   const [isImageUploading, setIsImageUploading] = useState(false)
-  const initializedVersion = useRef(false)
+
+  const tenantKey = `${selection.orgId}-${selection.companyId}`
+  const prevTenantRef = useRef(tenantKey)
 
   useEffect(() => {
     form.reset(mapCategoryToFormValues)
@@ -118,16 +125,14 @@ export function CategoryForm({ product }: any) {
   }, [form, mapCategoryToFormValues])
 
   useEffect(() => {
-    if (!initializedVersion.current) {
-      initializedVersion.current = true
-      return
-    }
+    if (prevTenantRef.current === tenantKey) return
+    prevTenantRef.current = tenantKey
 
     setNameError(null)
     setNameValidation({ status: 'idle', message: undefined })
     form.reset(emptyFormValues)
-    router.refresh()
-  }, [version, form, emptyFormValues, router])
+    invalidateCategories()
+  }, [tenantKey, form, emptyFormValues, invalidateCategories])
 
   const watchedName = form.watch('name')
   const watchedDescription = form.watch('description')
@@ -190,15 +195,15 @@ export function CategoryForm({ product }: any) {
           ...data,
         })
         toast.success('Categoria actualizada correctamente.')
+        invalidateCategories()
         router.push('/dashboard/categories')
-        router.refresh()
       } else {
         await createCategory({
           ...data,
         })
         toast.success('Categoria creada correctamente.')
+        invalidateCategories()
         router.push('/dashboard/categories')
-        router.refresh()
       }
     } catch (error: any) {
       if (error.response?.status === 409 || error.response?.data?.message.includes('ya existe')) {

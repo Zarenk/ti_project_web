@@ -8,11 +8,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { eachDayOfInterval, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { jwtDecode } from "jwt-decode";
 import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { HISTORY_GUIDE_STEPS } from "./history-guide-steps";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +64,7 @@ import {
 import { ActivityCharts } from "./activity-charts";
 import { GlobalActivityTable } from "./global-activity-table";
 import { UserActivityCharts } from "./user-activity-charts";
+import { queryKeys } from "@/lib/query-keys";
 
 interface HistoryEntry {
   id: number;
@@ -104,10 +108,6 @@ async function getUserContextFromToken(): Promise<{
 }
 
 export default function UserHistory(): React.ReactElement {
-  const [history, setHistory] = useState<History[]>([]);
-  const [activity, setActivity] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<any | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -124,15 +124,10 @@ export default function UserHistory(): React.ReactElement {
   const [userHeatmap, setUserHeatmap] = useState<
     Array<{ dow: number; hour: number; count: number }>
   >([]);
-  const [userOptions, setUserOptions] = useState<{
-    actions: string[];
-    entities: string[];
-  } | null>(null);
   const [userActors, setUserActors] = useState<
     Array<{ actorId: number; actorEmail: string | null; actorRole?: string }>
   >([]);
   const [userActorsLoading, setUserActorsLoading] = useState(false);
-  const [userOptionsLoading, setUserOptionsLoading] = useState(false);
   const [userDashLoading, setUserDashLoading] = useState(false);
   const [userDashError, setUserDashError] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<string | null>(null);
@@ -143,7 +138,7 @@ export default function UserHistory(): React.ReactElement {
   const [userSelectedEntity, setUserSelectedEntity] = useState("ALL");
   const [userSelectedSeverity, setUserSelectedSeverity] = useState("ALL");
   const [excludeContextUpdates, setExcludeContextUpdates] = useState(true);
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
   const filtersReadyRef = useRef(false);
   const lastUserSearchRef = useRef<string>("");
   const lastUserResultsRef = useRef<
@@ -192,12 +187,7 @@ export default function UserHistory(): React.ReactElement {
           setSelectedUserRole(null);
         }
       } else {
-        const message =
-          "No se pudo obtener el ID del usuario. Inicia sesion nuevamente.";
-        setError(message);
-        toast.error(message);
-        setHistory([]);
-        setActivity([]);
+        toast.error("No se pudo obtener el ID del usuario. Inicia sesion nuevamente.");
       }
     };
 
@@ -206,117 +196,83 @@ export default function UserHistory(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [version, userId, userScope]);
+  }, [selection.orgId, selection.companyId, userId, userScope]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!userId && !isAllUsers) return;
+  // Main data load: history + activity
+  const { data: mainData, isLoading: loading, error: mainError } = useQuery({
+    queryKey: queryKeys.activity.list(selection.orgId, selection.companyId, {
+      userId,
+      isAllUsers,
+      excludeContext: debouncedExcludeContext,
+    }),
+    queryFn: async () => {
+      const [historyData, activityData] = await Promise.all(
+        isAllUsers
+          ? [
+              getOrganizationHistory(),
+              getOrganizationActivity({
+                excludeContextUpdates: debouncedExcludeContext,
+              }),
+            ]
+          : [getUserHistory(userId as number), getUserActivity(userId as number)],
+      );
 
-    setLoading(true);
-    setError(null);
+      const mappedHistory = historyData.map((entry: HistoryEntry) => ({
+        id: entry.id,
+        username: entry.user.username,
+        action: entry.action,
+        product: entry.inventory.product.name,
+        stores: entry.inventory.storeOnInventory
+          .map((s) => s.store.name)
+          .join(", "),
+        previousStock: entry.previousStock ?? 0,
+        stockChange: entry.stockChange,
+        newStock: entry.inventory.storeOnInventory
+          .map((s) => s.stock)
+          .join(", "),
+        createdAt: entry.createdAt,
+      })) as unknown as History[];
 
-    const fetchData = async () => {
-      try {
-        const [historyData, activityData] = await Promise.all(
-          isAllUsers
-            ? [
-                getOrganizationHistory(),
-                getOrganizationActivity({
-                  excludeContextUpdates: debouncedExcludeContext,
-                }),
-              ]
-            : [getUserHistory(userId as number), getUserActivity(userId as number)],
-        );
+      const mappedActivity = activityData.map((entry: any) => ({
+        id: entry.id,
+        username: entry.actorEmail ?? "",
+        action: entry.action,
+        entityType: entry.entityType,
+        summary: entry.summary,
+        createdAt: entry.createdAt,
+      })) as Activity[];
 
-        if (cancelled) return;
+      return { history: mappedHistory, activity: mappedActivity };
+    },
+    enabled: !!(userId || isAllUsers),
+  });
 
-        const mappedHistory = historyData.map((entry: HistoryEntry) => ({
-          id: entry.id,
-          username: entry.user.username,
-          action: entry.action,
-          product: entry.inventory.product.name,
-          stores: entry.inventory.storeOnInventory
-            .map((s) => s.store.name)
-            .join(", "),
-          previousStock: entry.previousStock ?? 0,
-          stockChange: entry.stockChange,
-          newStock: entry.inventory.storeOnInventory
-            .map((s) => s.stock)
-            .join(", "),
-          createdAt: entry.createdAt,
-        })) as History[];
-
-        const mappedActivity = activityData.map((entry: any) => ({
-          id: entry.id,
-          username: entry.actorEmail ?? "",
-          action: entry.action,
-          entityType: entry.entityType,
-          summary: entry.summary,
-          createdAt: entry.createdAt,
-        })) as Activity[];
-
-        setHistory(mappedHistory);
-        setActivity(mappedActivity);
-      } catch (err) {
-        if (cancelled) return;
-        const message =
-          err instanceof Error
-            ? err.message
-            : "No se pudo cargar el historial del usuario.";
-        setError(message);
-        toast.error(message);
-        setHistory([]);
-        setActivity([]);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void fetchData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, isAllUsers, version, debouncedExcludeContext]);
+  const history = mainData?.history ?? [];
+  const activity = mainData?.activity ?? [];
+  const error = mainError
+    ? (mainError instanceof Error ? mainError.message : "No se pudo cargar el historial del usuario.")
+    : null;
 
 
-  useEffect(() => {
-    let cancelled = false;
-
-    setUserOptionsLoading(true);
-
-    const loadOptions = async () => {
-      try {
-        const options = await getOrganizationActivityOptions({
-          excludeContextUpdates: debouncedExcludeContext,
-          actionLimit: 50,
-          entityLimit: 50,
-        });
-        if (!cancelled) {
-          setUserOptions({
-            actions: Array.isArray(options?.actions) ? options.actions : [],
-            entities: Array.isArray(options?.entities) ? options.entities : [],
-          });
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setUserOptions({ actions: [], entities: [] });
-        }
-      } finally {
-        if (!cancelled) {
-          setUserOptionsLoading(false);
-        }
-      }
-    };
-
-    void loadOptions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedExcludeContext, version]);
+  // Options load via useQuery
+  const { data: userOptions = null, isLoading: userOptionsLoading } = useQuery<{
+    actions: string[];
+    entities: string[];
+  } | null>({
+    queryKey: [...queryKeys.activity.root(selection.orgId, selection.companyId), "options", { excludeContext: debouncedExcludeContext }],
+    queryFn: async (): Promise<{ actions: string[]; entities: string[] }> => {
+      const options = await getOrganizationActivityOptions({
+        excludeContextUpdates: debouncedExcludeContext,
+        actionLimit: 50,
+        entityLimit: 50,
+      });
+      return {
+        actions: Array.isArray(options?.actions) ? (options.actions as string[]) : [],
+        entities: Array.isArray(options?.entities) ? (options.entities as string[]) : [],
+      };
+    },
+    enabled: selection.orgId !== null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -376,8 +332,8 @@ export default function UserHistory(): React.ReactElement {
           const cache = userSearchCacheRef.current;
           cache.set(searchTerm, nextResults);
           if (cache.size > 20) {
-            const oldestKey = cache.keys().next().value;
-            cache.delete(oldestKey);
+            const oldestKey = cache.keys().next().value as string | undefined;
+            if (oldestKey !== undefined) cache.delete(oldestKey);
           }
           startTransition(() => {
             setUserActors(nextResults);
@@ -405,7 +361,7 @@ export default function UserHistory(): React.ReactElement {
         userSearchAbortRef.current.abort();
       }
     };
-  }, [debouncedExcludeContext, debouncedUserSearchTerm, version]);
+  }, [debouncedExcludeContext, debouncedUserSearchTerm, selection.orgId, selection.companyId]);
 
   useEffect(() => {
     if (!userSearchOpen) return;
@@ -611,7 +567,8 @@ export default function UserHistory(): React.ReactElement {
   }, [
     userId,
     isAllUsers,
-    version,
+    selection.orgId,
+    selection.companyId,
     debouncedUserAction,
     debouncedUserEntity,
     debouncedUserSeverity,
@@ -665,7 +622,7 @@ export default function UserHistory(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [version, currentRole]);
+  }, [selection.orgId, selection.companyId, currentRole]);
 
   const topAction = summary?.byAction?.[0];
   const topEntity = summary?.byEntity?.[0];
@@ -1174,7 +1131,10 @@ export default function UserHistory(): React.ReactElement {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-xl">Resumen del usuario</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-xl">Resumen del usuario</CardTitle>
+            <PageGuideButton steps={HISTORY_GUIDE_STEPS} tooltipLabel="Guía del historial" />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4 hidden md:block">{userFilters}</div>

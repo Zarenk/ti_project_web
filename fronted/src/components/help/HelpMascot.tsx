@@ -68,7 +68,7 @@ function LottieAnimation({ state }: { state: MascotState }) {
   return (
     <div
       ref={containerRef}
-      style={{ width: 52, height: 52 }}
+      style={{ width: 44, height: 44 }}
       aria-hidden="true"
     />
   )
@@ -189,7 +189,7 @@ export function HelpMascot() {
           <TooltipTrigger asChild>
             <button
               onClick={handleToggle}
-              className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-slate-200 transition-transform duration-150 hover:scale-[1.08] active:scale-95 dark:bg-slate-900 dark:ring-slate-700"
+              className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-slate-200 transition-transform duration-150 hover:scale-[1.08] active:scale-95 dark:bg-slate-900 dark:ring-slate-700"
               aria-label={isOpen ? "Cerrar asistente" : "Abrir asistente de ayuda"}
             >
               {/* Ping ring when waving */}
@@ -199,7 +199,7 @@ export function HelpMascot() {
 
               {/* Lottie animation — always mounted, hidden when open */}
               <span
-                className={`flex h-14 w-14 items-center justify-center overflow-hidden rounded-full transition-opacity duration-150 ${
+                className={`flex h-12 w-12 items-center justify-center overflow-hidden rounded-full transition-opacity duration-150 ${
                   isOpen ? "pointer-events-none opacity-0" : "opacity-100"
                 }`}
               >

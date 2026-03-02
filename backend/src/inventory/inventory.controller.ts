@@ -13,6 +13,8 @@ import {
   Header,
   Res,
   UseGuards,
+  Logger,
+  SetMetadata,
 } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
@@ -27,13 +29,19 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { InventorySnapshotService } from './inventory-snapshot.service';
+import { HistoricalSnapshotService } from './historical-snapshot.service';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class InventoryController {
+  private readonly logger = new Logger(InventoryController.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly inventoryService: InventoryService, // Inyectar el servicio
+    private readonly inventoryService: InventoryService,
+    private readonly snapshotService: InventorySnapshotService,
+    private readonly historicalSnapshotService: HistoricalSnapshotService,
   ) {}
 
   // Endpoint para crear un nuevo inventario
@@ -286,5 +294,304 @@ export class InventoryController {
       organizationId ?? undefined,
       companyId ?? undefined,
     );
+  }
+
+  // ==================== INVENTORY SNAPSHOTS ====================
+
+  /**
+   * Crear snapshot del mes actual manualmente
+   * POST /inventory/snapshots/current
+   */
+  @Post('/snapshots/current')
+  async createCurrentSnapshot(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.snapshotService.createCurrentMonthSnapshot(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Crear snapshot para un mes/año específico
+   * POST /inventory/snapshots
+   * Body: { month: number, year: number }
+   */
+  @Post('/snapshots')
+  async createSnapshot(
+    @Body() body: { month: number; year: number },
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const { month, year } = body;
+    if (!month || !year || month < 1 || month > 12 || year < 2000) {
+      throw new BadRequestException('Mes y año inválidos');
+    }
+    return this.snapshotService.createSnapshot(
+      month,
+      year,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Obtener snapshots históricos
+   * GET /inventory/snapshots?limit=12
+   */
+  @Get('/snapshots')
+  async getSnapshots(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNum = limit ? Number(limit) : 12;
+    return this.snapshotService.getSnapshots(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+      limitNum,
+    );
+  }
+
+  /**
+   * Obtener snapshot específico de un mes/año
+   * GET /inventory/snapshots/:year/:month
+   */
+  @Get('/snapshots/:year/:month')
+  async getSnapshot(
+    @Param('year') year: string,
+    @Param('month') month: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const yearNum = Number(year);
+    const monthNum = Number(month);
+    if (!Number.isFinite(yearNum) || !Number.isFinite(monthNum)) {
+      throw new BadRequestException('Año y mes deben ser números válidos');
+    }
+    if (monthNum < 1 || monthNum > 12 || yearNum < 2000) {
+      throw new BadRequestException('Mes y año inválidos');
+    }
+    return this.snapshotService.getSnapshot(
+      monthNum,
+      yearNum,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  // ==================== HISTORICAL SNAPSHOTS (BACKFILL) ====================
+
+  /**
+   * Obtener rango de datos disponibles (primera entrada y última venta)
+   * GET /inventory/snapshots/data-range
+   */
+  @Get('/snapshots/data-range')
+  async getDataRange(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.historicalSnapshotService.getDataRange(
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Crear snapshot calculado retroactivamente para un mes específico
+   * POST /inventory/snapshots/calculate
+   * Body: { month: number, year: number }
+   */
+  @Post('/snapshots/calculate')
+  async calculateSnapshot(
+    @Body() body: { month: number; year: number },
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const { month, year } = body;
+    if (!month || !year || month < 1 || month > 12 || year < 2000) {
+      throw new BadRequestException('Mes y año inválidos');
+    }
+    return this.historicalSnapshotService.createCalculatedSnapshot(
+      month,
+      year,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  /**
+   * Backfill: crear snapshots calculados para un rango de meses
+   * POST /inventory/snapshots/backfill
+   * Body: { startMonth: number, startYear: number, endMonth: number, endYear: number }
+   */
+  @Post('/snapshots/backfill')
+  async backfillSnapshots(
+    @Body()
+    body: {
+      startMonth: number;
+      startYear: number;
+      endMonth: number;
+      endYear: number;
+    },
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const { startMonth, startYear, endMonth, endYear } = body;
+
+    // Validaciones
+    if (
+      !startMonth ||
+      !startYear ||
+      !endMonth ||
+      !endYear ||
+      startMonth < 1 ||
+      startMonth > 12 ||
+      endMonth < 1 ||
+      endMonth > 12 ||
+      startYear < 2000 ||
+      endYear < 2000
+    ) {
+      throw new BadRequestException('Parámetros de fechas inválidos');
+    }
+
+    if (
+      startYear > endYear ||
+      (startYear === endYear && startMonth > endMonth)
+    ) {
+      throw new BadRequestException(
+        'La fecha de inicio debe ser anterior a la fecha de fin',
+      );
+    }
+
+    return this.historicalSnapshotService.backfillSnapshots(
+      startMonth,
+      startYear,
+      endMonth,
+      endYear,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Get('transfers')
+  async listTransfers(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const take = Math.min(Number(pageSize) || 50, 100);
+    const skip = ((Number(page) || 1) - 1) * take;
+
+    const where = organizationId ? { organizationId } : {};
+
+    const [items, total] = await Promise.all([
+      this.prisma.transfer.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, barcode: true } },
+          sourceStore: { select: { id: true, name: true } },
+          destinationStore: { select: { id: true, name: true } },
+          shippingGuide: {
+            select: {
+              id: true,
+              serie: true,
+              correlativo: true,
+              motivoTraslado: true,
+              cdrAceptado: true,
+              status: true,
+              puntoPartida: true,
+              puntoLlegada: true,
+              fechaTraslado: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take,
+        skip,
+      }),
+      this.prisma.transfer.count({ where }),
+    ]);
+
+    return { items, total, page: Number(page) || 1, pageSize: take };
+  }
+
+  @Get('product-transfers/:productId')
+  async listProductTransfers(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Param('productId') productId: string,
+  ) {
+    const pid = Number(productId);
+    if (!pid) return [];
+
+    const where: any = { productId: pid };
+    if (organizationId) where.organizationId = organizationId;
+
+    return this.prisma.transfer.findMany({
+      where,
+      include: {
+        sourceStore: { select: { id: true, name: true } },
+        destinationStore: { select: { id: true, name: true } },
+        shippingGuide: {
+          select: {
+            id: true,
+            serie: true,
+            correlativo: true,
+            cdrAceptado: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  @Get('/export/:storeId')
+  async exportInventoryExcel(
+    @Param('storeId') storeId: string,
+    @Query('categoryId') categoryId?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+    @Res() res?: Response,
+  ) {
+    const numericStoreId = parseInt(storeId, 10);
+    if (isNaN(numericStoreId)) {
+      throw new BadRequestException('storeId debe ser un número válido');
+    }
+
+    const store = await this.prisma.store.findFirst({
+      where: {
+        id: numericStoreId,
+        ...(organizationId ? { organizationId } : {}),
+      },
+      select: { name: true },
+    });
+
+    const orgName = organizationId
+      ? (
+          await this.prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { name: true },
+          })
+        )?.name ?? undefined
+      : undefined;
+
+    const buffer = await this.inventoryService.generateInventoryExcel(
+      numericStoreId,
+      categoryId ? parseInt(categoryId, 10) : undefined,
+      store?.name ?? undefined,
+      orgName,
+    );
+
+    const filename = `inventario-${store?.name?.replace(/\s+/g, '_') ?? numericStoreId}-${format(new Date(), 'yyyyMMdd')}.xlsx`;
+
+    res!.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length.toString(),
+    });
+    res!.end(buffer);
   }
 }

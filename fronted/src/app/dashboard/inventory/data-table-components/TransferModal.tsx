@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +46,13 @@ async function getUserIdFromToken(): Promise<number | null> {
 }
 
 const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, product }) => {
+  const queryClient = useQueryClient();
+  const { selection } = useTenantSelection();
+  const invalidateInventory = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId),
+    });
+
   const [formData, setFormData] = useState({
     sourceStoreId: "",
     destinationStoreId: "",
@@ -140,7 +150,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, product 
         description: "",
       });
 
-      location.reload(); // Refresca la página para actualizar los datos
+      invalidateInventory(); // Refresca datos via React Query
     } catch (error: any) {
       toast.error(error.message || "Error al realizar la transferencia.");
     } finally {

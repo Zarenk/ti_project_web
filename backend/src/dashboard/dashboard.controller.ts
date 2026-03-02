@@ -1,9 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from '../common/decorators/module-permission.decorator';
+import { SkipModulePermissionsGuard } from '../common/decorators/skip-module-permission.decorator';
 import { CurrentTenant } from '../tenancy/tenant-context.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -43,6 +44,28 @@ export class DashboardController {
     const parsedDays = parseInt(days, 10);
     return this.dashboardService.getSparklines({
       days: Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 30,
+      organizationId: organizationId ?? undefined,
+      companyId: companyId ?? undefined,
+    });
+  }
+
+  @Get('employee-kpis')
+  @SkipModulePermissionsGuard()
+  async getEmployeeKPIs(
+    @Req() req,
+    @Query('period') period: string = 'month',
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+  ) {
+    const userId = req.user?.userId ?? req.user?.sub;
+    const validPeriods = ['month', 'quarter', 'year'];
+    const safePeriod = validPeriods.includes(period)
+      ? (period as 'month' | 'quarter' | 'year')
+      : 'month';
+
+    return this.dashboardService.getEmployeeKPIs({
+      userId,
+      period: safePeriod,
       organizationId: organizationId ?? undefined,
       companyId: companyId ?? undefined,
     });

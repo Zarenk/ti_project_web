@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EntryLine } from '../entries.service';
+import { IGV_FACTOR } from '../accounting.constants';
 
 interface SaleEntryLine extends EntryLine {
   igv?: boolean;
@@ -27,7 +28,7 @@ function aggregateSaleLines(lines: SaleEntryLine[]): SaleEntryLine[] {
 @Injectable()
 export class SaleAccountingService {
   buildEntryFromSale(sale: any): SaleEntryLine[] {
-    const subtotal = +(sale.total / 1.18).toFixed(2);
+    const subtotal = +(sale.total / IGV_FACTOR).toFixed(2);
     const igv = +(sale.total - subtotal).toFixed(2);
     const cost = (sale.salesDetails || []).reduce(
       (sum: number, d: any) => sum + (d.entryDetail?.price ?? 0) * d.quantity,

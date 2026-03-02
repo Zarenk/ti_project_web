@@ -4,7 +4,6 @@ import { DebitNotePostedController } from './hooks/debit-note-posted.controller'
 import { InventoryAdjustedController } from './hooks/invetory-adjusted.controller';
 import { PaymentPostedController } from './hooks/payment-posted.controller';
 import { PurchasePostedController } from './hooks/purchase-posted.controller';
-import { SaleFulfilledController } from './hooks/sale-fulfilled.controller';
 import { SalePostedController } from './hooks/sale-posted.controller';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';
@@ -31,7 +30,6 @@ import { AccountBootstrapService } from './services/account-bootstrap.service';
   controllers: [
     AccountingController,
     SalePostedController,
-    SaleFulfilledController,
     PurchasePostedController,
     PaymentPostedController,
     InventoryAdjustedController,

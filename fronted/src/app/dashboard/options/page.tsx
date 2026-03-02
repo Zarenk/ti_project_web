@@ -79,6 +79,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
 import { authFetch, UnauthenticatedError } from "@/utils/auth-fetch";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -87,6 +88,9 @@ import {
   getTypographyFont,
 } from "@/lib/typography-fonts";
 import { DeleteActionsGuard } from "@/components/delete-actions-guard";
+import { useAuth } from "@/context/auth-context";
+import { useOptionalTenantSelection } from "@/context/tenant-selection-context";
+import { getCompanyDetail, type CompanyDetail } from "../tenancy/tenancy.api";
 
 import { BACKEND_URL } from "@/lib/utils";
 
@@ -147,7 +151,7 @@ const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
 
 type PermissionModuleKey = Exclude<
   keyof SiteSettings["permissions"],
-  "hidePurchaseCost" | "hideDeleteActions"
+  "hidePurchaseCost" | "hideDeleteForEmployees" | "hideDeleteForAdmins"
 >;
 
 const permissionModules: {
@@ -298,12 +302,91 @@ function mergeSettingsDeep<T extends Record<string, unknown>>(
   return output;
 }
 
+/* ─── Skeleton shown while settings load from API ─── */
+function SettingsPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-background font-site animate-fade-in">
+      {/* Header skeleton */}
+      <header className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
+        <div className="container mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-56" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-28 rounded-lg" />
+            <Skeleton className="h-9 w-28 rounded-lg" />
+            <Skeleton className="h-9 w-32 rounded-lg" />
+          </div>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
+          {/* Sidebar skeleton — mimics 15 nav items */}
+          <aside className="h-fit space-y-1">
+            {Array.from({ length: 15 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl px-4 py-3">
+                <Skeleton className="h-5 w-5 flex-shrink-0 rounded" />
+                <Skeleton className="h-4" style={{ width: `${90 + Math.round(Math.sin(i * 1.3) * 40)}px` }} />
+              </div>
+            ))}
+          </aside>
+
+          {/* Content skeleton — mimics a form section with card + fields */}
+          <main className="space-y-6">
+            <Card className="border shadow-md">
+              <CardHeader>
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-64 mt-1" />
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Field rows */}
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-10 w-full rounded-md" />
+                  </div>
+                ))}
+                {/* Two-column row */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-10 w-full rounded-md" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-10 w-full rounded-md" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </main>
+        </div>
+      </div>
+
+      {/* Footer bar skeleton */}
+      <div className="container mx-auto px-4 pb-8">
+        <div className="sticky bottom-4 z-50 border border-border bg-card/95 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-4 py-4">
+            <Skeleton className="h-5 w-36 rounded-full" />
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-28 rounded-md" />
+              <Skeleton className="h-9 w-24 rounded-md" />
+              <Skeleton className="h-9 w-36 rounded-md" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionId>(getStoredActiveSection);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [firstSave, setFirstSave] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
   const [serverSettings, setServerSettings] = useState<SettingsFormData>(defaultValues);
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
   const [hasConflict, setHasConflict] = useState(false);
@@ -312,10 +395,12 @@ export default function SettingsPage() {
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [isBackupPending, setIsBackupPending] = useState(false);
   const [isPurgeDialogOpen, setIsPurgeDialogOpen] = useState(false);
+  const [activeCompany, setActiveCompany] = useState<CompanyDetail | null>(null);
   const previewInitializedRef = useRef(false);
   const lastNonSystemModeRef = useRef<"light" | "dark">("light");
   const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
+  const tenantCtx = useOptionalTenantSelection();
 
   const {
     settings,
@@ -324,6 +409,7 @@ export default function SettingsPage() {
     resetPreview,
     saveSettings,
     isSaving,
+    isLoading: isContextLoading,
   } = useSiteSettings();
 
   const {
@@ -345,6 +431,20 @@ export default function SettingsPage() {
   useEffect(() => {
     reset(persistedSettings);
   }, [persistedSettings, reset]);
+
+  // Fetch active company details for CompanySection
+  useEffect(() => {
+    const companyId = tenantCtx?.selection?.companyId;
+    if (!companyId) {
+      setActiveCompany(null);
+      return;
+    }
+    let cancelled = false;
+    getCompanyDetail(companyId)
+      .then((detail) => { if (!cancelled) setActiveCompany(detail); })
+      .catch(() => { if (!cancelled) setActiveCompany(null); });
+    return () => { cancelled = true; };
+  }, [tenantCtx?.selection?.companyId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -666,6 +766,10 @@ export default function SettingsPage() {
     [],
   );
 
+  if (isContextLoading) {
+    return <SettingsPageSkeleton />;
+  }
+
   return (
     <div className="min-h-screen bg-background font-site">
       <header className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
@@ -784,7 +888,7 @@ export default function SettingsPage() {
                     transition={{ duration: 0.2 }}
                   >
                   {activeSection === "company" && (
-                    <CompanySection register={register} errors={errors} control={control} />
+                    <CompanySection register={register} errors={errors} control={control} companyData={activeCompany} />
                   )}
                   {activeSection === "brand" && (
                     <BrandSection register={register} errors={errors} setValue={setValue} watch={watch} />
@@ -1205,10 +1309,15 @@ function SystemDataSection({
   );
 }
 
-function CompanySection({ register, errors, control }: SimpleSectionProps) {
+function CompanySection({ register, errors, control, companyData }: SimpleSectionProps & { companyData?: CompanyDetail | null }) {
   if (!control) {
     return null;
   }
+
+  const companyName = companyData?.sunatBusinessName || companyData?.legalName || companyData?.name || "";
+  const companyRuc = companyData?.sunatRuc || companyData?.taxId || "";
+  const companyAddress = companyData?.sunatAddress || "";
+
   return (
     <Card className="border-2">
       <CardHeader>
@@ -1216,19 +1325,37 @@ function CompanySection({ register, errors, control }: SimpleSectionProps) {
         <CardDescription>Define la información principal de tu empresa.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="companyName">Nombre de la empresa *</Label>
-          <Input id="companyName" {...register("company.name")} placeholder="Mi Empresa" />
-          {errors.company?.name?.message && (
-            <p className="text-sm text-destructive">{errors.company.name.message}</p>
-          )}
-        </div>
+        {/* Datos de Company (readonly — se editan en Tenancy) */}
+        {companyData && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Estos datos provienen de tu empresa. Para editarlos, ve a la sección de empresas.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Nombre / Razón social</Label>
+                <p className="text-sm font-medium">{companyName || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">RUC</Label>
+                <p className="text-sm font-medium">{companyRuc || "—"}</p>
+              </div>
+              {companyAddress && (
+                <div className="space-y-1 md:col-span-2">
+                  <Label className="text-xs text-muted-foreground">Dirección fiscal</Label>
+                  <p className="text-sm font-medium">{companyAddress}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <Controller
           control={control}
           name="company.receiptFormat"
           render={({ field }) => (
             <div className="space-y-2">
-              <Label>Tipo de comprobante</Label>
+              <Label>Formato de comprobante</Label>
               <RadioGroup
                 value={field.value}
                 onValueChange={field.onChange}
@@ -1236,14 +1363,14 @@ function CompanySection({ register, errors, control }: SimpleSectionProps) {
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="a4" id="receipt-format-a4" />
-                  <Label htmlFor="receipt-format-a4" className="font-normal">
+                  <Label htmlFor="receipt-format-a4" className="font-normal cursor-pointer">
                     Hoja A4
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="ticket" id="receipt-format-ticket" />
-                  <Label htmlFor="receipt-format-ticket" className="font-normal">
-                    Ticket
+                  <Label htmlFor="receipt-format-ticket" className="font-normal cursor-pointer">
+                    Ticket (80mm)
                   </Label>
                 </div>
               </RadioGroup>
@@ -1255,28 +1382,6 @@ function CompanySection({ register, errors, control }: SimpleSectionProps) {
         />
 
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="companyDocumentNumber">RUC / Documento</Label>
-            <Input
-              id="companyDocumentNumber"
-              {...register("company.documentNumber")}
-              placeholder="20123456789"
-            />
-            {errors.company?.documentNumber?.message && (
-              <p className="text-sm text-destructive">{errors.company.documentNumber.message}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="companyAddress">Dirección fiscal</Label>
-            <Input
-              id="companyAddress"
-              {...register("company.address")}
-              placeholder="Av. Ejemplo 123, Lima"
-            />
-            {errors.company?.address?.message && (
-              <p className="text-sm text-destructive">{errors.company.address.message}</p>
-            )}
-          </div>
           <div className="space-y-2">
             <Label htmlFor="companyPhone">Teléfono</Label>
             <Input id="companyPhone" {...register("company.phone")} placeholder="(+51) 999 999 999" />
@@ -2336,6 +2441,8 @@ function MaintenanceSection({ register, errors, watch, setValue }: SectionProps)
 }
 
 function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
+  const { role } = useAuth();
+  const isSuperAdminGlobal = role?.toUpperCase() === "SUPER_ADMIN_GLOBAL";
   const permissions = watch("permissions");
   const currentPermissions = permissions ?? defaultValues.permissions;
 
@@ -2407,30 +2514,82 @@ function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {
         </div>
         <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
           <div className="space-y-1">
-            <Label htmlFor="permissions-hideDeleteActions" className="text-base font-medium">
-              Ocultar acciones de eliminar
+            <Label htmlFor="permissions-hideDeleteForEmployees" className="text-base font-medium">
+              Ocultar eliminación para empleados
             </Label>
             <p className="text-sm text-muted-foreground">
-              Quita los botones de eliminado para usuarios y administradores. Los super administradores globales
-              y de organización siempre los verán.
+              Quita los botones de eliminado para usuarios con rol Empleado.
             </p>
           </div>
           <Checkbox
-            id="permissions-hideDeleteActions"
-            checked={currentPermissions.hideDeleteActions ?? false}
+            id="permissions-hideDeleteForEmployees"
+            checked={currentPermissions.hideDeleteForEmployees ?? false}
             onCheckedChange={(checked) =>
               setValue(
                 "permissions",
                 {
                   ...currentPermissions,
-                  hideDeleteActions: checked === true,
+                  hideDeleteForEmployees: checked === true,
                 },
                 { shouldDirty: true },
               )
             }
-            aria-label="Ocultar acciones de eliminar"
+            aria-label="Ocultar eliminación para empleados"
           />
         </div>
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
+          <div className="space-y-1">
+            <Label htmlFor="permissions-hideDeleteForAdmins" className="text-base font-medium">
+              Ocultar eliminación para administradores
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Quita los botones de eliminado para usuarios con rol Administrador. Los super administradores globales
+              y de organización siempre los verán.
+            </p>
+          </div>
+          <Checkbox
+            id="permissions-hideDeleteForAdmins"
+            checked={currentPermissions.hideDeleteForAdmins ?? false}
+            onCheckedChange={(checked) =>
+              setValue(
+                "permissions",
+                {
+                  ...currentPermissions,
+                  hideDeleteForAdmins: checked === true,
+                },
+                { shouldDirty: true },
+              )
+            }
+            aria-label="Ocultar eliminación para administradores"
+          />
+        </div>
+        {isSuperAdminGlobal && (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-border/60 bg-card/40 p-4">
+            <div className="space-y-1">
+              <Label htmlFor="permissions-whatsapp" className="text-base font-medium">
+                WhatsApp
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Habilitar el módulo de mensajería y automatizaciones de WhatsApp.
+              </p>
+            </div>
+            <Checkbox
+              id="permissions-whatsapp"
+              checked={currentPermissions.whatsapp ?? false}
+              onCheckedChange={(checked) =>
+                setValue(
+                  "permissions",
+                  {
+                    ...currentPermissions,
+                    whatsapp: checked === true,
+                  },
+                  { shouldDirty: true },
+                )
+              }
+              aria-label="Activar módulo de WhatsApp"
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

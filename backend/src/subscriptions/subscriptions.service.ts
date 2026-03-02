@@ -242,6 +242,19 @@ export class SubscriptionsService {
     };
   }
 
+  async updatePlanTrialDays(planCode: string, trialDays: number) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({
+      where: { code: planCode },
+    });
+    if (!plan) {
+      throw new NotFoundException(`Plan con código "${planCode}" no encontrado`);
+    }
+    return this.prisma.subscriptionPlan.update({
+      where: { code: planCode },
+      data: { trialDays },
+    });
+  }
+
   async requestPlanChange(dto: ChangePlanDto) {
     this.logger.debug(
       `Plan change requested org=${dto.organizationId} plan=${dto.planCode} successUrl=${dto.successUrl} cancelUrl=${dto.cancelUrl} immediate=${dto.effectiveImmediately}`,

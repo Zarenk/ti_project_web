@@ -1,7 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
-import { subDays, startOfDay, endOfDay, eachDayOfInterval, format } from 'date-fns';
+import {
+  subDays,
+  startOfDay,
+  endOfDay,
+  eachDayOfInterval,
+  format,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  subQuarters,
+  startOfQuarter,
+  endOfQuarter,
+  subYears,
+  startOfYear,
+  endOfYear,
+} from 'date-fns';
 
 export interface SparklinePoint {
   date: string;
@@ -454,6 +469,318 @@ export class DashboardService {
     }
     return map;
   }
+
+  // ── Employee KPIs ──────────────────────────────────────────────────────
+
+  async getEmployeeKPIs(params: {
+    userId: number;
+    period: 'month' | 'quarter' | 'year';
+    organizationId?: number | null;
+    companyId?: number | null;
+  }) {
+    const { userId, period, organizationId, companyId } = params;
+    const now = new Date();
+
+    const { currentStart, currentEnd, previousStart, previousEnd } =
+      this.resolvePeriodRange(now, period);
+
+    const orgFilter = buildOrganizationFilter(organizationId, companyId);
+
+    const baseWhere = {
+      userId,
+      ...(orgFilter as Record<string, unknown>),
+    };
+
+    // Run all queries in parallel
+    const [
+      currentAgg,
+      previousAgg,
+      currentItemsSold,
+      previousItemsSold,
+      monthlySeries,
+      ranking,
+      topProducts,
+    ] = await Promise.all([
+      // Current period aggregate
+      this.prisma.sales.aggregate({
+        _sum: { total: true },
+        _count: { id: true },
+        where: {
+          ...baseWhere,
+          createdAt: { gte: currentStart, lte: currentEnd },
+        },
+      }),
+      // Previous period aggregate
+      this.prisma.sales.aggregate({
+        _sum: { total: true },
+        _count: { id: true },
+        where: {
+          ...baseWhere,
+          createdAt: { gte: previousStart, lte: previousEnd },
+        },
+      }),
+      // Current period items sold
+      this.prisma.salesDetail.aggregate({
+        _sum: { quantity: true },
+        where: {
+          sale: {
+            ...baseWhere,
+            createdAt: { gte: currentStart, lte: currentEnd },
+          },
+        },
+      }),
+      // Previous period items sold
+      this.prisma.salesDetail.aggregate({
+        _sum: { quantity: true },
+        where: {
+          sale: {
+            ...baseWhere,
+            createdAt: { gte: previousStart, lte: previousEnd },
+          },
+        },
+      }),
+      // Monthly series (last 12 months)
+      this.fetchEmployeeMonthlySeries(userId, organizationId, companyId),
+      // Ranking vs peers
+      this.fetchEmployeeRanking(
+        userId,
+        currentStart,
+        currentEnd,
+        organizationId,
+        companyId,
+      ),
+      // Top 5 products
+      this.fetchEmployeeTopProducts(
+        userId,
+        currentStart,
+        currentEnd,
+        organizationId,
+        companyId,
+      ),
+    ]);
+
+    const currentSalesCount = currentAgg._count.id ?? 0;
+    const currentRevenue = currentAgg._sum.total ?? 0;
+    const previousSalesCount = previousAgg._count.id ?? 0;
+    const previousRevenue = previousAgg._sum.total ?? 0;
+    const currentItems = currentItemsSold._sum.quantity ?? 0;
+    const previousItems = previousItemsSold._sum.quantity ?? 0;
+
+    const avgTicket = currentSalesCount > 0 ? currentRevenue / currentSalesCount : 0;
+    const prevAvgTicket =
+      previousSalesCount > 0 ? previousRevenue / previousSalesCount : 0;
+
+    const calcGrowth = (cur: number, prev: number) =>
+      prev > 0 ? ((cur - prev) / prev) * 100 : null;
+
+    return {
+      currentPeriod: {
+        salesCount: currentSalesCount,
+        totalRevenue: Math.round(currentRevenue * 100) / 100,
+        avgTicket: Math.round(avgTicket * 100) / 100,
+        itemsSold: currentItems,
+      },
+      previousPeriod: {
+        salesCount: previousSalesCount,
+        totalRevenue: Math.round(previousRevenue * 100) / 100,
+        avgTicket: Math.round(prevAvgTicket * 100) / 100,
+        itemsSold: previousItems,
+      },
+      growth: {
+        salesCount: calcGrowth(currentSalesCount, previousSalesCount),
+        totalRevenue: calcGrowth(currentRevenue, previousRevenue),
+        avgTicket: calcGrowth(avgTicket, prevAvgTicket),
+        itemsSold: calcGrowth(currentItems, previousItems),
+      },
+      monthlySeries,
+      ranking,
+      topProducts,
+    };
+  }
+
+  private resolvePeriodRange(
+    now: Date,
+    period: 'month' | 'quarter' | 'year',
+  ) {
+    switch (period) {
+      case 'quarter': {
+        const currentStart = startOfQuarter(now);
+        const currentEnd = endOfDay(now);
+        const prevQuarter = subQuarters(now, 1);
+        const previousStart = startOfQuarter(prevQuarter);
+        const previousEnd = endOfQuarter(prevQuarter);
+        return { currentStart, currentEnd, previousStart, previousEnd };
+      }
+      case 'year': {
+        const currentStart = startOfYear(now);
+        const currentEnd = endOfDay(now);
+        const prevYear = subYears(now, 1);
+        const previousStart = startOfYear(prevYear);
+        const previousEnd = endOfYear(prevYear);
+        return { currentStart, currentEnd, previousStart, previousEnd };
+      }
+      default: {
+        // month
+        const currentStart = startOfMonth(now);
+        const currentEnd = endOfDay(now);
+        const prevMonth = subMonths(now, 1);
+        const previousStart = startOfMonth(prevMonth);
+        const previousEnd = endOfMonth(prevMonth);
+        return { currentStart, currentEnd, previousStart, previousEnd };
+      }
+    }
+  }
+
+  private async fetchEmployeeMonthlySeries(
+    userId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const now = new Date();
+    const from = startOfMonth(subMonths(now, 11));
+    const orgFilter = buildOrganizationFilter(organizationId, companyId);
+
+    const sales = await this.prisma.sales.findMany({
+      where: {
+        userId,
+        ...(orgFilter as Record<string, unknown>),
+        createdAt: { gte: from },
+      },
+      select: { createdAt: true, total: true },
+    });
+
+    // Also fetch items sold
+    const details = await this.prisma.salesDetail.findMany({
+      where: {
+        sale: {
+          userId,
+          ...(orgFilter as Record<string, unknown>),
+          createdAt: { gte: from },
+        },
+      },
+      select: { quantity: true, sale: { select: { createdAt: true } } },
+    });
+
+    // Build monthly buckets
+    const months: { month: string; salesCount: number; revenue: number; itemsSold: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = subMonths(now, i);
+      months.push({
+        month: format(d, 'yyyy-MM'),
+        salesCount: 0,
+        revenue: 0,
+        itemsSold: 0,
+      });
+    }
+    const monthMap = new Map(months.map((m) => [m.month, m]));
+
+    for (const s of sales) {
+      const key = format(s.createdAt, 'yyyy-MM');
+      const bucket = monthMap.get(key);
+      if (bucket) {
+        bucket.salesCount++;
+        bucket.revenue += s.total;
+      }
+    }
+    for (const d of details) {
+      const key = format(d.sale.createdAt, 'yyyy-MM');
+      const bucket = monthMap.get(key);
+      if (bucket) {
+        bucket.itemsSold += d.quantity;
+      }
+    }
+
+    // Round revenues
+    for (const m of months) {
+      m.revenue = Math.round(m.revenue * 100) / 100;
+    }
+
+    return months;
+  }
+
+  private async fetchEmployeeRanking(
+    userId: number,
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const orgFilter = buildOrganizationFilter(organizationId, companyId);
+
+    // Get all sellers' revenue in the period
+    const sellerRevenues = await this.prisma.sales.groupBy({
+      by: ['userId'],
+      _sum: { total: true },
+      where: {
+        ...(orgFilter as Record<string, unknown>),
+        createdAt: { gte: from, lte: to },
+      },
+      orderBy: { _sum: { total: 'desc' } },
+    });
+
+    const totalSellers = sellerRevenues.length;
+    const position =
+      sellerRevenues.findIndex((s) => s.userId === userId) + 1 || totalSellers + 1;
+    const topSellerRevenue = sellerRevenues[0]?._sum?.total ?? 0;
+    const myRevenue =
+      sellerRevenues.find((s) => s.userId === userId)?._sum?.total ?? 0;
+
+    return {
+      position,
+      totalSellers,
+      topSellerRevenue: Math.round(topSellerRevenue * 100) / 100,
+      myRevenue: Math.round(myRevenue * 100) / 100,
+    };
+  }
+
+  private async fetchEmployeeTopProducts(
+    userId: number,
+    from: Date,
+    to: Date,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    const orgFilter = buildOrganizationFilter(organizationId, companyId);
+
+    const grouped = await this.prisma.salesDetail.groupBy({
+      by: ['productId'],
+      _sum: { quantity: true, price: true },
+      _count: { id: true },
+      where: {
+        sale: {
+          userId,
+          ...(orgFilter as Record<string, unknown>),
+          createdAt: { gte: from, lte: to },
+        },
+      },
+      orderBy: { _sum: { quantity: 'desc' } },
+      take: 5,
+    });
+
+    if (grouped.length === 0) return [];
+
+    const productIds = grouped.map((g) => g.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, name: true },
+    });
+
+    const productMap = new Map(products.map((p) => [p.id, p.name]));
+
+    return grouped.map((g) => {
+      // Revenue = sum of (quantity * price) per detail — groupBy _sum.price sums individual prices
+      // We need a different approach: use _count and average
+      const totalQuantity = g._sum.quantity ?? 0;
+      return {
+        productId: g.productId,
+        productName: productMap.get(g.productId) ?? `Producto ${g.productId}`,
+        quantity: totalQuantity,
+        salesCount: g._count.id ?? 0,
+      };
+    });
+  }
+
+  // ── Sparkline helpers ──
 
   private async fetchDailyOrderCounts(
     from: Date,

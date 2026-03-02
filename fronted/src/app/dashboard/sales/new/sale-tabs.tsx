@@ -12,6 +12,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SalesForm } from "./sales-form"
 import { QuickSaleView } from "./quick-sale-view"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SALE_FORM_GUIDE_STEPS } from "./sale-form-guide-steps"
 
 type SaleTabsProps = {
   categories: any
@@ -83,9 +85,12 @@ export function SaleTabs({ categories }: SaleTabsProps) {
       >
         <Card className="shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="pt-5 text-center text-xl font-bold">
-              Registrar nueva venta
-            </CardTitle>
+            <div className="flex items-center justify-center gap-2 pt-5">
+              <CardTitle className="text-center text-xl font-bold">
+                Registrar nueva venta
+              </CardTitle>
+              <PageGuideButton steps={SALE_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
+            </div>
           </CardHeader>
           <CardContent className="w-full">
             <SalesForm sales={null} categories={categories} />

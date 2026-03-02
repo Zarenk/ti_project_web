@@ -67,6 +67,12 @@ const VERTICAL_OPTIONS: VerticalOption[] = [
     description: "Produccion y control de planta (muy pronto).",
     enabled: false,
   },
+  {
+    value: "LAW_FIRM",
+    label: "Estudio de Abogados",
+    description: "Expedientes, plazos procesales y control de horas.",
+    enabled: true,
+  },
 ]
 
 const VERTICAL_EFFECT_MESSAGES: Partial<Record<VerticalName, string>> = {
@@ -82,6 +88,8 @@ const VERTICAL_EFFECT_MESSAGES: Partial<Record<VerticalName, string>> = {
     "El inventario pasa a solo lectura y se prioriza la gestion de citas y proyectos.",
   MANUFACTURING:
     "Se activan ordenes de trabajo, BOM y paneles de produccion.",
+  LAW_FIRM:
+    "Se habilitan modulos de expedientes, calendario de plazos procesales y gestion de documentos legales.",
 }
 
 const REFRESH_EVENTS = [

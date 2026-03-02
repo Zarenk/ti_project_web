@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip"
 import { listOrganizations, getCurrentUserRole } from "./tenancy.api"
 import { OrganizationFilterBar } from "./organization-filter-bar"
+import { TenancyGuideButton } from "./tenancy-guide-button"
 
 export const dynamic = "force-dynamic"
 
@@ -63,9 +64,12 @@ export default async function OrganizationsPage({
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-          Organizaciones
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            Organizaciones
+          </h1>
+          <TenancyGuideButton />
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {organizations.length} organizacion{organizations.length === 1 ? "" : "es"} registrada{organizations.length === 1 ? "" : "s"}
         </p>

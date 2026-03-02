@@ -105,6 +105,7 @@ export default async function ProductDetails({ params, searchParams }: Props) {
     name: product.product.name,
     category: product.product.category.name,
     categoryId: product.product.category.id,
+    price: product.product.price,
     priceSell: product.product.priceSell,
     createdAt,
     updateAt,

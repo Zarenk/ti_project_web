@@ -12,6 +12,7 @@ interface InventoryItem {
     product: {
       name: string;
       category: string;
+      price?: number;
       priceSell: number;
       extraAttributes?: Record<string, unknown> | null;
       isVerticalMigrated?: boolean | null;
@@ -54,130 +55,188 @@ export function useInventoryColumns(options: InventoryColumnsOptions = {}) {
 
   return useMemo<ColumnDef<InventoryItem>[]>(() => {
     const baseColumns: ColumnDef<InventoryItem>[] = [
-    {
-      id: "product_name",
-      accessorKey: "product.name", // Acceder al nombre del producto
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Producto
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => {
-        const isLegacy =
-          row.original.product.isVerticalMigrated === false ||
-          !row.original.product.extraAttributes ||
-          Object.keys(row.original.product.extraAttributes ?? {}).length === 0;
-        return (
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{row.original.product.name}</span>
-            {isLegacy && <Badge variant="destructive">Legacy</Badge>}
-          </div>
-        );
+      {
+        id: "product_name",
+        accessorKey: "product.name", // Acceder al nombre del producto
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Producto
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const isLegacy =
+            row.original.product.isVerticalMigrated === false ||
+            !row.original.product.extraAttributes ||
+            Object.keys(row.original.product.extraAttributes ?? {}).length === 0;
+          return (
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{row.original.product.name}</span>
+              {isLegacy && <Badge variant="destructive">Legacy</Badge>}
+            </div>
+          );
+        },
       },
-    },
-    {
-      id: "product.category",
-      accessorKey: "product.category", // Acceder a la categoría del producto
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Categoría
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    {
+      {
+        id: "product.category",
+        accessorKey: "product.category", // Acceder a la categor??a del producto
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Categoria
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+      },
+      {
+        accessorKey: "stock", // Acceder al stock
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Stock General
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) =>
+          row.original.stock > 0 ? row.original.stock : "Sin stock", // Formatear el valor
+      },
+      {
+        accessorKey: "product.price",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Precio de Compra
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const value = row.original.product.price;
+          if (!Number.isFinite(value) || (value ?? 0) <= 0) {
+            return <span className="text-muted-foreground">Sin precio</span>;
+          }
+          return (
+            <span className="font-medium tabular-nums">
+              S/. {value!.toFixed(2)}
+            </span>
+          );
+        },
+      },
+      {
+        id: "priceSell",
+        accessorKey: "product.priceSell",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Precio de Venta
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const value = row.original.product.priceSell;
+          if (!Number.isFinite(value) || (value ?? 0) <= 0) {
+            return <span className="text-muted-foreground">Sin precio</span>;
+          }
+          return (
+            <span className="font-medium tabular-nums">
+              S/. {value!.toFixed(2)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "updateAt", // Acceder a la ??ltima actualizaci??n
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Ultima Actualizacion
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const d = new Date(row.original.updateAt);
+          return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`;
+        },
+      },
+      {
         accessorKey: "lowestPurchasePrice",
         header: ({ column }) => (
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
-            Precio de Compra Más Bajo
+            Precio de Compra Mas Bajo
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         ),
-        cell: ({ row }) => `S/. ${row.original.lowestPurchasePrice?.toFixed(2)}`, // Formatear el precio
-    },
-    {
+        cell: ({ row }) => {
+          const value = row.original.lowestPurchasePrice;
+          if (value == null || !Number.isFinite(value)) {
+            return <span className="text-muted-foreground">Sin precio</span>;
+          }
+          return <span className="font-medium tabular-nums">S/. {value.toFixed(2)}</span>;
+        },
+      },
+      {
         accessorKey: "highestPurchasePrice",
         header: ({ column }) => (
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
-            Precio de Compra Más Alto
+            Precio de Compra Mas Alto
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         ),
-        cell: ({ row }) => `S/. ${row.original.highestPurchasePrice?.toFixed(2)}`, // Formatear el precio
-    },
-    {
-      accessorKey: "priceSell",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Precio de Venta
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => `S/. ${row.original.product.priceSell?.toFixed(2)}`, // Formatear el precio
-    },
-    {
-      accessorKey: "stock", // Acceder al stock
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Stock General
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => (row.original.stock > 0 ? row.original.stock : "Sin stock"), // Formatear el valor
-    },
-    {
-      accessorKey: "createdAt", // Acceder a la fecha de creación
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Fecha de Ingreso
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => new Date(row.original.createdAt).toLocaleDateString(), // Formatear la fecha
-    },
-    {
-      accessorKey: "updateAt", // Acceder a la última actualización
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Última Actualización
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => new Date(row.original.updateAt).toLocaleDateString(), // Formatear la fecha
-    },
-    {
-      id: "serialNumbers",
-      accessorKey: "serialNumbers",
-      header: "Series",
-    },
+        cell: ({ row }) => {
+          const value = row.original.highestPurchasePrice;
+          if (value == null || !Number.isFinite(value)) {
+            return <span className="text-muted-foreground">Sin precio</span>;
+          }
+          return <span className="font-medium tabular-nums">S/. {value.toFixed(2)}</span>;
+        },
+      },
+      {
+        accessorKey: "createdAt", // Acceder a la fecha de creaci??n
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Fecha de Ingreso
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const d = new Date(row.original.createdAt);
+          return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`;
+        },
+      },
+      {
+        id: "serialNumbers",
+        accessorKey: "serialNumbers",
+        header: "Series",
+      },
     ];
-
-    const dynamicColumns: ColumnDef<InventoryItem>[] = [];
+const dynamicColumns: ColumnDef<InventoryItem>[] = [];
 
     if (hasSizeField) {
       dynamicColumns.push({

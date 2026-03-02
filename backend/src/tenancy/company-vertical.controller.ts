@@ -38,6 +38,8 @@ const ALLOWED_VERTICALS = new Set<BusinessVertical>([
   BusinessVertical.COMPUTERS,
   BusinessVertical.RETAIL,
   BusinessVertical.RESTAURANTS,
+  BusinessVertical.LAW_FIRM,
+  BusinessVertical.GYM,
 ]);
 
 @Controller('companies')

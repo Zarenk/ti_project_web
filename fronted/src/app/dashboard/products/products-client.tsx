@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LayoutGrid, List, Search, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react"
+import { LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload, Megaphone } from "lucide-react"
+import { ManualPagination } from "@/components/data-table-pagination"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,35 +19,44 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { getProducts } from "../products/products.api"
 import { ProductsTable } from "./products-table"
 import { ProductsGallery } from "./products-gallery"
-import type { Products } from "./columns"
-import { useTenantSelection } from "@/context/tenant-selection-context"
-import { fetchCompanyVerticalInfo } from "@/app/dashboard/tenancy/tenancy.api"
-import { useDebounce } from "@/app/hooks/useDebounce"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 import { Badge } from "@/components/ui/badge"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { PRODUCTS_LIST_GUIDE_STEPS } from "./products-guide-steps"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isProductActive } from "./status.utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useProductsData, type MigrationFilter, type CategoryFilter } from "./use-products-data"
 
 type ViewMode = "table" | "gallery"
 const VIEW_MODE_KEY = "products-view-mode"
 const ITEMS_PER_PAGE_KEY = "products-items-per-page"
 
-type MigrationFilter = "all" | "legacy" | "migrated"
-type CategoryFilter = "all" | string
-
 export function ProductsClient() {
-  const [migrationStatus, setMigrationStatus] = useState<MigrationFilter>("all")
-  const [rawProducts, setRawProducts] = useState<Products[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [verticalName, setVerticalName] = useState<string>("GENERAL")
-  const [searchTerm, setSearchTerm] = useState("")
-  const debouncedSearchTerm = useDebounce(searchTerm, 300)
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all")
-  const { selection } = useTenantSelection()
+  const {
+    rawProducts,
+    loading,
+    error,
+    isRestaurant,
+    migrationStatus,
+    setMigrationStatus,
+    searchTerm,
+    setSearchTerm,
+    categoryFilter,
+    setCategoryFilter,
+    categories,
+    filteredProducts,
+    averagePrice,
+    reloadProducts,
+  } = useProductsData()
 
   // Pagination state for gallery view
   const [currentPage, setCurrentPage] = useState(1)
@@ -62,121 +72,15 @@ export function ProductsClient() {
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode)
     localStorage.setItem(VIEW_MODE_KEY, mode)
-    setCurrentPage(1) // Reset to first page when changing view
+    setCurrentPage(1)
   }
 
   const handleItemsPerPageChange = (value: string) => {
     const newValue = Number(value)
     setItemsPerPage(newValue)
     localStorage.setItem(ITEMS_PER_PAGE_KEY, String(newValue))
-    setCurrentPage(1) // Reset to first page
+    setCurrentPage(1)
   }
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const products = await getProducts(
-          migrationStatus === "all" ? undefined : { migrationStatus },
-        )
-        if (cancelled) return
-        const mapped = products.map((product: any) => ({
-          ...product,
-          category_name: product.category?.name || "Sin categoria",
-        }))
-        setRawProducts(mapped)
-      } catch (err) {
-        if (!cancelled) {
-          const message =
-            err instanceof Error ? err.message : "No se pudieron cargar los productos"
-          setError(message)
-          setRawProducts([])
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [migrationStatus, selection])
-
-  const reloadProducts = async () => {
-    try {
-      const products = await getProducts(
-        migrationStatus === "all" ? undefined : { migrationStatus },
-      )
-      const mapped = products.map((product: any) => ({
-        ...product,
-        category_name: product.category?.name || "Sin categoria",
-      }))
-      setRawProducts(mapped)
-    } catch {
-      // silent reload
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    const loadVertical = async () => {
-      if (!selection.companyId) {
-        if (!cancelled) setVerticalName("GENERAL")
-        return
-      }
-      try {
-        const info = await fetchCompanyVerticalInfo(selection.companyId)
-        if (!cancelled) {
-          setVerticalName(info?.businessVertical ?? "GENERAL")
-        }
-      } catch {
-        if (!cancelled) setVerticalName("GENERAL")
-      }
-    }
-    void loadVertical()
-    return () => {
-      cancelled = true
-    }
-  }, [selection.companyId])
-
-  const data = useMemo<Products[]>(() => rawProducts, [rawProducts])
-  const isRestaurant = verticalName === "RESTAURANTS"
-  const categories = useMemo(() => {
-    const values = new Set<string>()
-    rawProducts.forEach((product) => {
-      if (product.category_name) {
-        values.add(product.category_name)
-      }
-    })
-    return Array.from(values).sort((a, b) => a.localeCompare(b, "es"))
-  }, [rawProducts])
-  const filteredProducts = useMemo(() => {
-    const query = debouncedSearchTerm.trim().toLowerCase()
-    return rawProducts.filter((product) => {
-      const matchCategory = categoryFilter === "all" || product.category_name === categoryFilter
-      if (!matchCategory) return false
-      if (!query) return true
-      return (
-        product.name?.toLowerCase().includes(query) ||
-        product.description?.toLowerCase().includes(query)
-      )
-    })
-  }, [rawProducts, debouncedSearchTerm, categoryFilter])
-  const averagePrice = useMemo(() => {
-    if (filteredProducts.length === 0) return 0
-    const total = filteredProducts.reduce((sum, product) => {
-      const price = Number(product.priceSell ?? product.price ?? 0)
-      return sum + (Number.isFinite(price) ? price : 0)
-    }, 0)
-    return total / filteredProducts.length
-  }, [filteredProducts])
 
   // Pagination for gallery view
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
@@ -186,12 +90,13 @@ export function ProductsClient() {
     return filteredProducts.slice(startIndex, endIndex)
   }, [filteredProducts, currentPage, itemsPerPage])
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [debouncedSearchTerm, categoryFilter])
+  }, [filteredProducts])
 
   return (
+    <>
     <section className="py-2 sm:py-6">
       <div className="container mx-auto space-y-4 px-1 sm:px-6 lg:px-8">
         {isRestaurant ? (
@@ -297,7 +202,7 @@ export function ProductsClient() {
                   const images = Array.isArray((product as any).images)
                     ? ((product as any).images as string[]).filter(Boolean)
                     : []
-                  const imageUrl = images[0] ? resolveImageUrl(images[0]) : null
+                  const imageUrl = images[0] ? resolveImageVariant(images[0], "card") : null
                   const price = Number(product.priceSell ?? product.price ?? 0)
                   const isActive = isProductActive(product.status)
                   return (
@@ -341,9 +246,16 @@ export function ProductsClient() {
                           <span className="text-lg font-semibold text-emerald-400">
                             S/. {Number.isFinite(price) ? price.toFixed(2) : "0.00"}
                           </span>
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={`/dashboard/products/new?id=${product.id}`}>Editar</Link>
-                          </Button>
+                          <div className="flex gap-1.5">
+                            <Button asChild size="sm" variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
+                              <Link href={`/dashboard/products/${product.id}/promote`}>
+                                <Megaphone className="h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={`/dashboard/products/new?id=${product.id}`}>Editar</Link>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -354,10 +266,92 @@ export function ProductsClient() {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-3 px-5 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Productos</h1>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center justify-between gap-3 px-5">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold sm:text-3xl lg:text-4xl">Productos</h1>
+                <PageGuideButton steps={PRODUCTS_LIST_GUIDE_STEPS} tooltipLabel="Guía de productos" />
+              </div>
+
+              {/* ── Mobile: compact icon row ─────────────────── */}
+              <div className="flex items-center gap-1.5 sm:hidden">
+                {/* New product — primary action */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      size="icon"
+                      className="h-8 w-8 border-emerald-500/50 bg-emerald-600 text-white shadow-[0_2px_8px_rgba(16,185,129,0.3)] hover:bg-emerald-500 active:scale-95 dark:border-emerald-400/30"
+                    >
+                      <Link href="/dashboard/products/new">
+                        <Plus className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Nuevo producto</TooltipContent>
+                </Tooltip>
+
                 {/* View toggle */}
+                <div className="flex rounded-lg border p-0.5">
+                  <Button
+                    variant={viewMode === "table" ? "secondary" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleViewChange("table")}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "gallery" ? "secondary" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleViewChange("gallery")}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Actions menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onSelect={() => setMigrationStatus("all")}>
+                      <span className={migrationStatus === "all" ? "font-semibold" : ""}>Todos</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMigrationStatus("legacy")}>
+                      <span className={migrationStatus === "legacy" ? "font-semibold" : ""}>Legacy</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMigrationStatus("migrated")}>
+                      <span className={migrationStatus === "migrated" ? "font-semibold" : ""}>Migrados</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/products/new" className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Nuevo producto
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/products/migration" className="flex items-center gap-2">
+                        <ArrowRightLeft className="h-4 w-4" />
+                        Asistente de migracion
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/entries/excel-upload" className="flex items-center gap-2">
+                        <Upload className="h-4 w-4" />
+                        Importar Excel
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* ── Desktop: full controls ────────────────────── */}
+              <div className="hidden items-center gap-2 sm:flex">
                 <div className="flex rounded-lg border p-0.5">
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -388,8 +382,8 @@ export function ProductsClient() {
                 </div>
 
                 <Select value={migrationStatus} onValueChange={(value) => setMigrationStatus(value as MigrationFilter)}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Migración" />
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Migracion" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
@@ -398,7 +392,7 @@ export function ProductsClient() {
                   </SelectContent>
                 </Select>
                 <Button asChild variant="outline">
-                  <Link href="/dashboard/products/migration">Asistente de migración</Link>
+                  <Link href="/dashboard/products/migration">Asistente de migracion</Link>
                 </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -408,12 +402,21 @@ export function ProductsClient() {
                     >
                       <Link href="/dashboard/entries/excel-upload">
                         <FileSpreadsheet className="h-4 w-4" />
-                        <span className="hidden sm:inline">Importar Excel</span>
+                        Importar Excel
                       </Link>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Carga masiva de productos desde Excel</TooltipContent>
                 </Tooltip>
+                <Button
+                  asChild
+                  className="gap-2 border-emerald-500/50 bg-emerald-600 text-white shadow-[0_2px_10px_rgba(16,185,129,0.25)] transition-all hover:bg-emerald-500 hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] active:scale-[0.98] dark:border-emerald-400/30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                >
+                  <Link href="/dashboard/products/new">
+                    <Plus className="h-4 w-4" />
+                    Nuevo producto
+                  </Link>
+                </Button>
               </div>
             </div>
             {loading ? (
@@ -450,19 +453,6 @@ export function ProductsClient() {
                       className="pl-9"
                     />
                   </div>
-                  <Select
-                    value={String(itemsPerPage)}
-                    onValueChange={handleItemsPerPageChange}
-                  >
-                    <SelectTrigger className="w-full sm:w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="12">12 por página</SelectItem>
-                      <SelectItem value="24">24 por página</SelectItem>
-                      <SelectItem value="48">48 por página</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 {/* Products count */}
@@ -476,65 +466,28 @@ export function ProductsClient() {
                 <ProductsGallery data={paginatedProducts} onProductUpdated={reloadProducts} />
 
                 {/* Pagination controls */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Anterior
-                    </Button>
-
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum: number
-                        if (totalPages <= 5) {
-                          pageNum = i + 1
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i
-                        } else {
-                          pageNum = currentPage - 2 + i
-                        }
-
-                        return (
-                          <Button
-                            key={pageNum}
-                            variant={currentPage === pageNum ? "default" : "outline"}
-                            size="sm"
-                            className="h-9 w-9"
-                            onClick={() => setCurrentPage(pageNum)}
-                          >
-                            {pageNum}
-                          </Button>
-                        )
-                      })}
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Siguiente
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+                {totalPages > 0 && (
+                  <ManualPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    pageSize={itemsPerPage}
+                    totalItems={filteredProducts.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(size) => handleItemsPerPageChange(String(size))}
+                    pageSizeOptions={[12, 24, 48]}
+                  />
                 )}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <ProductsTable data={data} />
+                <ProductsTable data={rawProducts} />
               </div>
             )}
           </>
         )}
       </div>
     </section>
+
+    </>
   )
 }

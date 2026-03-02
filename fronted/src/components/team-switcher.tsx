@@ -77,6 +77,15 @@ function normalizeOrganizations(orgs: OrganizationResponse[]): ExtendedOrganizat
   }))
 }
 
+/** Read a numeric cookie value synchronously to prevent wrong-org flash on mount */
+function readCookieNumber(name: string): number | null {
+  if (typeof document === "undefined") return null
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`))
+  if (!match?.[1]) return null
+  const val = Number(decodeURIComponent(match[1]))
+  return Number.isFinite(val) ? val : null
+}
+
 export function TeamSwitcher(): React.ReactElement | null {
   const { isMobile } = useSidebar()
   const { role, isPublicSignup, userId } = useAuth()
@@ -116,14 +125,21 @@ export function TeamSwitcher(): React.ReactElement | null {
       RESTAURANTS: "Restaurante",
       SERVICES: "Servicios",
       MANUFACTURING: "Manufactura",
+      COMPUTERS: "Computacion",
+      LAW_FIRM: "Abogados",
+      GYM: "Gimnasio",
     }
     return labels[normalized] ?? normalized.toLowerCase()
   }, [])
 
   const [organizations, setOrganizations] = useState<ExtendedOrganization[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeOrgId, setActiveOrgId] = useState<number | null>(null)
-  const [activeCompanyId, setActiveCompanyId] = useState<number | null>(null)
+  const [activeOrgId, setActiveOrgId] = useState<number | null>(
+    () => selection.orgId ?? readCookieNumber("tenant_org_id"),
+  )
+  const [activeCompanyId, setActiveCompanyId] = useState<number | null>(
+    () => selection.companyId ?? readCookieNumber("tenant_company_id"),
+  )
   const [dialogOpen, setDialogOpen] = useState(false)
   const [companyName, setCompanyName] = useState("")
   const [companyLegalName, setCompanyLegalName] = useState("")
@@ -175,6 +191,18 @@ export function TeamSwitcher(): React.ReactElement | null {
           if (cached) {
             const normalizedCached = normalizeOrganizations(cached)
             setOrganizations(normalizedCached)
+            // Resolve active IDs from selection with cache to prevent wrong-org flash
+            const cachedOrgId =
+              selection.orgId ??
+              normalizedCached.find((org) => org.companies.length > 0)?.id ??
+              normalizedCached[0]?.id ??
+              null
+            const cachedCompanyId =
+              selection.companyId ??
+              normalizedCached.find((org) => org.id === cachedOrgId)?.companies?.[0]?.id ??
+              null
+            setActiveOrgId(cachedOrgId)
+            setActiveCompanyId(cachedCompanyId)
             setLoading(false)
           }
         }
@@ -595,14 +623,26 @@ export function TeamSwitcher(): React.ReactElement | null {
     const isRetailVertical = /RETAIL/.test(verticalTone)
     const isComputersVertical = /COMPUTER|COMPUTERS/.test(verticalTone)
     const isGeneralVertical = /GENERAL/.test(verticalTone)
+    const isLawFirmVertical = /LAW_FIRM|LAW/.test(verticalTone)
+    const isGymVertical = /GYM/.test(verticalTone)
+    const isServicesVertical = /SERVICES/.test(verticalTone)
+    const isManufacturingVertical = /MANUFACTURING/.test(verticalTone)
     const verticalBarClass =
       isRestaurantVertical
         ? "bg-amber-400/90"
-        : isRetailVertical || isComputersVertical
-          ? "bg-sky-400/90"
-          : isGeneralVertical
-            ? "bg-emerald-400/90"
-            : "bg-transparent"
+        : isLawFirmVertical
+          ? "bg-rose-500/90"
+          : isGymVertical
+            ? "bg-violet-500/90"
+            : isRetailVertical || isComputersVertical
+              ? "bg-sky-400/90"
+              : isServicesVertical
+                ? "bg-teal-400/90"
+                : isManufacturingVertical
+                  ? "bg-orange-400/90"
+                  : isGeneralVertical
+                    ? "bg-emerald-400/90"
+                    : "bg-transparent"
 
     return (
       <SidebarMenu>
@@ -788,49 +828,17 @@ export function TeamSwitcher(): React.ReactElement | null {
                           <span
                             aria-hidden="true"
                             className={`pointer-events-none absolute inset-x-0 bottom-0 h-0.5 ${
-                              /RESTAURANT|RESTAURANTE/.test(
-                                (
-                                  activeCompany?.businessVertical ??
-                                  activeOrganization?.businessVertical ??
-                                  resolveVerticalLabel(
-                                    activeCompany?.businessVertical ??
-                                      activeOrganization?.businessVertical,
-                                  )
-                                )
-                                  .toString()
-                                  .trim()
-                                  .toUpperCase(),
-                              )
-                                ? "bg-amber-400/90"
-                                : /RETAIL|COMPUTER|COMPUTERS/.test(
-                                      (
-                                        activeCompany?.businessVertical ??
-                                        activeOrganization?.businessVertical ??
-                                        resolveVerticalLabel(
-                                          activeCompany?.businessVertical ??
-                                            activeOrganization?.businessVertical,
-                                        )
-                                      )
-                                        .toString()
-                                        .trim()
-                                        .toUpperCase(),
-                                    )
-                                  ? "bg-sky-400/90"
-                                  : /GENERAL/.test(
-                                        (
-                                          activeCompany?.businessVertical ??
-                                          activeOrganization?.businessVertical ??
-                                          resolveVerticalLabel(
-                                            activeCompany?.businessVertical ??
-                                              activeOrganization?.businessVertical,
-                                          )
-                                        )
-                                          .toString()
-                                          .trim()
-                                          .toUpperCase(),
-                                      )
-                                    ? "bg-emerald-400/90"
-                                    : "bg-transparent"
+                              (() => {
+                                const vt = (activeCompany?.businessVertical ?? (activeOrganization as any)?.businessVertical ?? "").toString().trim().toUpperCase()
+                                if (/RESTAURANT|RESTAURANTE/.test(vt)) return "bg-amber-400/90"
+                                if (/LAW_FIRM|LAW/.test(vt)) return "bg-rose-500/90"
+                                if (/GYM/.test(vt)) return "bg-violet-500/90"
+                                if (/RETAIL|COMPUTER|COMPUTERS/.test(vt)) return "bg-sky-400/90"
+                                if (/SERVICES/.test(vt)) return "bg-teal-400/90"
+                                if (/MANUFACTURING/.test(vt)) return "bg-orange-400/90"
+                                if (/GENERAL/.test(vt)) return "bg-emerald-400/90"
+                                return "bg-transparent"
+                              })()
                             }`}
                           />
                         </SidebarMenuButton>

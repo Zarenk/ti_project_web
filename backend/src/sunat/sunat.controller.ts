@@ -176,11 +176,15 @@ export class SunatController {
         ? tipoInput.toLowerCase()
         : undefined;
     const effectiveType =
-      normalizedType === 'factura' || normalizedType === 'boleta'
+      normalizedType === 'factura' ||
+      normalizedType === 'boleta' ||
+      normalizedType === 'nota_credito'
         ? normalizedType
-        : file.originalname.includes('-01-')
-          ? 'factura'
-          : 'boleta';
+        : file.originalname.includes('-07-')
+          ? 'nota_credito'
+          : file.originalname.includes('-01-')
+            ? 'factura'
+            : 'boleta';
 
     const tenantAwarePath = path.join(
       'comprobantes',
@@ -220,27 +224,41 @@ export class SunatController {
 
   @Get('pdf/:tipo/:filename')
   async getComprobantePdf(
-    @Param('tipo') tipo: 'boleta' | 'factura',
+    @Param('tipo') tipo: 'boleta' | 'factura' | 'nota_credito',
     @Param('filename') filename: string,
     @CurrentTenant() tenant: TenantContext | null,
     @Res() res: Response,
   ) {
-    const record = await this.sunatService.getStoredPdfForTenant({
-      filename,
-      type: tipo,
-      tenant: tenant ?? null,
-    });
-
+    // 1. Try stored PDF record (tenant-aware path)
     try {
+      const record = await this.sunatService.getStoredPdfForTenant({
+        filename,
+        type: tipo,
+        tenant: tenant ?? null,
+      });
       const filePath = this.sunatService.getComprobantePdfPath(
         tipo,
         record.filename,
         record.relativePath,
       );
       res.setHeader('Content-Type', 'application/pdf');
-      res.sendFile(filePath);
-    } catch (error: any) {
-      throw new NotFoundException(error?.message ?? 'Archivo no encontrado');
+      return res.sendFile(filePath);
+    } catch {
+      // Record not found or file missing — try fallback
+    }
+
+    // 2. Fallback: standard path (comprobantes/pdf/{tipo}/{filename})
+    try {
+      const filePath = this.sunatService.getComprobantePdfPath(
+        tipo,
+        filename,
+      );
+      res.setHeader('Content-Type', 'application/pdf');
+      return res.sendFile(filePath);
+    } catch {
+      throw new NotFoundException(
+        'PDF no encontrado. Es posible que el comprobante no se haya guardado en el servidor.',
+      );
     }
   }
 

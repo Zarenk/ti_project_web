@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import type { HelpMessageSource, HelpFeedback } from '@prisma/client';
 import { HelpEmbeddingService } from './help-embedding.service';
+import { AiProviderManager } from './ai-providers/ai-provider-manager';
+import type { AiChatMessage } from './ai-providers/ai-provider.interface';
 
 export interface AskParams {
   question: string;
@@ -109,20 +111,13 @@ const CASUAL_PATTERNS = [
 @Injectable()
 export class HelpService {
   private readonly logger = new Logger(HelpService.name);
-  private readonly apiKey: string | undefined;
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly embeddingService: HelpEmbeddingService,
-  ) {
-    this.apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
-    if (!this.apiKey) {
-      this.logger.warn(
-        'ANTHROPIC_API_KEY not configured. AI help fallback will be unavailable.',
-      );
-    }
-  }
+    private readonly aiProviders: AiProviderManager,
+  ) {}
 
   /** Check if a message is casual/social rather than a system question */
   private isCasualMessage(text: string): boolean {
@@ -203,6 +198,34 @@ export class HelpService {
 
   /** Main ask method — persists messages and uses conversation context */
   async ask(params: AskParams): Promise<AskResult> {
+    const startTime = Date.now();
+    const result = await this.askInternal(params);
+    const durationMs = Date.now() - startTime;
+
+    // Log performance asynchronously (non-blocking)
+    this.prisma.helpPerformanceLog
+      .create({
+        data: {
+          durationMs,
+          source: result.source,
+          section: params.section || null,
+          similarity: null,
+          userId: params.userId,
+        },
+      })
+      .catch((err) =>
+        this.logger.warn(`Failed to log performance: ${err.message}`),
+      );
+
+    this.logger.debug(
+      `Help ask: "${params.question.substring(0, 50)}" → ${result.source} in ${durationMs}ms`,
+    );
+
+    return result;
+  }
+
+  /** Internal ask logic */
+  private async askInternal(params: AskParams): Promise<AskResult> {
     const conversation = await this.getOrCreateConversation(params.userId);
 
     // 🚀 OPTIMIZACIÓN: Batch DB writes - crear mensaje + update conversación en una transacción
@@ -305,7 +328,7 @@ export class HelpService {
     }
 
     // 3. If AI is not available, use best-effort: partial match or section-aware fallback
-    if (!this.apiKey) {
+    if (!this.aiProviders.isAvailable) {
       // 3a. Partial embedding match (similarity 0.40+)
       if (bestEmbeddingResult) {
         const source: HelpMessageSource = bestEmbeddingResult.sourceType === 'promoted' ? 'PROMOTED' : 'STATIC';
@@ -366,54 +389,22 @@ export class HelpService {
     return { messageId: assistantMsg.id, answer, source: 'ai' };
   }
 
-  /** Call Anthropic API with conversation history + RAG context */
-  private async callAI(
+  /** Build the system prompt for AI requests */
+  private buildSystemPrompt(
     params: AskParams,
-    conversationId: number,
-    embeddingContext: Array<{ question: string; answer: string; similarity: number }> = [],
-  ): Promise<string> {
-    if (!this.apiKey) {
-      return 'El asistente de IA no esta configurado en este momento. Intenta reformular tu pregunta.';
-    }
-
+    kbBlock: string,
+    ragBlock: string,
+  ): string {
     const sectionDesc =
       SECTION_DESCRIPTIONS[params.section] ?? SECTION_DESCRIPTIONS.general;
-
-    // Load recent conversation history for context
-    const recentMessages = await this.prisma.helpMessage.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'desc' },
-      take: MAX_CONTEXT_MESSAGES + 1, // +1 because the current user message is already saved
-      select: { role: true, content: true },
-    });
-
-    // Reverse to chronological order and exclude the current message (already in params.question)
-    const history = recentMessages.reverse().slice(0, -1);
-
-    // Load approved candidates for this section as extra knowledge
-    const approvedKB = await this.prisma.helpKBCandidate.findMany({
-      where: { section: params.section, status: 'APPROVED' },
-      take: 10,
-      select: { question: true, answer: true },
-    });
-
-    const kbBlock = approvedKB.length > 0
-      ? `\n\nRespuestas verificadas para esta seccion:\n${approvedKB.map((k) => `P: ${k.question}\nR: ${k.answer}`).join('\n\n')}`
-      : '';
-
     const isCasual = this.isCasualMessage(params.question);
 
-    const personalityBlock = `Eres el asistente virtual de ADSLab, una plataforma de gestion empresarial.
+    const personalityBlock = `Eres el asistente virtual de ADSLab, un sistema ERP integral de gestion empresarial para el mercado peruano. La plataforma incluye: inventario, ventas, compras, contabilidad PCGE, facturacion SUNAT (facturas/boletas), gestion de proveedores, cotizaciones, caja registradora, reportes, y modulos especializados segun el tipo de empresa.
+
 Tu personalidad: eres amigable, cercano y profesional. Usas un tono calido pero conciso. Puedes responder saludos, agradecimientos y charla casual de forma breve y natural antes de ofrecer tu ayuda con el sistema.`;
 
-    // Build RAG context block from embedding search results
-    const ragBlock = embeddingContext.length > 0
-      ? `\n\nInformacion relevante encontrada en la base de conocimiento (usa esto como contexto principal para tu respuesta, adapta y complementa segun la pregunta del usuario):
-${embeddingContext.map((r) => `P: ${r.question}\nR: ${r.answer}\n(relevancia: ${Math.round(r.similarity * 100)}%)`).join('\n\n')}`
-      : '';
-
-    const systemPrompt = isCasual
-      ? `${personalityBlock}
+    if (isCasual) {
+      return `${personalityBlock}
 
 El usuario te ha enviado un mensaje casual o de cortesia. Responde de forma amigable y natural, y luego ofrecele brevemente tu ayuda con el sistema.
 
@@ -425,14 +416,23 @@ Reglas:
 - Se calido y cercano
 - Termina ofreciendo ayuda con el sistema de forma natural
 - Responde en espanol
-- No uses markdown complejo`
-      : `${personalityBlock}
+- No uses markdown complejo`;
+    }
+
+    const roleContext = params.userRole === 'ADMIN' || params.userRole === 'SUPER_ADMIN_ORG'
+      ? 'Este usuario es administrador, puede acceder a configuraciones avanzadas, gestion de usuarios y reportes.'
+      : params.userRole === 'EMPLOYEE'
+        ? 'Este usuario es empleado, tiene acceso a ventas, inventario y funciones operativas del dia a dia.'
+        : '';
+
+    return `${personalityBlock}
 
 Tu funcion principal es ayudar con las funcionalidades del sistema. Si la pregunta no es sobre la plataforma y no es un saludo o cortesia, indica amablemente que tu especialidad es el sistema ADSLab y ofrece ayudar con eso.
 
 El usuario esta actualmente en la seccion: ${params.section}
 Ruta: ${params.route}
 Rol del usuario: ${params.userRole ?? 'no especificado'}
+${roleContext ? `\n${roleContext}` : ''}
 
 Funcionalidades disponibles en esta seccion:
 ${sectionDesc}${kbBlock}${ragBlock}
@@ -441,55 +441,256 @@ Reglas:
 - Si hay informacion relevante de la base de conocimiento, usala como base para tu respuesta. Adapta el lenguaje y complementa con detalles utiles.
 - Si la informacion encontrada responde directamente la pregunta, basate en ella sin inventar pasos adicionales.
 - Si la informacion es parcialmente relevante, usala como contexto y complementa con lo que sepas de la seccion.
-- Responde de forma concisa (maximo 150 palabras), en espanol, usa lenguaje simple.
+- Responde de forma concisa (maximo 200 palabras), en espanol, usa lenguaje simple.
 - Si mencionas un boton o accion, indica donde encontrarlo en la interfaz.
-- No uses markdown complejo, solo texto plano con negritas (**texto**) si es necesario.`;
+- Usa **negritas** para resaltar acciones o botones importantes.
+- Puedes usar listas con - para enumerar pasos cuando sea claro.`;
+  }
 
-    // Build messages array with history
-    const aiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-    for (const msg of history) {
-      const role = msg.role === 'USER' ? 'user' : 'assistant';
-      const content = msg.content.length > MAX_CONTENT_LENGTH
-        ? msg.content.slice(0, MAX_CONTENT_LENGTH) + '...'
-        : msg.content;
-      aiMessages.push({ role, content });
+  /** Load conversation context for AI request */
+  private async loadConversationContext(
+    conversationId: number,
+    section: string,
+  ): Promise<{ history: AiChatMessage[]; kbBlock: string }> {
+    const [recentMessages, approvedKB] = await Promise.all([
+      this.prisma.helpMessage.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: 'desc' },
+        take: MAX_CONTEXT_MESSAGES + 1,
+        select: { role: true, content: true },
+      }),
+      this.prisma.helpKBCandidate.findMany({
+        where: { section, status: 'APPROVED' },
+        take: 10,
+        select: { question: true, answer: true },
+      }),
+    ]);
+
+    const history: AiChatMessage[] = recentMessages
+      .reverse()
+      .slice(0, -1)
+      .map((msg) => ({
+        role: (msg.role === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content:
+          msg.content.length > MAX_CONTENT_LENGTH
+            ? msg.content.slice(0, MAX_CONTENT_LENGTH) + '...'
+            : msg.content,
+      }));
+
+    const kbBlock =
+      approvedKB.length > 0
+        ? `\n\nRespuestas verificadas para esta seccion:\n${approvedKB.map((k) => `P: ${k.question}\nR: ${k.answer}`).join('\n\n')}`
+        : '';
+
+    return { history, kbBlock };
+  }
+
+  /** Call AI provider with conversation history + RAG context */
+  private async callAI(
+    params: AskParams,
+    conversationId: number,
+    embeddingContext: Array<{ question: string; answer: string; similarity: number }> = [],
+  ): Promise<string> {
+    if (!this.aiProviders.isAvailable) {
+      return 'El asistente de IA no esta configurado en este momento. Intenta reformular tu pregunta.';
     }
-    aiMessages.push({ role: 'user', content: params.question });
+
+    const { history, kbBlock } = await this.loadConversationContext(
+      conversationId,
+      params.section,
+    );
+
+    const ragBlock =
+      embeddingContext.length > 0
+        ? `\n\nInformacion relevante encontrada en la base de conocimiento (usa esto como contexto principal para tu respuesta, adapta y complementa segun la pregunta del usuario):\n${embeddingContext.map((r) => `P: ${r.question}\nR: ${r.answer}\n(relevancia: ${Math.round(r.similarity * 100)}%)`).join('\n\n')}`
+        : '';
+
+    const systemPrompt = this.buildSystemPrompt(params, kbBlock, ragBlock);
+    const messages: AiChatMessage[] = [
+      ...history,
+      { role: 'user', content: params.question },
+    ];
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
-          system: systemPrompt,
-          messages: aiMessages,
-        }),
+      const response = await this.aiProviders.chat({
+        systemPrompt,
+        messages,
+        maxTokens: 500,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`Anthropic API error: ${response.status} ${errorText}`);
-        throw new Error('AI service unavailable');
-      }
-
-      const data = (await response.json()) as {
-        content: Array<{ type: string; text: string }>;
-      };
-
-      return (
-        data.content?.find((c) => c.type === 'text')?.text ??
-        'No pude generar una respuesta.'
-      );
+      return response.text;
     } catch (error) {
       this.logger.error('Failed to call AI service', error);
       return 'No se pudo consultar el asistente de IA en este momento. Intenta de nuevo mas tarde.';
     }
+  }
+
+  /** Streaming ask — yields SSE events for real-time response delivery */
+  async *askStream(
+    params: AskParams,
+  ): AsyncGenerator<{ event: string; data: string }> {
+    const conversation = await this.getOrCreateConversation(params.userId);
+
+    // Persist user message
+    await this.prisma.$transaction([
+      this.prisma.helpMessage.create({
+        data: {
+          conversationId: conversation.id,
+          role: 'USER',
+          content: params.question,
+          section: params.section,
+          route: params.route,
+        },
+      }),
+      this.prisma.helpConversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: new Date() },
+      }),
+    ]);
+
+    // 1. Semantic search via embeddings
+    let bestEmbeddingResult: { answer: string; sourceType: string; sourceId: string; similarity: number } | null = null;
+    let embeddingContext: Array<{ question: string; answer: string; similarity: number }> = [];
+
+    if (this.embeddingService.isReady) {
+      const queryEmbedding = await this.embeddingService.embedQuery(params.question);
+      if (queryEmbedding) {
+        const results = this.embeddingService.searchSimilar(queryEmbedding, params.section, 3);
+        const best = results[0];
+
+        if (best) {
+          const baseThreshold = Number(this.config.get<string>('HELP_EMBEDDING_THRESHOLD')) || 0.65;
+          const isCasual = this.isCasualMessage(params.question);
+          const threshold = isCasual ? Math.min(baseThreshold, 0.50) : baseThreshold;
+
+          if (best.similarity >= threshold) {
+            const source: HelpMessageSource = best.sourceType === 'promoted' ? 'PROMOTED' : 'STATIC';
+            const assistantMsg = await this.prisma.helpMessage.create({
+              data: {
+                conversationId: conversation.id,
+                role: 'ASSISTANT',
+                content: best.answer,
+                source,
+                section: params.section,
+                route: params.route,
+                score: best.similarity,
+              },
+            });
+            yield {
+              event: 'message',
+              data: JSON.stringify({
+                messageId: assistantMsg.id,
+                answer: best.answer,
+                source: best.sourceType === 'promoted' ? 'promoted' : 'static',
+              }),
+            };
+            return;
+          }
+
+          if (best.similarity >= 0.40) {
+            bestEmbeddingResult = { answer: best.answer, sourceType: best.sourceType, sourceId: best.sourceId, similarity: best.similarity };
+          }
+
+          embeddingContext = results
+            .filter((r) => r.similarity >= 0.30)
+            .map((r) => ({ question: r.question, answer: r.answer, similarity: r.similarity }));
+        }
+      }
+    }
+
+    // 2. If AI not available, use fallback
+    if (!this.aiProviders.isAvailable) {
+      let fallbackAnswer: string;
+      let fallbackSource: HelpMessageSource = 'STATIC';
+
+      if (bestEmbeddingResult) {
+        fallbackAnswer = bestEmbeddingResult.answer;
+        fallbackSource = bestEmbeddingResult.sourceType === 'promoted' ? 'PROMOTED' : 'STATIC';
+      } else {
+        const sectionDesc = SECTION_DESCRIPTIONS[params.section];
+        fallbackAnswer = sectionDesc
+          ? `Estoy en proceso de aprendizaje y aun no tengo una respuesta exacta para eso. Pero puedo ayudarte con lo que se de esta seccion:\n\n${sectionDesc}\n\nIntenta preguntar algo mas especifico sobre estas funcionalidades, o reformula tu pregunta.`
+          : 'No tengo una respuesta para eso todavia. Intenta preguntar sobre una funcionalidad especifica del sistema, por ejemplo: "como registro una venta" o "como agrego un producto".';
+      }
+
+      const assistantMsg = await this.prisma.helpMessage.create({
+        data: {
+          conversationId: conversation.id,
+          role: 'ASSISTANT',
+          content: fallbackAnswer,
+          source: fallbackSource,
+          section: params.section,
+          route: params.route,
+        },
+      });
+      yield {
+        event: 'message',
+        data: JSON.stringify({
+          messageId: assistantMsg.id,
+          answer: fallbackAnswer,
+          source: 'static',
+        }),
+      };
+      return;
+    }
+
+    // 3. Stream AI response
+    const { history, kbBlock } = await this.loadConversationContext(
+      conversation.id,
+      params.section,
+    );
+
+    const ragBlock =
+      embeddingContext.length > 0
+        ? `\n\nInformacion relevante encontrada en la base de conocimiento (usa esto como contexto principal para tu respuesta, adapta y complementa segun la pregunta del usuario):\n${embeddingContext.map((r) => `P: ${r.question}\nR: ${r.answer}\n(relevancia: ${Math.round(r.similarity * 100)}%)`).join('\n\n')}`
+        : '';
+
+    const systemPrompt = this.buildSystemPrompt(params, kbBlock, ragBlock);
+    const aiMessages: AiChatMessage[] = [
+      ...history,
+      { role: 'user', content: params.question },
+    ];
+
+    let fullText = '';
+
+    try {
+      for await (const chunk of this.aiProviders.chatStream({
+        systemPrompt,
+        messages: aiMessages,
+        maxTokens: 500,
+      })) {
+        if (chunk.text) {
+          fullText += chunk.text;
+          yield {
+            event: 'chunk',
+            data: JSON.stringify({ text: chunk.text, done: false }),
+          };
+        }
+      }
+    } catch (error) {
+      this.logger.error('AI stream failed', error);
+      fullText = fullText || 'No se pudo consultar el asistente de IA en este momento. Intenta de nuevo mas tarde.';
+    }
+
+    // Persist the complete AI response
+    const assistantMsg = await this.prisma.helpMessage.create({
+      data: {
+        conversationId: conversation.id,
+        role: 'ASSISTANT',
+        content: fullText,
+        source: 'AI',
+        section: params.section,
+        route: params.route,
+      },
+    });
+
+    yield {
+      event: 'done',
+      data: JSON.stringify({
+        messageId: assistantMsg.id,
+        source: 'ai',
+        fullText,
+      }),
+    };
   }
 
   /** Record feedback and trigger candidate promotion if threshold met */
@@ -874,22 +1075,12 @@ Reglas:
 
   async approveAlias(entryId: string, alias: string, adminId: number): Promise<void> {
     this.logger.log(`Alias approved: entryId=${entryId}, alias="${alias}", by admin=${adminId}`);
-    // TODO: Agregar alias a entrada existente en KB
-    // await this.prisma.helpKBEntry.update({
-    //   where: { id: entryId },
-    //   data: {
-    //     aliases: { push: alias }
-    //   }
-    // });
+    // FIXME: Stub — pending HelpKBEntry.aliases field implementation
   }
 
   async rejectAlias(aliasId: number, adminId: number): Promise<void> {
     this.logger.log(`Alias rejected: id=${aliasId}, by admin=${adminId}`);
-    // TODO: Marcar alias como rechazado
-    // await this.prisma.suggestedAlias.update({
-    //   where: { id: aliasId },
-    //   data: { status: 'REJECTED', reviewedBy: adminId }
-    // });
+    // FIXME: Stub — pending SuggestedAlias model implementation
   }
 
   async approveNewEntry(
@@ -932,11 +1123,7 @@ Reglas:
 
   async rejectEntry(entryId: number, adminId: number): Promise<void> {
     this.logger.log(`Entry suggestion rejected: id=${entryId}, by admin=${adminId}`);
-    // TODO: Marcar entrada sugerida como rechazada
-    // await this.prisma.suggestedEntry.update({
-    //   where: { id: entryId },
-    //   data: { status: 'REJECTED', reviewedBy: adminId }
-    // });
+    // FIXME: Stub — pending SuggestedEntry model implementation
   }
 
   async analyzePatterns(): Promise<void> {
@@ -1076,4 +1263,90 @@ Reglas:
   }
 
   // ========== END ADAPTIVE LEARNING METHODS ==========
+
+  // ========== PERFORMANCE METRICS ==========
+
+  async getPerformanceMetrics(days = 7) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const logs = await this.prisma.helpPerformanceLog.findMany({
+      where: { createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        durationMs: true,
+        source: true,
+        section: true,
+        createdAt: true,
+      },
+    });
+
+    if (logs.length === 0) {
+      return {
+        total: 0,
+        p50: 0,
+        p95: 0,
+        p99: 0,
+        avgMs: 0,
+        dailyStats: [],
+        bySource: [],
+      };
+    }
+
+    // Calculate percentiles
+    const durations = logs.map((l) => l.durationMs).sort((a, b) => a - b);
+    const p50 = durations[Math.floor(durations.length * 0.5)] ?? 0;
+    const p95 = durations[Math.floor(durations.length * 0.95)] ?? 0;
+    const p99 = durations[Math.floor(durations.length * 0.99)] ?? 0;
+    const avgMs = Math.round(
+      durations.reduce((sum, d) => sum + d, 0) / durations.length,
+    );
+
+    // Group by day for chart
+    const dailyMap = new Map<
+      string,
+      { durations: number[]; count: number }
+    >();
+    for (const log of logs) {
+      const day = log.createdAt.toISOString().split('T')[0];
+      const entry = dailyMap.get(day) || { durations: [], count: 0 };
+      entry.durations.push(log.durationMs);
+      entry.count++;
+      dailyMap.set(day, entry);
+    }
+
+    const dailyStats = Array.from(dailyMap.entries()).map(([date, data]) => {
+      const sorted = data.durations.sort((a, b) => a - b);
+      return {
+        date,
+        count: data.count,
+        avgMs: Math.round(
+          sorted.reduce((s, d) => s + d, 0) / sorted.length,
+        ),
+        p50: sorted[Math.floor(sorted.length * 0.5)] ?? 0,
+        p95: sorted[Math.floor(sorted.length * 0.95)] ?? 0,
+      };
+    });
+
+    // Distribution by source
+    const sourceMap = new Map<
+      string,
+      { count: number; totalMs: number }
+    >();
+    for (const log of logs) {
+      const src = log.source || 'unknown';
+      const entry = sourceMap.get(src) || { count: 0, totalMs: 0 };
+      entry.count++;
+      entry.totalMs += log.durationMs;
+      sourceMap.set(src, entry);
+    }
+
+    const bySource = Array.from(sourceMap.entries()).map(([source, data]) => ({
+      source,
+      count: data.count,
+      avgMs: Math.round(data.totalMs / data.count),
+      percentage: Math.round((data.count / logs.length) * 100),
+    }));
+
+    return { total: logs.length, p50, p95, p99, avgMs, dailyStats, bySource };
+  }
 }

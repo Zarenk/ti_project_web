@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { Calendar, DollarSign, ShoppingCart, TrendingUp, Users, BarChart3, Receipt } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -25,38 +27,22 @@ import { DailyProfitChart } from "./daily-profit-chart"
 import { MODULE_PERMISSION_LABELS, useEnforcedModulePermission } from "@/hooks/use-enforced-module-permission"
 import { useAuth } from "@/context/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageGuideButton } from "@/components/page-guide-dialog"
+import { SALESDASHBOARD_GUIDE_STEPS } from "./salesdashboard-guide-steps"
+import { ProfitAnalyticsTab } from "./components/ProfitAnalyticsTab"
 
 export default function SalesDashboard() {
     const router = useRouter()
     const { allowed: historyAllowed, loading: permissionLoading } = useEnforcedModulePermission("salesHistory")
     const permissionToastShown = useRef(false)
-    const { selection, version, loading: tenantLoading } = useTenantSelection();
+    const { selection, loading: tenantLoading } = useTenantSelection();
     const { authPending, sessionExpiring } = useAuth()
-    const selectionKey = `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`;
 
     const [dateRange, setDateRange] = useState<DateRange>({
         from: new Date(new Date().setDate(new Date().getDate() - 30)),
         to: new Date(),
       });
 
-    const [monthlyTotal, setMonthlyTotal] = useState<number>(0);
-    const [monthlyCount, setMonthlyCount] = useState<number>(0);
-    const [monthlyGrowth, setMonthlyGrowth] = useState<number | null>(null);
-    const [countGrowth, setCountGrowth] = useState<number | null>(null);
-    const [monthlyClients, setMonthlyClients] = useState(0);
-    const [clientGrowth, setClientGrowth] = useState<number | null>(null);
-    const [monthlyProfit, setMonthlyProfit] = useState<number>(0);
-    const [profitGrowth, setProfitGrowth] = useState<number | null>(null);
-    const [conversionRate, setConversionRate] = useState<number>(0);
-    const [transactions, setTransactions] = useState<any[]>([]);
-    const [taxTotals, setTaxTotals] = useState({
-        total: 0,
-        taxableTotal: 0,
-        exemptTotal: 0,
-        unaffectedTotal: 0,
-        igvTotal: 0,
-      });
-    const [prevTaxTotals, setPrevTaxTotals] = useState<typeof taxTotals | null>(null);
     const [taxDetailOpen, setTaxDetailOpen] = useState(false);
     const [activeTaxDetail, setActiveTaxDetail] = useState<"igv" | "ir" | null>(null);
     const [showTaxBreakdown, setShowTaxBreakdown] = useState(false);
@@ -65,6 +51,14 @@ export default function SalesDashboard() {
     const [cardDirection, setCardDirection] = useState<"next" | "prev" | null>(null);
     const [cardAnimating, setCardAnimating] = useState(false);
     const [hoveredTaxCard, setHoveredTaxCard] = useState<"igv" | "ir" | null>(null);
+
+    const queryEnabled = selection.orgId !== null && !tenantLoading && !permissionLoading && historyAllowed
+    const dateFrom = dateRange?.from?.toISOString() ?? ""
+    const dateTo = dateRange?.to ? endOfDay(dateRange.to).toISOString() : ""
+
+    const isDefaultRange = dateRange?.from && dateRange?.to &&
+      dateRange.from.getTime() === new Date(new Date().setDate(new Date().getDate() - 30)).getTime() &&
+      dateRange.to.toDateString() === new Date().toDateString();
 
     useEffect(() => {
       if (permissionLoading || authPending || sessionExpiring) return
@@ -79,162 +73,129 @@ export default function SalesDashboard() {
       }
     }, [historyAllowed, permissionLoading, router, authPending, sessionExpiring])
 
-    useEffect(() => {
-      if (tenantLoading || permissionLoading || !historyAllowed) return
-      const fetchSalesData = async () => {
-        try {
-          // Si hay dateRange con filtro, usa el rango; si no, usa mensual
-          const isDefaultRange = dateRange?.from && dateRange?.to && 
-            dateRange.from.getTime() === new Date(new Date().setDate(new Date().getDate() - 30)).getTime() &&
-            dateRange.to.toDateString() === new Date().toDateString();
-          
-          if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
-            // Usa datos mensuales
-            const { total, growth } = await getMonthlySalesTotal();
-            setMonthlyTotal(total);
-            setMonthlyGrowth(growth);
-          } else {
-            // Usa datos por rango
-            const from = dateRange.from.toISOString();
-            const to = endOfDay(dateRange.to).toISOString();
-            const total = await getSalesTotalByDateRange(from, to);
-            setMonthlyTotal(total);
-            setMonthlyGrowth(null); // No hay crecimiento en rango personalizado
-          }
-        } catch (error) {
-          console.error("Error al obtener ventas:", error);
-        }
-      };
-    
-      fetchSalesData();
-    }, [selectionKey, tenantLoading, dateRange, permissionLoading, historyAllowed]);
-
-    useEffect(() => {
-        if (tenantLoading || permissionLoading || !historyAllowed) return
-        const fetchSalesCount = async () => {
-          try {
-            const isDefaultRange = dateRange?.from && dateRange?.to && 
-              dateRange.from.getTime() === new Date(new Date().setDate(new Date().getDate() - 30)).getTime() &&
-              dateRange.to.toDateString() === new Date().toDateString();
-            
-            if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
-              const { count, growth } = await getMonthlySalesCount();
-              setMonthlyCount(count);
-              setCountGrowth(growth);
-            } else {
-              const from = dateRange.from.toISOString();
-              const to = endOfDay(dateRange.to).toISOString();
-              const count = await getSalesCountByDateRange(from, to);
-              setMonthlyCount(count);
-              setCountGrowth(null);
-            }
-          } catch (error) {
-            console.error("Error al obtener nÃºmero de ventas:", error);
-          }
-        };
-        fetchSalesCount();
-      }, [selectionKey, tenantLoading, dateRange, permissionLoading, historyAllowed]);
-
-      useEffect(() => {
-        if (tenantLoading || permissionLoading || !historyAllowed) return
-        const fetchClientsData = async () => {
-          try {
-            const isDefaultRange = dateRange?.from && dateRange?.to && 
-              dateRange.from.getTime() === new Date(new Date().setDate(new Date().getDate() - 30)).getTime() &&
-              dateRange.to.toDateString() === new Date().toDateString();
-            
-            if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
-              const data = await getMonthlyClientsStats();
-              setMonthlyClients(data.total);
-              setClientGrowth(data.growth);
-            } else {
-              const from = dateRange.from.toISOString();
-              const to = endOfDay(dateRange.to).toISOString();
-              const total = await getClientStatsByDateRange(from, to);
-              setMonthlyClients(total);
-              setClientGrowth(null);
-            }
-          } catch (error) {
-            console.error("Error al obtener clientes:", error);
-          }
-        };
-        fetchClientsData();
-      }, [selectionKey, tenantLoading, dateRange, permissionLoading, historyAllowed]);
-
-      useEffect(() => {
-        if (tenantLoading || permissionLoading || !historyAllowed) return
-        const fetchProfitData = async () => {
-          try {
-            const isDefaultRange = dateRange?.from && dateRange?.to && 
-              dateRange.from.getTime() === new Date(new Date().setDate(new Date().getDate() - 30)).getTime() &&
-              dateRange.to.toDateString() === new Date().toDateString();
-            
-            if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
-              const { total, growth } = await getMonthlySalesProfit();
-              setMonthlyProfit(total);
-              setProfitGrowth(growth);
-            } else {
-              const from = dateRange.from.toISOString();
-              const to = endOfDay(dateRange.to).toISOString();
-              const total = await getSalesProfitByDateRange(from, to);
-              setMonthlyProfit(total);
-              setProfitGrowth(null);
-            }
-          } catch (error) {
-            console.error("Error al obtener utilidades:", error);
-          }
-        };
-        fetchProfitData();
-      }, [selectionKey, tenantLoading, dateRange, permissionLoading, historyAllowed]);
-
-      useEffect(() => {
-        // Calcular tasa de conversiÃ³n dinÃ¡micamente
-        if (monthlyTotal > 0) {
-          setConversionRate((monthlyCount / monthlyTotal) * 100);
+    // ── Sales Total query ──
+    const { data: salesTotalData } = useQuery({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "salesTotal", { dateFrom, dateTo }],
+      queryFn: async () => {
+        if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
+          const { total, growth } = await getMonthlySalesTotal();
+          return { total, growth };
         } else {
-          setConversionRate(0);
+          const total = await getSalesTotalByDateRange(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString());
+          return { total, growth: null };
         }
-      }, [monthlyCount, monthlyTotal]);
+      },
+      enabled: queryEnabled,
+    })
+    const monthlyTotal = salesTotalData?.total ?? 0
+    const monthlyGrowth = salesTotalData?.growth ?? null
 
-      useEffect(() => {
-        if (tenantLoading || permissionLoading || !historyAllowed) return
-        if (dateRange?.from && dateRange?.to) {
-          const from = dateRange.from.toISOString();
-          const to = endOfDay(dateRange.to).toISOString();
-          getSalesTransactions(from, to)
-            .then(setTransactions)
-            .catch(console.error);
+    // ── Sales Count query ──
+    const { data: salesCountData } = useQuery({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "salesCount", { dateFrom, dateTo }],
+      queryFn: async () => {
+        if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
+          const { count, growth } = await getMonthlySalesCount();
+          return { count, growth };
+        } else {
+          const count = await getSalesCountByDateRange(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString());
+          return { count, growth: null };
         }
-      }, [dateRange, selectionKey, tenantLoading, permissionLoading, historyAllowed]);
+      },
+      enabled: queryEnabled,
+    })
+    const monthlyCount = salesCountData?.count ?? 0
+    const countGrowth = salesCountData?.growth ?? null
 
-      useEffect(() => {
-        if (tenantLoading || permissionLoading || !historyAllowed) return
-        if (!dateRange?.from || !dateRange?.to) return
-        const from = dateRange.from.toISOString()
-        const to = endOfDay(dateRange.to).toISOString()
-        getSalesTaxByRange(from, to)
-          .then((data) => setTaxTotals({
+    // ── Clients Stats query ──
+    const { data: clientsData } = useQuery({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "clientsStats", { dateFrom, dateTo }],
+      queryFn: async () => {
+        if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
+          const data = await getMonthlyClientsStats();
+          return { total: data.total, growth: data.growth };
+        } else {
+          const total = await getClientStatsByDateRange(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString());
+          return { total, growth: null };
+        }
+      },
+      enabled: queryEnabled,
+    })
+    const monthlyClients = clientsData?.total ?? 0
+    const clientGrowth = clientsData?.growth ?? null
+
+    // ── Profit query ──
+    const { data: profitData } = useQuery({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "profit", { dateFrom, dateTo }],
+      queryFn: async () => {
+        if (isDefaultRange || !dateRange?.from || !dateRange?.to) {
+          const { total, growth } = await getMonthlySalesProfit();
+          return { total, growth };
+        } else {
+          const total = await getSalesProfitByDateRange(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString());
+          return { total, growth: null };
+        }
+      },
+      enabled: queryEnabled,
+    })
+    const monthlyProfit = profitData?.total ?? 0
+    const profitGrowth = profitData?.growth ?? null
+
+    // ── Conversion rate (derived, no query needed) ──
+    const conversionRate = monthlyTotal > 0 ? (monthlyCount / monthlyTotal) * 100 : 0
+
+    // ── Transactions query ──
+    const { data: transactions = [] } = useQuery<any[]>({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "transactions", { dateFrom, dateTo }],
+      queryFn: async () => {
+        if (!dateRange?.from || !dateRange?.to) return []
+        return await getSalesTransactions(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString())
+      },
+      enabled: queryEnabled && !!dateRange?.from && !!dateRange?.to,
+    })
+
+    // ── Tax Totals query ──
+    const defaultTaxTotals = { total: 0, taxableTotal: 0, exemptTotal: 0, unaffectedTotal: 0, igvTotal: 0 }
+    const { data: taxTotals = defaultTaxTotals } = useQuery({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "taxTotals", { dateFrom, dateTo }],
+      queryFn: async () => {
+        if (!dateRange?.from || !dateRange?.to) return defaultTaxTotals
+        const data = await getSalesTaxByRange(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString())
+        return {
+          total: Number(data?.total ?? 0),
+          taxableTotal: Number(data?.taxableTotal ?? 0),
+          exemptTotal: Number(data?.exemptTotal ?? 0),
+          unaffectedTotal: Number(data?.unaffectedTotal ?? 0),
+          igvTotal: Number(data?.igvTotal ?? 0),
+        }
+      },
+      enabled: queryEnabled && !!dateRange?.from && !!dateRange?.to,
+    })
+
+    // ── Previous period Tax Totals query (for delta comparison) ──
+    const days = dateRange?.from && dateRange?.to ? Math.max(1, differenceInCalendarDays(endOfDay(dateRange.to), dateRange.from) + 1) : 0
+    const prevFrom = dateRange?.from ? subDays(dateRange.from, days).toISOString() : ""
+    const prevTo = dateRange?.to ? subDays(endOfDay(dateRange.to), days).toISOString() : ""
+
+    const { data: prevTaxTotals = null } = useQuery({
+      queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "prevTaxTotals", { prevFrom, prevTo }],
+      queryFn: async () => {
+        if (!prevFrom || !prevTo) return null
+        try {
+          const data = await getSalesTaxByRange(prevFrom, prevTo)
+          return {
             total: Number(data?.total ?? 0),
             taxableTotal: Number(data?.taxableTotal ?? 0),
             exemptTotal: Number(data?.exemptTotal ?? 0),
             unaffectedTotal: Number(data?.unaffectedTotal ?? 0),
             igvTotal: Number(data?.igvTotal ?? 0),
-          }))
-          .catch(console.error)
-
-        const days = Math.max(1, differenceInCalendarDays(endOfDay(dateRange.to), dateRange.from) + 1)
-        const prevFrom = subDays(dateRange.from, days)
-        const prevTo = subDays(endOfDay(dateRange.to), days)
-        getSalesTaxByRange(prevFrom.toISOString(), prevTo.toISOString())
-          .then((data) => setPrevTaxTotals({
-            total: Number(data?.total ?? 0),
-            taxableTotal: Number(data?.taxableTotal ?? 0),
-            exemptTotal: Number(data?.exemptTotal ?? 0),
-            unaffectedTotal: Number(data?.unaffectedTotal ?? 0),
-            igvTotal: Number(data?.igvTotal ?? 0),
-          }))
-          .catch(() => setPrevTaxTotals(null))
-      }, [dateRange, selectionKey, tenantLoading, permissionLoading, historyAllowed]);
+          }
+        } catch {
+          return null
+        }
+      },
+      enabled: queryEnabled && !!dateRange?.from && !!dateRange?.to,
+    })
 
 
       useEffect(() => {
@@ -535,7 +496,10 @@ export default function SalesDashboard() {
     <div className="sales-dashboard-theme flex w-full max-w-full flex-col gap-5 p-6 overflow-x-hidden">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Ventas</h1>
+            <PageGuideButton steps={SALESDASHBOARD_GUIDE_STEPS} tooltipLabel="Guía del dashboard" />
+          </div>
           <p className="text-muted-foreground">Monitorea el rendimiento de tus ventas y tendencias</p>
         </div>
         <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:justify-end">
@@ -547,7 +511,8 @@ export default function SalesDashboard() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
+      {/* Desktop: Navegación con botones */}
+      <div className="hidden md:flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-hidden">
         <Button
           variant="ghost"
           size="icon"
@@ -579,6 +544,15 @@ export default function SalesDashboard() {
         >
           <span className="text-lg">&gt;</span>
         </Button>
+      </div>
+
+      {/* Móvil: Swipe horizontal con snap points */}
+      <div className="md:hidden overflow-x-auto snap-x snap-mandatory flex gap-4 pb-4 -mx-4 px-4 scrollbar-hide">
+        {cards.map((card, index) => (
+          <div key={index} className="min-w-[280px] snap-center flex-shrink-0">
+            {card}
+          </div>
+        ))}
       </div>
 
 
@@ -646,6 +620,7 @@ export default function SalesDashboard() {
             <TabsTrigger value="customers" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Clientes</TabsTrigger>
             <TabsTrigger value="transactions" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Transacciones</TabsTrigger>
             <TabsTrigger value="profits" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Utilidades</TabsTrigger>
+            <TabsTrigger value="analytics" className="flex-shrink-0 rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">Análisis de Utilidades</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="overview" className="space-y-4">
@@ -669,22 +644,22 @@ export default function SalesDashboard() {
               </CardContent>
             </Card>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="lg:col-span-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 w-full min-w-0">
+            <Card className="lg:col-span-3 w-full min-w-0 overflow-hidden">
               <CardHeader>
                 <CardTitle>Ingresos por categoria</CardTitle>
                 <CardDescription>Distribucion de ventas entre categorias de productos</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-hidden">
                 <RevenueByCategory dateRange={dateRange} />
               </CardContent>
             </Card>
-            <Card className="lg:col-span-4">
+            <Card className="lg:col-span-4 w-full min-w-0 overflow-hidden">
               <CardHeader>
                 <CardTitle>Ventas Recientes</CardTitle>
                 <CardDescription>Ultimas transacciones en todos los canales</CardDescription>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
+              <CardContent className="overflow-hidden">
                 <SalesTable dateRange={dateRange} />
               </CardContent>
             </Card>
@@ -845,6 +820,9 @@ export default function SalesDashboard() {
             <DailyProfitChart dateRange={dateRange} />
           </div>
           <ProfitProductsTable dateRange={dateRange} />
+        </TabsContent>
+        <TabsContent value="analytics" className="space-y-4">
+          <ProfitAnalyticsTab dateRange={dateRange} />
         </TabsContent>
       </Tabs>
     </div>

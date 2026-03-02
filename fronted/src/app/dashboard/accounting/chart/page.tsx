@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,8 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Account, AccountType, fetchAccounts } from "./accounts.api";
 import { AccountForm } from "./account-form";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { queryKeys } from "@/lib/query-keys";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { CHART_GUIDE_STEPS } from "./chart-guide-steps";
 
 // Account type configuration
 const accountTypeConfig: Record<
@@ -136,46 +140,37 @@ function AccountCard({ account, onEdit }: { account: Account; onEdit: () => void
 }
 
 export default function ChartPage() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetchAccounts()
-      .then((data) => {
-        if (!cancelled) {
-          setAccounts(data);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAccounts([]);
-          setError("No se pudieron cargar las cuentas contables.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+  const {
+    data: accounts = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: queryKeys.accounting.accounts(selection.orgId, selection.companyId),
+    queryFn: () => fetchAccounts(),
+    enabled: selection.orgId !== null,
+  });
 
-  const handleCreate = (account: Account) => {
-    setAccounts((prev) => [...prev, account]);
+  const error = queryError ? "No se pudieron cargar las cuentas contables." : null;
+
+  const queryClient = useQueryClient();
+
+  const invalidateAccounts = () => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.accounting.accounts(selection.orgId, selection.companyId),
+    });
   };
 
-  const handleUpdate = (account: Account) => {
-    setAccounts((prev) => prev.map((a) => (a.id === account.id ? account : a)));
+  const handleCreate = (_account: Account) => {
+    invalidateAccounts();
+  };
+
+  const handleUpdate = (_account: Account) => {
+    invalidateAccounts();
   };
 
   // Flatten all accounts for searching (including children)
@@ -209,9 +204,12 @@ export default function ChartPage() {
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              Plan de Cuentas
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                Plan de Cuentas
+              </h1>
+              <PageGuideButton steps={CHART_GUIDE_STEPS} tooltipLabel="Guía del plan de cuentas" />
+            </div>
             <p className="text-slate-600 dark:text-slate-400 mt-1">
               Organiza las cuentas contables de tu negocio
             </p>

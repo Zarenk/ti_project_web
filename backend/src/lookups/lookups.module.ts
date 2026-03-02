@@ -6,17 +6,18 @@ import { ApisNetService } from './apisnet.service';
 import { ApisPeruService } from './apisperu.service';
 import { DecolectaService } from './decolecta.service';
 import { LookupsController } from './lookups.controller';
+import { MigoService } from './migo.service';
 
 @Module({
   imports: [
     ConfigModule,
     HttpModule.register({
-      timeout: 5000,
+      timeout: 8000,
     }),
     TenancyModule,
   ],
   controllers: [LookupsController],
-  providers: [ApisNetService, ApisPeruService, DecolectaService],
-  exports: [ApisNetService, ApisPeruService, DecolectaService],
+  providers: [ApisNetService, ApisPeruService, DecolectaService, MigoService],
+  exports: [ApisNetService, ApisPeruService, DecolectaService, MigoService],
 })
 export class LookupsModule {}

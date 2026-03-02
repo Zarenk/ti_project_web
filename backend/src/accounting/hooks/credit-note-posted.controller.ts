@@ -15,7 +15,8 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting/hooks/credit-note-posted')
-// TODO: Re-enable guards after adding auth headers to AccountingHookService
+// FIXME: Guards disabled — hooks llamados internamente sin headers de auth.
+// Re-habilitar cuando AccountingHookService propague JWT en llamadas internas.
 // @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class CreditNotePostedController {
   private readonly logger = new Logger(CreditNotePostedController.name);
@@ -36,7 +37,7 @@ export class CreditNotePostedController {
       this.logger.log(
         `Received credit-note-posted event for credit note ${data.creditNoteId}`,
       );
-      const creditNote = await (this.prisma as any).creditNote.findUnique({
+      const creditNote = await this.prisma.creditNote.findUnique({
         where: { id: data.creditNoteId },
       });
       if (!creditNote) {

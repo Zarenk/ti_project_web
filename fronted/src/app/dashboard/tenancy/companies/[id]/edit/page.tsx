@@ -25,21 +25,22 @@ export default async function EditCompanyPage({ params }: EditCompanyPageProps) 
   }
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <header className="mb-6 space-y-3">
-        <Badge className="rounded-full bg-sky-100 text-sky-700 dark:bg-slate-800 dark:text-slate-200">
-          Empresas
-        </Badge>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+    <div className="container mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge className="rounded-full bg-sky-100 text-sky-700 dark:bg-slate-800 dark:text-slate-200">
+              Empresas
+            </Badge>
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
             Editar empresa
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Actualiza los datos de la empresa seleccionada. Los cambios se verán
-            reflejados para toda la organización.
+            Actualiza los datos de la empresa. Los cambios aplican a toda la organización.
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild>
+        <Button variant="outline" size="sm" className="cursor-pointer" asChild>
           <Link href="/dashboard/tenancy/companies">Volver a empresas</Link>
         </Button>
       </header>

@@ -24,6 +24,8 @@ import { HelpAssistantProvider } from "@/context/help-assistant-context";
 import { HelpAssistant } from "@/components/help/HelpAssistant";
 import { AccountingModeProvider } from "@/context/accounting-mode-context";
 import { VerticalCSSProvider } from "@/components/vertical-css-provider";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { QueryProvider } from "@/providers/query-provider";
 
 export const revalidate = 0;
 
@@ -48,6 +50,7 @@ export default async function Page({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <TenantSelectionProvider>
+        <QueryProvider>
         <VerticalCSSProvider />
         <TenantFeaturesProvider>
           <AccountingModeProvider>
@@ -76,14 +79,17 @@ export default async function Page({ children }: { children: ReactNode }) {
                 }
               />
               <OnboardingWizardBanner />
-              <Suspense fallback={<DashboardLoading />}>
-                {children}
-              </Suspense>
+              <ErrorBoundary>
+                <Suspense fallback={<DashboardLoading />}>
+                  {children}
+                </Suspense>
+              </ErrorBoundary>
             </SidebarInset>
               <HelpAssistant />
             </HelpAssistantProvider>
           </AccountingModeProvider>
         </TenantFeaturesProvider>
+        </QueryProvider>
       </TenantSelectionProvider>
     </SidebarProvider>
   );

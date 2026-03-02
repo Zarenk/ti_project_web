@@ -879,6 +879,26 @@ export class TenancyService {
     }
 
     if (sunatEnvironment !== undefined) {
+      // Validar credenciales completas al cambiar a PROD
+      if (sunatEnvironment === 'PROD') {
+        const solUser = sunatSolUserProd ?? existing.sunatSolUserProd;
+        const solPass =
+          this.normalizeNullableInput(dto.sunatSolPasswordProd) ??
+          existing.sunatSolPasswordProd;
+        const cert = dto.sunatCertPathProd ?? existing.sunatCertPathProd;
+        const key = dto.sunatKeyPathProd ?? existing.sunatKeyPathProd;
+
+        if (!solUser || !solPass) {
+          throw new BadRequestException(
+            'Para activar modo PRODUCCIÓN, configure el Usuario SOL y Clave SOL de producción.',
+          );
+        }
+        if (!cert || !key) {
+          throw new BadRequestException(
+            'Para activar modo PRODUCCIÓN, suba el certificado digital y la clave privada de producción.',
+          );
+        }
+      }
       data.sunatEnvironment = sunatEnvironment;
     }
     if (dto.sunatRuc !== undefined) {
@@ -929,6 +949,9 @@ export class TenancyService {
     }
     if (dto.sunatKeyPathProd !== undefined) {
       data.sunatKeyPathProd = sunatKeyPathProd ?? null;
+    }
+    if (dto.whatsappAutoSendInvoice !== undefined) {
+      data.whatsappAutoSendInvoice = dto.whatsappAutoSendInvoice;
     }
 
     if (nextLegalNameInput !== undefined) {
@@ -2120,6 +2143,29 @@ export class TenancyService {
       if (!serie) {
         throw new BadRequestException(
           `La serie para el tipo de documento ${documentType} es obligatoria.`,
+        );
+      }
+
+      if (serie.length < 4) {
+        throw new BadRequestException(
+          `La serie "${serie}" para ${documentType} debe tener al menos 4 caracteres.`,
+        );
+      }
+
+      // SUNAT requires specific prefixes: F for facturas, B for boletas
+      if (documentType === 'FACTURA' && !serie.startsWith('F')) {
+        throw new BadRequestException(
+          `La serie de facturas debe iniciar con "F" (ej: F001). Serie actual: "${serie}".`,
+        );
+      }
+      if (documentType === 'BOLETA' && !serie.startsWith('B')) {
+        throw new BadRequestException(
+          `La serie de boletas debe iniciar con "B" (ej: B001). Serie actual: "${serie}".`,
+        );
+      }
+      if (documentType === 'GUIA' && !serie.startsWith('T')) {
+        throw new BadRequestException(
+          `La serie de guías de remisión debe iniciar con "T" (ej: T001). Serie actual: "${serie}".`,
         );
       }
 

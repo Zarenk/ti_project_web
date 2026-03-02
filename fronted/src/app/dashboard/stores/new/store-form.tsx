@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -23,9 +23,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, MapPin } from "lucide-react";
 import { resolveImageUrl } from "@/lib/images";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { UbigeoCombobox } from "@/components/ubigeo-combobox";
 
 import { createStore, updateStore, uploadStoreImage } from "../stores.api";
 
@@ -75,6 +78,8 @@ const storeSchema = z.object({
         return false;
       }
     }, "La imagen debe ser una URL valida"),
+  ubigeo: z.string().optional().or(z.literal("")),
+  district: z.string().optional().or(z.literal("")),
   status: z.enum(["Activo", "Inactivo"]).optional(),
 });
 
@@ -88,6 +93,8 @@ const defaultValues = (store: any | null): StoreFormValues => ({
   adress: store?.adress ?? "",
   email: store?.email ?? "",
   website: store?.website ?? "",
+  ubigeo: store?.ubigeo ?? "",
+  district: store?.district ?? "",
   status: store?.status ?? "Activo",
   image: normalizeStoreImagePath(store?.image ?? ""),
 });
@@ -99,7 +106,10 @@ type StoreFormProps = {
 
 export default function StoreForm({ store, storeId }: StoreFormProps): React.ReactElement {
   const router = useRouter();
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
+  const invalidateStores = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.stores.root(selection.orgId, selection.companyId) });
   const [nameError, setNameError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
@@ -120,16 +130,28 @@ export default function StoreForm({ store, storeId }: StoreFormProps): React.Rea
       adress: "",
       email: "",
       website: "",
+      ubigeo: "",
+      district: "",
       status: "Activo" as StoreFormValues["status"],
       image: "",
     }),
     [],
   );
 
+  const tenantKey = `${selection.orgId}-${selection.companyId}`;
+  const prevTenantRef = useRef(tenantKey);
+
   useEffect(() => {
     reset(defaultValues(store));
     setNameError(null);
-  }, [store, reset, version]);
+  }, [store, reset]);
+
+  useEffect(() => {
+    if (prevTenantRef.current === tenantKey) return;
+    prevTenantRef.current = tenantKey;
+    reset(defaultValues(store));
+    setNameError(null);
+  }, [tenantKey, store, reset]);
 
   const statusValue = watch("status") ?? "Activo";
   const watchedName = watch("name");
@@ -140,6 +162,8 @@ export default function StoreForm({ store, storeId }: StoreFormProps): React.Rea
   const watchedEmail = watch("email");
   const watchedWebsite = watch("website");
   const watchedImage = watch("image");
+  const watchedUbigeo = watch("ubigeo");
+  const watchedDistrict = watch("district");
 
   const normalizedRuc = (watchedRuc ?? "").replace(/\D/g, "");
   const hasName = Boolean(watchedName?.trim());
@@ -147,6 +171,7 @@ export default function StoreForm({ store, storeId }: StoreFormProps): React.Rea
   const hasDescription = Boolean(watchedDescription?.trim());
   const hasPhone = Boolean(watchedPhone?.trim());
   const hasAdress = Boolean(watchedAdress?.trim());
+  const hasUbigeo = Boolean(watchedUbigeo?.trim());
   const hasEmail = Boolean(watchedEmail?.trim());
   const hasWebsite = Boolean(watchedWebsite?.trim());
   const hasImage = Boolean(watchedImage?.trim());
@@ -199,8 +224,8 @@ export default function StoreForm({ store, storeId }: StoreFormProps): React.Rea
         toast.success("Tienda creada correctamente.");
       }
 
+      invalidateStores();
       router.push("/dashboard/stores");
-      router.refresh();
     } catch (error: any) {
       const backendMessage: string | undefined =
         error?.response?.data?.message ?? error?.message ?? undefined;
@@ -325,6 +350,27 @@ export default function StoreForm({ store, storeId }: StoreFormProps): React.Rea
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {formState.errors.adress.message}
               </p>
+            )}
+          </div>
+
+          <div className="flex flex-col lg:col-span-1">
+            <Label className="py-3">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5" />
+                Ubigeo (Distrito SUNAT)
+              </span>
+              {renderOptionalChip(hasUbigeo)}
+            </Label>
+            <UbigeoCombobox
+              value={watchedUbigeo || ""}
+              onSelect={(code, label) => {
+                setValue("ubigeo", code, { shouldValidate: true });
+                setValue("district", label, { shouldValidate: true });
+              }}
+              placeholder="Buscar distrito..."
+            />
+            {watchedDistrict && (
+              <p className="mt-1.5 text-xs text-muted-foreground">{watchedDistrict}</p>
             )}
           </div>
 

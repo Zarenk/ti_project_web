@@ -112,7 +112,7 @@ export default function ProductCombobox({ products, selectedId, selectedLabel, o
                   <div className="flex max-w-full flex-col">
                     <span className="font-medium break-words">{p.name}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">S/. {p.price.toFixed(2)}</span>
+                      <span className="text-xs text-muted-foreground">S/. {(Number(p.price) || 0).toFixed(2)}</span>
                       <Badge
                         variant={chipPresentation.variant}
                         className={cn("text-xs", stockBadgeClass(p.stock))}

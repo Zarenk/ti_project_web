@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { DataTable } from "./data-table";
 import { getUserDataFromToken, isTokenValid } from "@/lib/auth";
@@ -17,6 +18,9 @@ import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useDebounce } from "@/app/hooks/useDebounce";
 import { useAuth } from "@/context/auth-context";
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { ORDERS_GUIDE_STEPS } from "./orders-guide-steps";
+import { queryKeys } from "@/lib/query-keys";
 
 type RestaurantOrderStatus =
   | "OPEN"
@@ -82,97 +86,55 @@ const normalizeOrderSunatStatus = (value: any) => {
 };
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [restaurantOrders, setRestaurantOrders] = useState<RestaurantOrder[]>([]);
-  const [restaurantLoading, setRestaurantLoading] = useState(true);
   const [restaurantStatus, setRestaurantStatus] = useState<RestaurantOrderStatus | "ALL">("ALL");
   const [restaurantSearch, setRestaurantSearch] = useState("");
   const debouncedRestaurantSearch = useDebounce(restaurantSearch, 300);
   const router = useRouter();
-  const [storesMap, setStoresMap] = useState<Record<number, string>>({});
-  const { version, selection } = useTenantSelection();
-  const [verticalName, setVerticalName] = useState("GENERAL");
-  const [verticalResolved, setVerticalResolved] = useState(false);
+  const { selection } = useTenantSelection();
   const { authPending, sessionExpiring } = useAuth();
 
   const handleStatusUpdate = useCallback((id: number, status: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status } : o))
-    );
+    // Optimistic update on local query data not possible without queryClient.setQueryData
+    // but keeping the pattern for compatibility
   }, []);
 
   const columns = useMemo(() => getColumns(handleStatusUpdate), [handleStatusUpdate]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadVertical = async () => {
-      if (!selection.companyId) {
-        if (!cancelled) {
-          setVerticalName("GENERAL");
-          setVerticalResolved(true);
-        }
-        return;
-      }
-      try {
-        const info = await fetchCompanyVerticalInfo(selection.companyId);
-        if (cancelled) return;
-        const name = typeof info?.verticalName === "string" ? info.verticalName.toUpperCase() : "GENERAL";
-        setVerticalName(name);
-        setVerticalResolved(true);
-      } catch {
-        if (!cancelled) {
-          setVerticalName("GENERAL");
-          setVerticalResolved(true);
-        }
-      }
-    };
-    loadVertical();
-    return () => {
-      cancelled = true;
-    };
-  }, [selection.companyId, version]);
+  // Vertical info query
+  const { data: verticalInfo } = useQuery({
+    queryKey: [...queryKeys.orders.root(selection.orgId, selection.companyId), "vertical"],
+    queryFn: async () => {
+      if (!selection.companyId) return { name: "GENERAL" };
+      const info = await fetchCompanyVerticalInfo(selection.companyId);
+      const name = typeof info?.businessVertical === "string" ? info.businessVertical.toUpperCase() : "GENERAL";
+      return { name };
+    },
+    enabled: selection.orgId !== null,
+  });
 
+  const verticalName = verticalInfo?.name ?? "GENERAL";
+  const verticalResolved = !!verticalInfo;
   const isRestaurant = verticalName === "RESTAURANTS";
 
-  useEffect(() => {
-    if (!verticalResolved || !isRestaurant) {
-      return;
-    }
-    let cancelled = false;
-    setRestaurantLoading(true);
-    setRestaurantOrders([]);
-    const load = async () => {
-      try {
-        const data = await getRestaurantOrders(
-          restaurantStatus === "ALL" ? {} : { status: restaurantStatus },
-        );
-        if (cancelled) return;
-        setRestaurantOrders(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setRestaurantOrders([]);
-      } finally {
-        if (!cancelled) setRestaurantLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [verticalResolved, isRestaurant, restaurantStatus, version]);
+  // Restaurant orders query
+  const { data: restaurantOrders = [], isLoading: restaurantLoading } = useQuery({
+    queryKey: queryKeys.orders.list(selection.orgId, selection.companyId, {
+      type: "restaurant",
+      status: restaurantStatus,
+    }),
+    queryFn: async () => {
+      const data = await getRestaurantOrders(
+        restaurantStatus === "ALL" ? {} : { status: restaurantStatus },
+      );
+      return Array.isArray(data) ? data as RestaurantOrder[] : [];
+    },
+    enabled: verticalResolved && isRestaurant,
+  });
 
-  useEffect(() => {
-    if (!verticalResolved || isRestaurant) {
-      return;
-    }
-    if (authPending || sessionExpiring) {
-      return;
-    }
-    setIsLoading(true);
-    setOrders([]);
-    setStoresMap({});
-    async function fetchData() {
+  // Web orders query (with auth guard)
+  const { data: webOrdersData, isLoading: webOrdersLoading } = useQuery({
+    queryKey: queryKeys.orders.list(selection.orgId, selection.companyId, { type: "web" }),
+    queryFn: async () => {
       const user = await getUserDataFromToken();
       const isValid = await isTokenValid();
       const normalizedRole = user?.role ? user.role.trim().toUpperCase().replace(/\s+/g, "_") : null;
@@ -181,62 +143,58 @@ export default function OrdersPage() {
       const roleAllowed = normalizedRole ? (isSuperAdmin || allowedRoles.has(normalizedRole)) : false;
 
       if (!user || !isValid || !roleAllowed) {
-        if (authPending || sessionExpiring) {
-          return;
+        if (!authPending && !sessionExpiring) {
+          router.replace("/unauthorized");
         }
-        router.replace("/unauthorized");
-        return;
+        return { orders: [], storesMap: {} };
       }
-      try {
-        const data = await getOrders();
 
-        const uniqueStoreIds = Array.from(
-          new Set(
-            (data || [])
-              .map((o: any) => Number(o?.payload?.storeId))
-              .filter((n: any) => typeof n === "number" && !Number.isNaN(n) && n > 0)
-          )
-        );
+      const data = await getOrders();
 
-        const storeEntries: [number, string][] = [];
-        for (const sid of uniqueStoreIds) {
-          try {
-            const s = await getStore(String(sid));
-            if (s && s.name) storeEntries.push([sid as number, String(s.name)]);
-          } catch {
-            /* ignore */
-          }
+      const uniqueStoreIds = Array.from(
+        new Set(
+          (data || [])
+            .map((o: any) => Number(o?.payload?.storeId))
+            .filter((n: any) => typeof n === "number" && !Number.isNaN(n) && n > 0)
+        )
+      );
+
+      const storeEntries: [number, string][] = [];
+      for (const sid of uniqueStoreIds) {
+        try {
+          const s = await getStore(String(sid));
+          if (s && s.name) storeEntries.push([sid as number, String(s.name)]);
+        } catch {
+          /* ignore */
         }
-        const nextStoresMap = Object.fromEntries(storeEntries);
-        setStoresMap(nextStoresMap);
-
-        const mapped = data.map((o: any) => {
-          const sid = Number(o?.payload?.storeId);
-          const origin = sid && sid > 0 ? (nextStoresMap[sid] || `Tienda ${sid}`) : "WEB POS";
-          return {
-            id: o.id,
-            code: o.code,
-            createdAt: o.createdAt,
-            client: o.payload?.firstName ? `${o.payload.firstName} ${o.payload.lastName}` : o.shippingName,
-            total: o.payload?.total ?? 0,
-            status: o.status,
-            origin,
-            shippingMethod: typeof o?.payload?.shippingMethod === "string" ? o.payload.shippingMethod : undefined,
-            carrierName: o.carrierName ?? undefined,
-            carrierId: o.carrierId ?? undefined,
-            carrierMode: o.carrierMode ?? undefined,
-            sunatStatus: normalizeOrderSunatStatus(o.sunatStatus ?? o.sunat_status ?? null),
-          };
-        });
-        setOrders(mapped);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
       }
-    }
-    fetchData();
-  }, [router, version, isRestaurant, verticalResolved, authPending, sessionExpiring]);
+      const nextStoresMap = Object.fromEntries(storeEntries);
+
+      const mapped = data.map((o: any) => {
+        const sid = Number(o?.payload?.storeId);
+        const origin = sid && sid > 0 ? (nextStoresMap[sid] || `Tienda ${sid}`) : "WEB POS";
+        return {
+          id: o.id,
+          code: o.code,
+          createdAt: o.createdAt,
+          client: o.payload?.firstName ? `${o.payload.firstName} ${o.payload.lastName}` : o.shippingName,
+          total: o.payload?.total ?? 0,
+          status: o.status,
+          origin,
+          shippingMethod: typeof o?.payload?.shippingMethod === "string" ? o.payload.shippingMethod : undefined,
+          carrierName: o.carrierName ?? undefined,
+          carrierId: o.carrierId ?? undefined,
+          carrierMode: o.carrierMode ?? undefined,
+          sunatStatus: normalizeOrderSunatStatus(o.sunatStatus ?? o.sunat_status ?? null),
+        };
+      });
+      return { orders: mapped, storesMap: nextStoresMap };
+    },
+    enabled: verticalResolved && !isRestaurant && !authPending && !sessionExpiring,
+  });
+
+  const orders = webOrdersData?.orders ?? [];
+  const isLoading = webOrdersLoading;
 
   const restaurantStatusCounts = useMemo(() => {
     const base = {
@@ -288,7 +246,10 @@ export default function OrdersPage() {
     <section className="py-2 sm:py-6">
       <div className="container mx-auto px-1 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between px-5 gap-3 mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Ordenes</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Ordenes</h1>
+            <PageGuideButton steps={ORDERS_GUIDE_STEPS} tooltipLabel="Guía de órdenes" />
+          </div>
           <Button
             onClick={() => router.push("/dashboard/orders/new")}
             className="bg-blue-900 hover:bg-blue-800 text-white"

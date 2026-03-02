@@ -71,13 +71,25 @@ export async function POST(request: Request) {
     const payload: LoginPayload =
       data && typeof data === "object" ? data : { message: raw ?? "Inicio de sesión correcto" }
 
-    const response = NextResponse.json(payload)
+    const isProduction = process.env.NODE_ENV === "production"
+    // Strip refresh_token from response body — it lives only in httpOnly cookies
+    const { refresh_token: _rt, ...safePayload } = payload as LoginPayload & { refresh_token?: string }
+    const response = NextResponse.json(safePayload)
     if (payload.access_token) {
       response.cookies.set("token", payload.access_token, {
         httpOnly: true,
         path: "/",
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        secure: isProduction,
+      })
+    }
+    if ((payload as any).refresh_token) {
+      response.cookies.set("refresh_token", (payload as any).refresh_token, {
+        httpOnly: true,
+        path: "/",
+        sameSite: "strict",
+        secure: isProduction,
+        maxAge: 7 * 24 * 60 * 60, // 7 days
       })
     }
     return response

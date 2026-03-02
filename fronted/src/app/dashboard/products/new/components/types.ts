@@ -8,4 +8,5 @@ export type ProductFormContext = {
   clearErrors: UseFormReturn<any>['clearErrors']
   isProcessing: boolean
   suppressInlineErrors: boolean
+  addStockMode?: boolean
 }

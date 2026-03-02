@@ -55,10 +55,14 @@ export class HelpEmbeddingService implements OnModuleInit {
     question: string;
     answer: string;
     embedding: number[];
+    organizationId: number | null;
+    companyId: number | null;
   }> = [];
 
   /** In-memory map of sourceId → steps (loaded from static KB JSON) */
   private stepsIndex = new Map<string, KBStep[]>();
+
+  private readonly cachePath: string;
 
   constructor(
     private readonly config: ConfigService,
@@ -73,6 +77,7 @@ export class HelpEmbeddingService implements OnModuleInit {
       config.get<string>('HELP_EMBEDDING_SCRIPT') ?? 'ml/help_embeddings.py',
     );
     this.kbPath = path.resolve(process.cwd(), 'ml/help-kb-static.json');
+    this.cachePath = path.resolve(process.cwd(), 'ml/help-embeddings-cache.json');
     this.threshold = Number(config.get<string>('HELP_EMBEDDING_THRESHOLD') ?? '0.82');
     this.syncIntervalMs = Number(
       config.get<string>('HELP_EMBEDDING_SYNC_INTERVAL_MS') ?? '21600000',
@@ -107,6 +112,8 @@ export class HelpEmbeddingService implements OnModuleInit {
           question: true,
           answer: true,
           embedding: true,
+          organizationId: true,
+          companyId: true,
         },
       });
       this.embeddingIndex = records;
@@ -118,9 +125,9 @@ export class HelpEmbeddingService implements OnModuleInit {
 
   /** Sync static KB + approved candidates into DB embeddings */
   async syncEmbeddings(): Promise<void> {
-    if (!existsSync(this.scriptPath)) {
-      this.logger.warn(`Embedding script not found: ${this.scriptPath}`);
-      return;
+    const pythonAvailable = existsSync(this.scriptPath);
+    if (!pythonAvailable) {
+      this.logger.warn(`Python script not found: ${this.scriptPath} — will try cache fallback`);
     }
 
     // 1. Load static KB entries
@@ -188,12 +195,22 @@ export class HelpEmbeddingService implements OnModuleInit {
       return parts.join(' — ');
     });
 
-    // 5. Call Python script in batch mode
-    const embeddings = await this.encodeBatch(texts);
+    // 5. Call Python script in batch mode (skip if Python not available)
+    const embeddings = pythonAvailable ? await this.encodeBatch(texts) : null;
+
     if (!embeddings || embeddings.length !== newEntries.length) {
-      this.logger.error(
-        `Embedding count mismatch: expected ${newEntries.length}, got ${embeddings?.length ?? 0}`,
+      // Python unavailable or failed — try pre-computed cache file as fallback
+      this.logger.warn(
+        `Python embedding generation unavailable (got ${embeddings?.length ?? 0}/${newEntries.length}). Trying cache fallback...`,
       );
+      const seeded = await this.seedFromCache();
+      if (seeded) {
+        await this.loadIndex();
+      } else {
+        this.logger.warn(
+          'No cache file available. Help semantic search will be unavailable until embeddings are seeded.',
+        );
+      }
       return;
     }
 
@@ -266,12 +283,22 @@ export class HelpEmbeddingService implements OnModuleInit {
     queryEmbedding: number[],
     section: string | null,
     limit = 3,
+    organizationId?: number | null,
   ): EmbeddingSearchResult[] {
     if (this.embeddingIndex.length === 0) return [];
 
     const results: EmbeddingSearchResult[] = [];
 
     for (const entry of this.embeddingIndex) {
+      // Tenant isolation: show global entries (null) + entries from the user's org
+      if (
+        organizationId != null &&
+        entry.organizationId != null &&
+        entry.organizationId !== organizationId
+      ) {
+        continue;
+      }
+
       const similarity = this.cosineSimilarity(queryEmbedding, entry.embedding);
 
       // Boost entries from the same section
@@ -337,6 +364,8 @@ export class HelpEmbeddingService implements OnModuleInit {
         question: candidate.question,
         answer: candidate.answer,
         embedding,
+        organizationId: null as number | null,
+        companyId: null as number | null,
       };
       if (existingIdx >= 0) {
         this.embeddingIndex[existingIdx] = record;
@@ -358,6 +387,92 @@ export class HelpEmbeddingService implements OnModuleInit {
   /** Check if the embedding system is ready */
   get isReady(): boolean {
     return this.embeddingIndex.length > 0;
+  }
+
+  // ─── Cache fallback (production without Python) ────────────
+
+  /**
+   * Seeds the HelpEmbedding table from a pre-computed JSON cache file.
+   * Used in production where Python + sentence_transformers is unavailable.
+   * Cache generated via: npx ts-node scripts/generate-help-embeddings-cache.ts
+   */
+  private async seedFromCache(): Promise<boolean> {
+    if (!existsSync(this.cachePath)) {
+      this.logger.warn(`Cache file not found: ${this.cachePath}`);
+      return false;
+    }
+
+    try {
+      const raw = readFileSync(this.cachePath, 'utf-8');
+      const cache = JSON.parse(raw) as Array<{
+        sourceId: string;
+        sourceType: string;
+        section: string;
+        question: string;
+        answer: string;
+        embedding: number[];
+      }>;
+
+      if (!Array.isArray(cache) || cache.length === 0) {
+        this.logger.warn('Cache file is empty or malformed');
+        return false;
+      }
+
+      // Check which entries are already in DB
+      const existing = await this.prisma.helpEmbedding.findMany({
+        select: { sourceType: true, sourceId: true },
+      });
+      const existingSet = new Set(existing.map((e) => `${e.sourceType}:${e.sourceId}`));
+
+      const toInsert = cache.filter(
+        (e) => !existingSet.has(`${e.sourceType}:${e.sourceId}`),
+      );
+
+      if (toInsert.length === 0) {
+        this.logger.log('All cached embeddings already in DB');
+        return true;
+      }
+
+      let stored = 0;
+      for (const entry of toInsert) {
+        try {
+          await this.prisma.helpEmbedding.upsert({
+            where: {
+              sourceType_sourceId: {
+                sourceType: entry.sourceType,
+                sourceId: entry.sourceId,
+              },
+            },
+            create: {
+              sourceType: entry.sourceType,
+              sourceId: entry.sourceId,
+              section: entry.section,
+              question: entry.question,
+              answer: entry.answer,
+              embedding: entry.embedding,
+            },
+            update: {
+              question: entry.question,
+              answer: entry.answer,
+              embedding: entry.embedding,
+            },
+          });
+          stored++;
+        } catch (err) {
+          this.logger.warn(
+            `Failed to seed ${entry.sourceId}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+
+      this.logger.log(`Seeded ${stored} embeddings from cache file (${cache.length} total in cache)`);
+      return stored > 0;
+    } catch (err) {
+      this.logger.warn(
+        `Failed to read cache file: ${err instanceof Error ? err.message : err}`,
+      );
+      return false;
+    }
   }
 
   // ─── Private helpers ───────────────────────────────────────
@@ -401,7 +516,7 @@ export class HelpEmbeddingService implements OnModuleInit {
 
       proc.on('close', (code) => {
         if (code !== 0) {
-          this.logger.error(`encode-batch failed (code ${code}): ${stderr.slice(0, 500)}`);
+          this.logger.warn(`encode-batch: Python exited with code ${code} (expected in production without Python)`);
           resolve(null);
           return;
         }
@@ -409,13 +524,13 @@ export class HelpEmbeddingService implements OnModuleInit {
           const result = JSON.parse(stdout) as number[][];
           resolve(result);
         } catch {
-          this.logger.error(`Failed to parse batch embeddings: ${stdout.slice(0, 200)}`);
+          this.logger.warn(`Failed to parse batch embeddings: ${stdout.slice(0, 200)}`);
           resolve(null);
         }
       });
 
       proc.on('error', (err) => {
-        this.logger.error(`Failed to spawn Python for batch encoding: ${err.message}`);
+        this.logger.warn(`Python not available for batch encoding: ${err.message}`);
         resolve(null);
       });
 
@@ -449,7 +564,7 @@ export class HelpEmbeddingService implements OnModuleInit {
 
       proc.on('close', (code) => {
         if (code !== 0) {
-          this.logger.error(`encode-query failed (code ${code}): ${stderr.slice(0, 500)}`);
+          this.logger.warn(`encode-query: Python exited with code ${code} (query will use AI fallback)`);
           resolve(null);
           return;
         }
@@ -457,13 +572,13 @@ export class HelpEmbeddingService implements OnModuleInit {
           const result = JSON.parse(stdout) as number[];
           resolve(result.length > 0 ? result : null);
         } catch {
-          this.logger.error(`Failed to parse query embedding: ${stdout.slice(0, 200)}`);
+          this.logger.warn(`Failed to parse query embedding: ${stdout.slice(0, 200)}`);
           resolve(null);
         }
       });
 
       proc.on('error', (err) => {
-        this.logger.error(`Failed to spawn Python for query encoding: ${err.message}`);
+        this.logger.warn(`Python not available for query encoding: ${err.message}`);
         resolve(null);
       });
     });

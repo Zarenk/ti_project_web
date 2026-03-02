@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { listOrganizationsWithCompanies } from "../tenancy.api";
 import { CompaniesOverview } from "./companies-overview";
+import { CompaniesGuideButton } from "./companies-guide-button";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,12 @@ export default async function CompaniesPage() {
           Empresas
         </Badge>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-            Empresas por organización
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+              Empresas por organización
+            </h1>
+            <CompaniesGuideButton />
+          </div>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
             Consulta y administra las empresas creadas en cada organización. Los
             super administradores globales visualizan todas las organizaciones,

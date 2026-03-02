@@ -4,6 +4,7 @@ import {
   Logger,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   UseGuards,
   BadRequestException,
@@ -46,6 +47,23 @@ export class AdminSubscriptionsController {
     );
 
     return this.subscriptionsService.requestPlanChange(payload);
+  }
+
+  @Patch('plans/:code/trial-days')
+  async updatePlanTrialDays(
+    @Param('code') code: string,
+    @Body() body: { trialDays: number },
+  ) {
+    const days = Number(body.trialDays);
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      throw new BadRequestException(
+        'trialDays debe ser un número entero entre 1 y 90.',
+      );
+    }
+    this.logger.log(
+      `Admin updating trialDays for plan=${code} to ${days} days`,
+    );
+    return this.subscriptionsService.updatePlanTrialDays(code, days);
   }
 
   @Post(':orgId/complimentary')

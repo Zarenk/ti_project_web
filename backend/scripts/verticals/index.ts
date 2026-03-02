@@ -19,6 +19,7 @@ import {
 } from './manufacturing';
 import { setupProjectTemplates, cleanupServicesData } from './services';
 import { cleanupComputersData } from './computers';
+import { setupGymDefaults, setupGymClasses, cleanupGymData } from './gym';
 
 export interface VerticalScriptContext {
   companyId: number;
@@ -37,7 +38,9 @@ export type VerticalScriptName =
   | 'convert_to_menu_items'
   | 'setup_project_templates'
   | 'setup_bom_system'
-  | 'initialize_work_orders';
+  | 'initialize_work_orders'
+  | 'setup_gym_defaults'
+  | 'setup_gym_classes';
 
 export type VerticalScriptHandler = (
   context: VerticalScriptContext,
@@ -63,6 +66,8 @@ const handlers: Record<VerticalScriptName, VerticalScriptHandler> = {
   setup_project_templates: setupProjectTemplates,
   setup_bom_system: setupBomSystem,
   initialize_work_orders: initializeWorkOrders,
+  setup_gym_defaults: setupGymDefaults,
+  setup_gym_classes: setupGymClasses,
 };
 
 export async function runVerticalScript(
@@ -91,7 +96,9 @@ export type BusinessVertical =
   | 'RETAIL'
   | 'SERVICES'
   | 'MANUFACTURING'
-  | 'COMPUTERS';
+  | 'COMPUTERS'
+  | 'LAW_FIRM'
+  | 'GYM';
 
 export type VerticalCleanupHandler = (
   context: VerticalScriptContext,
@@ -104,6 +111,12 @@ const cleanupHandlers: Record<BusinessVertical, VerticalCleanupHandler> = {
   SERVICES: cleanupServicesData,
   MANUFACTURING: cleanupManufacturingData,
   COMPUTERS: cleanupComputersData,
+  LAW_FIRM: async (ctx) => {
+    console.log(
+      `[cleanup_law_firm] No specific cleanup for LAW_FIRM vertical (company ${ctx.companyId})`,
+    );
+  },
+  GYM: cleanupGymData,
 };
 
 /**

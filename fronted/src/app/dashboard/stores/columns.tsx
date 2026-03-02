@@ -18,6 +18,9 @@ import Link from "next/link"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
+import { useTenantSelection } from '@/context/tenant-selection-context';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 import { toast } from 'sonner';
 
@@ -195,13 +198,14 @@ export const columns: ColumnDef<Stores>[] = [
 
         const stores = row.original
 
-        const router = useRouter(); // Usa useRouter dentro del componente React
+        const router = useRouter();
+        const queryClient = useQueryClient();
+        const { selection } = useTenantSelection();
         const handleRemoveStore = async (id: string) => {
           try {
-            //console.log(id)
-            await deleteStore(id); // Llama a la API para eliminar el producto
-            toast.success("Tienda eliminada correctamente."); // Notificación de éxito
-            router.refresh(); // Refresca los datos de la página
+            await deleteStore(id);
+            toast.success("Tienda eliminada correctamente.");
+            queryClient.invalidateQueries({ queryKey: queryKeys.stores.root(selection.orgId, selection.companyId) });
           } catch (error: any) {
             toast.error(error.message || "No se pudo eliminar la(s) tienda(s).");
           }

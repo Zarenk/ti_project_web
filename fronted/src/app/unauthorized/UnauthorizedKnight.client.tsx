@@ -1,302 +1,537 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
-import * as THREE from "three"
+import { useEffect, useRef } from "react"
 
 type Phase = "idle" | "attack" | "defend"
 
-type Pix = 0 | 1 | 2 // 0: transparente, 1: blanco, 2: negro
+/* ── Easing ───────────────────────────────────────────── */
+const easeOut = (t: number) => 1 - (1 - t) ** 3
+const easeInOut = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
-// ===== Sprites 16x16 en B/N =====
-// Nota: Mantengo formas muy simples para un “caballerito” genérico (no Meta Knight).
-// Capa base: cuerpo redondeado + ojos
-const BODY_16: Pix[] = (() => {
-  // disco “gordo” + ojos (dos columnas negras)
-  const S: Pix[] = new Array(16 * 16).fill(0)
-  const circle = (cx: number, cy: number, r: number) => {
-    for (let y = 0; y < 16; y++) {
-      for (let x = 0; x < 16; x++) {
-        const dx = x - cx, dy = y - cy
-        if (dx * dx + dy * dy <= r * r) S[y * 16 + x] = 1
-      }
-    }
-  }
-  circle(8, 9, 6.5)
-
-  // ojos (negros)
-  const setEye = (ex: number, ey: number) => {
-    S[(ey + 0) * 16 + ex] = 2
-    S[(ey + 1) * 16 + ex] = 2
-    S[(ey + 2) * 16 + ex] = 2
-  }
-  setEye(5, 8)
-  setEye(10, 8)
-
-  return S
-})()
-
-// Yelmo muy simple (bisel superior y visor recto)
-const HELMET_16: Pix[] = (() => {
-  const H: Pix[] = new Array(16 * 16).fill(0)
-  // línea superior curva (blanca) y visor (negro)
-  for (let x = 2; x <= 13; x++) H[3 * 16 + x] = 1
-  for (let x = 3; x <= 12; x++) H[4 * 16 + x] = 1
-  for (let x = 4; x <= 11; x++) H[5 * 16 + x] = 1
-  // visor
-  for (let x = 4; x <= 11; x++) H[7 * 16 + x] = 2
-  for (let x = 4; x <= 11; x++) H[8 * 16 + x] = 2
-  return H
-})()
-
-// Brazos (dos “bultos” laterales)
-const ARMS_16: Pix[] = (() => {
-  const A: Pix[] = new Array(16 * 16).fill(0)
-  // izquierda
-  A[9 * 16 + 2] = 1; A[10 * 16 + 2] = 1; A[10 * 16 + 3] = 1
-  // derecha
-  A[9 * 16 + 13] = 1; A[10 * 16 + 13] = 1; A[10 * 16 + 12] = 1
-  return A
-})()
-
-// Espada (se dibuja en un grupo aparte para animarla)
-const SWORD_16: Pix[] = (() => {
-  const S: Pix[] = new Array(16 * 16).fill(0)
-  // empuñadura negra
-  S[11 * 16 + 13] = 2
-  S[12 * 16 + 13] = 2
-  S[13 * 16 + 13] = 2
-  // guarda horizontal
-  S[12 * 16 + 12] = 2
-  S[12 * 16 + 14] = 2
-  // hoja blanca hacia abajo
-  for (let y = 8; y <= 11; y++) S[y * 16 + 13] = 1
-  for (let y = 4; y <= 7; y++) S[y * 16 + 13] = 1
-  return S
-})()
+/* ── Palette (Meta Knight) ────────────────────────────── */
+const P = {
+  body: "#2B3990",
+  bodyHi: "#3B4CB0",
+  bodyLo: "#1C2760",
+  mask: "#B8C4D8",
+  maskHi: "#D8E0F0",
+  maskLo: "#7888A0",
+  maskEdge: "#D4A800",
+  visor: "#080818",
+  eye: "#FFE040",
+  eyeBright: "#FFFDE0",
+  eyeGlow: "rgba(255,224,64,0.35)",
+  cape: "#121848",
+  capeTip: "#1E2870",
+  capeInner: "#5C2D91",
+  shoe: "#6B3FA0",
+  shoeLo: "#4A2878",
+  hand: "#B8C0D0",
+  gold: "#D4A800",
+  goldHi: "#FFD700",
+  gem: "#FF2050",
+  bladeA: "#FF8800",
+  bladeB: "#FFE080",
+  shadow: "rgba(0,0,0,0.16)",
+}
 
 export default function UnauthorizedKnight() {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const rafRef = useRef<number | null>(null)
-  const [badgeColor, setBadgeColor] = useState("#ffffff")
+  const boxRef = useRef<HTMLDivElement>(null)
+  const cvRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    const el = containerRef.current!
-    // ===== Renderer en BAJA resolución para pixelar =====
-    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true })
-    renderer.setClearAlpha(0)
-    // Fijamos una resolución baja “retro”
-    const LOW_W = 160
-    const LOW_H = 160
-    renderer.setPixelRatio(1) // importante: sin HiDPI
-    renderer.setSize(LOW_W, LOW_H, false)
-    // Escalar por CSS al tamaño del contenedor y pixelar
-    renderer.domElement.style.width = "100%"
-    renderer.domElement.style.height = "100%"
-    ;(renderer.domElement.style as any).imageRendering = "pixelated"
-    el.appendChild(renderer.domElement)
+    const box = boxRef.current!
+    const cv = cvRef.current!
+    const ctx = cv.getContext("2d")!
 
-    // Cámara ortográfica sobre una placa frontal
-    const cam = new THREE.OrthographicCamera(-8, 8, 8, -8, 0.1, 100)
-    cam.position.set(0, 0, 10)
-    cam.lookAt(0, 0, 0)
+    let W = 0
+    let H = 0
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
 
-    const scene = new THREE.Scene()
-
-    // Materiales B/N
-    const MAT_WHITE = new THREE.MeshBasicMaterial({ color: 0xffffff })
-    const MAT_BLACK = new THREE.MeshBasicMaterial({ color: 0x000000 })
-
-    // Utilidad: crea un grupo de “píxeles” (cuadrados) a partir de un mapa 16×16
-    function makePixelLayer(map: Pix[], pixelSize = 1): THREE.Group {
-      const g = new THREE.Group()
-      const geo = new THREE.PlaneGeometry(pixelSize, pixelSize)
-      const instWhite: THREE.Mesh[] = []
-      const instBlack: THREE.Mesh[] = []
-      for (let y = 0; y < 16; y++) {
-        for (let x = 0; x < 16; x++) {
-          const v = map[y * 16 + x]
-          if (v === 0) continue
-          const mesh = new THREE.Mesh(geo, v === 1 ? MAT_WHITE : MAT_BLACK)
-          // centrado en (0,0)
-          const px = (x - 8) * pixelSize + pixelSize / 2
-          const py = (8 - y) * pixelSize - pixelSize / 2
-          mesh.position.set(px, py, 0)
-          g.add(mesh)
-          if (v === 1) instWhite.push(mesh); else instBlack.push(mesh)
-        }
-      }
-      return g
+    const resize = () => {
+      W = box.clientWidth
+      H = box.clientHeight
+      cv.width = W * dpr
+      cv.height = H * dpr
+      cv.style.width = W + "px"
+      cv.style.height = H + "px"
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
+    resize()
 
-    // ===== Construcción del “caballero” pixelado =====
-    const knight = new THREE.Group()
-    scene.add(knight)
-
-    // Orden Z: casco delante de cuerpo, brazos, y espada al frente
-    const body = makePixelLayer(BODY_16, 1)
-    body.position.z = 0
-    knight.add(body)
-
-    const helmet = makePixelLayer(HELMET_16, 1)
-    helmet.position.z = 0.1
-    knight.add(helmet)
-
-    const arms = makePixelLayer(ARMS_16, 1)
-    arms.position.z = 0.15
-    knight.add(arms)
-
-    // Espada en grupo aparte para animar “swing”
-    const swordGroup = new THREE.Group()
-    const sword = makePixelLayer(SWORD_16, 1)
-    swordGroup.add(sword)
-    swordGroup.position.set(1.5, -1.5, 0.2) // anclaje al costado
-    knight.add(swordGroup)
-
-    // Pequeño “sombrado” por duplicado negro a z- y transparencia
-    const shadow = makePixelLayer(BODY_16.map(v => (v ? 2 : 0)) as Pix[], 1)
-    shadow.position.z = -0.2
-    shadow.position.x = 0.4
-    shadow.position.y = -0.4
-    shadow.children.forEach(m => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.15)
-    shadow.children.forEach(m => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).transparent = true)
-    knight.add(shadow)
-
-    // ===== Estado/Interacción =====
+    /* ── State ──────────────────────────────────────── */
     let phase: Phase = "idle"
-    let animT = 0
-    let paused = false
+    let phaseT = 0
+    let mx = W / 2
+    let my = H / 2
+    let bobY = 0
+    let blinkT = 0
+    let blink = false
+    let swing = 0
+    let defend = 0
     let last = performance.now()
+    let raf = 0
+    let hidden = false
+    let clickTimer: ReturnType<typeof setTimeout> | null = null
+
+    const sc = () => Math.min(W, H) * 0.0026
+
+    /* ── Events ─────────────────────────────────────── */
+    const onMove = (e: MouseEvent) => {
+      const r = box.getBoundingClientRect()
+      mx = e.clientX - r.left
+      my = e.clientY - r.top
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0]
+      const r = box.getBoundingClientRect()
+      mx = t.clientX - r.left
+      my = t.clientY - r.top
+    }
     const onClick = () => {
-      if (phase !== "idle") return
-      if (badgeRef.current) {
-        badgeRef.current.style.opacity = "1"
-        setTimeout(() => { if (badgeRef.current) badgeRef.current.style.opacity = "0" }, 900)
+      if (clickTimer) return
+      clickTimer = setTimeout(() => {
+        clickTimer = null
+        if (phase !== "idle") return
+        phase = "attack"
+        phaseT = 0
+      }, 220)
+    }
+    const onDbl = (e: Event) => {
+      e.preventDefault()
+      if (clickTimer) {
+        clearTimeout(clickTimer)
+        clickTimer = null
       }
-      phase = "attack"
-      animT = 0
+      phase = "defend"
+      phaseT = 0
+      swing = 0
     }
-    const onVisibility = () => (paused = document.hidden)
-    el.addEventListener("click", onClick)
-    document.addEventListener("visibilitychange", onVisibility)
-
-    // Idle “bob” + parpadeo simple (apagamos ojos 1 frame cada cierto tiempo)
-    let blinkTimer = 0
-    const blinkInterval = 2200
-    let eyesOff = false
-
-    // Referencias rápidas a “ojos” (dos píxeles negros en BODY_16: (5,8..10) y (10,8..10))
-    const findEyeMeshes = () => {
-      const eyes: THREE.Mesh[] = []
-      body.children.forEach((m) => {
-        const mesh = m as THREE.Mesh
-        const mat = mesh.material as THREE.MeshBasicMaterial
-        if (mat.color.getHex() === 0x000000) eyes.push(mesh)
-      })
-      return eyes
+    const onVis = () => {
+      hidden = document.hidden
     }
-    const eyeMeshes = findEyeMeshes()
 
-    // Loop
+    box.addEventListener("mousemove", onMove)
+    box.addEventListener("touchmove", onTouchMove, { passive: true })
+    box.addEventListener("click", onClick)
+    box.addEventListener("dblclick", onDbl)
+    document.addEventListener("visibilitychange", onVis)
+
+    /* ── Draw helpers ───────────────────────────────── */
+    const fill = (c: string) => {
+      ctx.fillStyle = c
+    }
+    const ell = (
+      x: number,
+      y: number,
+      rx: number,
+      ry: number,
+      c: string,
+    ) => {
+      ctx.fillStyle = c
+      ctx.beginPath()
+      ctx.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    /* ── Draw Meta Knight ───────────────────────────── */
+    const drawKnight = (s: number, lx: number, ly: number, now: number) => {
+      const R = 54 * s
+      const t = now / 1000
+
+      /* ── 1  Ground shadow ── */
+      ell(0, R + 18 * s, R * 0.75, 8 * s, P.shadow)
+
+      /* ── 2  Cape (behind body) ── */
+      const capeWave = Math.sin(t * 1.8) * 6 * s
+      const capeDef = defend * 0.3 // shrink when defending
+      ctx.save()
+      // Left wing
+      fill(P.cape)
+      ctx.beginPath()
+      ctx.moveTo(-12 * s, -22 * s)
+      ctx.bezierCurveTo(
+        -75 * s + capeWave,
+        -5 * s,
+        -80 * s + capeWave * 0.6,
+        55 * s,
+        -55 * s * (1 - capeDef) + capeWave * 0.4,
+        75 * s,
+      )
+      ctx.quadraticCurveTo(-30 * s, 55 * s, -18 * s, 30 * s)
+      ctx.closePath()
+      ctx.fill()
+      // Wing tip highlight
+      fill(P.capeTip)
+      ctx.beginPath()
+      ctx.moveTo(-55 * s * (1 - capeDef) + capeWave * 0.4, 75 * s)
+      ctx.quadraticCurveTo(
+        -70 * s + capeWave * 0.5,
+        58 * s,
+        -65 * s + capeWave,
+        42 * s,
+      )
+      ctx.quadraticCurveTo(-50 * s, 55 * s, -55 * s * (1 - capeDef) + capeWave * 0.4, 75 * s)
+      ctx.fill()
+
+      // Right wing
+      fill(P.cape)
+      ctx.beginPath()
+      ctx.moveTo(12 * s, -22 * s)
+      ctx.bezierCurveTo(
+        75 * s - capeWave,
+        -5 * s,
+        80 * s - capeWave * 0.6,
+        55 * s,
+        55 * s * (1 - capeDef) - capeWave * 0.4,
+        75 * s,
+      )
+      ctx.quadraticCurveTo(30 * s, 55 * s, 18 * s, 30 * s)
+      ctx.closePath()
+      ctx.fill()
+      fill(P.capeTip)
+      ctx.beginPath()
+      ctx.moveTo(55 * s * (1 - capeDef) - capeWave * 0.4, 75 * s)
+      ctx.quadraticCurveTo(
+        70 * s - capeWave * 0.5,
+        58 * s,
+        65 * s - capeWave,
+        42 * s,
+      )
+      ctx.quadraticCurveTo(50 * s, 55 * s, 55 * s * (1 - capeDef) - capeWave * 0.4, 75 * s)
+      ctx.fill()
+      ctx.restore()
+
+      /* ── 3  Body ── */
+      const grad = ctx.createRadialGradient(
+        -12 * s,
+        -10 * s,
+        R * 0.08,
+        0,
+        0,
+        R,
+      )
+      grad.addColorStop(0, P.bodyHi)
+      grad.addColorStop(0.6, P.body)
+      grad.addColorStop(1, P.bodyLo)
+      ctx.fillStyle = grad
+      ctx.beginPath()
+      ctx.arc(0, 0, R, 0, Math.PI * 2)
+      ctx.fill()
+
+      /* ── 4  Shoes ── */
+      ell(-20 * s, R * 0.72 + 14 * s, 17 * s, 11 * s, P.shoe)
+      ell(-22 * s, R * 0.72 + 12 * s, 12 * s, 7 * s, P.shoeLo)
+      ell(20 * s, R * 0.72 + 14 * s, 17 * s, 11 * s, P.shoe)
+      ell(18 * s, R * 0.72 + 12 * s, 12 * s, 7 * s, P.shoeLo)
+
+      /* ── 5  Mask ── */
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(0, 0, R + 0.5, 0, Math.PI * 2)
+      ctx.clip()
+
+      const mGrad = ctx.createLinearGradient(0, -R, 0, 12 * s)
+      mGrad.addColorStop(0, P.maskHi)
+      mGrad.addColorStop(0.45, P.mask)
+      mGrad.addColorStop(1, P.maskLo)
+      ctx.fillStyle = mGrad
+      ctx.beginPath()
+      ctx.moveTo(-R * 0.92, 8 * s)
+      ctx.quadraticCurveTo(-R * 0.95, -R * 0.5, 0, -R * 0.95)
+      ctx.quadraticCurveTo(R * 0.95, -R * 0.5, R * 0.92, 8 * s)
+      ctx.quadraticCurveTo(0, 22 * s, -R * 0.92, 8 * s)
+      ctx.fill()
+
+      // Mask center ridge
+      ctx.strokeStyle = P.maskLo
+      ctx.lineWidth = 1.8 * s
+      ctx.beginPath()
+      ctx.moveTo(0, -R * 0.88)
+      ctx.lineTo(0, 8 * s)
+      ctx.stroke()
+
+      // Visor (V-shaped opening)
+      fill(P.visor)
+      const vY = -4 * s
+      const vW = 38 * s
+      const vH = 13 * s
+      ctx.beginPath()
+      ctx.roundRect(-vW / 2, vY, vW, vH, 3 * s)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.roundRect(-5 * s, vY + 2 * s, 10 * s, vH + 8 * s, [
+        0,
+        0,
+        3 * s,
+        3 * s,
+      ])
+      ctx.fill()
+
+      ctx.restore()
+
+      // Gold edge trim
+      ctx.strokeStyle = P.maskEdge
+      ctx.lineWidth = 2.2 * s
+      ctx.beginPath()
+      ctx.moveTo(-R * 0.88, 6 * s)
+      ctx.quadraticCurveTo(-R * 0.9, -R * 0.45, 0, -R * 0.9)
+      ctx.quadraticCurveTo(R * 0.9, -R * 0.45, R * 0.88, 6 * s)
+      ctx.stroke()
+
+      // Gold decorations on sides
+      ell(-R * 0.78, 0, 4 * s, 4 * s, P.goldHi)
+      ell(R * 0.78, 0, 4 * s, 4 * s, P.goldHi)
+
+      /* ── 6  Eyes ── */
+      if (!blink) {
+        const ex = lx * 4.5 * s
+        const ey = ly * 2.5 * s
+        const eyeY = vY + 5 * s
+
+        // Left eye
+        ell(-12 * s + ex, eyeY + ey, 7 * s, 5 * s, P.eyeGlow)
+        ell(-12 * s + ex, eyeY + ey, 4.5 * s, 3.5 * s, P.eye)
+        ell(-11 * s + ex, eyeY - 1 * s + ey, 1.8 * s, 1.5 * s, P.eyeBright)
+
+        // Right eye
+        ell(12 * s + ex, eyeY + ey, 7 * s, 5 * s, P.eyeGlow)
+        ell(12 * s + ex, eyeY + ey, 4.5 * s, 3.5 * s, P.eye)
+        ell(13 * s + ex, eyeY - 1 * s + ey, 1.8 * s, 1.5 * s, P.eyeBright)
+      }
+
+      /* ── 7  Hand + Sword (Galaxia) ── */
+      ctx.save()
+      const pivX = R * 0.58
+      const pivY = 8 * s
+      ctx.translate(pivX, pivY)
+
+      const restA = Math.PI * 0.12
+      const atkA = -Math.PI * 0.88
+      const defA = -Math.PI * 0.42
+      const curA =
+        phase === "attack"
+          ? restA + (atkA - restA) * swing
+          : phase === "defend"
+            ? restA + (defA - restA) * defend
+            : restA + Math.sin(t * 1.2) * 0.04
+      ctx.rotate(curA)
+
+      // Hand
+      ell(0, 0, 9 * s, 9 * s, P.hand)
+
+      // Hilt
+      const hW = 7 * s
+      const hH = 14 * s
+      fill(P.gold)
+      ctx.fillRect(-hW / 2, -hH, hW, hH)
+
+      // Cross guard
+      fill(P.goldHi)
+      ctx.beginPath()
+      ctx.roundRect(-13 * s, -hH - 3.5 * s, 26 * s, 5 * s, 2 * s)
+      ctx.fill()
+
+      // Gem
+      ell(0, -hH - 1 * s, 3.5 * s, 3.5 * s, P.gem)
+      ell(-0.8 * s, -hH - 2 * s, 1.2 * s, 1 * s, "rgba(255,255,255,0.5)")
+
+      // Flame blade (zigzag)
+      const bLen = 48 * s
+      const bY = -hH - 5 * s
+      const bGrad = ctx.createLinearGradient(0, bY, 0, bY - bLen)
+      bGrad.addColorStop(0, P.bladeA)
+      bGrad.addColorStop(0.4, "#FFBB44")
+      bGrad.addColorStop(1, P.bladeB)
+      ctx.fillStyle = bGrad
+      ctx.beginPath()
+      ctx.moveTo(-4.5 * s, bY)
+      ctx.lineTo(-7 * s, bY - bLen * 0.28)
+      ctx.lineTo(-3.5 * s, bY - bLen * 0.24)
+      ctx.lineTo(-6.5 * s, bY - bLen * 0.52)
+      ctx.lineTo(-2.5 * s, bY - bLen * 0.48)
+      ctx.lineTo(-5 * s, bY - bLen * 0.78)
+      ctx.lineTo(0, bY - bLen)
+      ctx.lineTo(5 * s, bY - bLen * 0.78)
+      ctx.lineTo(2.5 * s, bY - bLen * 0.48)
+      ctx.lineTo(6.5 * s, bY - bLen * 0.52)
+      ctx.lineTo(3.5 * s, bY - bLen * 0.24)
+      ctx.lineTo(7 * s, bY - bLen * 0.28)
+      ctx.lineTo(4.5 * s, bY)
+      ctx.closePath()
+      ctx.fill()
+
+      // Blade inner glow
+      ctx.fillStyle = "rgba(255,255,240,0.25)"
+      ctx.beginPath()
+      ctx.moveTo(-2 * s, bY - 2 * s)
+      ctx.lineTo(-1 * s, bY - bLen * 0.85)
+      ctx.lineTo(0, bY - bLen * 0.95)
+      ctx.lineTo(1 * s, bY - bLen * 0.85)
+      ctx.lineTo(2 * s, bY - 2 * s)
+      ctx.closePath()
+      ctx.fill()
+
+      ctx.restore()
+
+      /* ── 8  Cape front (defend) ── */
+      if (defend > 0.01) {
+        ctx.save()
+        ctx.globalAlpha = defend * 0.92
+
+        // Main cape wrap
+        fill(P.cape)
+        ctx.beginPath()
+        ctx.moveTo(-R * 0.75, -18 * s)
+        ctx.bezierCurveTo(
+          -R * 1.05,
+          15 * s,
+          -R * 0.5,
+          R * 0.9,
+          -R * 0.15,
+          R * 0.75,
+        )
+        ctx.lineTo(R * 0.15, R * 0.75)
+        ctx.bezierCurveTo(
+          R * 0.5,
+          R * 0.9,
+          R * 1.05,
+          15 * s,
+          R * 0.75,
+          -18 * s,
+        )
+        ctx.quadraticCurveTo(0, -32 * s, -R * 0.75, -18 * s)
+        ctx.fill()
+
+        // Inner lining
+        fill(P.capeInner)
+        ctx.beginPath()
+        ctx.moveTo(-R * 0.55, -8 * s)
+        ctx.bezierCurveTo(
+          -R * 0.8,
+          18 * s,
+          -R * 0.35,
+          R * 0.7,
+          -R * 0.08,
+          R * 0.6,
+        )
+        ctx.lineTo(R * 0.08, R * 0.6)
+        ctx.bezierCurveTo(
+          R * 0.35,
+          R * 0.7,
+          R * 0.8,
+          18 * s,
+          R * 0.55,
+          -8 * s,
+        )
+        ctx.quadraticCurveTo(0, -22 * s, -R * 0.55, -8 * s)
+        ctx.fill()
+
+        // Eyes peek through cape
+        if (!blink) {
+          const ex = lx * 3 * s
+          const ey = ly * 2 * s
+          ell(-10 * s + ex, -4 * s + ey, 5 * s, 3.5 * s, P.eyeGlow)
+          ell(-10 * s + ex, -4 * s + ey, 3 * s, 2.5 * s, P.eye)
+          ell(10 * s + ex, -4 * s + ey, 5 * s, 3.5 * s, P.eyeGlow)
+          ell(10 * s + ex, -4 * s + ey, 3 * s, 2.5 * s, P.eye)
+        }
+
+        ctx.restore()
+      }
+    }
+
+    /* ── Main loop ──────────────────────────────────── */
     const tick = () => {
       const now = performance.now()
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
 
-      if (!paused) {
-        // bamboleo
-        const t = now / 1000
-        knight.position.y = Math.sin(t * 2) * 0.25 - 0.5
-        knight.rotation.z = Math.sin(t * 1.6) * 0.03
+      if (!hidden) {
+        bobY = Math.sin(now / 1000 * 2) * 4
 
-        // parpadeo
-        blinkTimer += dt * 1000
-        if (blinkTimer > blinkInterval) {
-          eyesOff = !eyesOff
-          blinkTimer = 0
-          // apagar/encender ojos (cambiar a blanco)
-          for (const em of eyeMeshes) {
-            const mat = (em.material as THREE.MeshBasicMaterial)
-            mat.color.setHex(eyesOff ? 0xffffff : 0x000000)
-          }
+        // Blink
+        blinkT += dt
+        if (!blink && blinkT > 2.8 + Math.random() * 2) {
+          blink = true
+          blinkT = 0
+        }
+        if (blink && blinkT > 0.13) {
+          blink = false
+          blinkT = 0
         }
 
+        // Phase transitions
         if (phase === "attack") {
-          const dur = 0.5
-          animT = Math.min(1, animT + dt / dur)
-          const k = THREE.MathUtils.smoothstep(animT, 0, 1)
-          // swing de la espada
-          swordGroup.rotation.z = THREE.MathUtils.lerp(0, -Math.PI * 0.9, k)
-          swordGroup.position.x = THREE.MathUtils.lerp(1.5, 0.6, k)
-          swordGroup.position.y = THREE.MathUtils.lerp(-1.5, 0.2, k)
-          if (animT >= 1) { phase = "defend"; animT = 0 }
+          phaseT = Math.min(1, phaseT + dt / 0.42)
+          swing =
+            phaseT < 0.35
+              ? easeOut(phaseT / 0.35)
+              : 1 - easeInOut((phaseT - 0.35) / 0.65)
+          if (phaseT >= 1) {
+            phase = "idle"
+            swing = 0
+            phaseT = 0
+          }
         } else if (phase === "defend") {
-          const dur = 0.45
-          animT = Math.min(1, animT + dt / dur)
-          const k = THREE.MathUtils.smoothstep(animT, 0, 1)
-          // subir “escudo” (simulado con casco hacia delante)
-          helmet.position.y = THREE.MathUtils.lerp(0, 0.5, k)
-          arms.position.y = THREE.MathUtils.lerp(0, 0.3, k)
-          swordGroup.rotation.z = THREE.MathUtils.lerp(-Math.PI * 0.9, -Math.PI * 0.4, k)
-          if (animT >= 1) {
-            setTimeout(() => {
-              // reset
-              helmet.position.y = 0
-              arms.position.y = 0
-              swordGroup.rotation.set(0, 0, 0)
-              swordGroup.position.set(1.5, -1.5, 0.2)
-              phase = "idle"
-            }, 250)
+          phaseT = Math.min(1, phaseT + dt / 0.85)
+          if (phaseT < 0.25) defend = easeOut(phaseT / 0.25)
+          else if (phaseT > 0.7) defend = 1 - easeInOut((phaseT - 0.7) / 0.3)
+          else defend = 1
+          if (phaseT >= 1) {
+            phase = "idle"
+            defend = 0
+            phaseT = 0
           }
         }
+
+        // Draw
+        const s = sc()
+        const cx = W / 2
+        const cy = H / 2 + 8
+
+        ctx.clearRect(0, 0, W, H)
+
+        const lx = Math.max(-1, Math.min(1, (mx - cx) / (W * 0.4)))
+        const ly = Math.max(-1, Math.min(1, (my - cy) / (H * 0.4)))
+
+        ctx.save()
+        ctx.translate(cx, cy + bobY * s)
+        ctx.rotate(lx * 0.04)
+
+        drawKnight(s, lx, ly, now)
+
+        ctx.restore()
       }
 
-      renderer.render(scene, cam)
-      rafRef.current = requestAnimationFrame(tick)
+      raf = requestAnimationFrame(tick)
     }
     tick()
 
-    // Cleanup
+    const ro = new ResizeObserver(resize)
+    ro.observe(box)
+
     return () => {
-      cancelAnimationFrame(rafRef.current!)
-      el.removeEventListener("click", onClick)
-      document.removeEventListener("visibilitychange", onVisibility)
-      renderer.dispose()
-      if (renderer.domElement.parentElement === el) el.removeChild(renderer.domElement)
+      cancelAnimationFrame(raf)
+      if (clickTimer) clearTimeout(clickTimer)
+      box.removeEventListener("mousemove", onMove)
+      box.removeEventListener("touchmove", onTouchMove)
+      box.removeEventListener("click", onClick)
+      box.removeEventListener("dblclick", onDbl)
+      document.removeEventListener("visibilitychange", onVis)
+      ro.disconnect()
     }
   }, [])
 
-  // Badge color según tema
-  useEffect(() => {
-    const mq = window.matchMedia?.("(prefers-color-scheme: dark)")
-    const resolve = () => setBadgeColor(mq?.matches ? "#ffffff" : "#0a0a0a")
-    resolve()
-    mq?.addEventListener?.("change", resolve)
-    return () => mq?.removeEventListener?.("change", resolve)
-  }, [])
-
-  const badgeRef = useRef<HTMLDivElement>(null)
-
   return (
-    <div ref={containerRef} className="pointer-events-auto absolute inset-0 z-10">
-      <div
-        ref={badgeRef}
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "14%",
-          transform: "translate(-50%, -50%)",
-          fontSize: 14,
-          fontWeight: 700,
-          color: badgeColor,
-          textShadow: "0 1px 4px rgba(0,0,0,0.35)",
-          userSelect: "none",
-          pointerEvents: "none",
-          opacity: 0,
-          transition: "opacity 160ms ease-out",
-          whiteSpace: "nowrap",
-        }}
-      >
-        Protegida nuestra web
-      </div>
+    <div
+      ref={boxRef}
+      className="pointer-events-auto absolute inset-0 z-10 cursor-crosshair select-none"
+    >
+      <canvas ref={cvRef} className="absolute inset-0" />
+      <p className="absolute bottom-0 inset-x-0 text-center text-[11px] text-muted-foreground/40 select-none pointer-events-none">
+        Click: atacar · Doble click: defender
+      </p>
     </div>
   )
 }

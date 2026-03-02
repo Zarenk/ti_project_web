@@ -13,6 +13,8 @@ import { Download, RefreshCw, ChevronRight, DollarSign, Heart, FileText } from '
 import { toast } from 'sonner';
 import { AccountingModeToggle } from '@/components/accounting-mode-toggle';
 import { useAccountingMode } from '@/context/accounting-mode-context';
+import { PageGuideButton } from '@/components/page-guide-dialog';
+import { ACCOUNTING_GUIDE_STEPS } from './accounting-guide-steps';
 
 const quickLinksContador = [
   { title: 'Plan de Cuentas', href: '/dashboard/accounting/chart', description: 'Catálogo de cuentas contables' },
@@ -72,7 +74,10 @@ export default function AccountingDashboardPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contabilidad</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Contabilidad</h1>
+            <PageGuideButton steps={ACCOUNTING_GUIDE_STEPS} tooltipLabel="Guía de contabilidad" />
+          </div>
           <p className="text-muted-foreground mt-1">
             {isSimpleMode
               ? 'Información financiera de tu negocio de forma sencilla'

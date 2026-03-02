@@ -21,6 +21,9 @@ import { PublicSignupDto } from './dto/public-signup.dto';
 import { SubscriptionsService } from 'src/subscriptions/subscriptions.service';
 import { SubscriptionNotificationsService } from 'src/subscriptions/subscription-notifications.service';
 import { SubscriptionPrometheusService } from 'src/subscriptions/subscription-prometheus.service';
+import {
+  BusinessVertical,
+} from '../types/business-vertical.enum';
 
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
@@ -31,6 +34,98 @@ const DEVICE_DAILY_LIMIT = 5;
 const DOMAIN_DAILY_LIMIT = 25;
 const BLOCK_DURATION_MS = 60 * 60 * 1000; // 1 hour
 const MAX_USER_AGENT_LENGTH = 255;
+
+const INDUSTRY_TO_VERTICAL: Record<string, BusinessVertical> = {
+  retail: BusinessVertical.RETAIL,
+  services: BusinessVertical.SERVICES,
+  manufacturing: BusinessVertical.MANUFACTURING,
+  distribution: BusinessVertical.GENERAL,
+  computers: BusinessVertical.COMPUTERS,
+  restaurants: BusinessVertical.RESTAURANTS,
+  law_firm: BusinessVertical.LAW_FIRM,
+  gym: BusinessVertical.GYM,
+};
+
+const TOKEN_EXPIRY_HOURS = 48;
+
+type DemoSeed = {
+  categoryName: string;
+  categoryDescription: string;
+  productName: string;
+  productDescription: string;
+  price: number;
+  priceSell: number;
+};
+
+const DEMO_SEED_BY_VERTICAL: Record<string, DemoSeed> = {
+  [BusinessVertical.COMPUTERS]: {
+    categoryName: 'Equipos Demo',
+    categoryDescription: 'Categoría para que puedas explorar el sistema',
+    productName: 'Laptop Demo Pro 15"',
+    productDescription:
+      'Equipo de demostración preconfigurado con inventario y características listas.',
+    price: 1200,
+    priceSell: 1490,
+  },
+  [BusinessVertical.RETAIL]: {
+    categoryName: 'Productos Demo',
+    categoryDescription: 'Categoría de demostración para comercio minorista',
+    productName: 'Producto Demo — Retail',
+    productDescription: 'Producto demo para que explores inventario y ventas.',
+    price: 50,
+    priceSell: 75,
+  },
+  [BusinessVertical.RESTAURANTS]: {
+    categoryName: 'Platos Demo',
+    categoryDescription: 'Categoría de demostración para restaurante',
+    productName: 'Plato Demo — Menú del día',
+    productDescription: 'Plato demo para que explores pedidos y cocina.',
+    price: 12,
+    priceSell: 25,
+  },
+  [BusinessVertical.SERVICES]: {
+    categoryName: 'Servicios Demo',
+    categoryDescription: 'Categoría de demostración para servicios',
+    productName: 'Consultoría Demo — 1 hora',
+    productDescription: 'Servicio demo para que explores facturación.',
+    price: 80,
+    priceSell: 150,
+  },
+  [BusinessVertical.MANUFACTURING]: {
+    categoryName: 'Insumos Demo',
+    categoryDescription: 'Categoría de demostración para manufactura',
+    productName: 'Material Demo — Materia prima',
+    productDescription: 'Insumo demo para que explores control de producción.',
+    price: 30,
+    priceSell: 55,
+  },
+  [BusinessVertical.LAW_FIRM]: {
+    categoryName: 'Servicios Legales Demo',
+    categoryDescription: 'Categoría de demostración para estudio de abogados',
+    productName: 'Asesoría Legal Demo',
+    productDescription: 'Servicio demo para que explores gestión de expedientes.',
+    price: 200,
+    priceSell: 350,
+  },
+  [BusinessVertical.GYM]: {
+    categoryName: 'Membresías Demo',
+    categoryDescription: 'Categoría de demostración para gimnasio',
+    productName: 'Membresía Mensual Demo',
+    productDescription: 'Membresía demo para que explores control de clientes.',
+    price: 80,
+    priceSell: 120,
+  },
+};
+
+const DEFAULT_DEMO_SEED: DemoSeed = {
+  categoryName: 'Productos Demo',
+  categoryDescription: 'Categoría para que puedas explorar el sistema',
+  productName: 'Producto Demo General',
+  productDescription:
+    'Producto de demostración preconfigurado para que explores todas las funcionalidades.',
+  price: 50,
+  priceSell: 75,
+};
 
 const DEFAULT_DISPOSABLE_DOMAINS = [
   'mailinator.com',
@@ -130,6 +225,11 @@ export class PublicSignupService {
       let companyId: number;
       let userId: number;
 
+      const resolvedVertical: BusinessVertical =
+        dto.businessVertical ??
+        INDUSTRY_TO_VERTICAL[dto.industry ?? ''] ??
+        BusinessVertical.GENERAL;
+
       const result = await this.prisma.$transaction(async (tx) => {
         const slug = await this.generateOrgSlug(dto.organizationName);
         const organization = await tx.organization.create({
@@ -146,8 +246,12 @@ export class PublicSignupService {
             name: dto.companyName.trim(),
             legalName: dto.companyName.trim(),
             status: 'ACTIVE',
+            businessVertical: resolvedVertical,
           },
         });
+
+        const tokenExpiry = new Date();
+        tokenExpiry.setHours(tokenExpiry.getHours() + TOKEN_EXPIRY_HOURS);
 
         const user = await tx.user.create({
           data: {
@@ -160,6 +264,7 @@ export class PublicSignupService {
             lastCompanyId: company.id,
             isPublicSignup: true,
             emailVerificationToken: verificationToken,
+            emailVerificationTokenExpiresAt: tokenExpiry,
             emailVerifiedAt: null,
           },
         });
@@ -172,7 +277,7 @@ export class PublicSignupService {
           },
         });
 
-        await this.seedDemoData(tx, organization.id, company.id);
+        await this.seedDemoData(tx, organization.id, company.id, resolvedVertical);
 
         return {
           organizationId: organization.id,
@@ -195,11 +300,20 @@ export class PublicSignupService {
           organizationId,
           planCode,
         });
-      } catch (error) {
-        this.logger.error(
-          `Failed to start trial for org=${organizationId}: ${error}`,
+      } catch (firstError) {
+        this.logger.warn(
+          `Trial attempt 1 failed for org=${organizationId}: ${firstError}`,
         );
-        // Continue even if trial setup fails; admin can fix later.
+        try {
+          await this.subscriptionsService.startTrial({
+            organizationId,
+            planCode: 'trial',
+          });
+        } catch (secondError) {
+          this.logger.error(
+            `Trial attempt 2 failed for org=${organizationId}: ${secondError}`,
+          );
+        }
       }
 
       await this.sendVerificationEmailSafe({
@@ -249,6 +363,15 @@ export class PublicSignupService {
       );
     }
 
+    if (
+      user.emailVerificationTokenExpiresAt &&
+      user.emailVerificationTokenExpiresAt < new Date()
+    ) {
+      throw new BadRequestException(
+        'El enlace ha expirado. Solicita uno nuevo desde la pantalla de login.',
+      );
+    }
+
     if (user.emailVerifiedAt) {
       return {
         message: 'El correo ya se encuentra confirmado. Puedes iniciar sesión.',
@@ -289,9 +412,15 @@ export class PublicSignupService {
     }
 
     const token = this.generateVerificationToken();
+    const newExpiry = new Date();
+    newExpiry.setHours(newExpiry.getHours() + TOKEN_EXPIRY_HOURS);
+
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { emailVerificationToken: token },
+      data: {
+        emailVerificationToken: token,
+        emailVerificationTokenExpiresAt: newExpiry,
+      },
     });
 
     const organizationName = await this.resolveOrganizationName(user.id);
@@ -312,35 +441,37 @@ export class PublicSignupService {
     tx: Prisma.TransactionClient,
     organizationId: number,
     companyId: number,
+    vertical: BusinessVertical = BusinessVertical.GENERAL,
   ) {
+    const seed = DEMO_SEED_BY_VERTICAL[vertical] ?? DEFAULT_DEMO_SEED;
+
     const category = await tx.category.upsert({
       where: {
         organizationId_name: {
           organizationId,
-          name: 'Equipos Demo',
+          name: seed.categoryName,
         },
       },
       update: {},
       create: {
-        name: 'Equipos Demo',
+        name: seed.categoryName,
         organizationId,
         companyId,
         status: 'ACTIVE',
-        description: 'Categoría para que puedas explorar el sistema',
+        description: seed.categoryDescription,
       },
     });
 
     await tx.product.create({
       data: {
-        name: 'Laptop Demo Pro 15"',
+        name: seed.productName,
         categoryId: category.id,
-        price: 1200,
-        priceSell: 1490,
+        price: seed.price,
+        priceSell: seed.priceSell,
         organizationId,
         companyId,
-        images: ['/demo/laptop.png'],
-        description:
-          'Equipo de demostración preconfigurado con inventario y características listas.',
+        images: [],
+        description: seed.productDescription,
       },
     });
 

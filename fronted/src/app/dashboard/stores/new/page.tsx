@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 
 import { getStore } from "../stores.api";
 import StoreForm from "./store-form";
-
-type LoadedStore = Awaited<ReturnType<typeof getStore>> | null;
+import { PageGuideButton } from "@/components/page-guide-dialog";
+import { STORE_FORM_GUIDE_STEPS } from "./store-form-guide-steps";
 
 function resolveStoreId(
   paramsId: string | string[] | undefined,
@@ -32,59 +34,35 @@ function resolveStoreId(
 export default function StoresNewPage(): React.ReactElement {
   const params = useParams<{ id?: string | string[] }>();
   const search = useSearchParams();
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
 
   const storeId = useMemo(
     () => resolveStoreId(params?.id, search?.get("id") ?? null),
     [params?.id, search],
   );
 
-  const [store, setStore] = useState<LoadedStore>(null);
-  const [loading, setLoading] = useState<boolean>(Boolean(storeId));
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchStore = async () => {
-      if (!storeId) {
-        setStore(null);
-        setLoading(false);
-        setError(null);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
+  const { data: store = null, isLoading: loading, error: queryError } = useQuery({
+    queryKey: [...queryKeys.stores.root(selection.orgId, selection.companyId), "detail", storeId],
+    queryFn: async () => {
       try {
-        const data = await getStore(storeId);
-        if (!cancelled) {
-          setStore(data);
-        }
+        return await getStore(storeId!);
       } catch (err) {
         const message =
           err instanceof Error
             ? err.message
             : "No se pudo cargar la informacion de la tienda.";
-        if (!cancelled) {
-          setStore(null);
-          setError(message);
-        }
         toast.error(message);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        throw err;
       }
-    };
+    },
+    enabled: selection.orgId !== null && Boolean(storeId),
+  });
 
-    void fetchStore();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [storeId, version]);
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : "No se pudo cargar la informacion de la tienda."
+    : null;
 
   const title = storeId ? "Actualizar Tienda" : "Crear Tienda";
 
@@ -92,7 +70,10 @@ export default function StoresNewPage(): React.ReactElement {
     <div className="flex min-h-screen items-start justify-center p-3">
       <Card className="w-full max-w-lg sm:max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
         <CardHeader className="pb-2 sm:pb-2">
-          <CardTitle className="pt-5 text-center text-xl font-bold">{title}</CardTitle>
+          <CardTitle className="flex items-center justify-center gap-2 pt-5 text-xl font-bold">
+            {title}
+            <PageGuideButton steps={STORE_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
