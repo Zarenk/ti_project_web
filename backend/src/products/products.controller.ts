@@ -24,8 +24,9 @@ import { ValidateProductNameDto } from './dto/validate-product-name.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { extname } from 'path';
 import { processUploadedImage } from '../utils/image-processor';
+import { resolveStoragePath } from '../utils/path-utils';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
@@ -139,7 +140,7 @@ export class ProductsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/products',
+        destination: resolveStoragePath('uploads', 'products'),
         filename: (req, file, cb) => {
           const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, `${unique}${extname(file.originalname)}`);
@@ -165,7 +166,7 @@ export class ProductsController {
     }
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-    const absolutePath = join(process.cwd(), 'uploads', 'products', file.filename);
+    const absolutePath = resolveStoragePath('uploads', 'products', file.filename);
     const result = await processUploadedImage(
       absolutePath,
       'products',

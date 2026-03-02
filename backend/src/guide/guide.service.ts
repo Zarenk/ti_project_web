@@ -18,7 +18,7 @@ import { firmarGuiaUBL } from './utils/signer';
 import AdmZip from 'adm-zip';
 import { firstValueFrom } from 'rxjs';
 import { HttpService } from '@nestjs/axios';
-import { resolveBackendPath } from 'src/utils/path-utils';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { InventoryService } from 'src/inventory/inventory.service';
 
 @Injectable()
@@ -132,7 +132,7 @@ export class GuideService {
 
     const candidate = path.isAbsolute(value)
       ? value
-      : resolveBackendPath(value);
+      : resolveStoragePath(value);
 
     if (!fs.existsSync(candidate)) {
       throw new BadRequestException(

@@ -3,7 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsAppService } from '../whatsapp.service';
 import { CreateAutomationDto, UpdateAutomationDto } from '../dto/automation.dto';
-import { resolveBackendPath } from '../../utils/path-utils';
+import { resolveStoragePath } from '../../utils/path-utils';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -566,7 +566,7 @@ export class AutomationService {
       });
 
       if (record?.relativePath) {
-        const filePath = resolveBackendPath(record.relativePath);
+        const filePath = resolveStoragePath(record.relativePath);
         const buffer = await fs.readFile(filePath);
         this.logger.log(`Found PDF via SunatStoredPdf: ${filePath}`);
         return { buffer, fileName };
@@ -577,7 +577,7 @@ export class AutomationService {
 
     // 2. Fallback: standard path
     try {
-      const filePath = path.join(resolveBackendPath('comprobantes', 'pdf', tipo), fileName);
+      const filePath = path.join(resolveStoragePath('comprobantes', 'pdf', tipo), fileName);
       const buffer = await fs.readFile(filePath);
       this.logger.log(`Found PDF via standard path: ${filePath}`);
       return { buffer, fileName };

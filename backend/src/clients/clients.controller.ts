@@ -15,8 +15,9 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import { extname } from 'path';
 import { processUploadedImage } from '../utils/image-processor';
+import { resolveStoragePath } from '../utils/path-utils';
 import { Request } from 'express';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ClientService } from './clients.service';
@@ -203,7 +204,7 @@ export class ClientController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/clients',
+        destination: resolveStoragePath('uploads', 'clients'),
         filename: (req, file, cb) => {
           const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, `${unique}${extname(file.originalname)}`);
@@ -228,7 +229,7 @@ export class ClientController {
       throw new BadRequestException('No se proporcionó ninguna imagen');
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-    const absolutePath = join(process.cwd(), 'uploads', 'clients', file.filename);
+    const absolutePath = resolveStoragePath('uploads', 'clients', file.filename);
     const result = await processUploadedImage(
       absolutePath,
       'clients',

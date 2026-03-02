@@ -19,7 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { SunatService } from './sunat.service';
-import { resolveBackendPath } from 'src/utils/path-utils';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
@@ -132,7 +132,7 @@ export class SunatController {
     FileInterceptor('pdf', {
       storage: diskStorage({
         destination: (_req, _file, cb) => {
-          const tmpDir = resolveBackendPath('uploads', 'sunat', 'pdf', 'tmp');
+          const tmpDir = resolveStoragePath('uploads', 'sunat', 'pdf', 'tmp');
           fs.mkdirSync(tmpDir, { recursive: true });
           cb(null, tmpDir);
         },
@@ -194,7 +194,7 @@ export class SunatController {
       effectiveType,
     );
 
-    const destination = resolveBackendPath(tenantAwarePath);
+    const destination = resolveStoragePath(tenantAwarePath);
     fs.mkdirSync(destination, { recursive: true });
     const finalPath = path.join(destination, file.filename);
     if (fs.existsSync(finalPath)) {
@@ -203,7 +203,7 @@ export class SunatController {
     fs.renameSync(file.path, finalPath);
 
     const relativePath = path
-      .relative(resolveBackendPath(), finalPath)
+      .relative(resolveStoragePath(), finalPath)
       .replace(/\\/g, '/');
 
     await this.sunatService.registerStoredPdf({

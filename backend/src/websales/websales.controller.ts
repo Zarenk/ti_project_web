@@ -16,6 +16,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { Request } from 'express';
 import { WebSalesService } from './websales.service';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
@@ -138,7 +139,7 @@ export class WebSalesController {
   @UseInterceptors(
     FilesInterceptor('files', 5, {
       storage: diskStorage({
-        destination: './uploads/order-proofs',
+        destination: resolveStoragePath('uploads', 'order-proofs'),
         filename: (req, file, cb) => {
           const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
           cb(null, `${unique}${extname(file.originalname)}`);

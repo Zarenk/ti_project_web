@@ -11,12 +11,12 @@ import {
   SubscriptionStatus,
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { resolveBackendPath } from 'src/utils/path-utils';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import archiver from 'archiver';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const EXPORT_DIR = resolveBackendPath('exports', 'organizations');
+const EXPORT_DIR = resolveStoragePath('exports', 'organizations');
 const CLEANUP_RETENTION_DAYS = 7;
 const EXPORT_EXPIRATION_DAYS = 30;
 
@@ -67,7 +67,7 @@ export class OrganizationExportService {
     if (!record.filePath) {
       throw new BadRequestException('La exportación aún no está lista');
     }
-    const fullPath = resolveBackendPath(record.filePath);
+    const fullPath = resolveStoragePath(record.filePath);
     if (!fs.existsSync(fullPath)) {
       throw new NotFoundException(
         'El archivo exportado ya no se encuentra en el servidor',
@@ -323,7 +323,7 @@ export class OrganizationExportService {
     await fs.promises.unlink(jsonPath).catch(() => null);
 
     const relativePath = path
-      .relative(resolveBackendPath(), zipPath)
+      .relative(resolveStoragePath(), zipPath)
       .replace(/\\/g, '/');
     return relativePath;
   }

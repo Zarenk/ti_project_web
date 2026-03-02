@@ -9,6 +9,7 @@ import { MetricsService } from './metrics/metrics.service';
 import { TelemetryInterceptor } from './metrics/trace.interceptor';
 import { TenantHeaderSanitizerMiddleware } from './common/middleware/tenant-header.middleware';
 import { bootstrapSunatCerts } from './utils/bootstrap-sunat-certs';
+import { ensureStorageDirs, resolveStoragePath } from './utils/path-utils';
 import { PrismaService } from './prisma/prisma.service';
 import { TenantSlugResolverMiddleware } from './common/middleware/tenant-slug-resolver.middleware';
 import {
@@ -63,6 +64,9 @@ async function bootstrap() {
   // Write SUNAT certs from env vars to disk (Railway ephemeral FS)
   bootstrapSunatCerts();
 
+  // Ensure all persistent storage directories exist (Railway Volume or local)
+  ensureStorageDirs();
+
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new TenantExceptionFilter());
   const metrics = app.get(MetricsService);
@@ -98,8 +102,8 @@ async function bootstrap() {
   });
 
   // Serve static files before applying the global prefix so they remain
-  // accessible without "/api" in the path
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+  // accessible without "/api" in the path (uses persistent storage root on Railway)
+  app.use('/uploads', express.static(resolveStoragePath('uploads')));
 
   // PARA COLOCAR PREVIAMENTE EN LA URL /API/
   app.setGlobalPrefix('api');

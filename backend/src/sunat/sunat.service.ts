@@ -19,7 +19,7 @@ import { generateZip } from './utils/zip-generator';
 import { sendToSunat } from './utils/sunat-client';
 import * as path from 'path';
 import * as fs from 'fs';
-import { resolveBackendPath } from 'src/utils/path-utils';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
 const SUNAT_ENDPOINTS = {
@@ -183,7 +183,7 @@ export class SunatService {
 
       const zipFileName = `${ruc}-${tipoComprobante}-${serie}-${correlativo}`;
       const zipFilePath = generateZip(zipFileName, signedXml, normalizedType);
-      const xmlFolder = resolveBackendPath('sunat', 'xml', normalizedType);
+      const xmlFolder = resolveStoragePath('sunat', 'xml', normalizedType);
       if (!fs.existsSync(xmlFolder)) {
         fs.mkdirSync(xmlFolder, { recursive: true });
       }
@@ -255,7 +255,7 @@ export class SunatService {
       }
       let cdrFilePath: string | null = null;
       if (cdrXml) {
-        const cdrFolder = resolveBackendPath('sunat', 'cdr', normalizedType);
+        const cdrFolder = resolveStoragePath('sunat', 'cdr', normalizedType);
         if (!fs.existsSync(cdrFolder)) {
           fs.mkdirSync(cdrFolder, { recursive: true });
         }
@@ -400,8 +400,8 @@ export class SunatService {
     relativePath?: string,
   ): string {
     const filePath = relativePath
-      ? resolveBackendPath(relativePath)
-      : path.join(resolveBackendPath('comprobantes/pdf', tipo), filename);
+      ? resolveStoragePath(relativePath)
+      : path.join(resolveStoragePath('comprobantes/pdf', tipo), filename);
 
     if (!fs.existsSync(filePath)) {
       throw new Error('Archivo no encontrado');
@@ -475,7 +475,7 @@ export class SunatService {
 
     const candidate = path.isAbsolute(value)
       ? value
-      : resolveBackendPath(value);
+      : resolveStoragePath(value);
 
     if (!fs.existsSync(candidate)) {
       throw new BadRequestException(
@@ -793,13 +793,13 @@ export class SunatService {
     });
 
     if (storedPdf?.relativePath) {
-      const filePath = resolveBackendPath(storedPdf.relativePath);
+      const filePath = resolveStoragePath(storedPdf.relativePath);
       if (fs.existsSync(filePath)) return filePath;
     }
 
     // Fallback: try the standard path
     const standardPath = path.join(
-      resolveBackendPath('comprobantes/pdf', tipo),
+      resolveStoragePath('comprobantes/pdf', tipo),
       filename,
     );
     if (fs.existsSync(standardPath)) return standardPath;
@@ -840,7 +840,7 @@ export class SunatService {
 
     const tipo = invoice.tipoComprobante?.toUpperCase() === 'FACTURA' ? 'factura' : 'boleta';
     const standardPath = path.join(
-      resolveBackendPath('comprobantes/pdf', tipo),
+      resolveStoragePath('comprobantes/pdf', tipo),
       filename,
     );
     return fs.existsSync(standardPath);

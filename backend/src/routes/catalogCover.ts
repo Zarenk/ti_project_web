@@ -18,12 +18,12 @@ import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
-import { resolveBackendPath } from '../utils/path-utils';
+import { resolveStoragePath } from '../utils/path-utils';
 import { CurrentTenant } from '../tenancy/tenant-context.decorator';
 import sharp from 'sharp';
 
 function ensureCatalogDir(): string {
-  const dir = resolveBackendPath('uploads', 'catalog');
+  const dir = resolveStoragePath('uploads', 'catalog');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -82,7 +82,7 @@ export class CatalogCoverController {
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     const pdfRelativePath = buildPdfVariantRelativePath(cover.imagePath);
-    const pdfAbsolutePath = resolveBackendPath(
+    const pdfAbsolutePath = resolveStoragePath(
       ...pdfRelativePath.replace(/^\//, '').split('/'),
     );
     const pdfImageUrl = existsSync(pdfAbsolutePath)
@@ -147,7 +147,7 @@ export class CatalogCoverController {
     const relativePath = `/uploads/catalog/${file.filename}`;
     const absolutePath = file.path;
     const pdfRelativePath = buildPdfVariantRelativePath(relativePath);
-    const pdfAbsolutePath = resolveBackendPath(
+    const pdfAbsolutePath = resolveStoragePath(
       ...pdfRelativePath.replace(/^\//, '').split('/'),
     );
 

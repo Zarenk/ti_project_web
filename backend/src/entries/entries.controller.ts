@@ -26,6 +26,7 @@ import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { InvoiceExtractionService } from 'src/invoice-extraction/invoice-extraction.service';
 import { promises as fs, existsSync, mkdirSync } from 'fs';
 import { createHash } from 'crypto';
+import { resolveStoragePath } from 'src/utils/path-utils';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import type { Request } from 'express';
@@ -93,7 +94,7 @@ export class EntriesController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const target = './uploads/entries-drafts/invoices';
+          const target = resolveStoragePath('uploads', 'entries-drafts', 'invoices');
           if (!existsSync(target)) {
             mkdirSync(target, { recursive: true });
           }
@@ -147,7 +148,7 @@ export class EntriesController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const target = './uploads/entries-drafts/guides';
+          const target = resolveStoragePath('uploads', 'entries-drafts', 'guides');
           if (!existsSync(target)) {
             mkdirSync(target, { recursive: true });
           }
@@ -199,7 +200,7 @@ export class EntriesController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/invoices',
+        destination: resolveStoragePath('uploads', 'invoices'),
         filename: (req, file, cb) => {
           const uniqueSuffix =
             Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -237,7 +238,7 @@ export class EntriesController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads/guides', // Carpeta donde se guardarán los PDFs
+        destination: resolveStoragePath('uploads', 'guides'),
         filename: (req, file, cb) => {
           const uniqueSuffix =
             Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -287,8 +288,8 @@ export class EntriesController {
       throw new BadRequestException('draftId no autorizado.');
     }
 
-    const sourceDir = './uploads/entries-drafts/invoices';
-    const targetDir = './uploads/invoices';
+    const sourceDir = resolveStoragePath('uploads', 'entries-drafts', 'invoices');
+    const targetDir = resolveStoragePath('uploads', 'invoices');
     if (!existsSync(targetDir)) {
       mkdirSync(targetDir, { recursive: true });
     }
@@ -334,8 +335,8 @@ export class EntriesController {
       throw new BadRequestException('draftId no autorizado.');
     }
 
-    const sourceDir = './uploads/entries-drafts/guides';
-    const targetDir = './uploads/guides';
+    const sourceDir = resolveStoragePath('uploads', 'entries-drafts', 'guides');
+    const targetDir = resolveStoragePath('uploads', 'guides');
     if (!existsSync(targetDir)) {
       mkdirSync(targetDir, { recursive: true });
     }
@@ -440,7 +441,7 @@ export class EntriesController {
     try {
       const destination =
         file.destination ??
-        (file.path ? path.dirname(file.path) : './uploads/invoices');
+        (file.path ? path.dirname(file.path) : resolveStoragePath('uploads', 'invoices'));
       const absolutePath = path.resolve(destination, file.filename);
 
       if (!(await this.fileExists(absolutePath))) {
