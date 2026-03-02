@@ -8,6 +8,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { MetricsService } from './metrics/metrics.service';
 import { TelemetryInterceptor } from './metrics/trace.interceptor';
 import { TenantHeaderSanitizerMiddleware } from './common/middleware/tenant-header.middleware';
+import { bootstrapSunatCerts } from './utils/bootstrap-sunat-certs';
 import { PrismaService } from './prisma/prisma.service';
 import { TenantSlugResolverMiddleware } from './common/middleware/tenant-slug-resolver.middleware';
 import {
@@ -59,6 +60,9 @@ console.warn = (...args: any[]) => {
 };
 
 async function bootstrap() {
+  // Write SUNAT certs from env vars to disk (Railway ephemeral FS)
+  bootstrapSunatCerts();
+
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new TenantExceptionFilter());
   const metrics = app.get(MetricsService);
