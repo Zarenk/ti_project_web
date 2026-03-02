@@ -120,15 +120,18 @@ export function SaleCartSidebar({
 }: SaleCartSidebarProps) {
   const [comprobanteOpen, setComprobanteOpen] = useState(false)
 
-  // Comprobante allowed per client type: RUC→FACTURA, DNI→BOLETA, null (Público General)→SIN COMPROBANTE
-  const allowedComprobante: string | null =
+  // Comprobante disabled per client type:
+  // RUC → only FACTURA (block BOLETA & SIN COMPROBANTE)
+  // DNI → BOLETA or SIN COMPROBANTE (block FACTURA)
+  // null (Público General) → BOLETA or SIN COMPROBANTE (block FACTURA — SUNAT allows boleta anónima)
+  const disabledComprobantes: Set<string> =
     clientDocType === "RUC"
-      ? "FACTURA"
+      ? new Set(["SIN COMPROBANTE", "BOLETA"])
       : clientDocType === "DNI"
-        ? "BOLETA"
+        ? new Set(["FACTURA"])
         : clientDocType === null
-          ? "SIN COMPROBANTE"
-          : null // undefined = no restriction
+          ? new Set(["FACTURA"])
+          : new Set() // undefined = no restriction
 
   const total = items.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
@@ -420,7 +423,7 @@ export function SaleCartSidebar({
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
               {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((tipo) => {
-                const isDisabled = allowedComprobante !== null && tipo !== allowedComprobante
+                const isDisabled = disabledComprobantes.has(tipo)
                 return (
                   <Button
                     key={tipo}

@@ -1192,42 +1192,28 @@ const getSaleReferenceId = () => {
           return;
         } 
            
-        // Validar que el cliente exista, excepto si el tipo de comprobante es "SIN COMPROBANTE"
+        // Validar cliente según tipo de comprobante
+        // FACTURA: siempre requiere cliente con RUC (requisito SUNAT)
+        // BOLETA: cliente opcional (SUNAT permite boleta anónima / consumidor final)
+        // SIN COMPROBANTE: cliente opcional
         let clientId = null;
-        if (data.tipoComprobante === "SIN COMPROBANTE") {
-          // Seleccionar automáticamente el cliente "SIN CLIENTE"
+        if (data.tipoComprobante === "FACTURA") {
+          clientId = clients.find((client) => client.typeNumber === data.client_typeNumber)?.id;
+          if (!clientId) {
+            toast.error("FACTURA requiere un cliente con RUC válido.");
+            return;
+          }
+        } else if (!data.client_typeNumber || data.client_name === "Sin Cliente" || data.tipoComprobante === "SIN COMPROBANTE") {
+          // SIN COMPROBANTE o BOLETA sin cliente seleccionado: usar "Sin Cliente"
           const sinCliente = clients.find((client) => client.name === "Sin Cliente");
-          if (sinCliente) {
-            clientId = sinCliente.id;
-          } else {
-            clientId = null;
-            //toast.error("No se encontró el cliente predeterminado 'Sin Ciente'.");
-            //return;
-          }
+          clientId = sinCliente?.id ?? null; // Backend auto-crea si null
         } else {
-          // Validar que el cliente exista, excepto si el nombre del cliente es "Sin Cliente"
-          if (data.client_name !== "Sin Cliente") {
-            clientId = clients.find((client) => client.typeNumber === data.client_typeNumber)?.id;
-            if (!clientId) {
-              toast.error("Debe seleccionar un cliente válido.");
-              return;
-            }
-          }
-          else{
+          // BOLETA con cliente específico seleccionado
+          clientId = clients.find((client) => client.typeNumber === data.client_typeNumber)?.id;
+          if (!clientId) {
             const sinClient = clients.find((client) => client.name === "Sin Cliente");
-            if (sinClient) {
-              clientId = sinClient.id;
-            } else {
-              toast.error("No se encontró el cliente predeterminado 'Sin Cliente'.");
-              return;
-            }
+            clientId = sinClient?.id ?? null;
           }
-        }
-
-        // Asegurarse de que clientId no sea null
-        if (clientId === null) {
-          //toast.error("El cliente no es válido.");
-          //return;         
         }
 
         // Validar que todos los productos tengan valores válidos

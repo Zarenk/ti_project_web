@@ -536,46 +536,56 @@ function SaleCard({
               </PopoverContent>
             </Popover>
           )}
-          {sale.invoices ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span tabIndex={0}>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 gap-1 text-[11px] opacity-50 cursor-not-allowed"
-                    disabled
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Eliminar
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                <p className="text-xs">Tiene comprobante. Use anulación desde el detalle.</p>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <DeleteActionsGuard>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 gap-1 text-[11px] cursor-pointer text-rose-600 hover:bg-rose-500/10 hover:text-rose-700"
-                    onClick={() => setIsDialogOpen(true)}
-                    disabled={isDeleting}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    {isDeleting ? "Eliminando..." : "Eliminar"}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p className="text-xs">Eliminar esta venta</p>
-                </TooltipContent>
-              </Tooltip>
-            </DeleteActionsGuard>
-          )}
+          {(() => {
+            const blockDeletion = sale.invoices && sunatAccepted;
+
+            if (blockDeletion) {
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1 text-[11px] opacity-50 cursor-not-allowed"
+                        disabled
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Eliminar
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">Aceptada por SUNAT. Emita una nota de crédito para anular.</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            return (
+              <DeleteActionsGuard>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1 text-[11px] cursor-pointer text-rose-600 hover:bg-rose-500/10 hover:text-rose-700"
+                      onClick={() => setIsDialogOpen(true)}
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {isDeleting ? "Eliminando..." : "Eliminar"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">
+                      {sale.invoices ? "Eliminar venta y comprobante con error SUNAT" : "Eliminar esta venta"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </DeleteActionsGuard>
+            );
+          })()}
         </div>
       </div>
 
@@ -584,7 +594,9 @@ function SaleCard({
           <AlertDialogHeader>
             <AlertDialogTitle>¿Deseas eliminar esta venta?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer y removerá la venta del historial.
+              {sale.invoices
+                ? "Esta venta tiene un comprobante con error SUNAT. Se eliminará el comprobante junto con la venta. Esta acción no se puede deshacer."
+                : "Esta acción no se puede deshacer y removerá la venta del historial."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

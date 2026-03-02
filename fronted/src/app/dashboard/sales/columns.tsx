@@ -279,39 +279,48 @@ export function createSalesColumns(
             >
               Ver Detalles
             </Button>
-            {sale.invoices ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span tabIndex={0}>
-                      <Button
-                        variant="destructive"
-                        disabled
-                        className="opacity-50 cursor-not-allowed"
-                      >
-                        Eliminar
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Esta venta tiene comprobante. Use anulacion desde el detalle.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <DeleteActionsGuard>
-                <Button
-                  variant="destructive"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setIsDialogOpen(true);
-                  }}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Eliminando..." : "Eliminar"}
-                </Button>
-              </DeleteActionsGuard>
-            )}
+            {(() => {
+              const sunatIsAccepted = sale.sunatStatus?.status?.toUpperCase() === "ACCEPTED";
+              const blockDeletion = sale.invoices && sunatIsAccepted;
+
+              if (blockDeletion) {
+                return (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button
+                            variant="destructive"
+                            disabled
+                            className="opacity-50 cursor-not-allowed"
+                          >
+                            Eliminar
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Aceptada por SUNAT. Emita una nota de crédito para anular.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              }
+
+              return (
+                <DeleteActionsGuard>
+                  <Button
+                    variant="destructive"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsDialogOpen(true);
+                    }}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Eliminando..." : "Eliminar"}
+                  </Button>
+                </DeleteActionsGuard>
+              );
+            })()}
           </div>
 
           <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -319,8 +328,9 @@ export function createSalesColumns(
               <AlertDialogHeader>
                 <AlertDialogTitle>¿Deseas eliminar esta venta?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta acción no se puede deshacer y removerá la venta del
-                  historial.
+                  {sale.invoices
+                    ? "Esta venta tiene un comprobante con error SUNAT. Se eliminará el comprobante junto con la venta. Esta acción no se puede deshacer."
+                    : "Esta acción no se puede deshacer y removerá la venta del historial."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
