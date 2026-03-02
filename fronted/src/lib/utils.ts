@@ -97,7 +97,7 @@ export async function uploadPdfToServer({
     }
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/sunat/upload-pdf`, {
+  const response = await fetch(`/api/sunat/upload-pdf`, {
     method: "POST",
     headers,
     body: formData,
