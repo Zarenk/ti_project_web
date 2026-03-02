@@ -228,8 +228,8 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
   useEffect(() => {
     if (clientId === undefined) return // not yet selected
     if (clientId === null) {
-      // Publico General: default to BOLETA (SUNAT allows boleta anónima)
-      setTipoComprobante("BOLETA")
+      // Publico General: default SIN COMPROBANTE, user can switch to BOLETA manually
+      setTipoComprobante("SIN COMPROBANTE")
     } else if (clientDocType === "RUC") {
       setTipoComprobante("FACTURA")
     } else {
