@@ -18,7 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 
 interface InventoryGalleryItem {
   id: number | string
@@ -67,8 +67,8 @@ export function InventoryGallery({ data, onTransferProduct }: InventoryGalleryPr
     const images = Array.isArray(product.images)
       ? product.images.filter(Boolean)
       : []
-    if (images[0]) return resolveImageUrl(images[0])
-    if (product.image) return resolveImageUrl(product.image)
+    if (images[0]) return resolveImageVariant(images[0], "card")
+    if (product.image) return resolveImageVariant(product.image, "card")
     return null
   }
 

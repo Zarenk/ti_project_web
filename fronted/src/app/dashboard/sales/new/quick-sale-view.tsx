@@ -1,5 +1,8 @@
 "use client"
 
+// Stable empty array to prevent unstable references in useMemo dependencies.
+const STABLE_EMPTY: any[] = []
+
 import {
   useCallback,
   useEffect,
@@ -45,6 +48,8 @@ import {
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { getAuthToken } from "@/utils/auth-token"
 import { fetchCompanyVerticalInfo } from "../../tenancy/tenancy.api"
 
@@ -53,8 +58,8 @@ import { getRegisteredClients } from "../../clients/clients.api"
 import {
   createSale,
   getProductsByStore,
-  fetchSeriesByProductAndStore,
   getPaymentMethods,
+  sendInvoiceToSunat,
 } from "../sales.api"
 
 import { SaleContextBar } from "../components/quick-sale/sale-context-bar"
@@ -62,13 +67,20 @@ import {
   SaleProductCard,
   type SaleProductCardItem,
 } from "../components/quick-sale/sale-product-card"
-import {
-  SaleCartSidebar,
-  type SaleCartItem,
-} from "../components/quick-sale/sale-cart-sidebar"
+import { SaleCartSidebar } from "../components/quick-sale/sale-cart-sidebar"
 import { SaleSerialsDialog } from "../components/quick-sale/sale-serials-dialog"
 import { SplitPaymentDialog } from "../components/quick-sale/sale-split-payment-dialog"
 import { StoreChangeDialog } from "../components/StoreChangeDialog"
+import { InvoiceDocument } from "../components/pdf/InvoiceDocument"
+import { TicketInvoiceDocument } from "../components/pdf/TicketInvoiceDocument"
+import { useSiteSettings } from "@/context/site-settings-context"
+import { numeroALetrasCustom } from "../components/utils/numeros-a-letras"
+import { uploadPdfToServer } from "@/lib/utils"
+import { getCompanyDetail, type CompanyDetail } from "../../tenancy/tenancy.api"
+import { pdf } from "@react-pdf/renderer"
+import QRCode from "qrcode"
+import { useSaleCart } from "./use-sale-cart"
+import { useSalePayment } from "./use-sale-payment"
 
 async function getUserIdFromToken(): Promise<number | null> {
   const token = await getAuthToken()
@@ -98,20 +110,68 @@ type QuickSaleViewProps = {
 
 export function QuickSaleView({ categories }: QuickSaleViewProps) {
   const router = useRouter()
-  const { version, selection } = useTenantSelection()
-  const [serialsEnabled, setSerialsEnabled] = useState(false)
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
+  const invalidateSales = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.sales.root(selection.orgId, selection.companyId) })
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) })
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
+  }
+  const { settings } = useSiteSettings()
+  const receiptFormat = settings.company.receiptFormat ?? "a4"
 
-  // --- Data loading ---
-  const [stores, setStores] = useState<{ id: number; name: string }[]>([])
-  const [clients, setClients] = useState<
-    { id: number; name: string; type: string; typeNumber: string }[]
-  >([])
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>(
-    DEFAULT_PAYMENT_METHODS,
+  // --- Data loading via useQuery ---
+  const { data: storesRaw = STABLE_EMPTY, isLoading: storesLoading } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  })
+  const stores = useMemo(
+    () => (storesRaw as any[]).map((s: any) => ({ id: s.id, name: s.name })),
+    [storesRaw],
   )
-  const [dataLoading, setDataLoading] = useState(true)
-  const [products, setProducts] = useState<SaleProductCardItem[]>([])
+
+  const { data: clientsRaw = STABLE_EMPTY, isLoading: clientsLoading } = useQuery({
+    queryKey: queryKeys.clients.list(selection.orgId, selection.companyId),
+    queryFn: () => getRegisteredClients(),
+    enabled: selection.orgId !== null,
+  })
+  const clients = useMemo(
+    () => (Array.isArray(clientsRaw) ? clientsRaw : []) as { id: number; name: string; type: string; typeNumber: string }[],
+    [clientsRaw],
+  )
+
+  const { data: paymentMethodsRaw = STABLE_EMPTY } = useQuery({
+    queryKey: [...queryKeys.sales.root(selection.orgId, selection.companyId), "paymentMethods"],
+    queryFn: () => getPaymentMethods().catch(() => []),
+    enabled: selection.orgId !== null,
+  })
+  const paymentMethods = useMemo(() => {
+    const combined = [
+      ...DEFAULT_PAYMENT_METHODS,
+      ...((paymentMethodsRaw as any[]) ?? []),
+    ]
+    return Array.from(
+      new Map(combined.map((m) => [m.name, m])).values(),
+    ) as PaymentMethodOption[]
+  }, [paymentMethodsRaw])
+
+  const { data: verticalInfo } = useQuery({
+    queryKey: queryKeys.vertical.config(selection.orgId, selection.companyId),
+    queryFn: () => fetchCompanyVerticalInfo(selection.companyId!),
+    enabled: selection.companyId !== null,
+  })
+  const serialsEnabled = verticalInfo?.config?.features?.serialNumbers ?? false
+
+  const { data: activeCompany = null } = useQuery({
+    queryKey: [...queryKeys.stores.root(selection.orgId, selection.companyId), "companyDetail"],
+    queryFn: () => getCompanyDetail(selection.companyId!).catch(() => null),
+    enabled: selection.companyId !== null,
+  })
+
+  const dataLoading = storesLoading || clientsLoading
   const [productsLoading, setProductsLoading] = useState(false)
+  const [products, setProducts] = useState<SaleProductCardItem[]>([])
 
   // --- Filters ---
   const [searchQuery, setSearchQuery] = useState("")
@@ -129,35 +189,52 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
   const [clientId, setClientId] = useState<number | null | undefined>(undefined)
   const [saleDate, setSaleDate] = useState<Date>(new Date())
 
-  // --- Cart ---
-  const [cartMap, setCartMap] = useState<Map<number, SaleCartItem>>(new Map())
+  // --- Cart + Serials (hook) ---
+  const {
+    cartMap, cartItems, cartTotal, cartCount,
+    stockMap, setStockMap,
+    serialsMap,
+    addToCart, decrementCart, updateCartQty, updateCartPrice, removeFromCart,
+    serialDialogOpen, setSerialDialogOpen,
+    serialDialogProductId, serialDialogLoading,
+    handleSerialClick, handleSerialSave,
+    serialDialogProduct, serialDialogAssigned,
+    serialDialogAvailable, serialDialogOtherSerials,
+    resetCart,
+  } = useSaleCart(storeId, serialsEnabled)
+
+  // --- Payment (hook) ---
+  const {
+    selectedPayment, splitPayments,
+    splitDialogOpen, setSplitDialogOpen,
+    handleQuickPay, handleSplitPayClick, handleSplitPayConfirm,
+    resetPayment,
+  } = useSalePayment(cartTotal)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // --- Stock tracking ---
-  const [stockMap, setStockMap] = useState<Map<number, number>>(new Map())
-
-  // --- Serials (auto-assigned) ---
-  const [serialsMap, setSerialsMap] = useState<Map<number, string[]>>(
-    new Map(),
-  )
-  const [availableSeriesMap, setAvailableSeriesMap] = useState<
-    Map<number, string[]>
-  >(new Map())
-
-  // --- Payments ---
-  const [selectedPayment, setSelectedPayment] = useState<{
-    paymentMethodId: number
-    amount: number
-    currency: string
-  } | null>(null)
-  const [splitPayments, setSplitPayments] = useState<
-    { paymentMethodId: number; amount: number; currency: string }[]
-  >([])
-
-  const [splitDialogOpen, setSplitDialogOpen] = useState(false)
 
   // --- Comprobante ---
   const [tipoComprobante, setTipoComprobante] = useState("SIN COMPROBANTE")
+
+  // Derive client document type from selected client
+  const clientDocType: "RUC" | "DNI" | null = (() => {
+    if (clientId == null) return null // null = Publico General, undefined = not selected
+    const client = clients.find((c) => c.id === clientId)
+    if (!client?.type) return null
+    return client.type.toUpperCase() === "RUC" ? "RUC" : "DNI"
+  })()
+
+  // Auto-set comprobante when client changes
+  useEffect(() => {
+    if (clientId === undefined) return // not yet selected
+    if (clientId === null) {
+      setTipoComprobante("SIN COMPROBANTE")
+    } else if (clientDocType === "RUC") {
+      setTipoComprobante("FACTURA")
+    } else {
+      setTipoComprobante("BOLETA")
+    }
+  }, [clientId, clientDocType])
 
   // --- Store change ---
   const [pendingStoreId, setPendingStoreId] = useState<number | null>(null)
@@ -166,61 +243,10 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
   // --- Mobile ---
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
 
-  // --- Serial dialog ---
-  const [serialDialogOpen, setSerialDialogOpen] = useState(false)
-  const [serialDialogProductId, setSerialDialogProductId] = useState<
-    number | null
-  >(null)
-  const [serialDialogLoading, setSerialDialogLoading] = useState(false)
-
   // --- Idempotency ---
   const saleReferenceIdRef = useRef<string | null>(null)
 
-  // ──────────────────────────────────────────────
-  // Initial data load
-  // ──────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setDataLoading(true)
-      try {
-        const [strs, clts, pmethods, verticalInfo] = await Promise.all([
-          getStores(),
-          getRegisteredClients(),
-          getPaymentMethods().catch(() => []),
-          selection.companyId
-            ? fetchCompanyVerticalInfo(selection.companyId)
-            : Promise.resolve(null),
-        ])
-        if (cancelled) return
-
-        setSerialsEnabled(
-          verticalInfo?.config?.features?.serialNumbers ?? false,
-        )
-        setStores(
-          (strs as any[]).map((s: any) => ({ id: s.id, name: s.name })),
-        )
-        setClients(Array.isArray(clts) ? clts : [])
-
-        const combined = [
-          ...DEFAULT_PAYMENT_METHODS,
-          ...((pmethods as any[]) ?? []),
-        ]
-        const unique = Array.from(
-          new Map(combined.map((m) => [m.name, m])).values(),
-        )
-        setPaymentMethods(unique)
-      } catch {
-        toast.error("Error al cargar datos")
-      } finally {
-        if (!cancelled) setDataLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [version, selection.companyId])
+  // Data is loaded via useQuery hooks above
 
   // ──────────────────────────────────────────────
   // Products load when storeId changes
@@ -276,7 +302,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
     return () => {
       cancelled = true
     }
-  }, [storeId, version])
+  }, [storeId])
 
   // ──────────────────────────────────────────────
   // Store change handler
@@ -294,15 +320,12 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
   )
 
   const confirmStoreChange = useCallback(() => {
-    setCartMap(new Map())
-    setSerialsMap(new Map())
-    setAvailableSeriesMap(new Map())
-    setSelectedPayment(null)
-    setSplitPayments([])
+    resetCart()
+    resetPayment()
     setStoreId(pendingStoreId)
     setPendingStoreId(null)
     setStoreChangeDialogOpen(false)
-  }, [pendingStoreId])
+  }, [pendingStoreId, resetCart, resetPayment])
 
   // ──────────────────────────────────────────────
   // Filter products
@@ -363,300 +386,6 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
     if (showAllCategories) return usedCategories
     return usedCategories.slice(0, 10)
   }, [usedCategories, showAllCategories])
-
-  // ──────────────────────────────────────────────
-  // Cart operations
-  // ──────────────────────────────────────────────
-  const cartItems = useMemo(() => Array.from(cartMap.values()), [cartMap])
-  const cartTotal = useMemo(
-    () => cartItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0),
-    [cartItems],
-  )
-  const cartCount = useMemo(
-    () => cartItems.reduce((sum, i) => sum + i.quantity, 0),
-    [cartItems],
-  )
-
-  // Auto-assign series
-  const autoAssignSeries = useCallback(
-    async (productId: number, qty: number) => {
-      if (!storeId || !serialsEnabled) return
-
-      let available = availableSeriesMap.get(productId)
-      if (!available) {
-        try {
-          available = await fetchSeriesByProductAndStore(storeId, productId)
-          setAvailableSeriesMap((prev) => {
-            const next = new Map(prev)
-            next.set(productId, available!)
-            return next
-          })
-        } catch {
-          return
-        }
-      }
-
-      if (!available || available.length === 0) return
-
-      const usedByOthers = new Set<string>()
-      serialsMap.forEach((serials, pid) => {
-        if (pid !== productId) serials.forEach((s) => usedByOthers.add(s))
-      })
-
-      const assignable = available.filter((s) => !usedByOthers.has(s))
-      const assigned = assignable.slice(0, qty)
-
-      setSerialsMap((prev) => {
-        const next = new Map(prev)
-        if (assigned.length > 0) {
-          next.set(productId, assigned)
-        } else {
-          next.delete(productId)
-        }
-        return next
-      })
-    },
-    [storeId, serialsEnabled, availableSeriesMap, serialsMap],
-  )
-
-  const addToCart = useCallback(
-    (product: SaleProductCardItem) => {
-      const currentStock = stockMap.get(product.id) ?? 0
-      const currentQty = cartMap.get(product.id)?.quantity ?? 0
-
-      if (currentQty >= currentStock) {
-        toast.error(
-          `Stock insuficiente para ${product.name} (disponible: ${currentStock})`,
-        )
-        return
-      }
-
-      // Validate product has valid price before adding to cart
-      if (!product.priceSell || product.priceSell <= 0 || !Number.isFinite(product.priceSell)) {
-        toast.error(
-          `El producto "${product.name}" no tiene un precio de venta valido. Por favor, actualiza el precio del producto antes de agregarlo al carrito.`,
-        )
-        return
-      }
-
-      const newQty = currentQty + 1
-
-      setCartMap((prev) => {
-        const next = new Map(prev)
-        const existing = next.get(product.id)
-        if (existing) {
-          next.set(product.id, { ...existing, quantity: newQty })
-        } else {
-          next.set(product.id, {
-            product,
-            quantity: 1,
-            unitPrice: product.priceSell,
-          })
-        }
-        return next
-      })
-
-      // Auto-assign series
-      void autoAssignSeries(product.id, newQty)
-
-      // Auto-sync payment if quick pay is active
-      syncQuickPayment(newQty, product)
-    },
-    [stockMap, cartMap, autoAssignSeries],
-  )
-
-  const decrementCart = useCallback(
-    (productId: number) => {
-      setCartMap((prev) => {
-        const next = new Map(prev)
-        const item = next.get(productId)
-        if (!item) return prev
-        if (item.quantity <= 1) {
-          next.delete(productId)
-          setSerialsMap((s) => {
-            const ns = new Map(s)
-            ns.delete(productId)
-            return ns
-          })
-        } else {
-          const newQty = item.quantity - 1
-          next.set(productId, { ...item, quantity: newQty })
-          void autoAssignSeries(productId, newQty)
-        }
-        return next
-      })
-    },
-    [autoAssignSeries],
-  )
-
-  const updateCartQty = useCallback(
-    (productId: number, qty: number) => {
-      const maxStock = stockMap.get(productId) ?? 0
-      const clampedQty = Math.min(Math.max(1, qty), maxStock)
-      setCartMap((prev) => {
-        const next = new Map(prev)
-        const item = next.get(productId)
-        if (item) {
-          next.set(productId, { ...item, quantity: clampedQty })
-        }
-        return next
-      })
-      void autoAssignSeries(productId, clampedQty)
-    },
-    [stockMap, autoAssignSeries],
-  )
-
-  const updateCartPrice = useCallback((productId: number, price: number) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      const item = next.get(productId)
-      if (item) {
-        next.set(productId, { ...item, unitPrice: price })
-      }
-      return next
-    })
-  }, [])
-
-  const removeFromCart = useCallback((productId: number) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      next.delete(productId)
-      return next
-    })
-    setSerialsMap((prev) => {
-      const next = new Map(prev)
-      next.delete(productId)
-      return next
-    })
-  }, [])
-
-  // ──────────────────────────────────────────────
-  // Serial dialog
-  // ──────────────────────────────────────────────
-  const handleSerialClick = useCallback(
-    async (productId: number) => {
-      setSerialDialogProductId(productId)
-      setSerialDialogOpen(true)
-
-      // Ensure available series are fetched for this product
-      if (!availableSeriesMap.has(productId) && storeId) {
-        setSerialDialogLoading(true)
-        try {
-          const available = await fetchSeriesByProductAndStore(
-            storeId,
-            productId,
-          )
-          setAvailableSeriesMap((prev) => {
-            const next = new Map(prev)
-            next.set(productId, available)
-            return next
-          })
-        } catch {
-          // Keep empty
-        } finally {
-          setSerialDialogLoading(false)
-        }
-      }
-    },
-    [storeId, availableSeriesMap],
-  )
-
-  const handleSerialSave = useCallback(
-    (serials: string[]) => {
-      if (serialDialogProductId === null) return
-      setSerialsMap((prev) => {
-        const next = new Map(prev)
-        if (serials.length > 0) {
-          next.set(serialDialogProductId, serials)
-        } else {
-          next.delete(serialDialogProductId)
-        }
-        return next
-      })
-    },
-    [serialDialogProductId],
-  )
-
-  // Computed data for serials dialog
-  const serialDialogProduct = serialDialogProductId !== null
-    ? cartItems.find((i) => i.product.id === serialDialogProductId)
-    : null
-  const serialDialogAssigned =
-    serialDialogProductId !== null
-      ? serialsMap.get(serialDialogProductId) ?? []
-      : []
-  const serialDialogAvailable =
-    serialDialogProductId !== null
-      ? availableSeriesMap.get(serialDialogProductId) ?? []
-      : []
-  const serialDialogOtherSerials = useMemo(() => {
-    const others: string[] = []
-    serialsMap.forEach((serials, pid) => {
-      if (pid !== serialDialogProductId) others.push(...serials)
-    })
-    return others
-  }, [serialsMap, serialDialogProductId])
-
-  // ──────────────────────────────────────────────
-  // Payment
-  // ──────────────────────────────────────────────
-
-  // Sync quick payment amount when cart changes
-  const syncQuickPayment = useCallback(
-    (_newQty?: number, _product?: SaleProductCardItem) => {
-      // Will be synced via effect
-    },
-    [],
-  )
-
-  // Auto-sync quick payment with cart total
-  useEffect(() => {
-    if (selectedPayment && splitPayments.length === 0) {
-      const newTotal = Number(cartTotal.toFixed(2))
-      if (
-        newTotal > 0 &&
-        Math.abs(selectedPayment.amount - newTotal) > 0.001
-      ) {
-        setSelectedPayment((prev) =>
-          prev ? { ...prev, amount: newTotal } : null,
-        )
-      }
-    }
-  }, [cartTotal, selectedPayment, splitPayments.length])
-
-  const handleQuickPay = useCallback(
-    (methodId: number) => {
-      const total = Number(cartTotal.toFixed(2))
-      if (total <= 0) {
-        toast.error("Agrega productos al carrito primero")
-        return
-      }
-      setSelectedPayment({
-        paymentMethodId: methodId,
-        amount: total,
-        currency: "PEN",
-      })
-      setSplitPayments([])
-    },
-    [cartTotal],
-  )
-
-  const handleSplitPayClick = useCallback(() => {
-    const total = Number(cartTotal.toFixed(2))
-    if (total <= 0) {
-      toast.error("Agrega productos al carrito primero")
-      return
-    }
-    setSplitDialogOpen(true)
-  }, [cartTotal])
-
-  const handleSplitPayConfirm = useCallback(
-    (payments: { paymentMethodId: number; amount: number; currency: string }[]) => {
-      setSplitPayments(payments)
-      setSelectedPayment(null)
-    },
-    [],
-  )
 
   // ──────────────────────────────────────────────
   // Context hint
@@ -756,7 +485,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
 
       const total = Number(cartTotal.toFixed(2))
 
-      await createSale({
+      const createdSale = await createSale({
         userId,
         storeId: storeId!,
         ...(clientId != null ? { clientId } : {}),
@@ -766,6 +495,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
         payments: paymentsPayload,
         source: "POS",
         referenceId: saleReferenceIdRef.current,
+        fechaEmision: saleDate.toISOString(),
         ...(tipoComprobante !== "SIN COMPROBANTE"
           ? { tipoComprobante }
           : {}),
@@ -773,8 +503,150 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
 
       toast.success("Venta registrada exitosamente")
       saleReferenceIdRef.current = null
+
+      // Generate comprobante PDF if applicable
+      if (tipoComprobante !== "SIN COMPROBANTE" && createdSale?.id) {
+        const serieInvoice = createdSale.invoice?.serie ?? null
+        const correlativoInvoice = createdSale.invoice?.nroCorrelativo ?? null
+
+        const selectedClient = clientId != null
+          ? clients.find((c) => c.id === clientId)
+          : null
+
+        const tipoDocumentoFormatted =
+          selectedClient?.type?.toUpperCase() === "RUC" ? "6" : "1"
+
+        // Map to SUNAT document type: FACTURA→invoice, BOLETA→boleta
+        const sunatDocType =
+          tipoComprobante === "FACTURA" ? "invoice" : "boleta"
+
+        const emitterBusinessName =
+          activeCompany?.sunatBusinessName?.trim() ||
+          activeCompany?.legalName?.trim() ||
+          activeCompany?.name?.trim() ||
+          stores.find((s) => s.id === storeId)?.name || ""
+
+        const emitterAddress = activeCompany?.sunatAddress?.trim() || ""
+        const emitterPhone = activeCompany?.sunatPhone?.trim() || null
+        const emitterRuc =
+          activeCompany?.sunatRuc?.trim() ||
+          activeCompany?.taxId?.trim() || ""
+
+        const logoUrl = activeCompany?.logoUrl?.trim() || null
+
+        const invoicePayload = {
+          saleId: createdSale.id,
+          companyId: activeCompany?.id ?? selection?.companyId ?? null,
+          serie: serieInvoice,
+          correlativo: correlativoInvoice,
+          documentType: sunatDocType,
+          tipoMoneda: "PEN",
+          total,
+          fechaEmision: saleDate.toISOString(),
+          logoUrl,
+          primaryColor: activeCompany?.primaryColor ?? null,
+          secondaryColor: activeCompany?.secondaryColor ?? null,
+          cliente: {
+            razonSocial: selectedClient?.name || "PUBLICO GENERAL",
+            ruc: selectedClient?.typeNumber || "",
+            dni: selectedClient?.typeNumber || "",
+            nombre: selectedClient?.name || "PUBLICO GENERAL",
+            tipoDocumento: tipoDocumentoFormatted,
+          },
+          emisor: {
+            razonSocial: emitterBusinessName,
+            address: emitterAddress,
+            adress: emitterAddress,
+            phone: emitterPhone,
+            ruc: emitterRuc,
+            logoUrl,
+            primaryColor: activeCompany?.primaryColor ?? null,
+            secondaryColor: activeCompany?.secondaryColor ?? null,
+          },
+          items: cartItems.map((item) => {
+            const lineTotal = Math.round(item.unitPrice * item.quantity * 100) / 100
+            const lineSubtotal = Math.round((lineTotal / 1.18) * 100) / 100
+            const lineIgv = Math.round((lineTotal - lineSubtotal) * 100) / 100
+            return {
+              cantidad: item.quantity,
+              descripcion: item.product.name,
+              series: serialsMap.get(item.product.id) || [],
+              precioUnitario: item.unitPrice,
+              subtotal: lineSubtotal,
+              subTotal: lineSubtotal,
+              igv: lineIgv,
+              total: lineTotal,
+            }
+          }),
+          pagos: paymentsPayload.map((p) => {
+            const method = paymentMethods.find((m) => m.id === p.paymentMethodId)
+              ?? DEFAULT_PAYMENT_METHODS.find((m) => m.id === p.paymentMethodId)
+            return {
+              metodo: method?.name || "OTRO",
+              monto: p.amount,
+              moneda: p.currency || "PEN",
+            }
+          }),
+        }
+
+        // 1) Send to SUNAT (non-blocking — PDF opens regardless)
+        sendInvoiceToSunat(invoicePayload)
+          .then((sunatResponse) => {
+            if (sunatResponse.message?.toLowerCase().includes("exitosamente")) {
+              toast.success("Comprobante enviado a SUNAT correctamente.")
+            } else if (sunatResponse.message) {
+              toast.error(`Error SUNAT: ${sunatResponse.message}`)
+            }
+          })
+          .catch((sunatErr) => {
+            console.error("Error al enviar a SUNAT:", sunatErr)
+            toast.error("No se pudo enviar el comprobante a SUNAT")
+          })
+
+        // 2) Generate PDF and open in new window (always runs)
+        try {
+          const totalTexto = numeroALetrasCustom(total, "PEN")
+          const verificationCode = createdSale.invoice?.verificationCode
+          const baseUrl =
+            typeof window !== "undefined" ? window.location.origin : ""
+          const qrData = verificationCode
+            ? `${baseUrl}/verify/${verificationCode}`
+            : `Representación impresa de la ${tipoComprobante} ELECTRÓNICA\nN° ${serieInvoice}-${correlativoInvoice}`
+          const qrCode = await QRCode.toDataURL(qrData)
+
+          const invoiceProps = {
+            data: {
+              ...invoicePayload,
+              serie: serieInvoice,
+              correlativo: correlativoInvoice,
+            },
+            qrCode,
+            importeEnLetras: totalTexto,
+          }
+          const invoiceDoc = receiptFormat === "ticket"
+            ? <TicketInvoiceDocument {...invoiceProps} />
+            : <InvoiceDocument {...invoiceProps} />
+          const blob = await pdf(invoiceDoc).toBlob()
+          const blobUrl = URL.createObjectURL(blob)
+          window.open(blobUrl)
+
+          // Upload PDF to server
+          const uploadBlob = await pdf(invoiceDoc).toBlob()
+          await uploadPdfToServer({
+            blob: uploadBlob,
+            ruc: emitterRuc || "00000000000",
+            tipoComprobante: sunatDocType,
+            serie: serieInvoice!,
+            correlativo: correlativoInvoice!,
+          })
+        } catch (pdfErr) {
+          console.error("Error al generar comprobante PDF:", pdfErr)
+          toast.error("Venta registrada pero hubo un error al generar el comprobante")
+        }
+      }
+
+      invalidateSales()
       router.push("/dashboard/sales")
-      router.refresh()
     } catch (err: any) {
       const message = err?.message || "Error al registrar la venta"
       toast.error(message)
@@ -806,6 +678,12 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
         onStoreChange={handleStoreChange}
         onClientChange={setClientId}
         onDateChange={setSaleDate}
+        onClientCreated={() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.clients.root(selection.orgId, selection.companyId) })
+        }}
+        onDocumentTypeDetected={(type) => {
+          setTipoComprobante(type === "RUC" ? "FACTURA" : "BOLETA")
+        }}
         loading={dataLoading}
       />
 
@@ -1077,6 +955,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
               onSplitPayClick={handleSplitPayClick}
               tipoComprobante={tipoComprobante}
               onTipoComprobanteChange={setTipoComprobante}
+              clientDocType={clientDocType}
             />
           </div>
         </div>
@@ -1132,6 +1011,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
               onSplitPayClick={handleSplitPayClick}
               tipoComprobante={tipoComprobante}
               onTipoComprobanteChange={setTipoComprobante}
+              clientDocType={clientDocType}
             />
           </div>
         </SheetContent>

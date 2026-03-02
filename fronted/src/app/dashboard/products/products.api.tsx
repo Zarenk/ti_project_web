@@ -346,10 +346,24 @@ export async function uploadProductImage(file: File) {
   return res.json() as Promise<{ url: string }>
 }
 
+export type ExistingProductInfo = {
+  id: number
+  name: string
+  description?: string | null
+  price: number
+  priceSell?: number | null
+  images?: string[]
+  categoryId?: number | null
+  brandName?: string | null
+  brand?: { id: number; name: string } | null
+  category?: { id: number; name: string } | null
+  stock: { storeId: number; storeName: string; stock: number }[]
+}
+
 export async function validateProductName(payload: {
   name: string
   productId?: number | null
-}): Promise<{ nameAvailable: boolean }> {
+}): Promise<{ nameAvailable: boolean; existingProduct?: ExistingProductInfo }> {
   const response = await authFetch(`${BACKEND_URL}/api/products/validate-name`, {
     method: "POST",
     headers: {
@@ -372,6 +386,7 @@ export async function validateProductName(payload: {
 
   return {
     nameAvailable: Boolean((data as any).nameAvailable),
+    existingProduct: (data as any).existingProduct ?? undefined,
   }
 }
 

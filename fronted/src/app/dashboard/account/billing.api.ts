@@ -320,6 +320,19 @@ export async function markPaymentMethodAsDefault(organizationId: number, methodI
   }
 }
 
+export async function updatePlanTrialDays(planCode: string, trialDays: number) {
+  const res = await authFetch(`/admin/subscriptions/plans/${encodeURIComponent(planCode)}/trial-days`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trialDays }),
+  })
+  if (!res.ok) {
+    const message = await res.text().catch(() => "No se pudo actualizar los dias de prueba")
+    throw new Error(message || "No se pudo actualizar los dias de prueba")
+  }
+  return res.json()
+}
+
 export async function removePaymentMethod(organizationId: number, methodId: number) {
   const res = await authFetch(`/subscriptions/payment-methods/${methodId}`, {
     method: "DELETE",

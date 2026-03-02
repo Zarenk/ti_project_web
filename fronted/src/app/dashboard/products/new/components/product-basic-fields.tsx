@@ -2,7 +2,8 @@
 
 import { memo, type MutableRefObject, type Dispatch, type SetStateAction } from 'react'
 import { Controller } from 'react-hook-form'
-import { AlertTriangle, Loader2, Plus } from 'lucide-react'
+import { AlertTriangle, Loader2, Package, Plus, X } from 'lucide-react'
+import type { ExistingProductInfo } from '../../products.api'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,6 +57,9 @@ export type ProductBasicFieldsProps = ProductFormContext & {
   handleCreateCategory: () => void
   hasName: boolean
   hasCategory: boolean
+  existingProduct?: ExistingProductInfo | null
+  onEnterAddStockMode?: () => void
+  onCancelAddStockMode?: () => void
   OptionalChip: React.ComponentType<{ filled: boolean }>
   RequiredValidationChip: React.ComponentType<{ status: NameValidation['status']; filled: boolean }>
 }
@@ -67,6 +71,10 @@ export const ProductBasicFields = memo(function ProductBasicFields({
   clearErrors,
   isProcessing,
   suppressInlineErrors,
+  addStockMode,
+  existingProduct,
+  onEnterAddStockMode,
+  onCancelAddStockMode,
   nameValidation,
   nameError,
   nameInputRef,
@@ -92,7 +100,7 @@ export const ProductBasicFields = memo(function ProductBasicFields({
       <div className='flex flex-col lg:col-start-1 lg:row-start-1'>
         <Label className='py-3'>
           Nombre del Producto
-          {<RequiredValidationChip status={nameValidation.status} filled={hasName} />}
+          {<RequiredValidationChip status={addStockMode ? 'valid' : nameValidation.status} filled={hasName} />}
         </Label>
         <Input
           {...nameRegister}
@@ -101,21 +109,63 @@ export const ProductBasicFields = memo(function ProductBasicFields({
             nameInputRef.current = node
           }}
           maxLength={200}
+          readOnly={addStockMode}
+          className={addStockMode ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : undefined}
         />
         {nameValidation.status === "checking" ? (
           <p className="mt-2 text-xs text-amber-600">Validando nombre...</p>
-        ) : nameValidation.status === "invalid" ? (
-          <p className="mt-2 text-xs text-rose-500">
-            {nameValidation.message ?? "Ya existe un producto con ese nombre."}
-          </p>
+        ) : nameValidation.status === "invalid" && !addStockMode ? (
+          <>
+            <p className="mt-2 text-xs text-rose-500">
+              {nameValidation.message ?? "Ya existe un producto con ese nombre."}
+            </p>
+            {/* --- Add Stock Banner --- */}
+            {existingProduct && onEnterAddStockMode && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/40 dark:bg-amber-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted/30 flex-shrink-0">
+                    <Package className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium break-words">{existingProduct.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {existingProduct.stock.length > 0
+                        ? existingProduct.stock.map(s => `${s.storeName}: ${s.stock} uds`).join(' · ')
+                        : 'Sin stock registrado'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  onClick={onEnterAddStockMode}
+                  className="w-full mt-2 cursor-pointer bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-slate-950 dark:hover:bg-amber-600"
+                  size="sm"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Agregar stock a este producto
+                </Button>
+              </div>
+            )}
+          </>
         ) : null}
-        {!suppressInlineErrors && form.formState.errors.name && (
+        {/* --- Cancel add-stock mode button --- */}
+        {addStockMode && onCancelAddStockMode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+            onClick={onCancelAddStockMode}
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Cancelar, crear producto nuevo
+          </Button>
+        )}
+        {!suppressInlineErrors && form.formState.errors.name && !addStockMode && (
           <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
             <AlertTriangle className="h-3.5 w-3.5" />
             {form.formState.errors.name.message as string}
           </p>
         )}
-        {!suppressInlineErrors && nameError && (
+        {!suppressInlineErrors && nameError && !addStockMode && (
           <p className="mt-2 inline-flex items-center gap-2 rounded-md border border-rose-200/70 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
             <AlertTriangle className="h-3.5 w-3.5" />
             {nameError}
@@ -145,7 +195,7 @@ export const ProductBasicFields = memo(function ProductBasicFields({
                 render={({ field, fieldState }) => (
                   <>
                     <Select
-                      disabled={isProcessing || isLoadingCategories}
+                      disabled={isProcessing || isLoadingCategories || addStockMode}
                       value={field.value ?? ''}
                       onValueChange={(val) => { field.onChange(val); clearErrors('categoryId') }}
                     >
@@ -215,53 +265,60 @@ export const ProductBasicFields = memo(function ProductBasicFields({
               </Tooltip>
             </TooltipProvider>
             <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Nueva categoria</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="new-category-name">Nombre</Label>
-                  <Input
-                    id="new-category-name"
-                    value={newCategoryName}
-                    onChange={(event) => setNewCategoryName(event.target.value)}
-                    placeholder="Nombre de la categoria"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="new-category-description">Descripcion (opcional)</Label>
-                  <Input
-                    id="new-category-description"
-                    value={newCategoryDescription}
-                    onChange={(event) => setNewCategoryDescription(event.target.value)}
-                    placeholder="Descripcion de la categoria"
-                  />
-                </div>
-                {categoryError && (
-                  <p className="text-sm text-red-500">{categoryError}</p>
-                )}
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline" disabled={isCreatingCategory}>
-                    Cancelar
-                  </Button>
-                </DialogClose>
-                <Button
-                  type="button"
-                  onClick={handleCreateCategory}
-                  disabled={isCreatingCategory}
-                >
-                  {isCreatingCategory ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Guardando
-                    </span>
-                  ) : (
-                    'Crear'
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!isCreatingCategory) handleCreateCategory()
+                }}
+              >
+                <DialogHeader>
+                  <DialogTitle>Nueva categoria</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-3 py-4">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="new-category-name">Nombre</Label>
+                    <Input
+                      id="new-category-name"
+                      value={newCategoryName}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      placeholder="Nombre de la categoria"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="new-category-description">Descripcion (opcional)</Label>
+                    <Input
+                      id="new-category-description"
+                      value={newCategoryDescription}
+                      onChange={(event) => setNewCategoryDescription(event.target.value)}
+                      placeholder="Descripcion de la categoria"
+                    />
+                  </div>
+                  {categoryError && (
+                    <p className="text-sm text-red-500">{categoryError}</p>
                   )}
-                </Button>
-              </DialogFooter>
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline" disabled={isCreatingCategory}>
+                      Cancelar
+                    </Button>
+                  </DialogClose>
+                  <Button
+                    type="submit"
+                    disabled={isCreatingCategory}
+                  >
+                    {isCreatingCategory ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Guardando
+                      </span>
+                    ) : (
+                      'Crear'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
         </div>

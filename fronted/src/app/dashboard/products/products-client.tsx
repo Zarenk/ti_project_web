@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload } from "lucide-react"
+import { LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload, Megaphone } from "lucide-react"
 import { ManualPagination } from "@/components/data-table-pagination"
 
 import { Button } from "@/components/ui/button"
@@ -19,14 +19,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { getProducts } from "../products/products.api"
 import { ProductsTable } from "./products-table"
 import { ProductsGallery } from "./products-gallery"
-import type { Products } from "./columns"
-import { useTenantSelection } from "@/context/tenant-selection-context"
-import { fetchCompanyVerticalInfo } from "@/app/dashboard/tenancy/tenancy.api"
-import { useDebounce } from "@/app/hooks/useDebounce"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 import { Badge } from "@/components/ui/badge"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { PRODUCTS_LIST_GUIDE_STEPS } from "./products-guide-steps"
@@ -39,25 +34,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useRouter } from "next/navigation"
+import { useProductsData, type MigrationFilter, type CategoryFilter } from "./use-products-data"
 
 type ViewMode = "table" | "gallery"
 const VIEW_MODE_KEY = "products-view-mode"
 const ITEMS_PER_PAGE_KEY = "products-items-per-page"
 
-type MigrationFilter = "all" | "legacy" | "migrated"
-type CategoryFilter = "all" | string
-
 export function ProductsClient() {
-  const [migrationStatus, setMigrationStatus] = useState<MigrationFilter>("all")
-  const [rawProducts, setRawProducts] = useState<Products[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [verticalName, setVerticalName] = useState<string>("GENERAL")
-  const [searchTerm, setSearchTerm] = useState("")
-  const debouncedSearchTerm = useDebounce(searchTerm, 300)
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all")
-  const { selection } = useTenantSelection()
+  const {
+    rawProducts,
+    loading,
+    error,
+    isRestaurant,
+    migrationStatus,
+    setMigrationStatus,
+    searchTerm,
+    setSearchTerm,
+    categoryFilter,
+    setCategoryFilter,
+    categories,
+    filteredProducts,
+    averagePrice,
+    reloadProducts,
+  } = useProductsData()
 
   // Pagination state for gallery view
   const [currentPage, setCurrentPage] = useState(1)
@@ -73,121 +72,15 @@ export function ProductsClient() {
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode)
     localStorage.setItem(VIEW_MODE_KEY, mode)
-    setCurrentPage(1) // Reset to first page when changing view
+    setCurrentPage(1)
   }
 
   const handleItemsPerPageChange = (value: string) => {
     const newValue = Number(value)
     setItemsPerPage(newValue)
     localStorage.setItem(ITEMS_PER_PAGE_KEY, String(newValue))
-    setCurrentPage(1) // Reset to first page
+    setCurrentPage(1)
   }
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const products = await getProducts(
-          migrationStatus === "all" ? undefined : { migrationStatus },
-        )
-        if (cancelled) return
-        const mapped = products.map((product: any) => ({
-          ...product,
-          category_name: product.category?.name || "Sin categoria",
-        }))
-        setRawProducts(mapped)
-      } catch (err) {
-        if (!cancelled) {
-          const message =
-            err instanceof Error ? err.message : "No se pudieron cargar los productos"
-          setError(message)
-          setRawProducts([])
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [migrationStatus, selection])
-
-  const reloadProducts = async () => {
-    try {
-      const products = await getProducts(
-        migrationStatus === "all" ? undefined : { migrationStatus },
-      )
-      const mapped = products.map((product: any) => ({
-        ...product,
-        category_name: product.category?.name || "Sin categoria",
-      }))
-      setRawProducts(mapped)
-    } catch {
-      // silent reload
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    const loadVertical = async () => {
-      if (!selection.companyId) {
-        if (!cancelled) setVerticalName("GENERAL")
-        return
-      }
-      try {
-        const info = await fetchCompanyVerticalInfo(selection.companyId)
-        if (!cancelled) {
-          setVerticalName(info?.businessVertical ?? "GENERAL")
-        }
-      } catch {
-        if (!cancelled) setVerticalName("GENERAL")
-      }
-    }
-    void loadVertical()
-    return () => {
-      cancelled = true
-    }
-  }, [selection.companyId])
-
-  const data = useMemo<Products[]>(() => rawProducts, [rawProducts])
-  const isRestaurant = verticalName === "RESTAURANTS"
-  const categories = useMemo(() => {
-    const values = new Set<string>()
-    rawProducts.forEach((product) => {
-      if (product.category_name) {
-        values.add(product.category_name)
-      }
-    })
-    return Array.from(values).sort((a, b) => a.localeCompare(b, "es"))
-  }, [rawProducts])
-  const filteredProducts = useMemo(() => {
-    const query = debouncedSearchTerm.trim().toLowerCase()
-    return rawProducts.filter((product) => {
-      const matchCategory = categoryFilter === "all" || product.category_name === categoryFilter
-      if (!matchCategory) return false
-      if (!query) return true
-      return (
-        product.name?.toLowerCase().includes(query) ||
-        product.description?.toLowerCase().includes(query)
-      )
-    })
-  }, [rawProducts, debouncedSearchTerm, categoryFilter])
-  const averagePrice = useMemo(() => {
-    if (filteredProducts.length === 0) return 0
-    const total = filteredProducts.reduce((sum, product) => {
-      const price = Number(product.priceSell ?? product.price ?? 0)
-      return sum + (Number.isFinite(price) ? price : 0)
-    }, 0)
-    return total / filteredProducts.length
-  }, [filteredProducts])
 
   // Pagination for gallery view
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
@@ -197,12 +90,13 @@ export function ProductsClient() {
     return filteredProducts.slice(startIndex, endIndex)
   }, [filteredProducts, currentPage, itemsPerPage])
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [debouncedSearchTerm, categoryFilter])
+  }, [filteredProducts])
 
   return (
+    <>
     <section className="py-2 sm:py-6">
       <div className="container mx-auto space-y-4 px-1 sm:px-6 lg:px-8">
         {isRestaurant ? (
@@ -308,7 +202,7 @@ export function ProductsClient() {
                   const images = Array.isArray((product as any).images)
                     ? ((product as any).images as string[]).filter(Boolean)
                     : []
-                  const imageUrl = images[0] ? resolveImageUrl(images[0]) : null
+                  const imageUrl = images[0] ? resolveImageVariant(images[0], "card") : null
                   const price = Number(product.priceSell ?? product.price ?? 0)
                   const isActive = isProductActive(product.status)
                   return (
@@ -352,9 +246,16 @@ export function ProductsClient() {
                           <span className="text-lg font-semibold text-emerald-400">
                             S/. {Number.isFinite(price) ? price.toFixed(2) : "0.00"}
                           </span>
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={`/dashboard/products/new?id=${product.id}`}>Editar</Link>
-                          </Button>
+                          <div className="flex gap-1.5">
+                            <Button asChild size="sm" variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
+                              <Link href={`/dashboard/products/${product.id}/promote`}>
+                                <Megaphone className="h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={`/dashboard/products/new?id=${product.id}`}>Editar</Link>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -579,12 +480,14 @@ export function ProductsClient() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <ProductsTable data={data} />
+                <ProductsTable data={rawProducts} />
               </div>
             )}
           </>
         )}
       </div>
     </section>
+
+    </>
   )
 }

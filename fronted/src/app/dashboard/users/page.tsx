@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { UsersDataTable } from "./data-table";
@@ -14,60 +15,31 @@ import { HelpTestingPanel } from "./help-testing";
 import { HelpLearningDashboard } from "./help-learning";
 import { PageGuideButton } from "@/components/page-guide-dialog";
 import { USERS_LIST_GUIDE_STEPS } from "./users-guide-steps";
-
-type UsersState = {
-  data: DashboardUser[];
-  loading: boolean;
-  error: string | null;
-};
+import { queryKeys } from "@/lib/query-keys";
 
 export default function UsersPage(): React.ReactElement {
-  const { version, selection } = useTenantSelection();
+  const { selection } = useTenantSelection();
   const { role } = useAuth();
-  const [{ data, loading, error }, setState] = useState<UsersState>({
-    data: [],
-    loading: true,
-    error: null,
+  const queryClient = useQueryClient();
+
+  const { data = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: queryKeys.users.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const users = await getUsers();
+      return users;
+    },
+    enabled: selection.orgId !== null,
   });
 
-  useEffect(() => {
-    let cancelled = false;
+  const error = queryError
+    ? queryError instanceof Error ? queryError.message : "No se pudieron cargar los usuarios."
+    : null;
 
-    const loadUsers = async () => {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
-      try {
-        const users = await getUsers();
-        if (!cancelled) {
-          setState({ data: users, loading: false, error: null });
-        }
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "No se pudieron cargar los usuarios.";
-        if (!cancelled) {
-          setState({ data: [], loading: false, error: message });
-          toast.error(message);
-        }
-      }
-    };
-
-    void loadUsers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
-
-  const handleUserUpdated = useCallback(
-    (updatedUser: DashboardUser) => {
-      setState((prev) => ({
-        ...prev,
-        data: prev.data.map((user) =>
-          user.id === updatedUser.id ? { ...user, role: updatedUser.role, status: updatedUser.status } : user,
-        ),
-      }));
-    },
-    [],
-  );
+  const handleUserUpdated = (updatedUser: DashboardUser) => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.users.root(selection.orgId, selection.companyId),
+    });
+  };
 
   const normalizedRole = role?.trim().toUpperCase() ?? "";
   const isGlobalSuperAdmin = normalizedRole === "SUPER_ADMIN_GLOBAL";

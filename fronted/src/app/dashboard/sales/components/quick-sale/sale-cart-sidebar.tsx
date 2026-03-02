@@ -29,7 +29,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
 import type { SaleProductCardItem } from "./sale-product-card"
 import { useState } from "react"
@@ -90,6 +90,8 @@ type SaleCartSidebarProps = {
   // Comprobante
   tipoComprobante: string
   onTipoComprobanteChange: (value: string) => void
+  /** null = Publico General or not selected, "RUC" or "DNI" = client doc type */
+  clientDocType?: "RUC" | "DNI" | null
 }
 
 function getMethodName(id: number): string {
@@ -114,8 +116,19 @@ export function SaleCartSidebar({
   onSplitPayClick,
   tipoComprobante,
   onTipoComprobanteChange,
+  clientDocType,
 }: SaleCartSidebarProps) {
   const [comprobanteOpen, setComprobanteOpen] = useState(false)
+
+  // Comprobante allowed per client type: RUC→FACTURA, DNI→BOLETA, null (Público General)→SIN COMPROBANTE
+  const allowedComprobante: string | null =
+    clientDocType === "RUC"
+      ? "FACTURA"
+      : clientDocType === "DNI"
+        ? "BOLETA"
+        : clientDocType === null
+          ? "SIN COMPROBANTE"
+          : null // undefined = no restriction
 
   const total = items.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
@@ -151,7 +164,7 @@ export function SaleCartSidebar({
             const images = Array.isArray(item.product.images)
               ? item.product.images.filter(Boolean)
               : []
-            const imageUrl = images[0] ? resolveImageUrl(images[0]) : null
+            const imageUrl = images[0] ? resolveImageVariant(images[0], "thumb") : null
             const subtotal = item.quantity * item.unitPrice
             const serialCount = serialsMap?.get(item.product.id)?.length ?? 0
             const maxStock = stockMap.get(item.product.id) ?? 0
@@ -406,21 +419,28 @@ export function SaleCartSidebar({
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-1 pt-2">
-              {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((tipo) => (
-                <Button
-                  key={tipo}
-                  variant={tipoComprobante === tipo ? "default" : "outline"}
-                  size="sm"
-                  className={cn(
-                    "w-full cursor-pointer text-xs",
-                    tipoComprobante === tipo &&
-                      "bg-primary text-primary-foreground",
-                  )}
-                  onClick={() => onTipoComprobanteChange(tipo)}
-                >
-                  {tipo}
-                </Button>
-              ))}
+              {["SIN COMPROBANTE", "BOLETA", "FACTURA"].map((tipo) => {
+                const isDisabled = allowedComprobante !== null && tipo !== allowedComprobante
+                return (
+                  <Button
+                    key={tipo}
+                    variant={tipoComprobante === tipo ? "default" : "outline"}
+                    size="sm"
+                    disabled={isDisabled}
+                    className={cn(
+                      "w-full text-xs",
+                      isDisabled
+                        ? "cursor-not-allowed opacity-50"
+                        : "cursor-pointer",
+                      tipoComprobante === tipo &&
+                        "bg-primary text-primary-foreground",
+                    )}
+                    onClick={() => !isDisabled && onTipoComprobanteChange(tipo)}
+                  >
+                    {tipo}
+                  </Button>
+                )
+              })}
             </CollapsibleContent>
           </Collapsible>
         )}

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { Area, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { eachDayOfInterval } from "date-fns"
 import { formatInTimeZone } from "date-fns-tz"
@@ -15,39 +16,33 @@ interface Props {
 }
 
 export function DailyProfitChart({ dateRange }: Props) {
-  const [data, setData] = useState<{ date: string; displayDate: string; profit: number }[]>([])
   const { theme } = useTheme()
   const textColor = theme === "dark" ? "#9CA3AF" : "#6B7280"
-  const { selection, version } = useTenantSelection()
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const { selection } = useTenantSelection()
 
-  useEffect(() => {
-    if (!dateRange?.from || !dateRange?.to) return
-    const from = dateRange.from.toISOString()
-    const to = dateRange.to.toISOString()
-    async function fetchProfit() {
-      try {
-        const resp = await getProfitByDate(from, to)
-        const fullRange = eachDayOfInterval({ start: dateRange.from!, end: dateRange.to! })
-        const map = new Map((resp || []).map((r: any) => [r.date, r.profit ?? 0]))
-        const completed = fullRange.map((d) => {
-          const key = formatInTimeZone(d, "America/Lima", "yyyy-MM-dd")
-          return {
-            date: key,
-            displayDate: formatInTimeZone(d, "America/Lima", "MMM d", { locale: es }),
-            profit: Number(map.get(key) ?? 0),
-          }
-        })
-        setData(completed)
-      } catch (error) {
-        console.error("Error al obtener utilidades diarias:", error)
-      }
-    }
-    fetchProfit()
-  }, [dateRange, selectionKey])
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to?.toISOString() ?? ""
+
+  const { data = [] } = useQuery({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "dailyProfit", { from, to }],
+    queryFn: async () => {
+      if (!dateRange?.from || !dateRange?.to) return []
+      const fromStr = dateRange.from.toISOString()
+      const toStr = dateRange.to.toISOString()
+      const resp = await getProfitByDate(fromStr, toStr)
+      const fullRange = eachDayOfInterval({ start: dateRange.from, end: dateRange.to })
+      const map = new Map((resp || []).map((r: any) => [r.date, r.profit ?? 0]))
+      return fullRange.map((d) => {
+        const key = formatInTimeZone(d, "America/Lima", "yyyy-MM-dd")
+        return {
+          date: key,
+          displayDate: formatInTimeZone(d, "America/Lima", "MMM d", { locale: es }),
+          profit: Number(map.get(key) ?? 0),
+        }
+      })
+    },
+    enabled: selection.orgId !== null && !!dateRange?.from && !!dateRange?.to,
+  })
 
   if (data.length === 0) {
     return (

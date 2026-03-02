@@ -15,7 +15,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
+import { processUploadedImage } from '../utils/image-processor';
 import { Request } from 'express';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ClientService } from './clients.service';
@@ -209,7 +210,7 @@ export class ClientController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           return cb(
             new BadRequestException('Solo se permiten imagenes'),
             false,
@@ -219,12 +220,21 @@ export class ClientController {
       },
     }),
   )
-  uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
+  async uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request,
+  ) {
     if (!file)
       throw new BadRequestException('No se proporcionó ninguna imagen');
     const baseUrl =
       process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-    return { url: `${baseUrl}/uploads/clients/${file.filename}` };
+    const absolutePath = join(process.cwd(), 'uploads', 'clients', file.filename);
+    const result = await processUploadedImage(
+      absolutePath,
+      'clients',
+      file.mimetype,
+    );
+    return { url: `${baseUrl}${result.url}` };
   }
 
   @Patch()

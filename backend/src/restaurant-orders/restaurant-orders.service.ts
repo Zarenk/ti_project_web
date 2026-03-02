@@ -783,6 +783,69 @@ export class RestaurantOrdersService {
     return result;
   }
 
+  async getDashboardSummary(
+    organizationIdFromContext?: number | null,
+    companyIdFromContext?: number | null,
+  ) {
+    const orgFilter = buildOrganizationFilter(
+      organizationIdFromContext,
+      companyIdFromContext,
+    );
+
+    // Today boundaries (server local time)
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+    const [todayOrders, dailyRevenue, tablesOccupied, kitchenPending] =
+      await Promise.all([
+        // Count today's orders (all statuses except CANCELLED)
+        this.prisma.restaurantOrder.count({
+          where: {
+            ...orgFilter,
+            status: { not: 'CANCELLED' },
+            openedAt: { gte: startOfDay, lt: endOfDay },
+          } as Prisma.RestaurantOrderWhereInput,
+        }),
+
+        // Sum total of CLOSED orders today
+        this.prisma.restaurantOrder.aggregate({
+          where: {
+            ...orgFilter,
+            status: 'CLOSED',
+            closedAt: { gte: startOfDay, lt: endOfDay },
+          } as Prisma.RestaurantOrderWhereInput,
+          _sum: { total: true },
+        }),
+
+        // Count tables currently OCCUPIED
+        this.prisma.restaurantTable.count({
+          where: {
+            ...orgFilter,
+            status: 'OCCUPIED',
+          } as Prisma.RestaurantTableWhereInput,
+        }),
+
+        // Count items in kitchen (PENDING or COOKING)
+        this.prisma.restaurantOrderItem.count({
+          where: {
+            status: { in: ['PENDING', 'COOKING'] },
+            order: {
+              ...orgFilter,
+              status: { in: ['OPEN', 'IN_PROGRESS'] },
+            } as Prisma.RestaurantOrderWhereInput,
+          },
+        }),
+      ]);
+
+    return {
+      todayOrders,
+      dailyRevenue: dailyRevenue._sum.total ?? 0,
+      tablesOccupied,
+      kitchenPending,
+    };
+  }
+
   private async ensureOrder(
     id: number,
     organizationIdFromContext?: number | null,

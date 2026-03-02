@@ -71,12 +71,19 @@ export class JurisprudenceRagService {
     const startTime = Date.now();
     this.logger.log(`Processing query for org ${organizationId}: "${queryText.substring(0, 50)}..."`);
 
-    // Get organization config
-    const config = await this.prisma.jurisprudenceConfig.findUnique({
+    // Get or auto-create organization config
+    const config = await this.prisma.jurisprudenceConfig.upsert({
       where: { organizationId },
+      update: {},
+      create: {
+        organizationId,
+        ragEnabled: true,
+        scrapingEnabled: false,
+        courtsEnabled: [],
+      },
     });
 
-    if (!config || !config.ragEnabled) {
+    if (!config.ragEnabled) {
       throw new Error('RAG is not enabled for this organization');
     }
 

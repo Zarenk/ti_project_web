@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { ManualPagination } from "@/components/data-table-pagination"
 import { motion, AnimatePresence } from "framer-motion"
 import { Loader2 } from "lucide-react"
-import { BACKEND_URL } from "@/lib/utils"
 
 interface TransactionHistoryTableProps {
   transactions: any[]
@@ -111,9 +110,10 @@ export function TransactionHistoryTable({
                   const hasInvoice = Boolean(tx.tipoComprobante && tx.serie && tx.correlativo)
                   const invoiceType = hasInvoice ? String(tx.tipoComprobante).toLowerCase() : null
                   const invoiceCode = invoiceType === "boleta" ? "03" : "01"
-                  const invoiceFile = hasInvoice ? `20519857538-${invoiceCode}-${tx.serie}-${tx.correlativo}.pdf` : null
+                  const txRuc = tx.companyRuc ?? tx.ruc ?? "00000000000"
+                  const invoiceFile = hasInvoice ? `${txRuc}-${invoiceCode}-${tx.serie}-${tx.correlativo}.pdf` : null
                   const invoiceUrl =
-                    invoiceType && invoiceFile ? `${BACKEND_URL}/api/sunat/pdf/${invoiceType}/${invoiceFile}` : null
+                    invoiceType && invoiceFile ? `/api/sunat/pdf/${invoiceType}/${invoiceFile}` : null
 
                   const rowKey =
                     tx.id ??
@@ -182,9 +182,10 @@ export function TransactionHistoryTable({
                   const hasInvoice = Boolean(tx.tipoComprobante && tx.serie && tx.correlativo)
                   const invoiceType = hasInvoice ? String(tx.tipoComprobante).toLowerCase() : null
                   const invoiceCode = invoiceType === "boleta" ? "03" : "01"
-                  const invoiceFile = hasInvoice ? `20519857538-${invoiceCode}-${tx.serie}-${tx.correlativo}.pdf` : null
+                  const txRuc = tx.companyRuc ?? tx.ruc ?? "00000000000"
+                  const invoiceFile = hasInvoice ? `${txRuc}-${invoiceCode}-${tx.serie}-${tx.correlativo}.pdf` : null
                   const invoiceUrl =
-                    invoiceType && invoiceFile ? `${BACKEND_URL}/api/sunat/pdf/${invoiceType}/${invoiceFile}` : null
+                    invoiceType && invoiceFile ? `/api/sunat/pdf/${invoiceType}/${invoiceFile}` : null
 
                   const rowKey =
                     tx.id ??

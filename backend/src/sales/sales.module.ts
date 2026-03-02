@@ -24,5 +24,6 @@ import { InvestmentRecommendationService } from './services/investment-recommend
     PredictiveAlgorithmService,
     InvestmentRecommendationService,
   ],
+  exports: [SalesService],
 })
 export class SalesModule {}

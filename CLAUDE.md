@@ -1,7 +1,7 @@
 # CLAUDE.md - TI Projecto Web
 
 ## Descripción del Proyecto
-Sistema integral de gestión empresarial multi-tenant con contabilidad de doble partida integrada, diseñado para el mercado peruano. Soporta múltiples verticales de negocio (General, Retail, Restaurantes, Servicios, Manufactura, Computación, Estudio de Abogados) con configuración dinámica por empresa. Incluye módulos de inventario, ventas, compras, cotizaciones, contabilidad PCGE, facturación SUNAT, gestión legal, pedidos de restaurante, e-commerce, sistema de suscripciones y más.
+Sistema integral de gestión empresarial multi-tenant con contabilidad de doble partida integrada, diseñado para el mercado peruano. Soporta múltiples verticales de negocio (General, Retail, Restaurantes, Servicios, Manufactura, Computación, Estudio de Abogados, Gimnasio) con configuración dinámica por empresa. Incluye módulos de inventario, ventas, compras, cotizaciones, contabilidad PCGE, facturación SUNAT, notas de crédito, guías de remisión, gestión legal, pedidos de restaurante, gimnasio, WhatsApp, e-commerce, chatbot operacional, sistema de suscripciones y más.
 
 ## Stack Tecnológico
 
@@ -19,9 +19,10 @@ Sistema integral de gestión empresarial multi-tenant con contabilidad de doble 
 - **Componentes UI:** shadcn/ui
 - **Validaciones:** Zod
 - **Forms:** react-hook-form
+- **Data Fetching:** TanStack React Query (query-client + query-keys centralizados)
 - **PDFs:** react-pdf, @react-pdf/renderer
 - **Estado:** React Context API
-- **HTTP:** fetch nativo
+- **HTTP:** fetch nativo + SSE streaming (`sse-fetch.ts`)
 
 ## Arquitectura del Proyecto
 
@@ -55,7 +56,7 @@ Sistema integral de gestión empresarial multi-tenant con contabilidad de doble 
 ### Business Verticals
 Sistema de verticales de negocio que adapta la UI y funcionalidades según el tipo de empresa:
 
-- **Enum `BusinessVertical`:** GENERAL, RESTAURANTS, RETAIL, SERVICES, MANUFACTURING, COMPUTERS, LAW_FIRM
+- **Enum `BusinessVertical`:** GENERAL, RESTAURANTS, RETAIL, SERVICES, MANUFACTURING, COMPUTERS, LAW_FIRM, GYM
 - **Configuración por empresa:** `CompanyVerticalOverride` + `OrganizationVerticalOverride`
 - **Feature flags:** `VerticalConfigService` → `TenantFeaturesContext` en frontend
 - **Theming:** Variables CSS dinámicas por vertical (`vertical-css-variables.ts` + `vertical-css-provider.tsx`)
@@ -315,13 +316,13 @@ import { ManualPagination } from "@/components/data-table-pagination"
 
 ### Backend (NestJS)
 
-#### Módulos (~59 módulos NestJS)
+#### Módulos (~65+ módulos NestJS)
 - Un módulo por dominio de negocio
 - Estructura: controller, service, entity (Prisma model)
 - DTOs con class-validator para validación (`@IsString()`, `@IsNumber()`, `@IsBoolean()`, `@IsOptional()`, `@IsDateString()`)
 - Guards para autenticación y permisos (`JwtAuthGuard`, `RolesGuard`, `TenantRequiredGuard`)
 - Decoradores: `@Roles(...)`, `@ModulePermission('...')`, `@CurrentTenant('organizationId')`
-- Módulos principales: `products`, `sales`, `entries`, `inventory`, `accounting`, `legal-matters`, `legal-documents`, `legal-events`, `restaurant-orders`, `restaurant-tables`, `kitchen-stations`, `ingredients`, `subscriptions`, `chat`, `help`, `ml`
+- Módulos principales: `products`, `sales`, `entries`, `inventory`, `accounting`, `legal-matters`, `legal-documents`, `legal-events`, `restaurant-orders`, `restaurant-tables`, `kitchen-stations`, `ingredients`, `subscriptions`, `chat`, `help`, `ml`, `credit-notes`, `gym`, `whatsapp`, `guide`, `ads`
 
 #### Base de Datos (Prisma)
 - Migraciones con nombre descriptivo
@@ -335,6 +336,36 @@ import { ManualPagination } from "@/components/data-table-pagination"
 - CORS configurado correctamente
 - Rate limiting en endpoints sensibles
 - Validación de permisos por módulo
+
+#### Patrones Backend Reutilizables
+
+**State Machine** (`backend/src/common/state-machine/`):
+- Clase genérica `StateMachine<S, E>` para transiciones tipadas
+- Métodos: `canTransition()`, `transition()`, `getValidEvents()`, `getValidTargets()`
+- Uso real: `membershipStateMachine` en gym (PROSPECT → TRIAL → ACTIVE → ...)
+- Errores descriptivos en español con eventos válidos listados
+
+**Pessimistic Locking** (`backend/src/common/locking/`):
+- `acquireLock(tx, table, id, companyId, options?)` — `SELECT ... FOR UPDATE` dentro de transacciones Prisma
+- `acquireLockMany(tx, table, ids, companyId)` — múltiples locks en orden (previene deadlocks)
+- Modos: `WAIT` (default), `NOWAIT` (error inmediato), `SKIP_LOCKED` (ignora locked)
+- Usado en gym membership state changes
+
+**Auto-Managed Fields** (`backend/src/common/dto/`):
+- `AutoManagedBase = 'id' | 'createdAt' | 'updatedAt'`
+- `AutoManagedTenant = AutoManagedBase | 'organizationId'`
+- `AutoManagedMultiTenant = AutoManagedTenant | 'companyId'`
+- Uso: `type CreateDto = Omit<Model, AutoManagedMultiTenant>`
+
+**SUNAT Retry Cron** (`backend/src/sunat/sunat-retry.cron.ts`):
+- Cada 30 min, reintenta transmisiones FAILED/PENDING/SENT (max 3 reintentos, últimas 48h)
+- Marca SENDING >5min como FAILED automáticamente
+- Toma 10 a la vez para no saturar API de SUNAT
+
+**Sensitive Data Encryption** (`backend/src/gym/sensitive-data.policy.ts`):
+- KMS singleton con AES-256-GCM para datos sensibles (salud, teléfonos)
+- Auto-decrypt on read, null-safe
+- Usado en gym members (medicalConditions, injuries, emergencyContactPhone)
 
 ## Reglas de Negocio Específicas
 
@@ -351,6 +382,8 @@ import { ManualPagination } from "@/components/data-table-pagination"
 - Alertas de stock mínimo
 - Múltiples unidades de medida
 - Trazabilidad de movimientos
+- **Transferencias inter-tienda** con actualización de `EntryDetailSeries.storeId` y `Transfer` records
+- **Queries transfer-aware**: series filtran por `EntryDetailSeries.storeId` (NO `entry.storeId`), currency breakdown ajusta por `Transfer` records
 
 #### Ventas
 - Cotizaciones → Órdenes → Ventas completadas
@@ -419,12 +452,122 @@ import { ManualPagination } from "@/components/data-table-pagination"
 - **Aprendizaje** (`HelpLearningSession`, `HelpSynonymRule`): mejora continua del KB
 - **Candidatos KB** (`HelpKBCandidate`): promoción de buenas respuestas al knowledge base
 - Componente `HelpAssistant` con worker en background (`use-help-worker.ts`)
+- **AI Providers** (`backend/src/help/ai-providers/`): abstracción multi-proveedor (OpenAI/Anthropic) con circuit breaker (2 fallos → 5min cooldown) y fallback automático
+
+#### Chatbot Operacional (Frontend)
+Sistema de chatbot que ejecuta operaciones del sistema directamente desde el panel de ayuda.
+
+**Arquitectura del flujo:**
+```
+Mensaje usuario → Intent Parser → ¿intent confianza ≥ 0.85?
+                                   ├─ SÍ → Entity Resolver → Tool Executor → Rich UI
+                                   └─ NO → Q&A Local Matcher → AI fallback
+```
+
+**Intent System** (`fronted/src/data/help/intents/`):
+- `intent-parser.ts` — 9 intents operacionales con regex patterns y extracción de entidades
+- `entity-extractor.ts` — Extracción de entidades (producto, cliente, cantidad, período, fecha) con parsing español de períodos
+- `intent-types.ts` — Tipos: `ParsedIntent`, `ParsedEntity`, `OperationalIntentPattern`
+- Threshold: `0.85` para ejecutar, cálculo: base 0.8 + 0.1 (entidades completas) + 0.05 (cobertura >80%) + 0.05 (entidades no vacías) - 0.2 (entidades requeridas faltantes)
+
+**Intents soportados:**
+| Intent | Tipo | Ejemplo |
+|--------|------|---------|
+| `inventory.add` | mutation | "Agrega 10 unidades de X" |
+| `sale.list` | query | "Muestra ventas de hoy" |
+| `sale.stats` | query | "Cuánto se vendió esta semana" |
+| `sale.create` | mutation | "Haz una venta de 5 X a Y" |
+| `cashregister.view` | query | "Muestra la caja" |
+| `product.search` | query | "Busca producto X" |
+| `product.lowstock` | query | "Productos con stock bajo" |
+| `stats.dashboard` | query | "Dashboard del mes" |
+| `navigate.to` | navigation | "Llévame a ventas" |
+
+**Tool System** (`fronted/src/data/help/tools/`):
+- `tool-registry.ts` — Registro central + `executeTool(id, params, context)`
+- `entity-resolver.ts` — Resolución fuzzy de productos/clientes vía API
+- `tool-types.ts` — `ChatTool`, `ToolContext`, `ToolResult` (table|stats|confirmation|navigation|message|error)
+
+**Componentes UI** (`fronted/src/components/help/`):
+- `ToolResultTable` — Tabla con summary, columnas, max 8 filas visibles
+- `ToolResultStats` — Grid de stat cards (currency/percentage/number)
+- `ToolConfirmationCard` — Card amber para confirmar mutaciones
+- `ToolErrorCard` — Card rojo para errores
+
+**Local Matcher** (`fronted/src/context/help-local-matcher.ts`):
+- Pipeline de 3 etapas: contextual → enhanced fuzzy → courtesy
+- Cache: 2min TTL, max 100 entries
+- Context-aware: urgencia, tipo usuario, frustración, historial de conversación
+- Boosters: +0.3 misma sección, +0.5 ruta exacta
+
+**SSE Streaming** (`fronted/src/lib/sse-fetch.ts`):
+- `fetchSSE(path, body, callbacks)` — POST con streaming para respuestas AI
+- Eventos: `chunk`, `done`, `message`, `error`
+- Retorna AbortController para cancelación
 
 #### Extracción de Facturas (ML)
 - **Módulo ML** (`ml/`): bridge NestJS → Python (`predict.py`, `train_model.py`)
 - **Templates** (`InvoiceTemplate`, `InvoiceSample`): plantillas por proveedor para extracción
 - **Logs** (`InvoiceExtractionLog`): auditoría de extracciones
 - Extracción de datos desde PDF de factura de proveedor
+- **ML Models** (`backend/src/ml/ml-models.*`): demand forecasting (7 días), basket analysis (frequently bought together), price elasticity
+
+#### Notas de Crédito (Credit Notes)
+- **Backend** (`backend/src/credit-notes/`): controller + service + DTO
+- Solo para ventas con `SunatTransmission` status `ACCEPTED`
+- Serie automática: `FC01` para facturas, `BC01` para boletas
+- Transmisión a SUNAT + auto-anulación de venta original si es aceptada
+- Hook contable post-transaccional (`AccountingHook.postCreditNote()`)
+- Status: DRAFT → TRANSMITTED → ACCEPTED/REJECTED
+- **Frontend**: `credit-notes.api.ts` con `createCreditNote()`, generación de PDF con QR de verificación
+- Componente: `credit-note-dialog.tsx`, PDF: `CreditNoteDocument.tsx`
+
+#### Gimnasio (Gym Vertical)
+- **Backend** (`backend/src/gym/`): 7 servicios + controllers + cron + analytics
+- **Miembros** (`GymMember`): CRUD con encriptación de datos sensibles (condiciones médicas, teléfono emergencia) via KMS (AES-256-GCM)
+- **Membresías** (`GymMembership`): máquina de estados (PROSPECT → TRIAL → ACTIVE → PAST_DUE → FROZEN → PENDING_CANCEL → CANCELLED/EXPIRED)
+- **Check-ins** (`GymCheckin`): registro de asistencia, pases de día, pases de invitado
+- **Clases** (`GymClass`): scheduling, bookings, cancelaciones, asignación de entrenadores
+- **Entrenadores** (`GymTrainer`): gestión de personal
+- **Analytics** (`GymAnalytics`): retención, churn, revenue, tendencias
+- **Cron** (`GymCronService`): expiración automática de membresías, conversión trial → active, dunning
+- Frontend: `/dashboard/gym/` con overview, members, classes, trainers, checkins, memberships
+
+#### WhatsApp Integration
+- **Backend** (`backend/src/whatsapp/`): service + gateway + controller + automation + auto-reply
+- **Librería:** `@whiskeysockets/baileys` (cliente no-oficial WhatsApp Web)
+- **Sesiones**: auth state en `./whatsapp_auth/session_{orgId}_{companyId}/`, reconexión automática al startup
+- **Gateway** Socket.IO (`/whatsapp` namespace): QR codes + estado de conexión en tiempo real
+- **Rate limiting anti-ban**: 2s min por contacto, 1s entre mensajes, 30/min max, 500 contactos únicos/día, circuit breaker tras 5 fallos
+- **Templates**: mensajes predefinidos con variables `{{variable}}`
+- **Automaciones**: triggers por eventos con ventana de deduplicación (1 min)
+- **Auto-reply**: respuestas automáticas por keywords, tipo de mensaje, hora
+- **Modelos DB**: `WhatsAppSession`, `WhatsAppMessage`, `WhatsAppTemplate`, `WhatsAppAutomation`
+- Frontend: `/dashboard/whatsapp/`, hook `use-whatsapp-socket.ts`
+
+#### Transferencias y Guías de Remisión
+- **Transferencias**: movimiento de productos entre tiendas (`Transfer` model)
+- **Guías de Remisión** (`backend/src/guide/`): documento SUNAT para transporte de mercadería
+- Creación + validación + envío a SUNAT + descarga XML/ZIP/CDR
+- Verificación pública: `GET /public/verify-guide?ruc=&serie=&correlativo=`
+- **No se pueden eliminar** después de transmisión — solo anular (`voidGuide`)
+- Frontend: `/dashboard/transfers/`, API: `transfers.api.ts`
+
+#### Verificación Pública de Comprobantes
+- **Facturas**: `GET /public/verify?ruc=&serie=&correlativo=` + `GET /public/verify/:code` + `GET /public/verify/:code/pdf`
+- **Guías**: `GET /public/verify-guide?ruc=&serie=&correlativo=`
+- Decoradores: `@SkipTenantContextGuard()` + `@SkipModulePermissionsGuard()` (sin auth)
+
+#### Lookups de Documentos (MiGo)
+- **Servicio** (`backend/src/lookups/migo.service.ts`): consulta RUC y DNI via MiGo.pe API
+- Cache de 12 horas (`MIGO_CACHE_TTL_MS`), auth con bearer token (`MIGO_TOKEN`)
+- Métodos: `lookupRuc()`, `lookupDni()`, `lookupPhone()` con flag `refresh`
+
+#### OAuth para Redes Sociales
+- **Backend** (`backend/src/ads/oauth/`): flujo OAuth multi-plataforma
+- **Plataformas**: Facebook/Instagram (Meta Graph v21.0), TikTok (v2 API)
+- State token JWT con nonce + plataforma + organizationId (CSRF protection)
+- Tokens almacenados encriptados en `SocialAccount`
 
 ### Permisos y Roles
 - **Roles de usuario:** ADMIN, EMPLOYEE, CLIENT, GUEST, SUPER_ADMIN_GLOBAL, SUPER_ADMIN_ORG
@@ -437,12 +580,99 @@ import { ManualPagination } from "@/components/data-table-pagination"
 
 ## Patrones y Mejores Prácticas
 
+### Filosofía KISS (Keep It Simple, Stupid)
+
+**Principio fundamental:** Todo código nuevo debe seguir la filosofía KISS. Simplicidad sobre complejidad, claridad sobre cleverness.
+
+#### Reglas de Componentes
+1. **Componentes < 500 líneas:** Si un componente supera ~500 líneas de lógica (sin contar JSX), extraer hooks o utilidades
+2. **Máximo ~15 useState por componente:** Si supera este número, agrupar estados relacionados en custom hooks
+3. **Separar lógica de presentación:** Utility functions puras van en archivos `*-utils.ts`, hooks en `use-*.ts`
+4. **Un hook = una responsabilidad:** Cada custom hook debe encapsular un grupo cohesivo de estado y operaciones (ej: cart operations, payment management, data fetching)
+
+#### Reglas de Funciones
+5. **Funciones < 50 líneas:** Funciones que superan ~50 líneas probablemente necesitan descomponerse
+6. **No duplicar lógica:** Si un patrón se repite en 2+ archivos, extraer a utilidad compartida
+7. **Evitar abstracciones prematuras:** No crear helpers/wrappers para código que solo se usa una vez
+
+#### Patrones de Extracción Establecidos
+- **Pure utilities** (sin React) → `components/*-utils.ts` (ej: `cash-register-utils.ts`)
+- **Custom hooks** (con React state) → `use-*.ts` en el mismo directorio (ej: `use-sale-cart.ts`, `use-products-data.ts`)
+- **Cart pattern:** `useSaleCart`, `useEntryCart` — patrón reutilizable para cart + serials + stock tracking
+- **Payment pattern:** `useSalePayment` — patrón para gestión de pagos con auto-sync
+
+#### Al Crear Código Nuevo
+- Preguntarse: "¿Esto es lo más simple que puede ser?"
+- No sobre-ingenierizar: un `if` es mejor que un patrón Strategy cuando solo hay 2 casos
+- No agregar capas de abstracción "por si acaso"
+- Ver `docs/plans/KISS_PHASE3_PHASE4.md` para refactors pendientes de mayor riesgo
+
 ### Performance
 - Lazy loading de componentes pesados
 - Debouncing en búsquedas
 - Paginación en listados grandes
 - Optimistic updates donde sea apropiado
 - React.memo para componentes costosos
+
+### React Query — Data Fetching & Cache
+
+**Configuración central:** `fronted/src/lib/query-client.ts` + `fronted/src/lib/query-keys.ts`
+
+#### QueryClient (`query-client.ts`)
+- `staleTime: 2min` — datos frescos por 2 minutos, no refetch al navegar rápido
+- `gcTime: 5min` — cache en memoria por 5 minutos antes de garbage collection
+- `retry` — no reintenta `UnauthenticatedError`, máximo 2 reintentos para errores transitorios
+- `refetchOnWindowFocus: true` — refresca al volver al tab
+- Mutations: `retry: false` (side effects no se reintentan)
+- Singleton en browser, instancia nueva en server
+
+#### Query Keys Factory (`query-keys.ts`)
+**SIEMPRE** usar `queryKeys` para claves — nunca hardcodear strings:
+```typescript
+import { queryKeys } from "@/lib/query-keys"
+
+// Lectura
+useQuery({ queryKey: queryKeys.products.list(orgId, companyId, filters), ... })
+
+// Invalidación
+queryClient.invalidateQueries({ queryKey: queryKeys.products.root(orgId, companyId) })
+```
+
+Todas las claves incluyen tenant scope `["tenant", orgId, companyId, ...]` para evitar cache cruzado entre tenants.
+
+**Dominios cubiertos (~25):** products, sales, entries, inventory, categories, brands, stores, providers, clients, exchange, users, accounting, dashboard, cashRegister, series, vertical, activity, legal, restaurant, quotes, catalog, subscriptions, gym, orders, superUsers, onboarding
+
+#### Invalidación Cruzada de Cache (CRÍTICO)
+
+Después de mutaciones que afectan múltiples dominios, **SIEMPRE** invalidar todos los caches afectados:
+
+```typescript
+// ✅ CORRECTO — Después de crear producto con stock
+queryClient.invalidateQueries({ queryKey: queryKeys.products.root(orgId, companyId) })
+queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(orgId, companyId) })
+
+// ✅ CORRECTO — Después de crear entrada (compra)
+queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(orgId, companyId) })
+queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(orgId, companyId) })
+queryClient.invalidateQueries({ queryKey: queryKeys.products.root(orgId, companyId) })
+
+// ✅ CORRECTO — Después de crear/eliminar venta
+queryClient.invalidateQueries({ queryKey: queryKeys.sales.root(orgId, companyId) })
+queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(orgId, companyId) })
+queryClient.invalidateQueries({ queryKey: queryKeys.products.root(orgId, companyId) })
+
+// ❌ INCORRECTO — Solo invalidar el dominio directo
+queryClient.invalidateQueries({ queryKey: queryKeys.sales.root(orgId, companyId) })
+// Inventario y productos quedarían stale por 2 minutos
+```
+
+**Bug documentado 2026-03-02:** Sin invalidación cruzada, crear un producto con stock y navegar a `/inventory` en menos de 2 minutos mostraba datos stale (producto no aparecía). Fijado invalidando inventory + products en product-form, entries.form, quick-entry-view, quick-sale-view, sales-form y sales/page (delete).
+
+#### Draft Persistence (`fronted/src/lib/draft-utils.ts`)
+- Formularios de ventas y entradas persisten estado en localStorage
+- Prefijos: `sales-draft:v1:`, `entry-draft:v1:`, `sales-context:v1:`, `entry-context:v1:`
+- TTL: 24 horas (`DRAFT_TTL_MS`), limpiados en logout via `clearFormDrafts()`
+- Validar con `isDraftExpired(savedAt)` antes de restaurar
 
 ### Multi-Agent Orchestration
 
@@ -621,10 +851,39 @@ Task("analizar middleware de tenant", "Explore", "medium")
 | `use-delete-action-visibility` | Controla visibilidad de botones de eliminación |
 | `use-vertical-config` | Retorna configuración de vertical activa |
 | `use-kitchen-socket` | WebSocket para cocina de restaurante |
+| `use-whatsapp-socket` | WebSocket para conexión WhatsApp (QR, estado, mensajes) |
 | `use-help-worker` | Worker de fondo para asistente de ayuda |
 | `use-chat-user-id` | Resolución de ID de usuario para chat |
 | `use-mobile` | Detección responsive/mobile |
 | `use-user-context-sync` | Sincroniza último contexto usado al backend |
+
+## Utilidades Frontend (`fronted/src/lib/`)
+
+| Archivo | Propósito |
+|---------|-----------|
+| `query-client.ts` | Singleton QueryClient con staleTime 2min, gcTime 5min |
+| `query-keys.ts` | Factory de query keys con tenant scope (~25 dominios) |
+| `draft-utils.ts` | Persistencia de borradores en localStorage (24h TTL) |
+| `sse-fetch.ts` | POST con streaming SSE para respuestas AI |
+| `chat-utils.ts` | Utilidades para formateo de mensajes del chat |
+| `auth.ts` | Helpers de autenticación (token, headers) |
+| `images.ts` | `resolveImageVariant()` para WebP variants (full/card/thumb) |
+| `utils.ts` | Utilidades generales (cn, formatCurrency, etc.) |
+
+## Componentes Clave (`fronted/src/components/`)
+
+| Componente | Propósito |
+|------------|-----------|
+| `app-sidebar.tsx` | Sidebar principal con navegación vertical-aware |
+| `sidebar-navigation-data.ts` | Datos de navegación con permisos y ocultar por vertical |
+| `error-boundary.tsx` | React error boundary con fallback UI y "Reintentar" |
+| `data-table-pagination.tsx` | Paginación unificada (DataTable + Manual) |
+| `ubigeo-combobox.tsx` | Combobox de ubigeos peruanos (departamento/provincia/distrito) |
+| `help/HelpChatPanel.tsx` | Panel principal del chatbot con intents + tools |
+| `help/tool-result-table.tsx` | Tabla de resultados de tool execution |
+| `help/tool-result-stats.tsx` | Cards de estadísticas de tool execution |
+| `help/tool-confirmation-card.tsx` | Card de confirmación para mutaciones |
+| `help/tool-error-card.tsx` | Card de error de tool execution |
 
 ## Comandos Útiles
 
@@ -648,13 +907,16 @@ npx cypress open        # Tests E2E
 1. **Nombre del directorio:** Es `fronted` (con 'd'), NO `frontend`
 2. **Prisma:** Versión 7 con nuevas características
 3. **Autenticación:** Tokens en cookies httpOnly, no localStorage
-4. **WebSockets:** Gateway de barcode + gateway de cocina (restaurante) + gateway de chat
+4. **WebSockets:** Gateway de barcode + gateway de cocina (restaurante) + gateway de chat + gateway de WhatsApp
 5. **PDFs:** Generación server-side con @react-pdf/renderer
 6. **Imágenes:** Upload a `/storage` con validación de tamaño
 7. **Documentos legales:** Upload a `./uploads/legal-documents/` con hash SHA-256 para cadena de custodia
 8. **API Proxy:** Frontend NUNCA llama al backend directamente — siempre pasa por `/app/api/*` route handlers que reenvían con cookie `authToken`
 9. **Archivos API co-locados:** Cada sección del dashboard tiene un `*.api.tsx` hermano (ej: `sales.api.tsx`, `legal-matters.api.tsx`)
-10. **Prisma schema:** ~80+ modelos definidos en `/backend/prisma/schema.prisma`
+10. **Prisma schema:** ~90+ modelos definidos en `/backend/prisma/schema.prisma`
+11. **Sidebar navigation:** Datos en `sidebar-navigation-data.ts` con ocultamiento por vertical (RESTAURANT_HIDDEN_NAV, GYM_HIDDEN_NAV)
+12. **Error Boundary:** `error-boundary.tsx` como class component React, captura errores de render con UI fallback
+13. **Verificación pública:** Endpoints sin auth para que clientes verifiquen facturas y guías de remisión
 
 ## Cuando Hagas Cambios
 
@@ -687,6 +949,14 @@ npx cypress open        # Tests E2E
 ### Sistema Contable
 4. **AccountingSummaryService usa `journalLine`** (NO `accEntryLine`). Migrado 2026-02-17.
 5. **Nunca cambiar** el servicio de summary para usar `accEntryLine` - ese es el sistema antiguo vacío.
+
+### Cache Invalidation
+6. **Siempre invalidar caches cruzados** después de mutaciones: crear producto → invalidar products + inventory. Crear entrada → invalidar entries + inventory + products. Crear/eliminar venta → invalidar sales + inventory + products. Bug documentado 2026-03-02.
+7. **Usar `queryKeys.domain.root(orgId, companyId)`** para invalidación — nunca hardcodear strings de query key.
+
+### Series y Transferencias
+8. **`EntryDetailSeries.storeId`** es la fuente de verdad para ubicación actual de una serie. Al transferir, `storeId` se actualiza en el registro de la serie. **NUNCA** usar `entryDetail.entry.storeId` para filtrar series por tienda (ese es el store original de la entrada, no el actual). Bug fijado 2026-03-02.
+9. **Currency breakdown por tienda** debe considerar `Transfer` records. Solo mirar `EntryDetail` muestra stock en tienda de origen, no la actual tras transferencias.
 
 ## Flujo Crítico: Entradas y Salidas de Inventario
 
@@ -797,6 +1067,8 @@ Entry                                      Sales
 | **Eliminar venta** | StoreOnInventory (increment) → InventoryHistory → EntryDetailSeries (status→active) → CashRegister (decrement) → CashTransaction (delete) → SalePayment (delete) → SalesDetail (delete) → Sales (delete) → AccEntry (void) |
 | **Producto con stock** | Product → (llama createEntry completo) |
 | **Import Excel** | Por cada fila: Product (upsert) → Entry → EntryDetail → Inventory → StoreOnInventory → EntryDetailSeries |
+| **Transferir producto** | Transfer → StoreOnInventory (decrement origen, increment destino) → InventoryHistory (×2) → EntryDetailSeries (storeId→destino) |
+| **Crear nota de crédito** | CreditNote → SunatTransmission → Sales (status→annulled) → *JournalEntry* |
 
 *Cursiva = post-transacción, no-bloqueante*
 
@@ -809,7 +1081,7 @@ Entry                                      Sales
 
 ---
 
-**Última actualización:** 2026-02-21
-**Versión:** 1.5
+**Última actualización:** 2026-03-02
+**Versión:** 2.0
 
 Este archivo debe actualizarse cuando cambien convenciones, patrones o reglas importantes del proyecto.

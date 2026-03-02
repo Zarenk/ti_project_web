@@ -39,6 +39,9 @@ import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
 import { useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { DateRange } from "react-day-picker"; // Asegúrate de que este tipo esté disponible
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
@@ -72,6 +75,12 @@ export function DataTable<TData extends {id:string, name:string, document:string
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const queryClient = useQueryClient();
+  const { selection } = useTenantSelection();
+  const invalidateProviders = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.providers.root(selection.orgId, selection.companyId),
+    });
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -224,7 +233,7 @@ export function DataTable<TData extends {id:string, name:string, document:string
       //alert('Proveedores eliminados correctamente');
       toast.success("Proveedor(es) eliminado(s) correctamente."); // Notificación de éxito
       table.resetRowSelection(); // Limpia la selección después de eliminar
-      location.reload(); // Refresca la página para actualizar los datos
+      invalidateProviders(); // Refresca datos via React Query
     } catch (error: any) {
       toast.error(error.message || "No se pudo eliminar la(s) tienda(s).");
     }
@@ -435,7 +444,7 @@ export function DataTable<TData extends {id:string, name:string, document:string
         await updateManyProviders(updatedData);    
         toast.success("Proveedores actualizados correctamente.");    
         // Actualizar los datos en el frontend
-        location.reload(); // O actualiza el estado local si no quieres recargar la página   
+        invalidateProviders(); // Refresca datos via React Query
         setIsEditModalOpen(false); // Cierra el modal
       } catch (error) {
         //console.error("Error al actualizar proveedores:", error);

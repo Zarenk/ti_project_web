@@ -266,7 +266,8 @@ export class AccountingAnalyticsService {
       {
         name: 'Crecimiento',
         description: '¿Tu negocio está creciendo?',
-        value: '+8.5%', // TODO: Calculate real growth from historical data
+        // FIXME: Valor placeholder — requiere comparar patrimonio mes actual vs anterior
+        value: '+8.5%',
         status: 'BUENO' as const,
         detail: 'Tu patrimonio creció 8.5% este mes vs. el mes pasado.',
       },
@@ -308,8 +309,8 @@ export class AccountingAnalyticsService {
     else if (margenGanancia >= 0) score += 10;
     else score += 0;
 
-    // Growth score (20 points max) - simplified
-    score += 12; // TODO: Calculate from real growth data
+    // FIXME: Growth score placeholder (20 pts max) — requiere datos historicos de patrimonio
+    score += 12;
 
     // Determine status
     let status: 'EXCELENTE' | 'BUENO' | 'ATENCIÓN' | 'CRÍTICO';

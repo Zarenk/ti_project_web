@@ -149,7 +149,7 @@ export async function getJurisprudenceDocuments(filters?: {
     if (filters?.status) params.set("status", filters.status);
 
     const qs = params.toString();
-    const url = `${BACKEND_URL}/jurisprudence-documents${qs ? `?${qs}` : ""}`;
+    const url = `${BACKEND_URL}/api/jurisprudence-documents${qs ? `?${qs}` : ""}`;
 
     const res = await authFetch(url, { cache: "no-store" });
     if (!res.ok) {
@@ -174,7 +174,7 @@ export async function getJurisprudenceDocuments(filters?: {
 
 export async function getJurisprudenceDocument(id: number): Promise<JurisprudenceDocument | null> {
   try {
-    const res = await authFetch(`${BACKEND_URL}/jurisprudence-documents/${id}`, {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-documents/${id}`, {
       cache: "no-store",
     });
     if (!res.ok) {
@@ -191,7 +191,7 @@ export async function getJurisprudenceDocument(id: number): Promise<Jurisprudenc
 }
 
 export async function uploadJurisprudenceDocument(formData: FormData): Promise<JurisprudenceDocument> {
-  const res = await authFetch(`${BACKEND_URL}/jurisprudence-documents/upload`, {
+  const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-documents/upload`, {
     method: "POST",
     body: formData,
     // No Content-Type header - browser sets multipart/form-data automatically
@@ -210,7 +210,7 @@ export async function uploadJurisprudenceDocument(formData: FormData): Promise<J
 }
 
 export async function deleteJurisprudenceDocument(id: number): Promise<void> {
-  const res = await authFetch(`${BACKEND_URL}/jurisprudence-documents/${id}`, {
+  const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-documents/${id}`, {
     method: "DELETE",
   });
 
@@ -221,7 +221,7 @@ export async function deleteJurisprudenceDocument(id: number): Promise<void> {
 }
 
 export async function processJurisprudenceDocument(id: number): Promise<void> {
-  const res = await authFetch(`${BACKEND_URL}/jurisprudence-documents/${id}/process`, {
+  const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-documents/${id}/process`, {
     method: "POST",
   });
 
@@ -229,6 +229,98 @@ export async function processJurisprudenceDocument(id: number): Promise<void> {
     const error = await res.json().catch(() => ({}));
     throw new Error(error?.message || "Error al procesar documento");
   }
+}
+
+// ============================================================================
+// DOCUMENT DETAIL & DOWNLOAD
+// ============================================================================
+
+export interface DocumentPage {
+  pageNumber: number;
+  rawText: string | null;
+  hasText: boolean;
+  ocrRequired: boolean;
+}
+
+export interface DocumentSection {
+  structureType: string;
+  sectionName: string;
+  startPage: number;
+  endPage: number;
+  sectionText: string;
+}
+
+export interface DocumentDetail extends JurisprudenceDocument {
+  pages: DocumentPage[];
+  sections: DocumentSection[];
+  _count: { embeddings: number };
+}
+
+export async function getDocumentDetail(id: number): Promise<DocumentDetail | null> {
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-documents/${id}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error?.message || "Error al obtener documento");
+    }
+    const data = await res.json();
+    return data.success ? data.document : null;
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return null;
+    throw error;
+  }
+}
+
+export async function getDocumentText(id: number): Promise<{
+  document: {
+    id: number;
+    title: string;
+    expediente: string;
+    processingStatus: string;
+    pages: DocumentPage[];
+    sections: DocumentSection[];
+    _count: { embeddings: number };
+  };
+} | null> {
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-documents/${id}/text`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? { document: data.document } : null;
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return null;
+    throw error;
+  }
+}
+
+export async function downloadJurisprudenceDocument(id: number): Promise<void> {
+  const res = await authFetch(
+    `${BACKEND_URL}/api/jurisprudence-documents/${id}/download`,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.message || "Error al descargar el documento");
+  }
+  const blob = await res.blob();
+  const contentDisposition = res.headers.get("content-disposition");
+  let fileName = `jurisprudencia-${id}.pdf`;
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="?([^"]+)"?/);
+    if (match) fileName = decodeURIComponent(match[1]);
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ============================================================================
@@ -244,7 +336,7 @@ export async function queryJurisprudence(
     areas?: string[];
   }
 ): Promise<RagResponse> {
-  const res = await authFetch(`${BACKEND_URL}/jurisprudence-assistant/query`, {
+  const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-assistant/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -287,7 +379,7 @@ export async function getQueryHistory(
     if (limit) params.set("limit", String(limit));
 
     const qs = params.toString();
-    const url = `${BACKEND_URL}/jurisprudence-assistant/queries${qs ? `?${qs}` : ""}`;
+    const url = `${BACKEND_URL}/api/jurisprudence-assistant/queries${qs ? `?${qs}` : ""}`;
 
     const res = await authFetch(url, { cache: "no-store" });
     if (!res.ok) {
@@ -312,7 +404,7 @@ export async function updateQueryFeedback(
   }
 ): Promise<void> {
   const res = await authFetch(
-    `${BACKEND_URL}/jurisprudence-assistant/queries/${queryId}/feedback`,
+    `${BACKEND_URL}/api/jurisprudence-assistant/queries/${queryId}/feedback`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -332,7 +424,7 @@ export async function updateQueryFeedback(
 
 export async function getJurisprudenceStats(): Promise<JurisprudenceStats> {
   try {
-    const res = await authFetch(`${BACKEND_URL}/jurisprudence-admin/stats/queries`, {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-admin/stats/queries`, {
       cache: "no-store",
     });
 
@@ -359,7 +451,7 @@ export async function getJurisprudenceStats(): Promise<JurisprudenceStats> {
 
 export async function getCoverageStats(): Promise<CoverageStats> {
   try {
-    const res = await authFetch(`${BACKEND_URL}/jurisprudence-admin/coverage`, {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-admin/coverage`, {
       cache: "no-store",
     });
 
@@ -408,7 +500,7 @@ export async function getCoverageStats(): Promise<CoverageStats> {
 
 export async function getSystemHealth(): Promise<any> {
   try {
-    const res = await authFetch(`${BACKEND_URL}/jurisprudence-admin/health`, {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-admin/health`, {
       cache: "no-store",
     });
 
@@ -425,4 +517,138 @@ export async function getSystemHealth(): Promise<any> {
     }
     throw error;
   }
+}
+
+// ============================================================================
+// SCRAPING
+// ============================================================================
+
+export interface ScrapeJob {
+  id: number;
+  organizationId: number;
+  companyId: number;
+  court: string;
+  startYear?: number;
+  endYear?: number;
+  scrapeType: "MANUAL" | "SCHEDULED";
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  documentsFound: number;
+  documentsDownloaded: number;
+  documentsFailed: number;
+  startedAt?: string;
+  completedAt?: string;
+  errorLog?: string;
+  createdAt: string;
+  createdBy?: { id: number; username: string };
+}
+
+export interface CourtInfo {
+  name: string;
+  sections: Array<{
+    name: string;
+    category: string;
+    area: string;
+  }>;
+}
+
+export async function triggerScraping(
+  court: string,
+  startYear?: number,
+  endYear?: number,
+): Promise<{ jobId: number; status: string }> {
+  const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-scraper/trigger`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      court,
+      startYear,
+      endYear,
+      scrapeType: "MANUAL",
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error?.message || "Error al iniciar scraping");
+  }
+
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.error || "Error al iniciar scraping");
+  }
+
+  return { jobId: data.jobId, status: data.status };
+}
+
+export async function getScrapingJobs(
+  page?: number,
+  limit?: number,
+): Promise<{ jobs: ScrapeJob[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+  try {
+    const params = new URLSearchParams();
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+
+    const qs = params.toString();
+    const url = `${BACKEND_URL}/api/jurisprudence-scraper/jobs${qs ? `?${qs}` : ""}`;
+
+    const res = await authFetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error?.message || "Error al obtener jobs de scraping");
+    }
+
+    const data = await res.json();
+    return {
+      jobs: data.success ? data.jobs : [],
+      pagination: data.success ? data.pagination : { page: 1, limit: 20, total: 0, totalPages: 0 },
+    };
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { jobs: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } };
+    }
+    throw error;
+  }
+}
+
+export async function getScrapingJob(jobId: number): Promise<ScrapeJob | null> {
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-scraper/jobs/${jobId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? data.job : null;
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return null;
+    throw error;
+  }
+}
+
+export async function getAvailableCourts(): Promise<CourtInfo[]> {
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-scraper/courts`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.success ? data.courts : [];
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return [];
+    throw error;
+  }
+}
+
+export async function processPendingDocuments(): Promise<{ processed: number }> {
+  const res = await authFetch(`${BACKEND_URL}/api/jurisprudence-scraper/process-pending`, {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error?.message || "Error al procesar documentos pendientes");
+  }
+
+  const data = await res.json();
+  return { processed: data.processed || 0 };
 }

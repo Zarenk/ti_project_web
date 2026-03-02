@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   ParseIntPipe,
@@ -445,6 +446,25 @@ export class SalesController {
   ) {
     return this.salesService.findOne(
       id,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
+  @Patch(':id/annul')
+  @UseGuards(EntityOwnershipGuard)
+  @EntityModel('sales')
+  @EntityIdParam('id')
+  async annulSale(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const userId = req?.user?.userId;
+    return this.salesService.annulSale(
+      id,
+      userId,
       organizationId ?? undefined,
       companyId ?? undefined,
     );

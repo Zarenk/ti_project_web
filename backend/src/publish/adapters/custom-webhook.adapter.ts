@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import sharp from 'sharp';
-import { PublishAdapter } from '.';
+import { PublishAdapter, PublishConfig } from '.';
 import { TransientError, PermanentError } from '../error';
 import { PublishLogService } from '../publish-log.service';
 
@@ -12,7 +12,7 @@ export class CustomWebhookAdapter implements PublishAdapter {
     private readonly logService: PublishLogService,
   ) {}
 
-  async publish(image: Buffer, caption: string): Promise<string> {
+  async publish(image: Buffer, caption: string, _config?: PublishConfig): Promise<string> {
     try {
       const sanitized = await sharp(image).jpeg().toBuffer();
       const uploadUrl = process.env.CUSTOM_WEBHOOK_UPLOAD_URL as string;

@@ -2,13 +2,14 @@
 "use client"
 
 import { useTenantSelection } from "@/context/tenant-selection-context"
-import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { Area, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { format, eachDayOfInterval } from "date-fns"
+import { eachDayOfInterval } from "date-fns"
 import { formatInTimeZone } from "date-fns-tz"
 import { es } from "date-fns/locale"
 import { DateRange } from "react-day-picker"
-import { getSalesByDateParams } from "../sales.api" // Asegúrate que esté esto
+import { getSalesByDateParams } from "../sales.api"
 import { set } from "date-fns"
 
 interface Props {
@@ -20,50 +21,42 @@ function endOfDayInLima(date: Date) {
 }
 
 export function SalesChart({ dateRange }: Props) {
-  const [data, setData] = useState<{ date: string; displayDate: string; sales: number }[]>([])
-  const { selection, version } = useTenantSelection()
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const { selection } = useTenantSelection()
 
-  useEffect(() => {
-    if (!dateRange.from || !dateRange.to) return
-  
-    const from = dateRange.from!
-    const to = endOfDayInLima(dateRange.to!)
-  
-    async function fetchSales() {
-      try {
-        const dailySales = await getSalesByDateParams(from.toISOString(), to.toISOString())
-  
-        const fullRange = eachDayOfInterval({ start: from, end: dateRange.to! })
-  
-        const salesMap = new Map(
-          dailySales.map((s: any) => {
-            const dateKey = formatInTimeZone(s.date, "UTC", "yyyy-MM-dd", { timeZone: "America/Lima" })
-            return [dateKey, s.sales ?? 0]
-          })
-        )
-  
-        const completedData = fullRange.map((date) => {
-          const dateKey = formatInTimeZone(date, "America/Lima", "yyyy-MM-dd")
-          const displayDate = formatInTimeZone(date, "America/Lima", "MMM d", { locale: es })
-          return {
-            date: dateKey,
-            displayDate,
-            sales: Number(salesMap.get(dateKey) ?? 0),
-          }
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to ? endOfDayInLima(dateRange.to).toISOString() : ""
+
+  const { data = [] } = useQuery({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "salesChart", { from, to }],
+    queryFn: async () => {
+      if (!dateRange.from || !dateRange.to) return []
+
+      const fromDate = dateRange.from
+      const toDate = endOfDayInLima(dateRange.to)
+
+      const dailySales = await getSalesByDateParams(fromDate.toISOString(), toDate.toISOString())
+
+      const fullRange = eachDayOfInterval({ start: fromDate, end: dateRange.to })
+
+      const salesMap = new Map(
+        dailySales.map((s: any) => {
+          const dateKey = formatInTimeZone(s.date, "UTC", "yyyy-MM-dd", { timeZone: "America/Lima" })
+          return [dateKey, s.sales ?? 0]
         })
-  
-        setData(completedData)
-      } catch (error) {
-        console.error("Error al obtener las ventas diarias:", error)
-      }
-    }
-  
-    fetchSales()
-  }, [dateRange, selectionKey])
+      )
+
+      return fullRange.map((date) => {
+        const dateKey = formatInTimeZone(date, "America/Lima", "yyyy-MM-dd")
+        const displayDate = formatInTimeZone(date, "America/Lima", "MMM d", { locale: es })
+        return {
+          date: dateKey,
+          displayDate,
+          sales: Number(salesMap.get(dateKey) ?? 0),
+        }
+      })
+    },
+    enabled: selection.orgId !== null && !!dateRange.from && !!dateRange.to,
+  })
 
   return (
     <div className="w-full h-[350px] flex items-center justify-center">

@@ -83,6 +83,19 @@ export class ClientService {
       metadata: { userId: data.userId ?? null, type: data.type },
     });
 
+    // Si tiene typeNumber, buscar si ya existe en esta org → retornar directamente
+    if (data.typeNumber) {
+      const existing = await this.prismaService.client.findFirst({
+        where: {
+          typeNumber: data.typeNumber,
+          organizationId: orgId ?? null,
+        },
+      });
+      if (existing) {
+        return existing;
+      }
+    }
+
     const userId = data.userId || (await this.createGenericUser(orgId));
 
     try {
@@ -237,8 +250,8 @@ export class ClientService {
         metadata: { userId: client.idUser, typeNumber: client.typeNumber },
       });
 
-      const existing = await this.prismaService.client.findUnique({
-        where: { typeNumber: client.typeNumber }, // es unique global en tu schema
+      const existing = await this.prismaService.client.findFirst({
+        where: { typeNumber: client.typeNumber, organizationId: orgId ?? undefined },
       });
 
       if (!existing) {
@@ -337,9 +350,9 @@ export class ClientService {
     }
   }
 
-  async checkIfExists(typeNumber: string): Promise<boolean> {
-    const client = await this.prismaService.client.findUnique({
-      where: { typeNumber },
+  async checkIfExists(typeNumber: string, organizationId?: number | null): Promise<boolean> {
+    const client = await this.prismaService.client.findFirst({
+      where: { typeNumber, organizationId: organizationId ?? undefined },
     });
     return !!client;
   }
@@ -363,7 +376,11 @@ export class ClientService {
     ) as Prisma.ClientWhereInput;
     const where: Prisma.ClientWhereInput = {
       ...orgFilter,
-      OR: [{ name: 'Sin Cliente' }, { user: { role: 'CLIENT' } }],
+      OR: [
+        { name: 'Sin Cliente' },
+        { user: { role: 'CLIENT' } },
+        { typeNumber: { not: null } },
+      ],
     };
     return this.prismaService.client.findMany({ where });
   }

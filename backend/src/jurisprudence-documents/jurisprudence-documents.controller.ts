@@ -8,10 +8,12 @@ import {
   Body,
   UseGuards,
   Req,
+  Res,
   ParseIntPipe,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  StreamableFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -23,9 +25,12 @@ import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from '../common/decorators/module-permission.decorator';
 import { UserRole, JurisprudenceProcessingStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { JurisprudenceTextExtractorService } from './jurisprudence-text-extractor.service';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
+import { createReadStream, existsSync } from 'fs';
 import * as path from 'path';
+import { Response } from 'express';
 
 @Controller('jurisprudence-documents')
 @UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)
@@ -35,6 +40,7 @@ export class JurisprudenceDocumentsController {
 
   constructor(
     private readonly embeddingService: JurisprudenceEmbeddingService,
+    private readonly textExtractor: JurisprudenceTextExtractorService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -103,8 +109,197 @@ export class JurisprudenceDocumentsController {
   }
 
   /**
+   * POST /jurisprudence-documents/upload
+   * Manual upload of PDF document
+   */
+  @Post('upload')
+  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN_GLOBAL, UserRole.SUPER_ADMIN_ORG)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: process.env.JURISPRUDENCE_STORAGE_PATH || './uploads/jurisprudence',
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `jurisprudence-${uniqueSuffix}.pdf`);
+        },
+      }),
+      limits: {
+        fileSize: parseInt(process.env.JURISPRUDENCE_MAX_FILE_SIZE || '52428800', 10), // 50MB default
+      },
+      fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/pdf') {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only PDF files are allowed'), false);
+        }
+      },
+    }),
+  )
+  async uploadDocument(
+    @UploadedFile() file: Express.Multer.File,
+    @Body()
+    body: {
+      title: string;
+      court: string;
+      chamber?: string;
+      expediente: string;
+      year: string;
+      publishDate?: string;
+    },
+    @Req() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    const { organizationId, companyId } = req.tenantContext;
+    const userId = req.user?.userId;
+
+    // Calculate file hash
+    const fileBuffer = await fs.readFile(file.path);
+    const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+    // Create document record
+    const document = await this.prisma.jurisprudenceDocument.create({
+      data: {
+        organizationId,
+        companyId,
+        title: body.title,
+        court: body.court,
+        chamber: body.chamber,
+        expediente: body.expediente,
+        year: parseInt(body.year, 10),
+        publishDate: body.publishDate ? new Date(body.publishDate) : new Date(),
+        sourceType: 'MANUAL',
+        pdfPath: file.path,
+        fileName: file.filename,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        fileHash,
+        uploadedById: userId,
+        processingStatus: JurisprudenceProcessingStatus.PENDING,
+      },
+    });
+
+    // Extract text and generate embeddings in background
+    this.textExtractor.extractAndProcess(document.id).catch((err) => {
+      console.error(`Background text extraction failed for doc ${document.id}:`, err.message);
+    });
+
+    return {
+      success: true,
+      document,
+      message: 'Document uploaded successfully and processing started',
+    };
+  }
+
+  /**
+   * GET /jurisprudence-documents/:id/download
+   * Download the PDF file
+   * NOTE: Must be declared BEFORE :id to avoid route collision
+   */
+  @Get(':id/download')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.EMPLOYEE,
+    UserRole.SUPER_ADMIN_GLOBAL,
+    UserRole.SUPER_ADMIN_ORG,
+  )
+  async downloadDocument(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { organizationId } = req.tenantContext;
+
+    const document = await this.prisma.jurisprudenceDocument.findFirst({
+      where: {
+        id,
+        organizationId,
+        deletedAt: null,
+      },
+    });
+
+    if (!document) {
+      throw new BadRequestException('Documento no encontrado');
+    }
+
+    if (!document.pdfPath || !existsSync(document.pdfPath)) {
+      throw new BadRequestException('Archivo PDF no disponible en el servidor');
+    }
+
+    const contentType = document.mimeType || 'application/pdf';
+    const fileName = document.fileName || `jurisprudencia-${id}.pdf`;
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(fileName)}"`,
+    );
+    if (document.fileSize) {
+      res.setHeader('Content-Length', document.fileSize);
+    }
+
+    return new StreamableFile(createReadStream(document.pdfPath));
+  }
+
+  /**
+   * GET /jurisprudence-documents/:id/text
+   * Get extracted text content for a document
+   * NOTE: Must be declared BEFORE :id to avoid route collision
+   */
+  @Get(':id/text')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.EMPLOYEE,
+    UserRole.SUPER_ADMIN_GLOBAL,
+    UserRole.SUPER_ADMIN_ORG,
+  )
+  async getDocumentText(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const { organizationId } = req.tenantContext;
+
+    const document = await this.prisma.jurisprudenceDocument.findFirst({
+      where: { id, organizationId, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        expediente: true,
+        processingStatus: true,
+        pages: {
+          orderBy: { pageNumber: 'asc' },
+          select: {
+            pageNumber: true,
+            rawText: true,
+            hasText: true,
+            ocrRequired: true,
+          },
+        },
+        sections: {
+          select: {
+            structureType: true,
+            sectionName: true,
+            startPage: true,
+            endPage: true,
+            sectionText: true,
+          },
+        },
+        _count: {
+          select: { embeddings: true },
+        },
+      },
+    });
+
+    if (!document) {
+      return { success: false, error: 'Document not found' };
+    }
+
+    return { success: true, document };
+  }
+
+  /**
    * GET /jurisprudence-documents/:id
    * Get document details
+   * NOTE: Generic :id route must come AFTER specific sub-routes (:id/download, :id/text)
    */
   @Get(':id')
   @Roles(
@@ -145,88 +340,6 @@ export class JurisprudenceDocumentsController {
     return {
       success: true,
       document,
-    };
-  }
-
-  /**
-   * POST /jurisprudence-documents/upload
-   * Manual upload of PDF document
-   */
-  @Post('upload')
-  @Roles(UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.SUPER_ADMIN_GLOBAL, UserRole.SUPER_ADMIN_ORG)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: process.env.JURISPRUDENCE_STORAGE_PATH || './uploads/jurisprudence',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, `jurisprudence-${uniqueSuffix}.pdf`);
-        },
-      }),
-      limits: {
-        fileSize: parseInt(process.env.JURISPRUDENCE_MAX_FILE_SIZE || '52428800', 10), // 50MB default
-      },
-      fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/pdf') {
-          cb(null, true);
-        } else {
-          cb(new BadRequestException('Only PDF files are allowed'), false);
-        }
-      },
-    }),
-  )
-  async uploadDocument(
-    @UploadedFile() file: Express.Multer.File,
-    @Body()
-    body: {
-      title: string;
-      court: string;
-      chamber?: string;
-      expediente: string;
-      year: string;
-      publishDate: string;
-    },
-    @Req() req: any,
-  ) {
-    if (!file) {
-      throw new BadRequestException('File is required');
-    }
-
-    const { organizationId, companyId } = req.tenantContext;
-    const userId = req.user?.userId;
-
-    // Calculate file hash
-    const fileBuffer = await fs.readFile(file.path);
-    const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-
-    // Create document record
-    const document = await this.prisma.jurisprudenceDocument.create({
-      data: {
-        organizationId,
-        companyId,
-        title: body.title,
-        court: body.court,
-        chamber: body.chamber,
-        expediente: body.expediente,
-        year: parseInt(body.year, 10),
-        publishDate: new Date(body.publishDate),
-        sourceType: 'MANUAL',
-        pdfPath: file.path,
-        fileName: file.filename,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        fileHash,
-        uploadedById: userId,
-        processingStatus: JurisprudenceProcessingStatus.PENDING,
-      },
-    });
-
-    // TODO: Enqueue for text extraction
-
-    return {
-      success: true,
-      document,
-      message: 'Document uploaded successfully and queued for processing',
     };
   }
 

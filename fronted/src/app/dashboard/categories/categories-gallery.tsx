@@ -2,6 +2,9 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 import {
   Pencil,
   Eye,
@@ -36,6 +39,10 @@ type CategoriesGalleryProps = {
 
 export function CategoriesGallery({ data }: CategoriesGalleryProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
+  const invalidateCategories = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.categories.root(selection.orgId, selection.companyId) })
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Categories | null>(null)
   const [viewTarget, setViewTarget] = useState<Categories | null>(null)
@@ -46,8 +53,7 @@ export function CategoriesGallery({ data }: CategoriesGalleryProps) {
     try {
       await deleteCategory(deleteTarget.id)
       toast.success("Categoría eliminada correctamente.")
-      router.refresh()
-      location.reload()
+      invalidateCategories()
     } catch (error: any) {
       toast.error(error?.message || "No se pudo eliminar la categoría.")
     } finally {

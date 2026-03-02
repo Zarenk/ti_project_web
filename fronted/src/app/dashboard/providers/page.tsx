@@ -1,25 +1,27 @@
+"use client";
+
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { columns } from './columns';
 import { DataTable } from './data-table';
 import { getProviders } from './providers.api';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Plus } from 'lucide-react';
 import { ProvidersGuideButton } from './providers-guide-button';
+import { useTenantSelection } from '@/context/tenant-selection-context';
+import { queryKeys } from '@/lib/query-keys';
+import { TablePageSkeleton } from '@/components/table-page-skeleton';
 
+export default function Page() {
+  const { selection } = useTenantSelection();
 
+  const { data: providers = [], isLoading } = useQuery<any[]>({
+    queryKey: queryKeys.providers.list(selection.orgId, selection.companyId),
+    queryFn: () => getProviders(),
+    enabled: selection.orgId !== null,
+  });
 
-export const dynamic = "force-dynamic"; // PARA HACER LA PAGINA DINAMICA
-
-
-
-export default async function Page() {
-
-  //consulta al API
-  const providers = await getProviders()
-  //console.log(stores)
-
-  //para el label chiquito de la categoria
-  const mappedData = providers.map((provider:any) => ({
+  const mappedData = providers.map((provider: any) => ({
     ...provider,
   }));
 
@@ -74,9 +76,13 @@ export default async function Page() {
               </Button>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <DataTable columns={columns} data={mappedData}></DataTable>
-          </div>          
+          {isLoading ? (
+            <TablePageSkeleton title={false} columns={5} rows={6} actions={false} />
+          ) : (
+            <div className="overflow-x-auto">
+              <DataTable columns={columns} data={mappedData} />
+            </div>
+          )}
         </div>
       </section>
     </>

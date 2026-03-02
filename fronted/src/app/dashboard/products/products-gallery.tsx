@@ -4,17 +4,26 @@ import Link from "next/link"
 import { useRef, useState } from "react"
 import {
   Pencil,
+  PenLine,
   Eye,
+  Search,
   Trash2,
   Loader2,
   Package,
   Camera,
+  ImagePlus,
   Tag,
   Calendar,
   Sparkles,
   Cpu,
+  Megaphone,
+  Send,
+  X,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -30,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { DeleteActionsGuard } from "@/components/delete-actions-guard"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 import { isProductActive, normalizeProductStatus } from "./status.utils"
 import { deleteProduct, uploadProductImage, updateProduct } from "./products.api"
 import type { Products } from "./columns"
@@ -53,6 +62,10 @@ type ProductsGalleryProps = {
 
 export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
+  const invalidateProducts = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Products | null>(null)
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null)
@@ -64,7 +77,7 @@ export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps
     try {
       await deleteProduct(deleteTarget.id)
       toast.success("Producto eliminado.")
-      router.refresh()
+      invalidateProducts()
       onProductUpdated?.()
     } catch (error) {
       const message =
@@ -77,10 +90,9 @@ export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps
   }
 
   const handleImageChange = async (productId: string, file: File) => {
-    // Backend only accepts jpg, jpeg, png, gif
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif"]
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
     if (!allowedTypes.includes(file.type)) {
-      toast.error("Solo se permiten imágenes JPG, PNG o GIF.")
+      toast.error("Solo se permiten imágenes JPG, PNG, GIF o WebP.")
       return
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -131,7 +143,7 @@ export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps
             const images = Array.isArray((product as any).images)
               ? ((product as any).images as string[]).filter(Boolean)
               : []
-            const imageUrl = images[0] ? resolveImageUrl(images[0]) : null
+            const imageUrl = images[0] ? resolveImageVariant(images[0], "card") : null
             const active = isProductActive(product.status)
             const brandName =
               typeof product.brand === "string"
@@ -166,7 +178,7 @@ export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps
                 <input
                   ref={(el) => { fileInputRefs.current[product.id] = el }}
                   type="file"
-                  accept="image/jpeg,image/png,image/gif"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   className="hidden"
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
@@ -420,17 +432,20 @@ export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps
 
                     {/* Action buttons – pinned at bottom */}
                     <div
-                      className="flex items-center gap-1.5 border-t border-white/10 px-4 py-2.5"
+                      className="flex items-center justify-center gap-1.5 border-t border-white/10 px-3 py-2.5"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Button
                         asChild
                         size="sm"
                         variant="secondary"
-                        className="h-7 gap-1 bg-white/90 text-[11px] font-medium text-slate-900 hover:bg-white"
+                        className="group/ver h-7 gap-1 bg-white/90 text-[11px] font-medium text-slate-900 hover:bg-white"
                       >
                         <Link href={`/dashboard/products/${product.id}`}>
-                          <Eye className="h-3 w-3" />
+                          <span className="relative inline-flex flex-shrink-0">
+                            <Eye className="h-3 w-3 transition-all duration-200 ease-out group-hover/ver:scale-0 group-hover/ver:opacity-0 group-hover/ver:rotate-12" />
+                            <Search className="absolute inset-0 h-3 w-3 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/ver:scale-100 group-hover/ver:opacity-100 group-hover/ver:rotate-0" />
+                          </span>
                           Ver
                         </Link>
                       </Button>
@@ -438,30 +453,52 @@ export function ProductsGallery({ data, onProductUpdated }: ProductsGalleryProps
                         asChild
                         size="sm"
                         variant="secondary"
-                        className="h-7 gap-1 bg-white/90 text-[11px] font-medium text-slate-900 hover:bg-white"
+                        className="group/edit h-7 gap-1 bg-white/90 text-[11px] font-medium text-slate-900 hover:bg-white"
                       >
                         <Link href={`/dashboard/products/${product.id}/edit`}>
-                          <Pencil className="h-3 w-3" />
+                          <span className="relative inline-flex flex-shrink-0">
+                            <Pencil className="h-3 w-3 transition-all duration-200 ease-out group-hover/edit:scale-0 group-hover/edit:opacity-0 group-hover/edit:rotate-12" />
+                            <PenLine className="absolute inset-0 h-3 w-3 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/edit:scale-100 group-hover/edit:opacity-100 group-hover/edit:rotate-0" />
+                          </span>
                           Editar
                         </Link>
                       </Button>
                       <Button
                         size="sm"
                         variant="secondary"
-                        className="h-7 w-7 bg-white/90 p-0 text-slate-900 hover:bg-white"
+                        className="group/cam h-7 w-7 cursor-pointer bg-white/90 p-0 text-slate-900 hover:bg-white"
                         disabled={isUploading}
                         onClick={() => fileInputRefs.current[product.id]?.click()}
                       >
-                        <Camera className="h-3 w-3" />
+                        <span className="relative inline-flex">
+                          <Camera className="h-3 w-3 transition-all duration-200 ease-out group-hover/cam:scale-0 group-hover/cam:opacity-0 group-hover/cam:rotate-12" />
+                          <ImagePlus className="absolute inset-0 h-3 w-3 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/cam:scale-100 group-hover/cam:opacity-100 group-hover/cam:rotate-0" />
+                        </span>
                       </Button>
-                      <div className="flex-1" />
                       <Button
                         size="sm"
                         variant="secondary"
-                        className="h-7 w-7 bg-rose-500/80 p-0 text-white hover:bg-rose-600"
+                        className="group/promo h-7 cursor-pointer gap-1 bg-violet-500/80 text-[11px] font-medium text-white hover:bg-violet-600"
+                        onClick={() => {
+                          router.push(`/dashboard/products/${product.id}/promote`)
+                        }}
+                      >
+                        <span className="relative inline-flex flex-shrink-0">
+                          <Megaphone className="h-3 w-3 transition-all duration-200 ease-out group-hover/promo:scale-0 group-hover/promo:opacity-0 group-hover/promo:rotate-12" />
+                          <Send className="absolute inset-0 h-3 w-3 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/promo:scale-100 group-hover/promo:opacity-100 group-hover/promo:rotate-0" />
+                        </span>
+                        Promocionar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="group/del h-7 w-7 cursor-pointer bg-rose-500/80 p-0 text-white hover:bg-rose-600"
                         onClick={() => setDeleteTarget(product)}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <span className="relative inline-flex">
+                          <Trash2 className="h-3 w-3 transition-all duration-200 ease-out group-hover/del:scale-0 group-hover/del:opacity-0 group-hover/del:rotate-12" />
+                          <X className="absolute inset-0 h-3 w-3 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/del:scale-100 group-hover/del:opacity-100 group-hover/del:rotate-0" />
+                        </span>
                       </Button>
                     </div>
                   </div>

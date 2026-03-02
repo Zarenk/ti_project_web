@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { X, Send, Paperclip } from 'lucide-react';
-import { motion } from 'framer-motion'; 
+import { X, Send, Paperclip, ChevronUp, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import socket from '@/lib/utils';
 import TypingIndicator from './TypingIndicator';
 import { useChatUserId } from '@/hooks/use-chat-user-id';
@@ -66,11 +66,17 @@ export default function ChatPanel({
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef(0);
+  const isLoadingOlderRef = useRef(false);
+  const historyLoadedRef = useRef(false);
   const hookUserId = useChatUserId();
   const userId = propUserId ?? hookUserId;
   const [agentTyping, setAgentTyping] = useState(false);
   const pendingTempIds = useRef<Set<number>>(new Set());
   const [rateLimited, setRateLimited] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -89,8 +95,18 @@ export default function ChatPanel({
       }
     };
 
-    const historyHandler = (history: Message[]) => {
-      const chatHistory = history.filter((m) => m.clientId === userId);
+    const historyHandler = (
+      data: Message[] | { messages: Message[]; hasMore: boolean },
+    ) => {
+      // Guard: only accept the first history response to prevent stale
+      // responses from overwriting recently sent optimistic messages
+      if (historyLoadedRef.current) return;
+      historyLoadedRef.current = true;
+      const raw = Array.isArray(data) ? data : data.messages;
+      const chatHistory = raw.filter((m) => m.clientId === userId);
+      if (!Array.isArray(data)) {
+        setHasMore(data.hasMore);
+      }
       if (chatHistory.length === 0) {
         const welcome: Message = {
           id: Date.now(),
@@ -102,6 +118,15 @@ export default function ChatPanel({
         setMessages([welcome]);
       } else {
         setMessages(chatHistory);
+      }
+    };
+
+    const olderHandler = (data: { messages: Message[]; hasMore: boolean }) => {
+      isLoadingOlderRef.current = true;
+      setHasMore(data.hasMore);
+      setLoadingOlder(false);
+      if (data.messages.length > 0) {
+        setMessages((prev) => [...data.messages, ...prev]);
       }
     };
 
@@ -122,10 +147,11 @@ export default function ChatPanel({
       }
     };
 
-    socket.emit('chat:history', { clientId: userId });
+    socket.emit('chat:history', { clientId: userId, limit: 50 });
     socket.emit('chat:seen', { clientId: userId, viewerId: userId });
     socket.on('chat:receive', receiveHandler);
     socket.on('chat:history', historyHandler);
+    socket.on('chat:history:older', olderHandler);
     socket.on('chat:seen', seenHandler);
     const typingHandler = ({ clientId, senderId, isTyping }: TypingPayload) => {
       if (clientId === userId && senderId !== userId) {
@@ -156,6 +182,7 @@ export default function ChatPanel({
     return () => {
       socket.off('chat:receive', receiveHandler);
       socket.off('chat:history', historyHandler);
+      socket.off('chat:history:older', olderHandler);
       socket.off('chat:seen', seenHandler);
       socket.off('chat:typing', typingHandler);
       socket.off('chat:rate-limit', rateLimitHandler);
@@ -244,9 +271,33 @@ export default function ChatPanel({
     setPreview(null);
   };
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  useLayoutEffect(() => {
+    if (isLoadingOlderRef.current) {
+      isLoadingOlderRef.current = false;
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTop =
+          container.scrollHeight - prevScrollHeightRef.current;
+      }
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingOlder || !hasMore || !userId || messages.length === 0) return;
+    const oldest = messages[0];
+    if (!oldest) return;
+    setLoadingOlder(true);
+    isLoadingOlderRef.current = true;
+    prevScrollHeightRef.current =
+      scrollContainerRef.current?.scrollHeight ?? 0;
+    socket.emit('chat:history', {
+      clientId: userId,
+      limit: 50,
+      beforeId: oldest.id,
+    });
+  }, [loadingOlder, hasMore, userId, messages]);
 
   const handleEdit = (id: number, newText: string) => {
     setMessages((prev) =>
@@ -277,7 +328,28 @@ export default function ChatPanel({
             <X className="h-5 w-5" />
           </Button>
         </div>
-        <div className="flex-1 p-4 space-y-2 overflow-y-auto bg-background">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 px-4 py-2 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/30"
+        >
+          {hasMore && (
+            <div className="flex justify-center py-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLoadMore}
+                disabled={loadingOlder}
+                className="text-xs text-muted-foreground cursor-pointer"
+              >
+                {loadingOlder ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <ChevronUp className="h-3 w-3 mr-1" />
+                )}
+                Cargar anteriores
+              </Button>
+            </div>
+          )}
           <MessagesList
             messages={messages}
             userId={userId!}

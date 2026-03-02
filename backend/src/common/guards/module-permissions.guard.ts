@@ -38,8 +38,10 @@ export class ModulePermissionsGuard implements CanActivate {
     'providers',
     'settings',
     'legal',
+    'whatsapp',
     'hidePurchaseCost',
-    'hideDeleteActions',
+    'hideDeleteForEmployees',
+    'hideDeleteForAdmins',
   ] as const;
 
   private readonly jwtService: JwtService;

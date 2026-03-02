@@ -6,6 +6,7 @@ export const BusinessVertical = {
   SERVICES: 'SERVICES',
   MANUFACTURING: 'MANUFACTURING',
   LAW_FIRM: 'LAW_FIRM',
+  GYM: 'GYM',
 } as const;
 
 export type BusinessVertical =
@@ -19,4 +20,5 @@ export const VERTICAL_DISPLAY_NAMES: Record<BusinessVertical, string> = {
   [BusinessVertical.SERVICES]: 'Servicios Profesionales',
   [BusinessVertical.MANUFACTURING]: 'Manufactura y Producción',
   [BusinessVertical.LAW_FIRM]: 'Estudio de Abogados',
+  [BusinessVertical.GYM]: 'Gimnasio',
 };

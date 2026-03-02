@@ -11,15 +11,16 @@ import { getUserDataFromToken } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/progress'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   FileSpreadsheet,
+  Info,
   Loader2,
   Package,
+  Search,
   Store,
   Truck,
   Upload,
@@ -32,6 +33,21 @@ type FilaError = {
   valor: unknown
 }
 
+type ErrorCategory = 'campo_vacio' | 'formato_invalido' | 'series_duplicadas' | 'espacios_extra'
+
+const CATEGORY_CONFIG: Record<ErrorCategory, { label: string; color: string; bg: string; dot: string }> = {
+  campo_vacio: { label: 'Campos vacíos', color: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-50 dark:bg-rose-950/30', dot: 'bg-rose-500' },
+  formato_invalido: { label: 'Formato inválido', color: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-950/30', dot: 'bg-amber-500' },
+  series_duplicadas: { label: 'Series duplicadas', color: 'text-violet-700 dark:text-violet-300', bg: 'bg-violet-50 dark:bg-violet-950/30', dot: 'bg-violet-500' },
+  espacios_extra: { label: 'Espacios extra', color: 'text-sky-700 dark:text-sky-300', bg: 'bg-sky-50 dark:bg-sky-950/30', dot: 'bg-sky-500' },
+}
+
+function categorizeError(error: FilaError): ErrorCategory {
+  if (error.mensaje.includes('obligatorio')) return 'campo_vacio'
+  if (error.mensaje.includes('numerico')) return 'formato_invalido'
+  if (error.mensaje.includes('espacios')) return 'espacios_extra'
+  return 'formato_invalido'
+}
 
 function obtenerValorLegible(valor: unknown): string {
   if (valor === undefined || valor === null) {
@@ -237,7 +253,7 @@ export default function ExcelUploadPage() {
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null)
   const [erroresValidacion, setErroresValidacion] = useState<string[]>([])
   const [filasConError, setFilasConError] = useState<number[]>([])
-  const [errorFieldFilter, setErrorFieldFilter] = useState<string>('ALL')
+  const [selectedCategory, setSelectedCategory] = useState<ErrorCategory | null>(null)
   const [errorSearchTerm, setErrorSearchTerm] = useState('')
   const erroresMapeados: Record<number, FilaError[]> = previewData ? validarFilas(previewData) : {}
   const filaErroresEntries = useMemo(
@@ -249,41 +265,35 @@ export default function ExcelUploadPage() {
       })),
     [erroresMapeados],
   )
-  const availableErrorFields = useMemo(() => {
-    const fieldSet = new Set<string>()
-    filaErroresEntries.forEach(({ errores }) => {
-      errores.forEach((error) => fieldSet.add(error.campo))
-    })
-    return Array.from(fieldSet).sort((a, b) => a.localeCompare(b))
-  }, [filaErroresEntries])
-  const filteredErrorEntries = useMemo(() => {
-    const query = errorSearchTerm.trim().toLowerCase()
-    return filaErroresEntries.filter(({ rowNumber, errores }) => {
-      const matchesField =
-        errorFieldFilter === 'ALL' || errores.some((error) => error.campo === errorFieldFilter)
-      if (!matchesField) {
-        return false
-      }
-      if (!query) {
-        return true
-      }
-      const rowLabel = `fila ${rowNumber}`.toLowerCase()
-      if (rowLabel.includes(query)) {
-        return true
-      }
-      return errores.some((error) => {
-        const valor = obtenerValorLegible(error.valor).toLowerCase()
-        return (
-          error.campo.toLowerCase().includes(query) ||
-          error.mensaje.toLowerCase().includes(query) ||
-          valor.includes(query)
-        )
-      })
-    })
-  }, [filaErroresEntries, errorFieldFilter, errorSearchTerm])
   const generalErrorMessages = useMemo(
     () => erroresValidacion.filter((mensaje) => !mensaje.toLowerCase().startsWith('fila ')),
     [erroresValidacion],
+  )
+  const errorCategorySummary = useMemo(() => {
+    const summary: Record<ErrorCategory, { count: number; rowIndices: Set<number> }> = {
+      campo_vacio: { count: 0, rowIndices: new Set() },
+      formato_invalido: { count: 0, rowIndices: new Set() },
+      series_duplicadas: { count: 0, rowIndices: new Set() },
+      espacios_extra: { count: 0, rowIndices: new Set() },
+    }
+    filaErroresEntries.forEach(({ rowIndex, errores }) => {
+      errores.forEach((error) => {
+        const cat = categorizeError(error)
+        summary[cat].count++
+        summary[cat].rowIndices.add(rowIndex)
+      })
+    })
+    if (generalErrorMessages.some((m) => m.toLowerCase().includes('duplicada'))) {
+      summary.series_duplicadas.count++
+    }
+    return summary
+  }, [filaErroresEntries, generalErrorMessages])
+
+  const activeCategories = useMemo(
+    () =>
+      (Object.entries(errorCategorySummary) as [ErrorCategory, { count: number; rowIndices: Set<number> }][])
+        .filter(([, { count }]) => count > 0),
+    [errorCategorySummary],
   )
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -332,7 +342,7 @@ export default function ExcelUploadPage() {
 
       setErroresValidacion(generalMessages)
       setFilasConError(indicesConError)
-      setErrorFieldFilter('ALL')
+      setSelectedCategory(null)
       setErrorSearchTerm('')
 
       if (hasRowErrors || generalMessages.length > 0) {
@@ -387,7 +397,7 @@ export default function ExcelUploadPage() {
 
     setErroresValidacion(generalMessages)
     setFilasConError(indicesConError)
-    setErrorFieldFilter('ALL')
+    setSelectedCategory(null)
     setErrorSearchTerm('')
 
     if (hasRowErrors || generalMessages.length > 0) {
@@ -466,6 +476,8 @@ export default function ExcelUploadPage() {
     setPreviewData(null)
     setErroresValidacion([])
     setFilasConError([])
+    setSelectedCategory(null)
+    setErrorSearchTerm('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -715,20 +727,130 @@ export default function ExcelUploadPage() {
                 </CardContent>
               </Card>
 
-              {/* Preview summary */}
+              {/* ── Validation Report Card ── */}
+              {hasErrors && (
+                <Card className="border-rose-200 dark:border-rose-900/50 animate-in fade-in-0 slide-in-from-top-2 duration-300">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/40">
+                        <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base text-rose-900 dark:text-rose-200">Reporte de validación</CardTitle>
+                        <CardDescription className="text-rose-700/70 dark:text-rose-400/70">
+                          Corrige los errores en tu Excel y vuelve a subir el archivo
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Progress bar */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="font-medium">{validRowCount} válidas</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
+                          <span className="font-medium">{errorRowCount} con errores</span>
+                        </span>
+                      </div>
+                      <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                        {validRowCount > 0 && (
+                          <div
+                            className="h-full bg-emerald-500 transition-all duration-500"
+                            style={{ width: `${(validRowCount / previewData.length) * 100}%` }}
+                          />
+                        )}
+                        {errorRowCount > 0 && (
+                          <div
+                            className="h-full bg-rose-500 transition-all duration-500"
+                            style={{ width: `${(errorRowCount / previewData.length) * 100}%` }}
+                          />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        {previewData.length} filas procesadas &middot; {validRowCount} listas &middot; {errorRowCount} requieren corrección
+                      </p>
+                    </div>
+
+                    {/* Error category pills */}
+                    {activeCategories.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Tipos de error encontrados
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedCategory !== null && (
+                            <button
+                              type="button"
+                              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all bg-muted/50 hover:bg-muted text-muted-foreground"
+                              onClick={() => setSelectedCategory(null)}
+                            >
+                              <X className="h-3 w-3" />
+                              Mostrar todos
+                            </button>
+                          )}
+                          {activeCategories.map(([category, { count, rowIndices }]) => {
+                            const config = CATEGORY_CONFIG[category]
+                            const isActive = selectedCategory === category
+                            return (
+                              <button
+                                key={category}
+                                type="button"
+                                className={`cursor-pointer inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+                                  isActive
+                                    ? `${config.bg} ${config.color} border-current shadow-sm`
+                                    : 'bg-muted/30 text-muted-foreground hover:bg-muted border-transparent'
+                                }`}
+                                onClick={() => setSelectedCategory(isActive ? null : category)}
+                              >
+                                <span className={`h-2 w-2 rounded-full ${config.dot}`} />
+                                {config.label}
+                                <Badge variant="secondary" className="h-5 min-w-[1.25rem] px-1 text-[10px]">
+                                  {rowIndices.size}
+                                </Badge>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* General error messages (series duplicadas, etc.) */}
+                    {generalErrorMessages.length > 0 && (
+                      <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900/30 dark:bg-violet-950/20">
+                        <div className="flex items-start gap-2">
+                          <Info className="h-4 w-4 shrink-0 mt-0.5 text-violet-600 dark:text-violet-400" />
+                          <div className="space-y-1">
+                            {generalErrorMessages.map((msg, idx) => (
+                              <p key={idx} className="text-sm text-violet-800 dark:text-violet-300">{msg}</p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Enhanced Preview ── */}
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                       4
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <CardTitle className="text-base">Vista previa</CardTitle>
                       <CardDescription>
-                        {previewData.length} producto{previewData.length === 1 ? '' : 's'} encontrado{previewData.length === 1 ? '' : 's'}
+                        {selectedCategory
+                          ? `Mostrando filas con: ${CATEGORY_CONFIG[selectedCategory].label}`
+                          : `${previewData.length} producto${previewData.length === 1 ? '' : 's'} encontrado${previewData.length === 1 ? '' : 's'}`
+                        }
                       </CardDescription>
                     </div>
-                    {/* Summary badges */}
                     <div className="flex flex-wrap gap-1.5">
                       {validRowCount > 0 && (
                         <Badge variant="secondary" className="gap-1 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -746,43 +868,94 @@ export default function ExcelUploadPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="max-h-[400px] space-y-2 overflow-auto rounded-lg border p-3">
+                  {/* Search bar */}
+                  {previewData.length > 5 && (
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        value={errorSearchTerm}
+                        onChange={(e) => setErrorSearchTerm(e.target.value)}
+                        placeholder="Buscar por nombre, categoría o fila..."
+                        className="h-9 pl-9 text-sm"
+                      />
+                    </div>
+                  )}
+
+                  <div className="max-h-[400px] space-y-2 overflow-y-auto overflow-x-hidden rounded-lg border p-3">
                     {previewData.map((item, idx) => {
                       const filaErrores = erroresMapeados[idx] ?? []
-                      const camposConError = new Set(filaErrores.map((error) => error.campo))
-                      const hasError = filasConError.includes(idx)
+                      const camposConError = new Set(filaErrores.map((e) => e.campo))
+                      const hasRowError = filaErrores.length > 0
+
+                      // Category filter
+                      if (selectedCategory) {
+                        const rowCategories = filaErrores.map(categorizeError)
+                        if (!rowCategories.includes(selectedCategory)) return null
+                      }
+
+                      // Search filter
+                      if (errorSearchTerm.trim()) {
+                        const q = errorSearchTerm.trim().toLowerCase()
+                        const rowLabel = `fila ${idx + 2}`.toLowerCase()
+                        const nombre = (item.nombre || '').toLowerCase()
+                        const categoria = (item.categoria || '').toLowerCase()
+                        if (!rowLabel.includes(q) && !nombre.includes(q) && !categoria.includes(q)) return null
+                      }
+
                       return (
                         <div
                           key={idx}
-                          className={`rounded-lg border p-3 text-sm transition-colors ${
-                            hasError
-                              ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/50 dark:bg-rose-950/20'
-                              : 'border-transparent bg-muted/40'
+                          className={`rounded-lg border-l-4 border p-3 text-sm transition-all ${
+                            hasRowError
+                              ? 'border-l-rose-500 border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/10'
+                              : 'border-l-emerald-500 border-transparent bg-muted/30'
                           }`}
                         >
-                          <div className="mb-1.5 flex items-center gap-2">
-                            <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-muted px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                          {/* Row header */}
+                          <div className="flex items-center gap-2 mb-1.5 w-full min-w-0">
+                            <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded bg-muted px-1 text-[10px] font-semibold tabular-nums text-muted-foreground shrink-0">
                               {idx + 2}
                             </span>
-                            <span className={`font-medium ${camposConError.has('nombre') ? 'text-rose-700 dark:text-rose-400' : ''}`}>
+                            {hasRowError ? (
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                            )}
+                            <span className={`font-medium truncate min-w-0 ${camposConError.has('nombre') ? 'text-rose-700 dark:text-rose-400' : ''}`}>
                               {item['nombre '] || item.nombre || 'Sin nombre'}
                             </span>
-                            <span className={`text-xs italic text-muted-foreground ${camposConError.has('categoria') ? 'text-rose-700 dark:text-rose-400' : ''}`}>
-                              {item.categoria ?? 'Sin categoria'}
+                            <span className={`text-xs italic text-muted-foreground truncate min-w-0 ${camposConError.has('categoria') ? 'text-rose-700 dark:text-rose-400' : ''}`}>
+                              {item.categoria ?? 'Sin categoría'}
                             </span>
                           </div>
 
+                          {/* Inline errors — always visible, color-coded by category */}
                           {filaErrores.length > 0 && (
-                            <div className="mb-2 space-y-1">
-                              {filaErrores.map((error) => (
-                                <p key={`${idx}-${error.campo}`} className="text-xs text-rose-700 dark:text-rose-400">
-                                  <span className="font-semibold capitalize">{error.campo}</span>: {error.mensaje}
-                                </p>
-                              ))}
+                            <div className="ml-7 mb-2 space-y-1.5">
+                              {filaErrores.map((error, eIdx) => {
+                                const cat = categorizeError(error)
+                                const config = CATEGORY_CONFIG[cat]
+                                return (
+                                  <div
+                                    key={`${idx}-${error.campo}-${eIdx}`}
+                                    className={`flex items-start gap-2 rounded-md border ${config.bg} px-2.5 py-1.5`}
+                                  >
+                                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${config.dot}`} />
+                                    <div className="min-w-0 flex-1">
+                                      <p className={`text-xs font-semibold capitalize ${config.color}`}>{error.campo}</p>
+                                      <p className="text-xs text-muted-foreground">{error.mensaje}</p>
+                                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                        Valor: <code className="rounded bg-muted px-1 py-0.5">{obtenerValorOriginal(error.valor)}</code>
+                                      </p>
+                                    </div>
+                                  </div>
+                                )
+                              })}
                             </div>
                           )}
 
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          {/* Data summary */}
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground ml-7">
                             <span className={camposConError.has('stock') ? 'text-rose-700 dark:text-rose-400' : ''}>
                               <span className="font-medium">Stock:</span> {obtenerValorLegible(item.stock)}
                             </span>
@@ -809,117 +982,6 @@ export default function ExcelUploadPage() {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Error panel */}
-              {(filteredErrorEntries.length > 0 || generalErrorMessages.length > 0) && (
-                <Card className="border-rose-200 dark:border-rose-900/50">
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/40">
-                          <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-                        </div>
-                        <div>
-                          <CardTitle className="text-base text-rose-900 dark:text-rose-200">Errores encontrados</CardTitle>
-                          <CardDescription className="text-rose-700/70 dark:text-rose-400/70">
-                            Corrige estos problemas en tu Excel y vuelve a subirlo
-                          </CardDescription>
-                        </div>
-                      </div>
-                      {(errorFieldFilter !== 'ALL' || errorSearchTerm) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-rose-700 hover:text-rose-900 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/40"
-                          onClick={() => {
-                            setErrorFieldFilter('ALL')
-                            setErrorSearchTerm('')
-                          }}
-                        >
-                          Limpiar filtros
-                        </Button>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {filaErroresEntries.length > 0 && (
-                      <>
-                        <div className="grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)]">
-                          <Select value={errorFieldFilter} onValueChange={setErrorFieldFilter}>
-                            <SelectTrigger className="h-9 border-rose-200 dark:border-rose-900/50">
-                              <SelectValue placeholder="Todos los campos" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="ALL">Todos los campos</SelectItem>
-                              {availableErrorFields.map((field) => (
-                                <SelectItem key={field} value={field} className="capitalize">
-                                  {field}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={errorSearchTerm}
-                            onChange={(event) => setErrorSearchTerm(event.target.value)}
-                            placeholder="Buscar por fila, campo o valor"
-                            className="h-9 border-rose-200 dark:border-rose-900/50"
-                          />
-                        </div>
-
-                        <div className="rounded-lg border border-rose-200 dark:border-rose-900/50">
-                          {filteredErrorEntries.length > 0 ? (
-                            <Accordion type="multiple" className="divide-y divide-rose-100 dark:divide-rose-900/30">
-                              {filteredErrorEntries.map(({ rowIndex, rowNumber, errores }) => (
-                                <AccordionItem key={rowIndex} value={`error-row-${rowIndex}`}>
-                                  <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                                    <div className="flex w-full items-center justify-between gap-3 text-left">
-                                      <span className="font-medium text-rose-900 dark:text-rose-200">Fila {rowNumber}</span>
-                                      <Badge variant="secondary" className="bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
-                                        {errores.length} {errores.length === 1 ? 'error' : 'errores'}
-                                      </Badge>
-                                    </div>
-                                  </AccordionTrigger>
-                                  <AccordionContent className="px-4 pb-4">
-                                    <ul className="space-y-2 text-sm">
-                                      {errores.map((error, eIdx) => (
-                                        <li
-                                          key={`${rowIndex}-${error.campo}-${eIdx}`}
-                                          className="rounded-lg border border-rose-100 bg-rose-50/50 p-3 text-rose-900 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-200"
-                                        >
-                                          <p className="font-semibold capitalize">{error.campo}</p>
-                                          <p className="text-sm">{error.mensaje}</p>
-                                          <p className="mt-1 text-xs text-muted-foreground">
-                                            Valor recibido: {obtenerValorOriginal(error.valor)}
-                                          </p>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              ))}
-                            </Accordion>
-                          ) : (
-                            <div className="p-4 text-sm text-muted-foreground">
-                              No se encontraron errores con los filtros aplicados.
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {generalErrorMessages.length > 0 && (
-                      <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/30 dark:bg-rose-950/20">
-                        <p className="mb-2 text-sm font-semibold text-rose-900 dark:text-rose-200">Validaciones adicionales</p>
-                        <ul className="list-inside list-disc space-y-1 text-sm text-rose-800 dark:text-rose-300">
-                          {generalErrorMessages.map((error, idx) => (
-                            <li key={`general-${idx}`}>{error}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Confirm */}
               <Card className={hasErrors ? 'opacity-60' : 'border-emerald-200 dark:border-emerald-900/50'}>

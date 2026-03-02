@@ -12,6 +12,7 @@ import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { ApisNetService } from './apisnet.service';
 import { DecolectaService } from './decolecta.service';
 import { ApisPeruService } from './apisperu.service';
+import { MigoService } from './migo.service';
 
 @UseGuards(JwtAuthGuard, TenantContextGuard)
 @Controller('lookups')
@@ -22,6 +23,7 @@ export class LookupsController {
     private readonly apisNet: ApisNetService,
     private readonly apisPeru: ApisPeruService,
     private readonly decolecta: DecolectaService,
+    private readonly migo: MigoService,
   ) {}
 
   @Get('ruc/:ruc')
@@ -35,6 +37,11 @@ export class LookupsController {
         name: 'apisperu',
         enabled: this.apisPeru.isEnabled(),
         handler: () => this.apisPeru.lookupRuc(ruc, { refresh: refreshFlag }),
+      },
+      {
+        name: 'migo',
+        enabled: this.migo.isEnabled(),
+        handler: () => this.migo.lookupRuc(ruc, { refresh: refreshFlag }),
       },
       {
         name: 'apisnet',
@@ -55,6 +62,11 @@ export class LookupsController {
         name: 'apisperu',
         enabled: this.apisPeru.isEnabled(),
         handler: () => this.apisPeru.lookupDni(dni, { refresh: refreshFlag }),
+      },
+      {
+        name: 'migo',
+        enabled: this.migo.isEnabled(),
+        handler: () => this.migo.lookupDni(dni, { refresh: refreshFlag }),
       },
       {
         name: 'apisnet',

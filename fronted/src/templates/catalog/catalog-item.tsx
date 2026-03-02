@@ -11,7 +11,7 @@ export interface CatalogItemProps {
   brand?: string
   logoUrls?: string[]
   details?: { label: string; value: string; iconKey?: string }[]
-  layout?: 'grid' | 'list'
+  layout?: 'grid' | 'list' | 'magazine'
   priceEditor?: React.ReactNode
 }
 
@@ -138,6 +138,68 @@ export function CatalogItem({
         </ul>
       )
     ) : null
+
+  if (layout === 'magazine') {
+    return (
+      <div className="catalog-item group/mag flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100">
+          {imageUrl ? (
+            <BrandLogo
+              src={resolveImageUrl(imageUrl)}
+              alt={title}
+              className="absolute inset-0 h-full w-full object-contain p-6 transition-transform duration-500 ease-out group-hover/mag:scale-105"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-gray-400">
+              Imagen no disponible
+            </div>
+          )}
+        </div>
+        <div className="flex flex-1 flex-col gap-2 p-4">
+          <h3 className="text-base font-bold leading-tight text-gray-900">{title}</h3>
+          {description && (
+            <p className="text-sm text-gray-500 line-clamp-2">{description}</p>
+          )}
+          {details && details.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {details.slice(0, 4).map((detail, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
+                >
+                  {renderSpecIcon(detail.iconKey)}
+                  <span>{detail.value}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
+          {displayLogos && displayLogos.length > 0 ? (
+            <div className="flex gap-2">
+              {displayLogos.map((logo, idx) => (
+                <BrandLogo
+                  key={idx}
+                  src={logo}
+                  alt="logo"
+                  className="h-8 w-8 object-contain"
+                />
+              ))}
+            </div>
+          ) : (
+            <div />
+          )}
+          {(priceEditor || price) && (
+            <div>
+              {priceEditor ?? (
+                <p className="text-lg font-bold text-gray-900">{price}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   if (layout === 'list') {
     return (

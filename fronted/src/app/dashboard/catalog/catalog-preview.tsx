@@ -68,6 +68,7 @@ interface Product {
 interface CatalogPreviewProps {
   products: Product[];
   layout: CatalogLayoutMode;
+  accentColor?: string;
   onRemoveProduct?: (productId: number) => void;
   onPriceChange?: (productId: number, value: number | null) => void;
   onPreviousPriceChange?: (productId: number, value: number | null) => void;
@@ -189,6 +190,7 @@ function buildItemDetails(spec?: ProductSpecification): CatalogItemDetailItem[] 
 export function CatalogPreview({
   products,
   layout,
+  accentColor,
   onRemoveProduct,
   onPriceChange,
   onPreviousPriceChange,
@@ -350,7 +352,7 @@ function getDefaultPreviousPrice(product: Product): number | undefined {
       title: p.name,
       description: p.description,
       price: typeof priceValue === "number" ? formatPrice(priceValue) : undefined,
-      imageUrl: p.imageUrl ?? p.image ?? p.images?.[0],
+      imageUrl: p.image || p.images?.[0] || undefined,
       logos: getLogos(p),
       details: details.length > 0 ? details : undefined,
     };
@@ -363,7 +365,9 @@ function getDefaultPreviousPrice(product: Product): number | undefined {
   const layoutContainerClass =
     layout === "grid"
       ? "catalog-grid mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-      : "catalog-list mx-auto flex max-w-7xl flex-col gap-6";
+      : layout === "magazine"
+        ? "catalog-magazine mx-auto grid max-w-7xl grid-cols-1 gap-6 sm:grid-cols-2"
+        : "catalog-list mx-auto flex max-w-7xl flex-col gap-6";
 
   return (
     <Card>
@@ -416,7 +420,10 @@ function getDefaultPreviousPrice(product: Product): number | undefined {
           <div key={cat} className="rounded-md p-4 odd:bg-muted/50 even:bg-muted">
             <div className="mb-4 text-center">
               <h2 className="text-xl font-semibold">{cat}</h2>
-              <div className="mx-auto mt-2 h-1 w-full bg-primary"></div>
+              <div
+                className="mx-auto mt-2 h-1 w-full rounded-full transition-colors duration-300"
+                style={{ backgroundColor: accentColor || 'hsl(var(--primary))' }}
+              />
             </div>
             <div className={layoutContainerClass}>
               {grouped[cat].map(({ product, item }, index) => {

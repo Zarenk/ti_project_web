@@ -1,8 +1,8 @@
 'use client'
 
-import { memo } from 'react';
-import { AnimatePresence } from 'framer-motion';
-import MessageBubble from './MessageBubble';
+import { Fragment, memo, useMemo } from 'react';
+import EditableMessage from '@/app/dashboard/messages/EditableMessage';
+import { groupMessages } from '@/lib/chat-utils';
 
 interface Message {
   id: number;
@@ -26,21 +26,32 @@ function MessagesListComponent({
   userId,
   onEdit,
 }: MessagesListProps) {
+  const grouped = useMemo(() => groupMessages(messages), [messages]);
+
   return (
-    <AnimatePresence initial={false}>
-      {messages.map((m) => (
-        <MessageBubble
-          key={m.id}
-          id={m.id}
-          text={m.text}
-          file={m.file}
-          createdAt={m.createdAt}
-          isSender={m.senderId === userId}
-          userId={userId}
-          onEdit={onEdit}
-        />
+    <>
+      {grouped.map((m) => (
+        <Fragment key={m.tempId ?? m.id}>
+          {m.showDateSeparator && (
+            <div className="flex items-center gap-3 my-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-[10px] text-muted-foreground font-medium bg-background px-2 py-0.5 rounded-full shadow-sm border">
+                {m.showDateSeparator}
+              </span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+          )}
+          <EditableMessage
+            message={m}
+            isSender={m.senderId === userId}
+            userId={userId}
+            onEdit={onEdit}
+            isFirst={m.isFirst}
+            isLast={m.isLast}
+          />
+        </Fragment>
       ))}
-    </AnimatePresence>
+    </>
   );
 }
 

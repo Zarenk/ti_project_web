@@ -2,10 +2,12 @@
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   generateBoletaXML,
@@ -35,12 +37,18 @@ interface SendDocumentParams {
   certificatePathOverride?: string | null;
   environmentOverride?: string;
   saleId?: number | null;
+  creditNoteId?: number | null;
   subscriptionInvoiceId?: number | null;
 }
 
 @Injectable()
 export class SunatService {
-  constructor(private prismaService: PrismaService) {}
+  private readonly logger = new Logger(SunatService.name);
+
+  constructor(
+    private prismaService: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   async sendDocument(params: SendDocumentParams) {
     const {
@@ -51,6 +59,7 @@ export class SunatService {
       certificatePathOverride,
       environmentOverride,
       saleId,
+      creditNoteId,
       subscriptionInvoiceId,
     } = params;
 
@@ -62,9 +71,12 @@ export class SunatService {
         select: {
           id: true,
           organizationId: true,
+          name: true,
           taxId: true,
           sunatEnvironment: true,
           sunatRuc: true,
+          sunatBusinessName: true,
+          sunatAddress: true,
           sunatSolUserBeta: true,
           sunatSolPasswordBeta: true,
           sunatCertPathBeta: true,
@@ -125,11 +137,16 @@ export class SunatService {
         );
       }
 
+      const emisorDefaults = {
+        razonSocial: company.sunatBusinessName ?? company.name ?? '',
+        direccion: company.sunatAddress ?? '',
+      };
       const payload = {
         ...documentData,
         emisor: {
+          ...emisorDefaults,
           ...(documentData?.emisor ?? {}),
-          ruc,
+          ruc, // company RUC always wins
         },
       };
 
@@ -161,6 +178,9 @@ export class SunatService {
       const correlativo =
         payload.correlativo ?? documentData?.correlativo ?? '000000';
 
+      // Validate serie format against SUNAT requirements
+      this.validateSerieFormat(serie, tipoComprobante, normalizedType);
+
       const zipFileName = `${ruc}-${tipoComprobante}-${serie}-${correlativo}`;
       const zipFilePath = generateZip(zipFileName, signedXml, normalizedType);
       const xmlFolder = resolveBackendPath('sunat', 'xml', normalizedType);
@@ -177,6 +197,7 @@ export class SunatService {
           companyId,
           organizationId: company.organizationId ?? null,
           saleId: saleId ?? null,
+          creditNoteId: creditNoteId ?? null,
           subscriptionInvoiceId: subscriptionInvoiceId ?? null,
           environment,
           documentType: normalizedType,
@@ -210,7 +231,9 @@ export class SunatService {
       const cdrCode = response?.cdrCode ?? null;
       const cdrDescription = response?.cdrDescription ?? null;
       const cdrXml = response?.cdrXml ?? null;
+      const soapFault = response?.soapFault ?? null;
       let status = 'SENT';
+      let errorMessage: string | null = null;
       if (cdrCode) {
         if (cdrCode === '0') {
           status = 'ACCEPTED';
@@ -221,6 +244,14 @@ export class SunatService {
         } else {
           status = 'OBSERVED';
         }
+      } else if (soapFault) {
+        // SUNAT returned a SOAP Fault (no CDR)
+        status = 'FAILED';
+        errorMessage = soapFault;
+      } else {
+        // Response received but no CDR and no fault — mark as SENT for retry
+        errorMessage =
+          'Respuesta recibida de SUNAT pero sin CDR. Será reintentado automáticamente.';
       }
       let cdrFilePath: string | null = null;
       if (cdrXml) {
@@ -241,8 +272,28 @@ export class SunatService {
           cdrFilePath,
           cdrCode,
           cdrDescription,
+          errorMessage,
         },
       });
+
+      this.logger.log(
+        `SUNAT ${environment} [${normalizedType}] ${serie}-${correlativo} → ${status}` +
+          (cdrCode ? ` (CDR: ${cdrCode})` : '') +
+          (cdrDescription ? ` — ${cdrDescription}` : '') +
+          (soapFault ? ` — SOAP Fault: ${soapFault}` : ''),
+      );
+
+      // Fire-and-forget: notify WhatsApp automation when invoice is accepted
+      if (status === 'ACCEPTED' && saleId) {
+        this.eventEmitter.emit('sale.sunat-accepted', {
+          saleId,
+          organizationId: company.organizationId,
+          companyId,
+          documentType: normalizedType,
+          serie,
+          correlativo,
+        });
+      }
 
       return response;
     } catch (error: any) {
@@ -344,7 +395,7 @@ export class SunatService {
   }
 
   getComprobantePdfPath(
-    tipo: 'boleta' | 'factura',
+    tipo: 'boleta' | 'factura' | 'nota_credito',
     filename: string,
     relativePath?: string,
   ): string {
@@ -357,6 +408,50 @@ export class SunatService {
     }
 
     return filePath;
+  }
+
+  /**
+   * Validates that the serie matches SUNAT naming requirements.
+   * - Facturas (01): must start with F
+   * - Boletas (03): must start with B
+   * - Notas de Crédito (07): must start with F or B
+   */
+  private validateSerieFormat(
+    serie: string,
+    tipoComprobante: string,
+    documentType: SunatDocumentType,
+  ) {
+    if (!serie || serie.length < 4) {
+      throw new BadRequestException(
+        `La serie "${serie}" es inválida. Debe tener al menos 4 caracteres (ej: F001, B001).`,
+      );
+    }
+
+    const firstChar = serie.charAt(0).toUpperCase();
+
+    if (tipoComprobante === '01' && firstChar !== 'F') {
+      throw new BadRequestException(
+        `La serie "${serie}" es inválida para facturas. ` +
+          `Las facturas electrónicas deben tener una serie que inicie con "F" (ej: F001). ` +
+          `Corrija la serie en Configuración > Empresa > Comprobantes.`,
+      );
+    }
+
+    if (tipoComprobante === '03' && firstChar !== 'B') {
+      throw new BadRequestException(
+        `La serie "${serie}" es inválida para boletas. ` +
+          `Las boletas electrónicas deben tener una serie que inicie con "B" (ej: B001). ` +
+          `Corrija la serie en Configuración > Empresa > Comprobantes.`,
+      );
+    }
+
+    if (tipoComprobante === '07' && firstChar !== 'F' && firstChar !== 'B') {
+      throw new BadRequestException(
+        `La serie "${serie}" es inválida para notas de crédito. ` +
+          `Debe iniciar con "F" o "B" según el comprobante original. ` +
+          `Corrija la serie en Configuración > Empresa > Comprobantes.`,
+      );
+    }
   }
 
   private normalizeDocumentType(type: string): SunatDocumentType {
@@ -542,5 +637,212 @@ export class SunatService {
       where,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // ── Public verification methods ──────────────────────────
+
+  async getPublicInvoiceByCode(code: string) {
+    const invoice = await this.prismaService.invoiceSales.findUnique({
+      where: { verificationCode: code },
+      include: {
+        company: {
+          select: {
+            name: true,
+            taxId: true,
+            sunatAddress: true,
+            sunatPhone: true,
+            logoUrl: true,
+            sunatRuc: true,
+          },
+        },
+        sales: {
+          select: {
+            total: true,
+            description: true,
+            createdAt: true,
+            client: {
+              select: { name: true, type: true },
+            },
+            salesDetails: {
+              select: {
+                quantity: true,
+                price: true,
+                productId: true,
+                entryDetail: {
+                  select: {
+                    product: {
+                      select: { name: true, barcode: true },
+                    },
+                  },
+                },
+              },
+            },
+            sunatTransmissions: {
+              orderBy: { createdAt: 'desc' as const },
+              take: 1,
+              select: {
+                status: true,
+                cdrCode: true,
+                cdrDescription: true,
+                environment: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!invoice) return null;
+
+    const sale = invoice.sales;
+    const sunatTx = sale.sunatTransmissions?.[0] ?? null;
+    const ruc = invoice.company.sunatRuc ?? invoice.company.taxId ?? null;
+
+    return {
+      verificationCode: invoice.verificationCode,
+      comprobante: {
+        tipo: invoice.tipoComprobante,
+        serie: invoice.serie,
+        correlativo: invoice.nroCorrelativo,
+        moneda: invoice.tipoMoneda ?? 'PEN',
+        fechaEmision: invoice.fechaEmision,
+        total: invoice.total,
+      },
+      emisor: {
+        razonSocial: invoice.company.name,
+        ruc,
+        direccion: invoice.company.sunatAddress,
+        telefono: invoice.company.sunatPhone,
+        logo: invoice.company.logoUrl,
+      },
+      cliente: {
+        nombre: sale.client?.name ?? null,
+        tipoDocumento: sale.client?.type ?? null,
+      },
+      items: sale.salesDetails.map((d) => ({
+        producto: d.entryDetail?.product?.name ?? 'Producto',
+        sku: d.entryDetail?.product?.barcode ?? null,
+        cantidad: d.quantity,
+        precioUnitario: d.price,
+        subtotal: d.quantity * d.price,
+      })),
+      montos: this.calculateMontos(sale.salesDetails, invoice.total),
+      sunat: sunatTx
+        ? {
+            estado: sunatTx.status,
+            codigo: sunatTx.cdrCode,
+            descripcion: sunatTx.cdrDescription,
+            ambiente: sunatTx.environment,
+            fecha: sunatTx.createdAt,
+          }
+        : null,
+      hasPdf: await this.hasStoredPdf(invoice),
+    };
+  }
+
+  async getPublicInvoiceBySearch(ruc: string, serie: string, correlativo: string) {
+    const company = await this.prismaService.company.findFirst({
+      where: {
+        OR: [
+          { sunatRuc: ruc },
+          { taxId: ruc },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!company) return null;
+
+    const invoice = await this.prismaService.invoiceSales.findFirst({
+      where: {
+        companyId: company.id,
+        serie: serie.toUpperCase(),
+        nroCorrelativo: correlativo,
+      },
+      select: { verificationCode: true },
+    });
+
+    if (!invoice?.verificationCode) return null;
+
+    return { verificationCode: invoice.verificationCode };
+  }
+
+  async getPublicPdfPath(code: string): Promise<string | null> {
+    const invoice = await this.prismaService.invoiceSales.findUnique({
+      where: { verificationCode: code },
+      select: {
+        companyId: true,
+        tipoComprobante: true,
+        serie: true,
+        nroCorrelativo: true,
+      },
+    });
+
+    if (!invoice) return null;
+
+    const tipo = invoice.tipoComprobante?.toUpperCase() === 'FACTURA' ? 'factura' : 'boleta';
+    const filename = `${invoice.serie}-${invoice.nroCorrelativo}.pdf`;
+
+    const storedPdf = await this.prismaService.sunatStoredPdf.findFirst({
+      where: {
+        companyId: invoice.companyId,
+        filename,
+      },
+      select: { relativePath: true },
+    });
+
+    if (storedPdf?.relativePath) {
+      const filePath = resolveBackendPath(storedPdf.relativePath);
+      if (fs.existsSync(filePath)) return filePath;
+    }
+
+    // Fallback: try the standard path
+    const standardPath = path.join(
+      resolveBackendPath('comprobantes/pdf', tipo),
+      filename,
+    );
+    if (fs.existsSync(standardPath)) return standardPath;
+
+    return null;
+  }
+
+  private calculateMontos(
+    details: { quantity: number; price: number }[],
+    invoiceTotal: number | null,
+  ) {
+    const subtotal = details.reduce((sum, d) => sum + d.quantity * d.price, 0);
+    const total = invoiceTotal ?? subtotal;
+    const igv = +(total - total / 1.18).toFixed(2);
+    const gravada = +(total - igv).toFixed(2);
+
+    return {
+      gravada,
+      igv,
+      exonerada: 0,
+      inafecta: 0,
+      total,
+    };
+  }
+
+  private async hasStoredPdf(invoice: {
+    companyId: number;
+    serie: string;
+    nroCorrelativo: string;
+    tipoComprobante: string;
+  }): Promise<boolean> {
+    const filename = `${invoice.serie}-${invoice.nroCorrelativo}.pdf`;
+    const stored = await this.prismaService.sunatStoredPdf.findFirst({
+      where: { companyId: invoice.companyId, filename },
+      select: { id: true },
+    });
+    if (stored) return true;
+
+    const tipo = invoice.tipoComprobante?.toUpperCase() === 'FACTURA' ? 'factura' : 'boleta';
+    const standardPath = path.join(
+      resolveBackendPath('comprobantes/pdf', tipo),
+      filename,
+    );
+    return fs.existsSync(standardPath);
   }
 }

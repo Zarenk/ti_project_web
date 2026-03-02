@@ -8,7 +8,8 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 
 @Controller('accounting/hooks/payment-posted')
-// TODO: Re-enable guards after adding auth headers to AccountingHookService
+// FIXME: Guards disabled — hooks llamados internamente sin headers de auth.
+// Re-habilitar cuando AccountingHookService propague JWT en llamadas internas.
 // @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class PaymentPostedController {
   private readonly logger = new Logger(PaymentPostedController.name);

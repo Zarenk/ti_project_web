@@ -6,9 +6,11 @@ import { format } from 'date-fns';
 import { DebitNoteAccountingService } from '../services/debit-note-accounting.service';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { IGV_FACTOR } from '../accounting.constants';
 
 @Controller('accounting/hooks/debit-note-posted')
-// TODO: Re-enable guards after adding auth headers to AccountingHookService
+// FIXME: Guards disabled — hooks llamados internamente sin headers de auth.
+// Re-habilitar cuando AccountingHookService propague JWT en llamadas internas.
 // @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class DebitNotePostedController {
   private readonly logger = new Logger(DebitNotePostedController.name);
@@ -34,7 +36,7 @@ export class DebitNotePostedController {
         return { status: 'not_found' };
       }
       const total = debitNote.total ?? 0;
-      const igv = debitNote.igv ?? +(total - total / 1.18).toFixed(2);
+      const igv = debitNote.igv ?? +(total - total / IGV_FACTOR).toFixed(2);
       const lines = this.mapper.buildEntryFromDebitNote({
         total,
         igv,

@@ -24,4 +24,32 @@ export class SeriesService {
 
     return { exists: !!existingSeries };
   }
+
+  async batchCheckSeries(
+    serials: string[],
+  ): Promise<{ serial: string; exists: boolean }[]> {
+    if (!serials.length) return [];
+
+    const context = this.tenantContext.getContext();
+    const organizationId = context.organizationId ?? null;
+
+    if (organizationId === null) {
+      return serials.map((serial) => ({ serial, exists: false }));
+    }
+
+    const existing = await this.prisma.entryDetailSeries.findMany({
+      where: {
+        serial: { in: serials },
+        organizationId,
+      },
+      select: { serial: true },
+    });
+
+    const existingSet = new Set(existing.map((e) => e.serial));
+
+    return serials.map((serial) => ({
+      serial,
+      exists: existingSet.has(serial),
+    }));
+  }
 }

@@ -7,6 +7,18 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { JurisprudenceJobStatus, JurisprudenceScrapeType, JurisprudenceProcessingStatus } from '@prisma/client';
 import { scrapeQueue } from '../jurisprudence/jurisprudence.queue';
+import { COURT_SECTIONS, PJ_BASE_URL, MAX_PAGES_PER_SECTION, type CourtSection } from './court-sections.config';
+import { JurisprudenceTextExtractorService } from '../jurisprudence-documents/jurisprudence-text-extractor.service';
+
+interface PdfLinkInfo {
+  url: string;
+  title: string;
+  expediente: string;
+  year: number;
+  area: string;
+  chamber: string;
+  category: string;
+}
 
 @Injectable()
 export class JurisprudenceScraperService {
@@ -16,7 +28,10 @@ export class JurisprudenceScraperService {
   private readonly USER_AGENT = 'JurisprudenceBot/1.0 (+mailto:legal@ecoterra.pe)';
   private readonly MAX_RETRIES = 3;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private textExtractor: JurisprudenceTextExtractorService,
+  ) {
     this.ensureStorageDirectory();
   }
 
@@ -43,19 +58,36 @@ export class JurisprudenceScraperService {
   ) {
     this.logger.log(`Triggering scraping job for org ${organizationId}, court: ${court}`);
 
-    // Check if scraping is enabled for this organization
-    const config = await this.prisma.jurisprudenceConfig.findUnique({
+    // Get or create config for this organization
+    let config = await this.prisma.jurisprudenceConfig.findUnique({
       where: { organizationId },
     });
 
-    if (!config || !config.scrapingEnabled) {
+    if (!config) {
+      // Auto-create config with scraping enabled for the requested court
+      config = await this.prisma.jurisprudenceConfig.create({
+        data: {
+          organizationId,
+          companyId,
+          ragEnabled: true,
+          scrapingEnabled: true,
+          courtsEnabled: [court],
+        },
+      });
+      this.logger.log(`Auto-created JurisprudenceConfig for org ${organizationId}`);
+    }
+
+    if (!config.scrapingEnabled) {
       throw new Error('Scraping is not enabled for this organization');
     }
 
-    // Check court is in enabled list
-    const courtsEnabled = config.courtsEnabled as string[];
+    // Check court is in enabled list — auto-add if not present
+    const courtsEnabled = (config.courtsEnabled as string[]) || [];
     if (!courtsEnabled.includes(court)) {
-      throw new Error(`Court "${court}" is not enabled for scraping`);
+      await this.prisma.jurisprudenceConfig.update({
+        where: { organizationId },
+        data: { courtsEnabled: [...courtsEnabled, court] },
+      });
     }
 
     // Create scrape job
@@ -153,7 +185,7 @@ export class JurisprudenceScraperService {
   }
 
   /**
-   * Scrape documents from a specific court
+   * Scrape documents from a specific court by crawling its web sections.
    */
   private async scrapeCourt(
     organizationId: number,
@@ -162,12 +194,265 @@ export class JurisprudenceScraperService {
     startYear?: number,
     endYear?: number,
   ): Promise<Array<{ downloaded: boolean; failed: boolean }>> {
-    // TODO: Implement court-specific scraping logic
-    // This would vary by court (Corte Suprema, Corte Superior, etc.)
-    // For now, return empty array as placeholder
+    const sections = COURT_SECTIONS[court];
+    if (!sections || sections.length === 0) {
+      this.logger.warn(`No sections configured for court: ${court}`);
+      return [];
+    }
 
-    this.logger.warn(`Court-specific scraping not yet implemented for: ${court}`);
-    return [];
+    this.logger.log(`Scraping ${sections.length} sections for court: ${court}`);
+    const results: Array<{ downloaded: boolean; failed: boolean }> = [];
+
+    for (const section of sections) {
+      this.logger.log(`Scraping section: ${section.name}`);
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore && page <= MAX_PAGES_PER_SECTION) {
+        try {
+          const html = await this.fetchPage(section.url, page);
+          const $ = cheerio.load(html);
+          const pdfLinks = this.extractPdfLinks($, section);
+
+          if (pdfLinks.length === 0) {
+            this.logger.log(`No more PDFs found on page ${page} of section: ${section.name}`);
+            hasMore = false;
+            break;
+          }
+
+          this.logger.log(`Found ${pdfLinks.length} PDFs on page ${page} of section: ${section.name}`);
+
+          for (const link of pdfLinks) {
+            // Filter by year range if specified
+            if (startYear && link.year < startYear) continue;
+            if (endYear && link.year > endYear) continue;
+
+            try {
+              // Check if document already exists
+              const existing = await this.prisma.jurisprudenceDocument.findFirst({
+                where: {
+                  organizationId,
+                  sourceUrl: link.url,
+                  deletedAt: null,
+                },
+              });
+
+              if (existing) {
+                this.logger.log(`Document already exists, skipping: ${link.title}`);
+                results.push({ downloaded: false, failed: false });
+                continue;
+              }
+
+              // Download PDF
+              const { filePath, fileHash, fileSize } = await this.downloadPdf(link.url, organizationId);
+
+              // Create document record
+              const doc = await this.createDocument({
+                organizationId,
+                companyId,
+                title: link.title,
+                court,
+                chamber: link.chamber,
+                expediente: link.expediente,
+                year: link.year,
+                publishDate: new Date(link.year, 0, 1), // January 1st of the year
+                sourceUrl: link.url,
+                pdfPath: filePath,
+                fileHash,
+                fileName: path.basename(filePath),
+                fileSize,
+              });
+
+              // Extract text and generate embeddings
+              try {
+                await this.textExtractor.extractAndProcess(doc.id);
+              } catch (extractError) {
+                this.logger.warn(
+                  `Text extraction failed for ${doc.id}, document still saved: ${(extractError as Error).message}`,
+                );
+              }
+
+              results.push({ downloaded: true, failed: false });
+            } catch (error) {
+              this.logger.error(`Failed to process PDF ${link.url}: ${(error as Error).message}`);
+              results.push({ downloaded: false, failed: true });
+            }
+          }
+
+          // Check if there's a next page
+          hasMore = this.hasNextPage($, page);
+          page++;
+        } catch (error) {
+          this.logger.error(
+            `Failed to fetch page ${page} of section ${section.name}: ${(error as Error).message}`,
+          );
+          hasMore = false;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Fetch an HTML page from the PJ website with rate limiting.
+   */
+  private async fetchPage(sectionUrl: string, page: number): Promise<string> {
+    await this.sleep(this.RATE_LIMIT_MS);
+
+    const url = page === 1 ? sectionUrl : `${sectionUrl}?WCM_PI=${page}`;
+
+    this.logger.log(`Fetching page: ${url}`);
+
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': this.USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8',
+      },
+      timeout: 30000,
+    });
+
+    if (this.detectCaptcha(response.data)) {
+      throw new Error('CAPTCHA detected while fetching page');
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Extract PDF links from a parsed HTML page.
+   * PJ.gob.pe PDFs follow pattern: /wps/wcm/connect/[HASH]/[FILENAME].pdf
+   */
+  private extractPdfLinks($: cheerio.CheerioAPI, section: CourtSection): PdfLinkInfo[] {
+    const links: PdfLinkInfo[] = [];
+    const seenUrls = new Set<string>();
+
+    // Find all <a> tags linking to PDFs
+    $('a[href]').each((_, el) => {
+      const href = $(el).attr('href') || '';
+
+      // Match PDF links from PJ website
+      if (!href.toLowerCase().includes('.pdf')) return;
+
+      // Build absolute URL
+      let absoluteUrl: string;
+      if (href.startsWith('http')) {
+        absoluteUrl = href;
+      } else {
+        absoluteUrl = `${PJ_BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
+      }
+
+      // Deduplicate
+      const cleanUrl = absoluteUrl.split('?')[0]; // Remove query params for dedup
+      if (seenUrls.has(cleanUrl)) return;
+      seenUrls.add(cleanUrl);
+
+      // Get link text for metadata
+      const linkText = $(el).text().trim();
+      const parentText = $(el).parent().text().trim();
+
+      // Parse metadata from the link text and filename
+      const metadata = this.parseDocumentMetadata(linkText, parentText, href, section);
+
+      links.push({
+        url: absoluteUrl,
+        ...metadata,
+      });
+    });
+
+    return links;
+  }
+
+  /**
+   * Parse document metadata from link text and filename.
+   * Extracts expediente number, year, and title from PJ document names.
+   */
+  private parseDocumentMetadata(
+    linkText: string,
+    parentText: string,
+    href: string,
+    section: CourtSection,
+  ): Omit<PdfLinkInfo, 'url'> {
+    // Try to extract expediente (case number) from text
+    // Common patterns: "N°03-2012/CJ-116", "CAS Nº 0301-2011", "RN N° 0956-2011"
+    const expedientePatterns = [
+      /N[°º]\s*(\d{1,4}[-–]\d{4}(?:\/[A-Z]+-\d+)?)/i,
+      /CAS\.?\s*(?:N[°º])?\s*(\d{1,4}[-–]\d{4})/i,
+      /R\.?N\.?\s*(?:N[°º])?\s*(\d{1,4}[-–]\d{4})/i,
+      /(?:Exp|Expediente)\.?\s*(?:N[°º])?\s*(\d{1,5}[-–]\d{4})/i,
+    ];
+
+    let expediente = 'SIN-EXPEDIENTE';
+    const textToSearch = `${linkText} ${parentText}`;
+
+    for (const pattern of expedientePatterns) {
+      const match = textToSearch.match(pattern);
+      if (match) {
+        expediente = match[1].replace('–', '-');
+        break;
+      }
+    }
+
+    // Try to extract year from text or filename
+    let year = new Date().getFullYear();
+    const yearMatch = textToSearch.match(/\b(20\d{2}|19\d{2})\b/);
+    if (yearMatch) {
+      year = parseInt(yearMatch[1], 10);
+    } else {
+      // Try from filename
+      const filenameYearMatch = href.match(/(\d{4})/);
+      if (filenameYearMatch) {
+        const parsedYear = parseInt(filenameYearMatch[1], 10);
+        if (parsedYear >= 1990 && parsedYear <= new Date().getFullYear()) {
+          year = parsedYear;
+        }
+      }
+    }
+
+    // Build title from link text or fallback to filename
+    let title = linkText || parentText;
+    if (!title || title.length < 5) {
+      // Extract from filename
+      const filename = decodeURIComponent(href.split('/').pop() || '')
+        .replace(/\.pdf$/i, '')
+        .replace(/\+/g, ' ')
+        .replace(/%2B/g, ' ');
+      title = filename;
+    }
+
+    // Clean up title
+    title = title.substring(0, 500).trim();
+
+    return {
+      title,
+      expediente,
+      year,
+      area: section.area,
+      chamber: section.chamber,
+      category: section.category,
+    };
+  }
+
+  /**
+   * Check if there's a next page in the WCM pagination.
+   */
+  private hasNextPage($: cheerio.CheerioAPI, currentPage: number): boolean {
+    // WCM pagination typically shows "Página X de Y" text
+    const paginationText = $('body').text();
+    const pageMatch = paginationText.match(
+      /[Pp](?:á|a)gina\s+(\d+)\s+de\s+(\d+)/,
+    );
+
+    if (pageMatch) {
+      const current = parseInt(pageMatch[1], 10);
+      const total = parseInt(pageMatch[2], 10);
+      return current < total;
+    }
+
+    // Alternative: check for "next page" links
+    const hasNextLink = $('a[title*="siguiente"], a[title*="Siguiente"], a.next, a[title*="next"]').length > 0;
+    return hasNextLink;
   }
 
   /**

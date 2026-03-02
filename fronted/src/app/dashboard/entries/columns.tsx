@@ -17,6 +17,9 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
+import { useTenantSelection } from '@/context/tenant-selection-context';
 import { toast } from 'sonner';
 import { deleteEntry, getPdfGuiaUrl, getPdfUrl } from './entries.api';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
@@ -207,13 +210,14 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
 
         const entries = row.original
 
-        const router = useRouter(); // Usa useRouter dentro del componente React
+        const router = useRouter();
+        const queryClient = useQueryClient();
+        const { selection } = useTenantSelection();
         const handleRemoveEntry = async (id: number) => {
           try {
-            //console.log(id)
-            await deleteEntry(id); // Llama a la API para eliminar el producto
-            toast.success("Registro eliminado correctamente."); // Notificación de éxito
-            router.refresh(); // Refresca los datos de la página
+            await deleteEntry(id);
+            toast.success("Registro eliminado correctamente.");
+            queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) });
           } catch (error: any) {
             toast.error(error.message || "No se pudo eliminar el registro.");
           }

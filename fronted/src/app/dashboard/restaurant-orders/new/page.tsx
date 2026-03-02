@@ -16,6 +16,8 @@ import { UtensilsCrossed, ShoppingBag, Truck, Plus, Minus, Search, ImageOff, Ale
 import { resolveImageUrl } from "@/lib/images";
 import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { getStores } from "@/app/dashboard/stores/stores.api";
 import { getClients } from "@/app/dashboard/clients/clients.api";
 import { getCategories } from "@/app/dashboard/categories/categories.api";
@@ -42,6 +44,9 @@ import { RESTAURANT_ORDER_FORM_GUIDE_STEPS } from "./restaurant-order-form-guide
   isDish?: boolean;
 };
 
+// Stable empty array to prevent infinite re-render loops in bridge useEffects.
+const STABLE_EMPTY: any[] = []
+
  type OrderItem = {
   productId: number;
   name: string;
@@ -51,7 +56,7 @@ import { RESTAURANT_ORDER_FORM_GUIDE_STEPS } from "./restaurant-order-form-guide
 
 export default function NewRestaurantOrderPage() {
   const router = useRouter();
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
   const { info: verticalInfo } = useVerticalConfig();
   const isRestaurant = verticalInfo?.businessVertical === "RESTAURANTS";
 
@@ -133,28 +138,19 @@ export default function NewRestaurantOrderPage() {
   }, [items]);
   const total = subtotal;
 
+  const { data: storesFromQuery = STABLE_EMPTY, isLoading: storesQueryLoading } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let active = true;
-    const loadStores = async () => {
-      try {
-        const data = await getStores();
-        const list = Array.isArray(data) ? data.map((s: any) => ({ id: s.id, name: s.name })) : [];
-        if (!active) return;
-        setStores(list);
-        if (!list.find((s) => s.id === storeId) && list.length > 0) {
-          setStoreId(list[0].id);
-        }
-      } catch (err) {
-        console.error("Error loading stores", err);
-      } finally {
-        if (active) setStoresLoading(false);
-      }
-    };
-    loadStores();
-    return () => {
-      active = false;
-    };
-  }, [version]);
+    const list = Array.isArray(storesFromQuery) ? storesFromQuery.map((s: any) => ({ id: s.id, name: s.name })) : [];
+    setStores(list);
+    setStoresLoading(storesQueryLoading);
+    if (!list.find((s) => s.id === storeId) && list.length > 0) {
+      setStoreId(list[0].id);
+    }
+  }, [storesFromQuery, storesQueryLoading]);
 
   const loadTables = useCallback(async () => {
     if (!isRestaurant) {
@@ -193,7 +189,7 @@ export default function NewRestaurantOrderPage() {
 
   useEffect(() => {
     loadTables();
-  }, [loadTables, version]);
+  }, [loadTables]);
 
   // Real-time table updates via WebSocket
   useKitchenSocket({
@@ -206,41 +202,24 @@ export default function NewRestaurantOrderPage() {
     }, [loadTables]),
   });
 
+  const { data: clientsFromQuery = STABLE_EMPTY, isLoading: clientsQueryLoading } = useQuery({
+    queryKey: queryKeys.clients.list(selection.orgId, selection.companyId),
+    queryFn: () => getClients(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let active = true;
-    const loadClients = async () => {
-      try {
-        const data = await getClients();
-        if (!active) return;
-        setClients(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Error loading clients", err);
-      } finally {
-        if (active) setClientsLoading(false);
-      }
-    };
-    loadClients();
-    return () => {
-      active = false;
-    };
-  }, [version]);
+    setClients(Array.isArray(clientsFromQuery) ? clientsFromQuery : []);
+    setClientsLoading(clientsQueryLoading);
+  }, [clientsFromQuery, clientsQueryLoading]);
 
+  const { data: categoriesFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: () => getCategories(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let active = true;
-    const loadCategories = async () => {
-      try {
-        const data = await getCategories();
-        if (!active) return;
-        setCategories(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Error loading categories", err);
-      }
-    };
-    loadCategories();
-    return () => {
-      active = false;
-    };
-  }, [version]);
+    setCategories(Array.isArray(categoriesFromQuery) ? categoriesFromQuery : []);
+  }, [categoriesFromQuery]);
 
   useEffect(() => {
     let active = true;
@@ -299,7 +278,7 @@ export default function NewRestaurantOrderPage() {
     return () => {
       active = false;
     };
-  }, [storeId, version]);
+  }, [storeId]);
 
   useEffect(() => {
     let active = true;

@@ -16,6 +16,9 @@ import {
   Calendar,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -40,6 +43,10 @@ type StoresGalleryProps = {
 
 export function StoresGallery({ data }: StoresGalleryProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
+  const invalidateStores = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.stores.root(selection.orgId, selection.companyId) })
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Stores | null>(null)
   const [viewTarget, setViewTarget] = useState<Stores | null>(null)
@@ -50,7 +57,7 @@ export function StoresGallery({ data }: StoresGalleryProps) {
     try {
       await deleteStore(deleteTarget.id)
       toast.success("Tienda eliminada correctamente.")
-      router.refresh()
+      invalidateStores()
     } catch (error: any) {
       toast.error(error?.message || "No se pudo eliminar la tienda.")
     } finally {

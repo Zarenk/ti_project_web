@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import * as crypto from 'crypto';
 
 export interface SaleDetail {
   productId: number;
@@ -36,7 +37,11 @@ async function allocateInvoiceSequence(
         ? 'F001'
         : normalizedType === 'BOLETA'
           ? 'B001'
-          : 'S001';
+          : normalizedType === 'NC_FACTURA'
+            ? 'FC01'
+            : normalizedType === 'NC_BOLETA'
+              ? 'BC01'
+              : 'S001';
 
     const lastInvoice = await prisma.invoiceSales.findFirst({
       where: {
@@ -209,6 +214,7 @@ export async function executeSale(
     organizationId?: number | null;
     companyId?: number | null;
     referenceId?: string | null;
+    fechaEmision?: string;
   },
 ) {
   const {
@@ -228,14 +234,17 @@ export async function executeSale(
     organizationId,
     companyId,
     referenceId,
+    fechaEmision,
   } = params;
 
   const saleOrganizationId = organizationId ?? null;
   const igvRate = 0.18;
-  const taxableTotal = total;
+  // total is IGV-inclusive (what the customer pays).
+  // taxableTotal (base) = total / 1.18, igv = total - base.
+  const taxableTotal = Math.round((total / (1 + igvRate)) * 100) / 100;
   const exemptTotal = 0;
   const unaffectedTotal = 0;
-  const igvTotal = Number((taxableTotal * igvRate).toFixed(2));
+  const igvTotal = Math.round((total - taxableTotal) * 100) / 100;
 
   const sale = await prisma.$transaction(async (prismaTx) => {
     const sale = await prismaTx.sales.create({
@@ -436,6 +445,7 @@ export async function executeSale(
         documentType: tipoComprobante,
       });
 
+      const verificationCode = crypto.randomBytes(8).toString('base64url');
       await prismaTx.invoiceSales.create({
         data: {
           salesId: sale.id,
@@ -445,7 +455,8 @@ export async function executeSale(
           tipoComprobante,
           tipoMoneda: tipoMoneda || 'PEN',
           total,
-          fechaEmision: new Date(),
+          fechaEmision: fechaEmision ? new Date(fechaEmision) : new Date(),
+          verificationCode,
           createdAt: new Date(),
           updatedAt: new Date(),
         },

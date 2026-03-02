@@ -274,8 +274,8 @@ export class WebSalesService {
         `${firstName ?? ''} ${lastName ?? ''}`.trim();
 
       if (documentNumber && documentType && orderName) {
-        const existingClient = await this.prisma.client.findUnique({
-          where: { typeNumber: documentNumber },
+        const existingClient = await this.prisma.client.findFirst({
+          where: { typeNumber: documentNumber, organizationId: inputOrganizationId ?? undefined },
           select: { id: true },
         });
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, type ComponentType } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import {
   Building2,
@@ -42,6 +43,7 @@ import {
 } from "@/lib/onboarding-progress"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { queryKeys } from "@/lib/query-keys"
 
 type StepDefinition = {
   key: OnboardingStepKey
@@ -157,14 +159,9 @@ function formatDate(value?: string | null) {
 }
 
 export default function OnboardingWizardPage() {
-  const { selection, version } = useTenantSelection()
-  const selectionKey = useMemo(
-    () => `${selection.companyId ?? "none"}-${version}`,
-    [selection.companyId, version],
-  )
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
   const [progress, setProgress] = useState<OnboardingProgress | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [savingStep, setSavingStep] = useState<OnboardingStepKey | null>(null)
   const [clearingDemo, setClearingDemo] = useState(false)
   const [seedingDemo, setSeedingDemo] = useState(false)
@@ -173,25 +170,26 @@ export default function OnboardingWizardPage() {
   const [sunatForm, setSunatForm] = useState<SunatFormState>(defaultSunatForm)
   const [dataForm, setDataForm] = useState<DataFormState>(defaultDataForm)
 
-  useEffect(() => {
-    loadProgress()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectionKey])
+  const onboardingKey = queryKeys.onboarding.progress(selection.orgId, selection.companyId)
 
-  async function loadProgress() {
-    try {
-      setLoading(true)
-      setError(null)
+  const { isLoading: loading, error: queryError } = useQuery({
+    queryKey: onboardingKey,
+    queryFn: async () => {
       const response = await fetchOnboardingProgress()
       setProgress(response)
       hydrateForms(response)
       await prefillFromTenantContext()
-    } catch (err) {
-      console.error(err)
-      setError("No se pudo cargar el estado del onboarding.")
-    } finally {
-      setLoading(false)
-    }
+      return response
+    },
+    enabled: selection.orgId !== null,
+  })
+
+  const error = queryError
+    ? "No se pudo cargar el estado del onboarding."
+    : null
+
+  function loadProgress() {
+    queryClient.invalidateQueries({ queryKey: onboardingKey })
   }
 
   function hydrateForms(data: OnboardingProgress) {

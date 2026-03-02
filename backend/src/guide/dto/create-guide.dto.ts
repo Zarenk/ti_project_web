@@ -6,6 +6,7 @@ import {
   IsArray,
   IsNumber,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -22,8 +23,8 @@ class TransportistaDto {
   @IsNotEmpty()
   razonSocial!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   numeroPlaca?: string;
 }
 
@@ -171,6 +172,14 @@ export class CreateGuideDto {
   @IsNumber()
   pesoBrutoTotal?: number;
 
+  @IsOptional()
+  @IsString()
+  codigoEstablecimientoPartida?: string;
+
+  @IsOptional()
+  @IsString()
+  codigoEstablecimientoLlegada?: string;
+
   @IsObject()
   @ValidateNested()
   @Type(() => TransportistaDto)
@@ -185,4 +194,29 @@ export class CreateGuideDto {
   @ValidateNested({ each: true })
   @Type(() => ItemDto)
   items!: ItemDto[];
+
+  // Inter-store transfer fields (optional)
+  @IsOptional()
+  @IsBoolean()
+  isInterStore?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  sourceStoreId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  destinationStoreId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  userId?: number;
+
+  @IsOptional()
+  @IsArray()
+  transferItems?: {
+    productId: number;
+    quantity: number;
+    serials?: string[];
+  }[];
 }

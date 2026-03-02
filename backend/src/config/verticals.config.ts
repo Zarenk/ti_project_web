@@ -360,6 +360,41 @@ const MANUFACTURING_PRODUCT_SCHEMA: VerticalProductSchema = {
   ],
 };
 
+const GYM_PRODUCT_SCHEMA: VerticalProductSchema = {
+  inventoryTracking: 'by_product',
+  pricingModel: 'uniform',
+  fields: [
+    {
+      key: 'membership_type',
+      label: 'Tipo de membresia',
+      type: 'select',
+      options: ['MENSUAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL', 'PASE_DIARIO'],
+      required: true,
+      group: 'membership',
+    },
+    {
+      key: 'duration_days',
+      label: 'Duracion (dias)',
+      type: 'number',
+      required: true,
+      group: 'membership',
+    },
+    {
+      key: 'max_freezes',
+      label: 'Congelaciones permitidas',
+      type: 'number',
+      group: 'membership',
+    },
+    {
+      key: 'includes_classes',
+      label: 'Incluye clases grupales',
+      type: 'select',
+      options: ['SI', 'NO'],
+      group: 'benefits',
+    },
+  ],
+};
+
 export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
   [BusinessVertical.GENERAL]: {
     name: BusinessVertical.GENERAL,
@@ -719,6 +754,87 @@ export const VERTICAL_REGISTRY: Record<BusinessVertical, VerticalConfig> = {
     },
     requiresDataMigration: true,
     isActive: false,
+    version: '1.0.0',
+  },
+  [BusinessVertical.GYM]: {
+    name: BusinessVertical.GYM,
+    displayName: 'Gimnasio',
+    description:
+      'Vertical especializado para gimnasios con membresias, check-in, clases y entrenadores.',
+    icon: 'dumbbell',
+    features: {
+      sales: true,
+      inventory: true,
+      production: false,
+      reservations: true,
+      appointments: true,
+      multiWarehouse: false,
+      lotTracking: false,
+      serialNumbers: false,
+      tableManagement: false,
+      kitchenDisplay: false,
+      workOrders: false,
+      projectTracking: false,
+      posIntegration: true,
+      ecommerceIntegration: false,
+      deliveryPlatforms: false,
+      accounting: true,
+      cashRegister: true,
+      quotes: false,
+    },
+    ui: {
+      theme: 'default',
+      dashboardLayout: 'sales-focused',
+      templates: {
+        invoice: 'standard-invoice',
+        receipt: 'standard-receipt',
+        report: 'sales-report',
+      },
+      customMenuItems: [
+        {
+          label: 'Dashboard',
+          path: '/dashboard/gym',
+          icon: 'dashboard',
+        },
+        {
+          label: 'Miembros',
+          path: '/dashboard/gym/members',
+          icon: 'members',
+        },
+        {
+          label: 'Membresias',
+          path: '/dashboard/gym/memberships',
+          icon: 'membership',
+        },
+        {
+          label: 'Check-in',
+          path: '/dashboard/gym/checkin',
+          icon: 'checkin',
+        },
+        {
+          label: 'Clases',
+          path: '/dashboard/gym/classes',
+          icon: 'classes',
+        },
+        {
+          label: 'Entrenadores',
+          path: '/dashboard/gym/trainers',
+          icon: 'trainers',
+        },
+      ],
+    },
+    productSchema: GYM_PRODUCT_SCHEMA,
+    fiscal: {
+      taxCalculation: 'service',
+      requiredFields: ['tax_id'],
+      invoiceFormat: 'simplified',
+      taxCategories: ['services'],
+    },
+    migrations: {
+      onActivate: ['setup_gym_defaults', 'setup_gym_classes'],
+    },
+    requiresDataMigration: false,
+    isActive: true,
     version: '1.0.0',
   },
 };

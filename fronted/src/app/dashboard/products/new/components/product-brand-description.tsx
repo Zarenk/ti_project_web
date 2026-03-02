@@ -34,6 +34,7 @@ export const ProductBrandDescription = memo(function ProductBrandDescription({
   register,
   setValue,
   isProcessing,
+  addStockMode,
   brands,
   isLoadingBrands,
   hasBrand,
@@ -50,9 +51,10 @@ export const ProductBrandDescription = memo(function ProductBrandDescription({
             {<OptionalChip filled={hasBrand} />}
           </Label>
           <Input
-            disabled={isProcessing || isLoadingBrands}
+            disabled={isProcessing || isLoadingBrands || addStockMode}
             list="brand-options"
             maxLength={50}
+            className={addStockMode ? 'bg-muted/50 text-muted-foreground' : undefined}
             {...register('brand')}
           />
           <datalist id="brand-options">
@@ -78,6 +80,8 @@ export const ProductBrandDescription = memo(function ProductBrandDescription({
         </Label>
         <Input
           maxLength={200}
+          readOnly={addStockMode}
+          className={addStockMode ? 'bg-muted/50 text-muted-foreground cursor-not-allowed' : undefined}
           {...register('description')}
         />
         {form.formState.errors.description && (

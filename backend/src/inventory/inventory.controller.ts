@@ -475,4 +475,123 @@ export class InventoryController {
     );
   }
 
+  @Get('transfers')
+  async listTransfers(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const take = Math.min(Number(pageSize) || 50, 100);
+    const skip = ((Number(page) || 1) - 1) * take;
+
+    const where = organizationId ? { organizationId } : {};
+
+    const [items, total] = await Promise.all([
+      this.prisma.transfer.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, barcode: true } },
+          sourceStore: { select: { id: true, name: true } },
+          destinationStore: { select: { id: true, name: true } },
+          shippingGuide: {
+            select: {
+              id: true,
+              serie: true,
+              correlativo: true,
+              motivoTraslado: true,
+              cdrAceptado: true,
+              status: true,
+              puntoPartida: true,
+              puntoLlegada: true,
+              fechaTraslado: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take,
+        skip,
+      }),
+      this.prisma.transfer.count({ where }),
+    ]);
+
+    return { items, total, page: Number(page) || 1, pageSize: take };
+  }
+
+  @Get('product-transfers/:productId')
+  async listProductTransfers(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Param('productId') productId: string,
+  ) {
+    const pid = Number(productId);
+    if (!pid) return [];
+
+    const where: any = { productId: pid };
+    if (organizationId) where.organizationId = organizationId;
+
+    return this.prisma.transfer.findMany({
+      where,
+      include: {
+        sourceStore: { select: { id: true, name: true } },
+        destinationStore: { select: { id: true, name: true } },
+        shippingGuide: {
+          select: {
+            id: true,
+            serie: true,
+            correlativo: true,
+            cdrAceptado: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  @Get('/export/:storeId')
+  async exportInventoryExcel(
+    @Param('storeId') storeId: string,
+    @Query('categoryId') categoryId?: string,
+    @CurrentTenant('organizationId') organizationId?: number | null,
+    @CurrentTenant('companyId') companyId?: number | null,
+    @Res() res?: Response,
+  ) {
+    const numericStoreId = parseInt(storeId, 10);
+    if (isNaN(numericStoreId)) {
+      throw new BadRequestException('storeId debe ser un número válido');
+    }
+
+    const store = await this.prisma.store.findFirst({
+      where: {
+        id: numericStoreId,
+        ...(organizationId ? { organizationId } : {}),
+      },
+      select: { name: true },
+    });
+
+    const orgName = organizationId
+      ? (
+          await this.prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { name: true },
+          })
+        )?.name ?? undefined
+      : undefined;
+
+    const buffer = await this.inventoryService.generateInventoryExcel(
+      numericStoreId,
+      categoryId ? parseInt(categoryId, 10) : undefined,
+      store?.name ?? undefined,
+      orgName,
+    );
+
+    const filename = `inventario-${store?.name?.replace(/\s+/g, '_') ?? numericStoreId}-${format(new Date(), 'yyyyMMdd')}.xlsx`;
+
+    res!.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length.toString(),
+    });
+    res!.end(buffer);
+  }
 }

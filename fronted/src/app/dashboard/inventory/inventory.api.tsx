@@ -477,6 +477,21 @@ export async function getProductSales(productId: number) {
   }
 }
 
+export async function getProductTransfers(productId: number) {
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/product-transfers/${productId}`,
+    );
+    if (response.status === 404) return [];
+    if (!response.ok) throw new Error("Error al obtener traslados del producto");
+    return response.json();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return [];
+    console.error("Error al obtener traslados del producto:", error);
+    return [];
+  }
+}
+
 export async function getCategoriesFromInventory(): Promise<string[]> {
   try {
     const response = await authFetch(`${BACKEND_URL}/api/category`);
@@ -612,7 +627,7 @@ interface ExportInventoryExcelOptions {
   withStockOnly?: boolean;
 }
 
-export function exportInventoryExcel({
+export async function exportInventoryExcel({
   storeId,
   categoryId,
   brandId,
@@ -638,10 +653,26 @@ export function exportInventoryExcel({
   }
 
   const queryString = params.toString();
-  const url = `${BACKEND_URL}/api/inventory/export/${storeId}${queryString ? `?${queryString}` : ''}`;
+  const url = `/inventory/export/${storeId}${queryString ? `?${queryString}` : ''}`;
 
-  // Abre directamente en nueva pestaña para que el navegador descargue el archivo
-  window.open(url, '_blank');
+  const res = await authFetch(url);
+  if (!res.ok) {
+    throw new Error('Error al exportar inventario');
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') || '';
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+  const filename = filenameMatch?.[1] || `inventario-${storeId}.xlsx`;
+
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
 }
 
 // ==================== INVENTORY SNAPSHOTS ====================

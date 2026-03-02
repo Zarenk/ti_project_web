@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactElement } from "react"
+import { type ReactElement } from "react"
 
+import { useQuery } from "@tanstack/react-query"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
 import { setTenantSelection } from "@/utils/tenant-preferences"
@@ -9,58 +10,36 @@ import { useTenantSelection } from "@/context/tenant-selection-context"
 
 export function DashboardCompanyName(): ReactElement {
   const { settings } = useSiteSettings()
-  const { selection, version } = useTenantSelection()
-  const [organizationName, setOrganizationName] = useState<string | null>(null)
-  const [companyName, setCompanyName] = useState<string | null>(null)
-  const lastRequestIdRef = useRef(0)
+  const { selection } = useTenantSelection()
 
-  useEffect(() => {
-    let cancelled = false
+  const { data: tenantSummary } = useQuery({
+    queryKey: ["tenant", selection.orgId, selection.companyId, "currentTenant"],
+    queryFn: async () => {
+      const summary = await getCurrentTenant()
+      const resolvedOrg = summary.organization ?? null
+      const resolvedCompany = summary.company ?? null
 
-    const resolveTenantDisplay = async () => {
-      lastRequestIdRef.current += 1
-      const requestId = lastRequestIdRef.current
-
-      try {
-        const summary = await getCurrentTenant()
-        if (cancelled || requestId !== lastRequestIdRef.current) {
-          return
-        }
-
-        const resolvedOrg = summary.organization ?? null
-        const resolvedCompany = summary.company ?? null
-
-        const normalizedOrgName = resolvedOrg?.name?.trim() ?? ""
-        const normalizedCompanyName = resolvedCompany?.name?.trim() ?? ""
-
-        setOrganizationName(normalizedOrgName.length > 0 ? normalizedOrgName : null)
-        setCompanyName(normalizedCompanyName.length > 0 ? normalizedCompanyName : null)
-
-        const resolvedSelection = {
-          orgId: resolvedOrg?.id ?? null,
-          companyId: resolvedCompany?.id ?? null,
-        }
-        if (
-          resolvedSelection.orgId !== (selection.orgId ?? null) ||
-          resolvedSelection.companyId !== (selection.companyId ?? null)
-        ) {
-          setTenantSelection(resolvedSelection)
-        }
-      } catch {
-        if (cancelled || requestId !== lastRequestIdRef.current) {
-          return
-        }
-        setOrganizationName(null)
-        setCompanyName(null)
+      const resolvedSelection = {
+        orgId: resolvedOrg?.id ?? null,
+        companyId: resolvedCompany?.id ?? null,
       }
-    }
+      if (
+        resolvedSelection.orgId !== (selection.orgId ?? null) ||
+        resolvedSelection.companyId !== (selection.companyId ?? null)
+      ) {
+        setTenantSelection(resolvedSelection)
+      }
 
-    void resolveTenantDisplay()
+      return {
+        organizationName: resolvedOrg?.name?.trim() || null,
+        companyName: resolvedCompany?.name?.trim() || null,
+      }
+    },
+    enabled: selection.orgId !== null,
+  })
 
-    return () => {
-      cancelled = true
-    }
-  }, [selection.orgId, selection.companyId, version])
+  const organizationName = tenantSummary?.organizationName ?? null
+  const companyName = tenantSummary?.companyName ?? null
 
   const siteCompanyName = settings.company?.name?.trim() ?? null
   const displayCompanyName =

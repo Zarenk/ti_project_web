@@ -1,13 +1,13 @@
 "use client";
 
 import { memo, useMemo, Dispatch, SetStateAction } from 'react';
-import Image from 'next/image';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Filter, ArrowUpDown } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Filter, ArrowUpDown, Search, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatRelativeTime } from '@/lib/chat-utils';
 
 interface ChatClient {
   userId: number;
@@ -76,88 +76,127 @@ function ClientListComponent({
 
   return (
     <Card className="w-full md:w-80 flex flex-col overflow-hidden max-h-[70vh] md:max-h-none md:h-full">
-      <div className="px-4 py-0 border-b flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Conversaciones</h2>
-        <div className="flex gap-2">
+      {/* Header */}
+      <div className="px-4 py-3 border-b flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Conversaciones</h2>
+        <div className="flex gap-1">
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Filtrar"
+            aria-label="Solo pendientes"
             onClick={() => setShowPendingOnly((p) => !p)}
-            className="hover:bg-blue-100 hover:text-blue-600 h-8 w-8"
+            className={cn(
+              'h-7 w-7 cursor-pointer',
+              showPendingOnly && 'bg-primary/10 text-primary',
+            )}
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Ordenar"
+            aria-label="Ordenar por nombre"
             onClick={() => setSortByName((p) => !p)}
-            className="hover:bg-blue-100 hover:text-blue-600 h-8 w-8"
+            className={cn(
+              'h-7 w-7 cursor-pointer',
+              sortByName && 'bg-primary/10 text-primary',
+            )}
           >
-            <ArrowUpDown className="h-4 w-4" />
+            <ArrowUpDown className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
-      <div className="border-b px-4 py-1 flex items-center">
-        <Input
-          placeholder="Buscar cliente..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+
+      {/* Search */}
+      <div className="px-3 py-2 border-b">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Buscar cliente..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
       </div>
-      <ul className="flex-1 overflow-y-auto divide-y">
-        {filteredClients.map((c) => (
-          <li key={c.userId}>
-            <button
-              onClick={() => setSelected(c.userId)}
-              className={cn(
-                'w-full px-4 py-3 text-left transition-transform bg-gradient-to-r from-background to-muted hover:shadow-md hover:scale-105',
-                selected === c.userId && 'from-primary/10 to-primary/5',
-              )}
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <Image
-                    src={c.image || '/placeholder.svg'}
-                    alt={displayName(c)}
-                    width={40}
-                    height={40}
-                    unoptimized
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                  <div className="flex flex-col text-left">
-                    <span className="font-medium">{displayName(c)}</span>
-                    <span className="text-sm text-muted-foreground truncate max-w-[160px]">
-                      {lastMessages[c.userId]?.text ||
-                        (lastMessages[c.userId]?.file
-                          ? 'Archivo adjunto'
-                          : 'Sin mensajes')}
+
+      {/* Client list */}
+      <ul className="flex-1 overflow-y-auto">
+        {filteredClients.length === 0 && (
+          <li className="px-4 py-8 text-center text-xs text-muted-foreground">
+            No hay conversaciones
+          </li>
+        )}
+        {filteredClients.map((c) => {
+          const pending = pendingCounts[c.userId] ?? 0;
+          const lastMsg = lastMessages[c.userId];
+          const previewText = lastMsg?.text
+            ? lastMsg.text
+            : lastMsg?.file
+              ? 'Archivo adjunto'
+              : 'Sin mensajes';
+
+          return (
+            <li key={c.userId}>
+              <button
+                onClick={() => setSelected(c.userId)}
+                className={cn(
+                  'w-full px-3 py-2.5 flex items-center gap-3 transition-colors cursor-pointer',
+                  'hover:bg-accent/50',
+                  selected === c.userId &&
+                    'bg-accent border-l-2 border-l-primary',
+                )}
+              >
+                {/* Avatar */}
+                <Avatar className="h-10 w-10 shrink-0">
+                  {c.image ? (
+                    <AvatarImage src={c.image} alt={displayName(c)} />
+                  ) : null}
+                  <AvatarFallback className="text-sm font-semibold bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                    {displayName(c)[0]?.toUpperCase() || '?'}
+                  </AvatarFallback>
+                </Avatar>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        'text-sm truncate',
+                        pending > 0 ? 'font-semibold' : 'font-medium',
+                      )}
+                    >
+                      {displayName(c)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {formatRelativeTime(lastMsg?.createdAt)}
                     </span>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-xs text-muted-foreground">
-                    {lastMessages[c.userId]?.createdAt
-                      ? new Date(
-                          lastMessages[c.userId]!.createdAt,
-                        ).toLocaleTimeString()
-                      : ''}
-                  </span>
-                  {pendingCounts[c.userId] > 0 && (
-                    <Badge
-                      variant="destructive"
-                      className="flex items-center gap-1"
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span
+                      className={cn(
+                        'text-xs truncate max-w-[160px]',
+                        pending > 0
+                          ? 'text-foreground font-medium'
+                          : 'text-muted-foreground',
+                      )}
                     >
-                      <AlertCircle className="h-4 w-4" />
-                      {pendingCounts[c.userId]}
-                    </Badge>
-                  )}
+                      {lastMsg?.file && !lastMsg?.text && (
+                        <Paperclip className="inline h-3 w-3 mr-0.5 -mt-0.5" />
+                      )}
+                      {previewText}
+                    </span>
+                    {pending > 0 && (
+                      <span className="shrink-0 flex items-center justify-center h-[18px] min-w-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
+                        {pending}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </button>
-          </li>
-        ))}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );

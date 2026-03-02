@@ -1,5 +1,8 @@
 "use client"
 
+// Stable empty array to prevent unstable references in useMemo dependencies.
+const STABLE_EMPTY: any[] = []
+
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -30,6 +33,8 @@ import {
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { getAuthToken } from "@/utils/auth-token"
 import { fetchCompanyVerticalInfo } from "../../tenancy/tenancy.api"
 
@@ -40,8 +45,9 @@ import { createEntry } from "../entries.api"
 
 import { ContextBar } from "../components/quick-entry/context-bar"
 import { ProductCard, type ProductCardItem } from "../components/quick-entry/product-card"
-import { CartSidebar, type CartItem } from "../components/quick-entry/cart-sidebar"
+import { CartSidebar } from "../components/quick-entry/cart-sidebar"
 import { ProductSerialsDialog } from "../components/quick-entry/serials-dialog"
+import { useEntryCart } from "./use-entry-cart"
 
 async function getUserIdFromToken(): Promise<number | null> {
   const token = await getAuthToken()
@@ -60,14 +66,67 @@ type QuickEntryViewProps = {
 
 export function QuickEntryView({ categories }: QuickEntryViewProps) {
   const router = useRouter()
-  const { version, selection } = useTenantSelection()
-  const [serialsEnabled, setSerialsEnabled] = useState(false)
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
+  const invalidateEntries = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) })
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) })
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
+  }
 
-  // --- Data loading ---
-  const [products, setProducts] = useState<ProductCardItem[]>([])
-  const [providers, setProviders] = useState<{ id: number; name: string }[]>([])
-  const [stores, setStores] = useState<{ id: number; name: string }[]>([])
-  const [dataLoading, setDataLoading] = useState(true)
+  // --- Data loading via useQuery ---
+  const { data: productsRaw = STABLE_EMPTY, isLoading: productsLoading } = useQuery({
+    queryKey: queryKeys.products.list(selection.orgId, selection.companyId),
+    queryFn: () => getProducts(),
+    enabled: selection.orgId !== null,
+  })
+  const products: ProductCardItem[] = useMemo(
+    () =>
+      (productsRaw as any[]).map((p: any) => ({
+        id: typeof p.id === "string" ? parseInt(p.id, 10) : p.id,
+        name: p.name,
+        description: p.description || "",
+        price: p.price ?? 0,
+        priceSell: p.priceSell ?? 0,
+        categoryId: p.categoryId ?? p.category?.id ?? null,
+        category_name: p.category_name || p.category?.name || null,
+        images: p.images,
+        specification: p.specification,
+        brand: p.brand,
+        features: p.features ?? [],
+        extraAttributes: p.extraAttributes ?? {},
+      })),
+    [productsRaw],
+  )
+
+  const { data: providersRaw = STABLE_EMPTY, isLoading: providersLoading } = useQuery({
+    queryKey: queryKeys.providers.list(selection.orgId, selection.companyId),
+    queryFn: () => getProviders(),
+    enabled: selection.orgId !== null,
+  })
+  const providers = useMemo(
+    () => (providersRaw as any[]).map((p: any) => ({ id: p.id, name: p.name })),
+    [providersRaw],
+  )
+
+  const { data: storesRaw = STABLE_EMPTY, isLoading: storesLoading } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  })
+  const stores = useMemo(
+    () => (storesRaw as any[]).map((s: any) => ({ id: s.id, name: s.name })),
+    [storesRaw],
+  )
+
+  const { data: verticalInfo } = useQuery({
+    queryKey: queryKeys.vertical.config(selection.orgId, selection.companyId),
+    queryFn: () => fetchCompanyVerticalInfo(selection.companyId!),
+    enabled: selection.companyId !== null,
+  })
+  const serialsEnabled = verticalInfo?.config?.features?.serialNumbers ?? false
+
+  const dataLoading = productsLoading || providersLoading || storesLoading
 
   // --- Filters ---
   const [searchQuery, setSearchQuery] = useState("")
@@ -84,76 +143,31 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
   const [storeId, setStoreId] = useState<number | null>(null)
   const [entryDate, setEntryDate] = useState<Date>(new Date())
 
-  // --- Cart ---
-  const [cartMap, setCartMap] = useState<
-    Map<number, CartItem>
-  >(new Map())
+  // --- Cart (extracted hook) ---
+  const {
+    cartMap,
+    cartItems,
+    cartTotal,
+    cartCount,
+    addToCart,
+    removeFromCart,
+    updateCartQty,
+    updateCartPrice,
+    decrementCart,
+    removeFromCartWithSerials,
+    serialsMap,
+    serialDialogProductId,
+    handleSerialClick,
+    handleSerialSave,
+    getOtherSerials,
+    closeSerialDialog,
+  } = useEntryCart()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // --- Mobile sheet ---
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
 
-  // --- Serials (optional, per-product) ---
-  const [serialsMap, setSerialsMap] = useState<Map<number, string[]>>(new Map())
-  const [serialDialogProductId, setSerialDialogProductId] = useState<number | null>(null)
-
-  // Load data
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setDataLoading(true)
-      try {
-        const fetches: [Promise<any>, Promise<any>, Promise<any>, Promise<any>] = [
-          getProducts(),
-          getProviders(),
-          getStores(),
-          selection.companyId
-            ? fetchCompanyVerticalInfo(selection.companyId)
-            : Promise.resolve(null),
-        ]
-        const [prods, provs, strs, verticalInfo] = await Promise.all(fetches)
-        if (cancelled) return
-
-        // Vertical config — serial numbers
-        setSerialsEnabled(
-          verticalInfo?.config?.features?.serialNumbers ?? false,
-        )
-
-        setProducts(
-          (prods as any[]).map((p: any) => ({
-            id: typeof p.id === "string" ? parseInt(p.id, 10) : p.id,
-            name: p.name,
-            description: p.description || "",
-            price: p.price ?? 0,
-            priceSell: p.priceSell ?? 0,
-            categoryId: p.categoryId ?? p.category?.id ?? null,
-            category_name:
-              p.category_name || p.category?.name || null,
-            images: p.images,
-            specification: p.specification,
-            brand: p.brand,
-            features: p.features ?? [],
-            extraAttributes: p.extraAttributes ?? {},
-          })),
-        )
-        setProviders(
-          (provs as any[]).map((p: any) => ({ id: p.id, name: p.name })),
-        )
-        setStores(
-          (strs as any[]).map((s: any) => ({ id: s.id, name: s.name })),
-        )
-      } catch (err) {
-        console.error("Error loading quick entry data:", err)
-        toast.error("Error al cargar datos")
-      } finally {
-        if (!cancelled) setDataLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [version, selection.companyId])
+  // Data is loaded via useQuery hooks above
 
   // --- Filter products ---
   const filteredProducts = useMemo(() => {
@@ -217,120 +231,6 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
     return usedCategories.slice(0, 10)
   }, [usedCategories, showAllCategories])
 
-  // --- Cart operations ---
-  const addToCart = useCallback((product: ProductCardItem) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      const existing = next.get(product.id)
-      if (existing) {
-        next.set(product.id, {
-          ...existing,
-          quantity: existing.quantity + 1,
-        })
-      } else {
-        next.set(product.id, {
-          product,
-          quantity: 1,
-          unitPrice: product.price,
-        })
-      }
-      return next
-    })
-  }, [])
-
-  const removeFromCart = useCallback((productId: number) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      next.delete(productId)
-      return next
-    })
-  }, [])
-
-  const updateCartQty = useCallback((productId: number, qty: number) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      const item = next.get(productId)
-      if (item) {
-        next.set(productId, { ...item, quantity: qty })
-      }
-      return next
-    })
-  }, [])
-
-  const updateCartPrice = useCallback((productId: number, price: number) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      const item = next.get(productId)
-      if (item) {
-        next.set(productId, { ...item, unitPrice: price })
-      }
-      return next
-    })
-  }, [])
-
-  const decrementCart = useCallback((productId: number) => {
-    setCartMap((prev) => {
-      const next = new Map(prev)
-      const item = next.get(productId)
-      if (!item) return prev
-      if (item.quantity <= 1) {
-        next.delete(productId)
-      } else {
-        next.set(productId, { ...item, quantity: item.quantity - 1 })
-      }
-      return next
-    })
-  }, [])
-
-  const cartItems = useMemo(() => Array.from(cartMap.values()), [cartMap])
-  const cartTotal = useMemo(
-    () => cartItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0),
-    [cartItems],
-  )
-  const cartCount = useMemo(
-    () => cartItems.reduce((sum, i) => sum + i.quantity, 0),
-    [cartItems],
-  )
-
-  // --- Serial dialog helpers ---
-  const handleSerialClick = useCallback((productId: number) => {
-    setSerialDialogProductId(productId)
-  }, [])
-
-  const handleSerialSave = useCallback((productId: number, serials: string[]) => {
-    setSerialsMap((prev) => {
-      const next = new Map(prev)
-      if (serials.length > 0) {
-        next.set(productId, serials)
-      } else {
-        next.delete(productId)
-      }
-      return next
-    })
-  }, [])
-
-  // Get all serials from OTHER products (for cross-product duplicate check)
-  const getOtherSerials = useCallback(
-    (excludeProductId: number): string[] => {
-      const result: string[] = []
-      serialsMap.forEach((serials, pid) => {
-        if (pid !== excludeProductId) result.push(...serials)
-      })
-      return result
-    },
-    [serialsMap],
-  )
-
-  // Clean up serials when product is removed from cart
-  const removeFromCartWithSerials = useCallback((productId: number) => {
-    removeFromCart(productId)
-    setSerialsMap((prev) => {
-      const next = new Map(prev)
-      next.delete(productId)
-      return next
-    })
-  }, [removeFromCart])
-
   // --- Submit ---
   const handleSubmit = async () => {
     if (!providerId) {
@@ -374,8 +274,8 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
       })
 
       toast.success("Ingreso creado exitosamente")
+      invalidateEntries()
       router.push("/dashboard/entries")
-      router.refresh()
     } catch (err: any) {
       const message = err?.message || "Error al crear el ingreso"
       toast.error(message)
@@ -389,24 +289,24 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
     async (data: { name: string; document: string; documentNumber: string }) => {
       const result = await createProvider(data)
       const newOption = { id: result.id, name: result.name }
-      setProviders((prev) => [...prev, newOption])
       setProviderId(newOption.id)
       toast.success(`Proveedor "${newOption.name}" creado`)
+      queryClient.invalidateQueries({ queryKey: queryKeys.providers.root(selection.orgId, selection.companyId) })
       return newOption
     },
-    [],
+    [queryClient, selection.orgId, selection.companyId],
   )
 
   const handleCreateStore = useCallback(
     async (data: { name: string; ruc: string }) => {
       const result = await createStore(data)
       const newOption = { id: result.id, name: result.name }
-      setStores((prev) => [...prev, newOption])
       setStoreId(newOption.id)
       toast.success(`Almacen "${newOption.name}" creado`)
+      queryClient.invalidateQueries({ queryKey: queryKeys.stores.root(selection.orgId, selection.companyId) })
       return newOption
     },
-    [],
+    [queryClient, selection.orgId, selection.companyId],
   )
 
   const contextHint = useMemo(() => {
@@ -742,7 +642,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
           <ProductSerialsDialog
             open
             onOpenChange={(open) => {
-              if (!open) setSerialDialogProductId(null)
+              if (!open) closeSerialDialog()
             }}
             productName={item.product.name}
             quantity={item.quantity}
@@ -750,7 +650,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
             allOtherSerials={getOtherSerials(serialDialogProductId)}
             onSave={(serials) => {
               handleSerialSave(serialDialogProductId, serials)
-              setSerialDialogProductId(null)
+              closeSerialDialog()
             }}
           />
         )

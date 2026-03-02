@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DateRange } from "react-day-picker"
 import { useTenantSelection } from "@/context/tenant-selection-context"
@@ -30,36 +32,27 @@ export function ProfitProductsTable({ dateRange }: Props) {
   const query = useDebounce(searchTerm, 300)
   const [page, setPage] = useState(1)
   const [pageSize] = useState(25)
-  const [data, setData] = useState<ProductProfit[]>([])
-  const [total, setTotal] = useState(0)
-  const { selection, version } = useTenantSelection()
+  const { selection } = useTenantSelection()
 
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to?.toISOString() ?? ""
 
-  
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        if (!dateRange?.from || !dateRange?.to) {
-          setData([])
-          setTotal(0)
-          return
-        }
-        const from = dateRange.from.toISOString()
-        const to = dateRange.to.toISOString()
-        const res = await getProductsProfitByRange(from, to, query || undefined, page, pageSize)
-        setData(res.items || [])
-        setTotal(res.total || 0)
-      } catch (error) {
-        console.error("Error al obtener utilidades por producto:", error)
+  const { data: result } = useQuery({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "profitProducts", { from, to, query, page, pageSize }],
+    queryFn: async () => {
+      if (!dateRange?.from || !dateRange?.to) {
+        return { items: [] as ProductProfit[], total: 0 }
       }
-    }
-    fetchData()
-  }, [dateRange, selectionKey, query, page, pageSize])
+      const fromStr = dateRange.from.toISOString()
+      const toStr = dateRange.to.toISOString()
+      const res = await getProductsProfitByRange(fromStr, toStr, query || undefined, page, pageSize)
+      return { items: (res.items || []) as ProductProfit[], total: (res.total || 0) as number }
+    },
+    enabled: selection.orgId !== null,
+  })
+
+  const data = result?.items ?? []
+  const total = result?.total ?? 0
 
   return (
     <div className="rounded-xl border bg-card shadow-md overflow-hidden">

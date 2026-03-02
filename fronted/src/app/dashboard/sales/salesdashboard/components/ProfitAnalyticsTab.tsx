@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { DateRange } from "react-day-picker"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { getProfitAnalysis, ProfitAnalysisResponse } from "../../sales.api"
@@ -16,42 +17,25 @@ interface ProfitAnalyticsTabProps {
 }
 
 export function ProfitAnalyticsTab({ dateRange }: ProfitAnalyticsTabProps) {
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<ProfitAnalysisResponse | null>(null)
-  const { selection, version } = useTenantSelection()
+  const { selection } = useTenantSelection()
 
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to?.toISOString() ?? ""
 
-  useEffect(() => {
-    const fetchAnalysis = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
+  const { data = null, isLoading, error: queryError } = useQuery<ProfitAnalysisResponse | null>({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "profitAnalysis", { from, to }],
+    queryFn: async () => {
+      if (!dateRange?.from || !dateRange?.to) return null
 
-        if (!dateRange?.from || !dateRange?.to) {
-          setData(null)
-          return
-        }
+      const fromStr = dateRange.from.toISOString()
+      const toStr = dateRange.to.toISOString()
 
-        const from = dateRange.from.toISOString()
-        const to = dateRange.to.toISOString()
+      return await getProfitAnalysis(fromStr, toStr)
+    },
+    enabled: selection.orgId !== null && !!dateRange?.from && !!dateRange?.to,
+  })
 
-        const result = await getProfitAnalysis(from, to)
-        setData(result)
-      } catch (err) {
-        console.error("Error al obtener análisis de utilidades:", err)
-        setError(err instanceof Error ? err.message : "Error desconocido")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchAnalysis()
-  }, [dateRange, selectionKey])
+  const error = queryError ? (queryError instanceof Error ? queryError.message : "Error desconocido") : null
 
   if (isLoading) {
     return (

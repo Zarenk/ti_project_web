@@ -1,7 +1,9 @@
 "use client"
 
 import { useTenantSelection } from "@/context/tenant-selection-context"
-import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useState, useEffect } from "react"
 import {
   Table,
   TableBody,
@@ -10,7 +12,6 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table"
-import { motion, AnimatePresence } from "framer-motion"
 import { Badge } from "@/components/ui/badge"
 import {
   ArrowUpDown,
@@ -28,32 +29,28 @@ interface Props {
 }
 
 export function SalesTable({ dateRange }: Props) {
-  const [sales, setSales] = useState<any[]>([])
   const [sortKey, setSortKey] = useState<string>("createdAt")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [selectedSale, setSelectedSale] = useState<any | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
-  const { selection, version } = useTenantSelection()
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const { selection } = useTenantSelection()
+
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to ? endOfDay(dateRange.to).toISOString() : ""
+
+  const { data: sales = [] } = useQuery<any[]>({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "recentSales", { from, to }],
+    queryFn: async () => {
+      if (!dateRange?.from || !dateRange?.to) return []
+      return await getRecentSalesByRange(dateRange.from.toISOString(), endOfDay(dateRange.to).toISOString())
+    },
+    enabled: selection.orgId !== null && !!dateRange?.from && !!dateRange?.to,
+  })
 
   useEffect(() => {
     setPage(1)
   }, [pageSize, sales.length])
-
-  useEffect(() => {
-    if (dateRange?.from && dateRange?.to) {
-      const from = dateRange.from.toISOString()
-      const to = endOfDay(dateRange.to).toISOString()
-
-      getRecentSalesByRange(from, to)
-        .then(setSales)
-        .catch(console.error)
-    }
-  }, [dateRange, selectionKey])
 
   const handleSort = (key: string) => {
     if (sortKey === key) {

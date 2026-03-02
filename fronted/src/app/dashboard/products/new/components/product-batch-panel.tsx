@@ -19,6 +19,8 @@ type BatchCartItem = {
   name: string
   payload: any
   initialStock: number
+  addStockMode?: boolean
+  existingProductId?: number
 }
 
 export type ProductBatchPanelProps = {
@@ -164,8 +166,16 @@ export const ProductBatchPanel = memo(function ProductBatchPanel({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Producto
+                      {item.addStockMode ? '+ Stock' : 'Producto'}
                     </p>
+                    {item.addStockMode && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 px-1.5 text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0"
+                      >
+                        Existente
+                      </Badge>
+                    )}
                     {item.initialStock > 0 && (
                       <Badge
                         variant="secondary"

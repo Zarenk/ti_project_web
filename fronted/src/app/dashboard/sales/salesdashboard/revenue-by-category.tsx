@@ -1,7 +1,9 @@
 "use client"
 
 import { useTenantSelection } from "@/context/tenant-selection-context"
-import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useMemo, useState, useEffect } from "react"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { getRevenueByCategoryByRange } from "../sales.api"
 import { DateRange } from "react-day-picker"
@@ -27,38 +29,32 @@ interface CategoryItem {
 }
 
 export function RevenueByCategory({ dateRange }: { dateRange: DateRange }) {
-  const [rawData, setRawData] = useState<CategoryItem[]>([])
   const { theme } = useTheme()
-  const { selection, version } = useTenantSelection()
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const { selection } = useTenantSelection()
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        if (!dateRange?.from || !dateRange?.to) return
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to ? endOfDay(dateRange.to).toISOString() : ""
 
-        const from = dateRange.from.toISOString()
-        const to = endOfDay(dateRange.to).toISOString()
+  const { data: rawData = [] } = useQuery({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "revenueByCategory", { from, to }],
+    queryFn: async () => {
+      if (!dateRange?.from || !dateRange?.to) return []
 
-        const revenueData = await getRevenueByCategoryByRange(from, to)
-        const total = revenueData.reduce((acc: number, item: { value: number }) => acc + item.value, 0)
-        const withPercent = revenueData
-          .map((item: { name: string; value: number }) => ({
-            ...item,
-            percent: total > 0 ? ((item.value / total) * 100).toFixed(1) : "0.0",
-          }))
-          .sort((a: CategoryItem, b: CategoryItem) => parseFloat(b.percent) - parseFloat(a.percent))
-        setRawData(withPercent)
-      } catch (error) {
-        console.error("Error al cargar ingresos por categoría:", error)
-      }
-    }
+      const fromStr = dateRange.from.toISOString()
+      const toStr = endOfDay(dateRange.to).toISOString()
 
-    fetchData()
-  }, [dateRange, selectionKey])
+      const revenueData = await getRevenueByCategoryByRange(fromStr, toStr)
+      const total = revenueData.reduce((acc: number, item: { value: number }) => acc + item.value, 0)
+      const withPercent = revenueData
+        .map((item: { name: string; value: number }) => ({
+          ...item,
+          percent: total > 0 ? ((item.value / total) * 100).toFixed(1) : "0.0",
+        }))
+        .sort((a: CategoryItem, b: CategoryItem) => parseFloat(b.percent) - parseFloat(a.percent))
+      return withPercent as CategoryItem[]
+    },
+    enabled: selection.orgId !== null && !!dateRange?.from && !!dateRange?.to,
+  })
 
   // Separar categorías principales de las agrupadas en "Otros"
   const { chartData, colorMap } = useMemo(() => {

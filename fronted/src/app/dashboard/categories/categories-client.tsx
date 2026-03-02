@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 
 import { DataTable } from "./data-table";
 import { columns, type Categories } from "./columns";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { PageGuideButton } from "@/components/page-guide-dialog";
 import { CATEGORIES_GUIDE_STEPS } from "./categories-guide-steps";
+import { queryKeys } from "@/lib/query-keys";
 
 type RawCategory = {
   id: string | number;
@@ -23,64 +25,45 @@ type RawCategory = {
 };
 
 export function CategoriesClient(): React.ReactElement {
-  const { version } = useTenantSelection();
-  const [categories, setCategories] = useState<Categories[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { selection } = useTenantSelection();
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadCategories() {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await getCategories();
-        if (cancelled) return;
-        const normalized = (Array.isArray(response) ? response : []).map(
-          (item: RawCategory): Categories => ({
-            id: String(item.id),
-            name: item.name?.trim() ?? "Sin nombre",
-            description: item.description ?? "",
-            status: item.status ?? "ACTIVO",
-            image: item.image ?? "",
-            createdAt: item.createdAt
-              ? new Date(item.createdAt)
-              : new Date(),
-          }),
-        );
-        setCategories(normalized);
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Error cargando categorias:", err);
-        setError("No se pudieron cargar las categorias.");
-        setCategories([]);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-    loadCategories();
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+  const { data: rawCategories, isLoading, error } = useQuery<RawCategory[]>({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const response = await getCategories();
+      return Array.isArray(response) ? response : [];
+    },
+    enabled: selection.orgId !== null,
+  });
+
+  const categories = useMemo<Categories[]>(
+    () =>
+      (rawCategories ?? []).map((item) => ({
+        id: String(item.id),
+        name: item.name?.trim() ?? "Sin nombre",
+        description: item.description ?? "",
+        status: item.status ?? "ACTIVO",
+        image: item.image ?? "",
+        createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
+      })),
+    [rawCategories],
+  );
 
   const content = useMemo(() => {
-    if (loading) {
+    if (isLoading) {
       return <TablePageSkeleton title={false} columns={3} rows={5} actions={false} />;
     }
 
     if (error) {
       return (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-6 text-destructive">
-          {error}
+          {error instanceof Error ? error.message : "No se pudieron cargar las categorias."}
         </div>
       );
     }
 
     return <DataTable columns={columns} data={categories} />;
-  }, [categories, error, loading]);
+  }, [categories, error, isLoading]);
 
   return (
     <section className="py-2 sm:py-6">

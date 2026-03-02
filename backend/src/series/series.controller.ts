@@ -31,4 +31,15 @@ export class SeriesController {
     // Delegar la lógica al servicio
     return this.seriesService.checkSeries(serial);
   }
+
+  @Post('batch-check')
+  async batchCheckSeries(@Body() body: { serials: string[] }) {
+    const { serials } = body;
+
+    if (!Array.isArray(serials)) {
+      throw new BadRequestException('Se requiere un array de series.');
+    }
+
+    return this.seriesService.batchCheckSeries(serials);
+  }
 }

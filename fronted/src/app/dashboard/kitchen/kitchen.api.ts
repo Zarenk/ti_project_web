@@ -52,6 +52,29 @@ async function parseErrorMessage(res: Response, fallback: string) {
   return fallback
 }
 
+export type RestaurantDashboardSummary = {
+  todayOrders: number
+  dailyRevenue: number
+  tablesOccupied: number
+  kitchenPending: number
+}
+
+export async function getRestaurantDashboardSummary(): Promise<RestaurantDashboardSummary> {
+  let res: Response
+  try {
+    res = await authFetch("/restaurant-orders/dashboard-summary", { cache: "no-store" })
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      return { todayOrders: 0, dailyRevenue: 0, tablesOccupied: 0, kitchenPending: 0 }
+    }
+    throw error
+  }
+  if (!res.ok) {
+    return { todayOrders: 0, dailyRevenue: 0, tablesOccupied: 0, kitchenPending: 0 }
+  }
+  return res.json()
+}
+
 export async function getKitchenStations(): Promise<KitchenStation[]> {
   let res: Response
   try {

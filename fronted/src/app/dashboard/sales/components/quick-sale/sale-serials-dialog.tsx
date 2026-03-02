@@ -108,13 +108,13 @@ export function SaleSerialsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center rounded-md bg-blue-500/10 p-1.5">
+      <DialogContent className="sm:max-w-[520px] overflow-hidden">
+        <DialogHeader className="w-full min-w-0 overflow-hidden">
+          <DialogTitle className="flex items-center gap-2 w-full min-w-0 pr-6">
+            <span className="inline-flex items-center justify-center rounded-md bg-blue-500/10 p-1.5 shrink-0">
               <Barcode className="h-5 w-5 text-blue-500 dark:text-blue-400" />
             </span>
-            <span className="truncate">{productName}</span>
+            <span className="truncate min-w-0">{productName}</span>
           </DialogTitle>
           <DialogDescription>
             Series asignadas automaticamente. Puedes intercambiar o quitar

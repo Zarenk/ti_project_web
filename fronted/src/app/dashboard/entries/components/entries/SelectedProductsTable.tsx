@@ -12,6 +12,7 @@ import { EditSeriesModal } from "../EditSeriesModal"
 import { useState, type MouseEvent, useCallback, useEffect, useMemo, useRef } from "react"
 import { MobileProductModal } from "../MobileProductModal"
 import { cn } from "@/lib/utils"
+import { ProductTooltipCard } from "./ProductTooltipCard"
 
 interface Product {
   id: number
@@ -320,7 +321,12 @@ export const SelectedProductsTable = ({
                 style={nameColumnWidthStyle}
                 title={product.name}
               >
-                {product.name}
+                <span className="hidden sm:inline">
+                  <ProductTooltipCard product={product}>
+                    <span className="cursor-default">{product.name}</span>
+                  </ProductTooltipCard>
+                </span>
+                <span className="sm:hidden">{product.name}</span>
               </TableCell>
               <TableCell
                 className={cn(

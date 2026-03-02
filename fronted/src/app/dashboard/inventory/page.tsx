@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -58,10 +60,10 @@ import {
   getAllPurchasePrices,
   getInventoryWithCurrency,
   getInventoryAlertSummary,
-  getCategoriesFromInventory,
   getAllStores,
   type InventoryAlertSummary,
 } from "./inventory.api";
+import { getCategories } from "../categories/categories.api";
 import { DataTable } from "./data-table";
 import { CreateTemplateDialog } from "./create-template-dialog";
 import { TablePageSkeleton } from "@/components/table-page-skeleton";
@@ -187,19 +189,12 @@ function FilterControls({
 }
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [baseInventory, setBaseInventory] = useState<InventoryItem[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("created");
   const [inStockOnly, setInStockOnly] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<MigrationFilter>("all");
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
-  const { selection, version, loading: tenantLoading } = useTenantSelection();
-  const selectionKey = useMemo(
-    () => `${selection.companyId ?? "none"}-${version}`,
-    [selection.companyId, version],
-  );
-  const [alertSummary, setAlertSummary] = useState<InventoryAlertSummary | null>(null);
+  const { selection, loading: tenantLoading } = useTenantSelection();
+  const tenantReady = !tenantLoading && !!selection.companyId;
   const { migration, productSchema } = useTenantFeatures();
   const pendingLegacyProducts = migration?.legacy ?? 0;
   const columns = useInventoryColumns({ productSchema });
@@ -207,9 +202,7 @@ export default function InventoryPage() {
   // Lifted filter state (shared with DataTable)
   const [globalFilter, setGlobalFilter] = useState("");
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [selectedStore, setSelectedStore] = useState('all');
-  const [storeOptions, setStoreOptions] = useState<{id:number; name:string}[]>([]);
 
   // OutOfStock dialog
   const [isOutOfStockDialogOpen, setIsOutOfStockDialogOpen] = useState(false);
@@ -222,182 +215,120 @@ export default function InventoryPage() {
     }
   }, [searchParams]);
 
-  // Load categories and stores for filters
-  useEffect(() => {
-    async function loadCategories() {
-      try {
-        const categories = await getCategoriesFromInventory();
-        setCategoryOptions(Array.isArray(categories) ? categories : []);
-      } catch (error) {
-        console.error('Error al cargar las categorías:', error);
-        setCategoryOptions([]);
+  // Categories for filters — uses shared cache key with getCategories() (full objects).
+  // `select` normalizes to string[] so the cache stays consistent across pages.
+  const { data: categoryOptions = [] } = useQuery<any[], Error, string[]>({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: () => getCategories(),
+    select: (data) =>
+      (Array.isArray(data) ? data : [])
+        .map((cat: any) => (typeof cat === "string" ? cat : cat?.name))
+        .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0),
+    enabled: selection.orgId !== null,
+  });
+
+  // Stores for filters
+  const { data: storeOptions = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const stores = await getAllStores();
+      return Array.isArray(stores) ? stores : [];
+    },
+    enabled: selection.orgId !== null,
+  });
+
+  // Main inventory data
+  const { data: baseInventory = [], isLoading: loading } = useQuery<InventoryItem[]>({
+    queryKey: queryKeys.inventory.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const [inventoryData, purchasePrices] = await Promise.all([
+        getInventoryWithCurrency(),
+        getAllPurchasePrices(),
+      ]);
+
+      if (!Array.isArray(inventoryData)) {
+        throw new Error("Los datos del inventario no son validos");
       }
-    }
-    async function loadStores() {
-      try {
-        const stores = await getAllStores();
-        setStoreOptions(Array.isArray(stores) ? stores : []);
-      } catch (error) {
-        console.error('Error al cargar las tiendas:', error);
-        setStoreOptions([]);
-      }
-    }
-    loadCategories();
-    loadStores();
-  }, []);
 
+      const priceMap = (Array.isArray(purchasePrices) ? purchasePrices : []).reduce((acc: any, price: any) => {
+        acc[price.productId] = {
+          highestPurchasePrice: price.highestPurchasePrice,
+          lowestPurchasePrice: price.lowestPurchasePrice,
+        };
+        return acc;
+      }, {});
 
-  useEffect(() => {
-    if (tenantLoading || !selection.companyId) {
-      return;
-    }
+      const groupedData = Object.values(
+        inventoryData.reduce((acc: any, item: any) => {
+          const productName = item.product?.name;
+          if (!productName) return acc;
 
-    let cancelled = false;
-
-    const loadInventory = async () => {
-      setLoading(true);
-      setInventory([]);
-      setBaseInventory([]);
-
-      try {
-        const [inventoryData, purchasePrices] = await Promise.all([
-          getInventoryWithCurrency(),
-          getAllPurchasePrices(),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!Array.isArray(inventoryData)) {
-          throw new Error("Los datos del inventario no son validos");
-        }
-
-        const priceMap = (Array.isArray(purchasePrices) ? purchasePrices : []).reduce((acc: any, price: any) => {
-          acc[price.productId] = {
-            highestPurchasePrice: price.highestPurchasePrice,
-            lowestPurchasePrice: price.lowestPurchasePrice,
-          };
-          return acc;
-        }, {});
-
-        const groupedData = Object.values(
-          inventoryData.reduce((acc: any, item: any) => {
-            const productName = item.product?.name;
-            if (!productName) return acc;
-
-            if (!acc[productName]) {
-              acc[productName] = {
-                id: item.product.id,
-                product: {
-                  ...item.product,
-                  category: item.product.category?.name ?? 'Sin categoría',
-                },
-                stock: 0,
-                stockByCurrency: { USD: 0, PEN: 0 },
-                createdAt: item.createdAt,
-                updateAt: item.updatedAt,
-                storeOnInventory: [],
-                serialNumbers: [],
-                highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0,
-                lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0,
-              };
-            }
-
-            const stores = Array.isArray(item.storeOnInventory) ? item.storeOnInventory : [];
-
-            acc[productName].stock += stores.reduce(
-              (total: number, store: any) => total + (store.stock ?? 0),
-              0
-            );
-
-            (Array.isArray(item.stockByStore) ? item.stockByStore : []).forEach((store: any) => {
-              acc[productName].stockByCurrency.USD += store.stockByCurrency?.USD ?? 0;
-              acc[productName].stockByCurrency.PEN += store.stockByCurrency?.PEN ?? 0;
-            });
-
-            acc[productName].storeOnInventory.push(...stores);
-
-            item.entryDetails?.forEach((detail: any) => {
-              const series = detail.series?.map((s: any) => s.serial) || [];
-              acc[productName].serialNumbers.push(...series);
-            });
-
-            if (stores.length > 0) {
-              const latestUpdateAt = stores.reduce(
-                (latest: Date, store: any) =>
-                  new Date(store.updatedAt) > new Date(latest) ? new Date(store.updatedAt) : latest,
-                new Date(acc[productName].updateAt)
-              );
-              acc[productName].updateAt = latestUpdateAt;
-            }
-
-            return acc;
-          }, {})
-        );
-
-        const sortedData = groupedData.sort(
-          (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        setBaseInventory(groupedData as InventoryItem[]);
-        setInventory(sortedData as InventoryItem[]);
-      } catch (error) {
-        console.error("Error al obtener el inventario:", error);
-        if (!cancelled) {
-          toast.error("Error al obtener el inventario");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadInventory();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantLoading, selectionKey]);
-
-  const tenantReady = !tenantLoading && !!selection.companyId;
-
-  useEffect(() => {
-    if (!tenantReady) {
-      setAlertSummary(null);
-      return;
-    }
-
-    let cancelled = false;
-    const loadSummary = async () => {
-        try {
-          const summary = await getInventoryAlertSummary({
-            companyId: selection.companyId ?? undefined,
-          });
-          if (!cancelled) {
-            setAlertSummary(summary);
+          if (!acc[productName]) {
+            acc[productName] = {
+              id: item.product.id,
+              product: {
+                ...item.product,
+                category: item.product.category?.name ?? 'Sin categoría',
+              },
+              stock: 0,
+              stockByCurrency: { USD: 0, PEN: 0 },
+              createdAt: item.createdAt,
+              updateAt: item.updatedAt,
+              storeOnInventory: [],
+              serialNumbers: [],
+              highestPurchasePrice: priceMap[item.product.id]?.highestPurchasePrice || 0,
+              lowestPurchasePrice: priceMap[item.product.id]?.lowestPurchasePrice || 0,
+            };
           }
-      } catch (error) {
-        console.error("Error al cargar resumen de alertas:", error);
-        if (!cancelled) {
-          setAlertSummary(null);
-        }
-      }
-    };
 
-    void loadSummary();
-    return () => {
-      cancelled = true;
-    };
-    }, [tenantReady, selectionKey]);
+          const stores = Array.isArray(item.storeOnInventory) ? item.storeOnInventory : [];
 
-  // Aplicar orden y filtro según controles
-  useEffect(() => {
+          acc[productName].stock += stores.reduce(
+            (total: number, store: any) => total + (store.stock ?? 0),
+            0
+          );
+
+          (Array.isArray(item.stockByStore) ? item.stockByStore : []).forEach((store: any) => {
+            acc[productName].stockByCurrency.USD += store.stockByCurrency?.USD ?? 0;
+            acc[productName].stockByCurrency.PEN += store.stockByCurrency?.PEN ?? 0;
+          });
+
+          acc[productName].storeOnInventory.push(...stores);
+
+          item.entryDetails?.forEach((detail: any) => {
+            const series = detail.series?.map((s: any) => s.serial) || [];
+            acc[productName].serialNumbers.push(...series);
+          });
+
+          if (stores.length > 0) {
+            const latestUpdateAt = stores.reduce(
+              (latest: Date, store: any) =>
+                new Date(store.updatedAt) > new Date(latest) ? new Date(store.updatedAt) : latest,
+              new Date(acc[productName].updateAt)
+            );
+            acc[productName].updateAt = latestUpdateAt;
+          }
+
+          return acc;
+        }, {})
+      );
+
+      return groupedData.sort(
+        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ) as InventoryItem[];
+    },
+    enabled: selection.orgId !== null,
+  });
+
+  // Alert summary
+  const { data: alertSummary = null } = useQuery<InventoryAlertSummary | null>({
+    queryKey: [...queryKeys.inventory.root(selection.orgId, selection.companyId), "alerts"],
+    queryFn: () => getInventoryAlertSummary({ companyId: selection.companyId ?? undefined }),
+    enabled: selection.orgId !== null && !!selection.companyId,
+  });
+
+  // Derived filtered/sorted inventory (replaces useEffect → setInventory)
+  const inventory = useMemo(() => {
     let data = [...baseInventory];
 
     if (inStockOnly) {
@@ -406,10 +337,10 @@ export default function InventoryPage() {
 
     if (migrationStatus !== "all") {
       data = data.filter((item) => {
-        const attrs = item.product?.extraAttributes ?? null;
+        const attrs = (item.product as any)?.extraAttributes ?? null;
         const hasAttrs = !!attrs && Object.keys(attrs).length > 0;
-        const migrated = item.product?.isVerticalMigrated === true;
-        const legacy = item.product?.isVerticalMigrated === false || !hasAttrs;
+        const migrated = (item.product as any)?.isVerticalMigrated === true;
+        const legacy = (item.product as any)?.isVerticalMigrated === false || !hasAttrs;
 
         return migrationStatus === "legacy" ? legacy : migrated && hasAttrs;
       });
@@ -433,7 +364,7 @@ export default function InventoryPage() {
       );
     }
 
-    setInventory(data);
+    return data;
   }, [baseInventory, sortMode, inStockOnly, migrationStatus, selectedDateRange]);
 
 

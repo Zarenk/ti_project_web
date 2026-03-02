@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
 import Link from "next/link"
 import {
   ArrowRightLeft,
@@ -27,6 +27,7 @@ import {
   Wallet,
   XCircle,
 } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { ENTRIES_GUIDE_STEPS } from "./entries-guide-steps"
@@ -74,6 +75,7 @@ import {
 } from "@/components/ui/hover-card"
 import { cn } from "@/lib/utils"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { queryKeys } from "@/lib/query-keys"
 
 import {
   type EntryFilters,
@@ -143,12 +145,8 @@ function buildDateRange(date: string, view: "day" | "month" | "year") {
 /* ------------------------------------------------------------------ */
 
 export default function AccountingEntriesPage() {
-  const { version } = useTenantSelection()
-
-  // Data
-  const [entries, setEntries] = useState<JournalEntry[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const { selection } = useTenantSelection()
+  const queryClient = useQueryClient()
 
   // Filters
   const [periodView, setPeriodView] = useState<"day" | "month" | "year">("month")
@@ -166,9 +164,18 @@ export default function AccountingEntriesPage() {
   } | null>(null)
 
   /* ---- Fetch ---- */
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
+  const entriesQueryKey = useMemo(() => [
+    ...queryKeys.accounting.root(selection.orgId, selection.companyId),
+    "entries",
+    { selectedDate, periodView, sourceFilter, statusFilter, page },
+  ], [selection.orgId, selection.companyId, selectedDate, periodView, sourceFilter, statusFilter, page])
+
+  const {
+    data: queryData,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: entriesQueryKey,
+    queryFn: async () => {
       const range = buildDateRange(selectedDate, periodView)
       const filters: EntryFilters = {
         from: range.from,
@@ -179,19 +186,19 @@ export default function AccountingEntriesPage() {
       if (sourceFilter !== "all") filters.sources = [sourceFilter as EntrySource]
       if (statusFilter !== "all") filters.statuses = [statusFilter as EntryStatus]
 
-      const res = await fetchEntries(filters)
-      setEntries(res.data)
-      setTotal(res.total)
-    } catch {
-      toast.error("Error al cargar asientos")
-      setEntries([])
-      setTotal(0)
-    } finally {
-      setLoading(false)
-    }
-  }, [selectedDate, periodView, sourceFilter, statusFilter, page])
+      return fetchEntries(filters)
+    },
+    enabled: selection.orgId !== null,
+  })
 
-  useEffect(() => { load() }, [load, version])
+  const entries = queryData?.data ?? []
+  const total = queryData?.total ?? 0
+
+  const invalidateEntries = () => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.accounting.root(selection.orgId, selection.companyId),
+    })
+  }
 
   /* ---- Computed metrics ---- */
   const metrics = useMemo(() => {
@@ -225,7 +232,7 @@ export default function AccountingEntriesPage() {
         await deleteEntry(id)
         toast.success("Asiento eliminado")
       }
-      load()
+      invalidateEntries()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error en la operación")
     } finally {
@@ -577,7 +584,7 @@ export default function AccountingEntriesPage() {
         <EntryForm
           open={formOpen}
           onOpenChange={setFormOpen}
-          onSuccess={load}
+          onSuccess={invalidateEntries}
         />
       </div>
     </TooltipProvider>

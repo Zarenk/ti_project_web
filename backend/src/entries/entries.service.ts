@@ -392,6 +392,7 @@ export class EntriesService {
                   entryDetailId: detail.id,
                   serial: String(serial),
                   organizationId,
+                  storeId: data.storeId || null,
                 })),
                 skipDuplicates: true, // Ignorar duplicados en la base de datos
               });
@@ -546,6 +547,8 @@ export class EntriesService {
           details: verifiedProducts,
           invoice: data.invoice ?? null,
         } as any,
+        organizationId: resolvedOrganizationId ?? null,
+        companyId: storeForValidation?.companyId ?? null,
       });
       try {
         await this.accountingHook.postPurchase(entry.id);
@@ -822,6 +825,8 @@ export class EntriesService {
           entityId: entry.id.toString(),
           action: AuditAction.DELETED,
           summary: `Entrada #${entry.id} eliminada afectando: ${summary}`,
+          organizationId: orgId ?? null,
+          companyId: resolvedCompanyId ?? null,
         });
       } catch (logError) {
         console.warn('No se pudo registrar la actividad de eliminacion:', logError);
@@ -1004,6 +1009,8 @@ export class EntriesService {
             entityId: entry.id.toString(),
             action: AuditAction.DELETED,
             summary: `Entrada #${entry.id} eliminada afectando: ${summary}`,
+            organizationId: resolvedOrganizationId ?? null,
+            companyId: resolvedCompanyId ?? null,
           });
         } catch (logError) {
           console.warn('No se pudo registrar la actividad de eliminacion:', logError);

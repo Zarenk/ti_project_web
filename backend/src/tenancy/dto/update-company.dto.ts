@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -119,6 +120,10 @@ export class UpdateCompanyDto {
   @IsString()
   @MaxLength(255)
   sunatKeyPathProd?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  whatsappAutoSendInvoice?: boolean;
 
   @IsOptional()
   @IsArray()

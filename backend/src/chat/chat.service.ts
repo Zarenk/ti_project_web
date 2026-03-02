@@ -209,6 +209,33 @@ export class ChatService {
     });
   }
 
+  async getMessagesPaginated(
+    clientId: number,
+    limit: number,
+    beforeId?: number,
+    tenant?: TenantContext,
+  ): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
+    await this.assertClientWithinTenant(clientId, tenant);
+
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const take = safeLimit + 1;
+
+    const messages = await this.prisma.chatMessage.findMany({
+      where: {
+        clientId,
+        deletedAt: null,
+        ...(beforeId ? { id: { lt: beforeId } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+
+    const hasMore = messages.length > safeLimit;
+    if (hasMore) messages.pop();
+
+    return { messages: messages.reverse(), hasMore };
+  }
+
   async markAsSeen(
     clientId: number,
     viewerId: number,

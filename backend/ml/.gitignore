@@ -1,0 +1,17 @@
+# Virtual environment
+.venv-training/
+
+# Exported training data (regenerable from DB)
+exports/
+
+# Trained model files (large binaries)
+models/**/*.pkl
+models/**/*.pt
+models/**/*.bin
+
+# Keep model JSON outputs (small, useful for API)
+!models/**/*.json
+
+# Python cache
+__pycache__/
+*.pyc

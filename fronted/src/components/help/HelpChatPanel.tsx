@@ -16,8 +16,13 @@ import {
 } from "@/components/ui/tooltip"
 import { useHelpAssistant } from "@/context/help-assistant-context"
 import type { ChatMessage, HelpStep } from "@/data/help/types"
+import type { ToolTableData, ToolStatsData } from "@/data/help/tools/tool-types"
 import { LocationIndicator } from "./location-indicator"
 import { getSectionDisplayName } from "@/data/help/route-detection"
+import { ToolResultTable } from "./tool-result-table"
+import { ToolResultStats } from "./tool-result-stats"
+import { ToolConfirmationCard } from "./tool-confirmation-card"
+import { ToolErrorCard } from "./tool-error-card"
 
 function StepsGuide({ steps }: { steps: HelpStep[] }) {
   const [expanded, setExpanded] = useState(false)
@@ -87,6 +92,7 @@ function StepsGuide({ steps }: { steps: HelpStep[] }) {
 
 function SourceBadge({ source }: { source: ChatMessage["source"] }) {
   if (!source) return null
+  if (source === "tool") return null // Tool results have their own rendering
   if (source === "ai") {
     return (
       <div className="mt-1.5 flex items-center gap-1 text-[10px] opacity-60">
@@ -112,53 +118,96 @@ function SourceBadge({ source }: { source: ChatMessage["source"] }) {
 }
 
 
-function MessageContent({ content }: { content: string }) {
-  // Detectar markdown links [text](url)
-  const parts = content.split(/(\[.*?\]\(.*?\))/)
+function MessageContent({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+  // Split content into lines for list detection, then process inline markdown
+  const lines = content.split("\n")
 
-  return (
-    <>
-      {parts.map((part, idx) => {
-        // Verificar si es un link markdown
-        const match = part.match(/\[(.*?)\]\((.*?)\)/)
-        if (match) {
-          const [, text, url] = match
+  const renderInline = (text: string, keyPrefix: string) => {
+    // Split by markdown links and bold patterns
+    const parts = text.split(/(\[.*?\]\(.*?\)|\*\*.*?\*\*)/)
 
-          // Caso especial: Link al manual PDF
-          if (url === '/api/manual') {
-            return (
-              <a
-                key={idx}
-                href={url}
-                download="Manual_Usuario_ADSLab.pdf"
-                className="mt-2 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                onClick={() => {
-                  console.log('Descargando manual PDF...')
-                }}
-              >
-                <Download className="h-4 w-4" />
-                {text}
-              </a>
-            )
-          }
-
-          // Links normales
+    return parts.map((part, idx) => {
+      // Markdown link [text](url)
+      const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/)
+      if (linkMatch) {
+        const [, linkText, url] = linkMatch
+        if (url === "/api/manual") {
           return (
             <a
-              key={idx}
+              key={`${keyPrefix}-${idx}`}
               href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              download="Manual_Usuario_ADSLab.pdf"
+              className="mt-2 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
             >
-              {text}
+              <Download className="h-4 w-4" />
+              {linkText}
             </a>
           )
         }
+        return (
+          <a
+            key={`${keyPrefix}-${idx}`}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            {linkText}
+          </a>
+        )
+      }
 
-        // Texto normal con saltos de línea preservados
-        return <span key={idx}>{part}</span>
+      // Bold **text**
+      const boldMatch = part.match(/^\*\*(.*?)\*\*$/)
+      if (boldMatch) {
+        return <strong key={`${keyPrefix}-${idx}`}>{boldMatch[1]}</strong>
+      }
+
+      return <span key={`${keyPrefix}-${idx}`}>{part}</span>
+    })
+  }
+
+  return (
+    <>
+      {lines.map((line, lineIdx) => {
+        const trimmed = line.trimStart()
+
+        // Bullet list item (- or *)
+        if (/^[-*]\s/.test(trimmed)) {
+          return (
+            <div key={lineIdx} className="flex items-start gap-1.5 pl-1 my-0.5">
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
+              <span>{renderInline(trimmed.slice(2), `l${lineIdx}`)}</span>
+            </div>
+          )
+        }
+
+        // Numbered list item (1. 2. etc)
+        const numMatch = trimmed.match(/^(\d+)\.\s/)
+        if (numMatch) {
+          return (
+            <div key={lineIdx} className="flex items-start gap-1.5 pl-1 my-0.5">
+              <span className="shrink-0 text-[10px] font-semibold opacity-60">{numMatch[1]}.</span>
+              <span>{renderInline(trimmed.slice(numMatch[0].length), `l${lineIdx}`)}</span>
+            </div>
+          )
+        }
+
+        // Regular line (preserve blank lines as spacing)
+        if (!line.trim()) {
+          return <div key={lineIdx} className="h-1.5" />
+        }
+
+        return (
+          <span key={lineIdx}>
+            {lineIdx > 0 && lines[lineIdx - 1].trim() !== "" && "\n"}
+            {renderInline(line, `l${lineIdx}`)}
+          </span>
+        )
       })}
+      {isStreaming && (
+        <span className="inline-block w-[2px] h-3 ml-0.5 bg-current animate-cursor-blink align-text-bottom" />
+      )}
     </>
   )
 }
@@ -169,10 +218,14 @@ function MessageContent({ content }: { content: string }) {
  */
 const ChatMessageItem = memo(({
   message,
-  onFeedback
+  onFeedback,
+  onConfirmTool,
+  onCancelTool,
 }: {
   message: ChatMessage;
   onFeedback: (id: string, feedback: 'POSITIVE' | 'NEGATIVE') => void
+  onConfirmTool?: (messageId: string) => Promise<void>
+  onCancelTool?: (messageId: string) => void
 }) => {
   // FIX #1: Render system messages differently (section separators)
   if (message.isSystemMessage) {
@@ -211,14 +264,44 @@ const ChatMessageItem = memo(({
             : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
         }`}
       >
-        <div className="whitespace-pre-wrap">
-          <MessageContent content={message.content} />
-        </div>
-        {message.steps && message.steps.length > 0 && (
+        {/* Streaming: show shimmer when no content yet */}
+        {message.isStreaming && !message.content ? (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Sparkles className="h-3 w-3 animate-pulse" />
+            <span className="text-[10px] animate-pulse">Pensando...</span>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap">
+            <MessageContent content={message.content} isStreaming={message.isStreaming} />
+          </div>
+        )}
+        {/* Tool result rendering */}
+        {message.toolResult && message.toolResult.type === "table" && message.toolResult.data && (
+          <ToolResultTable title={message.toolResult.title} data={message.toolResult.data as ToolTableData} />
+        )}
+        {message.toolResult && message.toolResult.type === "stats" && message.toolResult.data && (
+          <ToolResultStats title={message.toolResult.title} data={message.toolResult.data as ToolStatsData} />
+        )}
+        {message.toolResult && message.toolResult.type === "error" && (
+          <ToolErrorCard title={message.toolResult.title} message={message.toolResult.message ?? "Error desconocido"} />
+        )}
+        {/* Tool confirmation card for mutations */}
+        {message.toolConfirmation && (
+          <ToolConfirmationCard
+            data={message.toolConfirmation}
+            onConfirm={() => onConfirmTool?.(message.id) ?? Promise.resolve()}
+            onCancel={() => onCancelTool?.(message.id)}
+            resolved={message.toolConfirmation.resolved}
+            resolvedMessage={message.toolConfirmation.resolvedMessage}
+          />
+        )}
+        {message.steps && message.steps.length > 0 && !message.isStreaming && (
           <StepsGuide steps={message.steps} />
         )}
-        <SourceBadge source={message.source} />
-        <FeedbackButtonsMemoized message={message} onFeedback={onFeedback} />
+        {!message.isStreaming && <SourceBadge source={message.source} />}
+        {!message.isStreaming && !message.toolResult && !message.toolConfirmation && (
+          <FeedbackButtonsMemoized message={message} onFeedback={onFeedback} />
+        )}
       </div>
     </div>
   )
@@ -231,8 +314,10 @@ const ChatMessageItem = memo(({
     prevProps.message.role === nextProps.message.role &&
     prevProps.message.source === nextProps.message.source &&
     prevProps.message.isSystemMessage === nextProps.message.isSystemMessage &&
-    // Compare steps array length (deep comparison would be expensive)
-    prevProps.message.steps?.length === nextProps.message.steps?.length
+    prevProps.message.isStreaming === nextProps.message.isStreaming &&
+    prevProps.message.steps?.length === nextProps.message.steps?.length &&
+    prevProps.message.toolResult === nextProps.message.toolResult &&
+    prevProps.message.toolConfirmation?.resolved === nextProps.message.toolConfirmation?.resolved
   )
 })
 
@@ -309,6 +394,8 @@ export function HelpChatPanel() {
     hasMoreMessages,
     isLoadingMore,
     loadOlderMessages,
+    confirmToolAction,
+    cancelToolAction,
   } = useHelpAssistant()
 
   const [input, setInput] = useState("")
@@ -488,20 +575,23 @@ export function HelpChatPanel() {
               key={msg.id}
               message={msg}
               onFeedback={sendFeedback}
+              onConfirmTool={confirmToolAction}
+              onCancelTool={cancelToolAction}
             />
           ))}
 
-          {/* Thinking indicator */}
-          {mascotState === "thinking" && (
+          {/* Thinking indicator — only show when no streaming message is visible */}
+          {mascotState === "thinking" && !messages.some((m) => m.isStreaming) && (
             <div className="flex gap-2">
               <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <Bot className="h-3.5 w-3.5" />
               </div>
               <div className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800">
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:0ms]" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]" />
                   <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
+                  <span className="ml-1 text-[10px] text-slate-400">Pensando...</span>
                 </div>
               </div>
             </div>

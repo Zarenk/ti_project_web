@@ -36,6 +36,12 @@ import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { UpdateCreativeDto } from './dto/update-creative.dto';
 import { OrganizationScoped } from './organization.decorator';
 import { AdsRole } from './roles.enum';
+import { GenerateFromProductDto } from './dto/generate-from-product.dto';
+import { PublishAdDto } from './dto/publish-ad.dto';
+import { CreateSocialAccountDto } from './dto/create-social-account.dto';
+import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { SocialPlatform } from '@prisma/client';
+import { Delete } from '@nestjs/common';
 
 @ApiTags('ads')
 @ApiBearerAuth()
@@ -183,6 +189,109 @@ export class AdsController {
       ...dto,
       organizationId,
     });
+  }
+
+  @Post('generate-from-product')
+  @ApiOperation({ summary: 'Generate ad content from a product using Gemini AI' })
+  @ApiBody({ type: GenerateFromProductDto })
+  @ApiResponse({ status: 201, description: 'Ad variations generated' })
+  async generateFromProduct(
+    @Body() dto: GenerateFromProductDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.generateFromProduct(
+      dto.productId,
+      organizationId,
+      dto.tone,
+      dto.style,
+    );
+  }
+
+  @Get('generations/:productId')
+  @ApiOperation({ summary: 'Get ad generations for a product' })
+  async getAdGenerations(
+    @Param('productId', ParseIntPipe) productId: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.getAdGenerations(productId, organizationId);
+  }
+
+  @Patch('generations/:id/select')
+  @ApiOperation({ summary: 'Save selected variation index' })
+  async selectAdVariation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('selectedIndex', ParseIntPipe) selectedIndex: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.selectAdVariation(id, organizationId, selectedIndex);
+  }
+
+  // ── Social Publishing ──────────────────────────────────────────────
+
+  @Post('publish')
+  @ApiOperation({ summary: 'Publish an ad generation to social networks' })
+  async publishAd(
+    @Body() dto: PublishAdDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.publishAd(
+      dto.adGenerationId,
+      organizationId,
+      dto.networks as SocialPlatform[],
+    );
+  }
+
+  @Get('social-accounts')
+  @ApiOperation({ summary: 'List linked social accounts' })
+  async getSocialAccounts(
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.getSocialAccounts(organizationId);
+  }
+
+  @Post('social-accounts')
+  @ApiOperation({ summary: 'Link a social account' })
+  async createSocialAccount(
+    @Body() dto: CreateSocialAccountDto,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.createSocialAccount(organizationId, {
+      platform: dto.platform as SocialPlatform,
+      accountName: dto.accountName,
+      accountId: dto.accountId,
+      accessToken: dto.accessToken,
+      refreshToken: dto.refreshToken,
+    });
+  }
+
+  @Delete('social-accounts/:id')
+  @ApiOperation({ summary: 'Unlink a social account' })
+  async deleteSocialAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+    return this.adsService.deleteSocialAccount(id, organizationId);
   }
 
   @Post('reference-image')

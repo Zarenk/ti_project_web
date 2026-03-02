@@ -46,8 +46,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 import { useAuth } from '@/context/auth-context'
 import { normalizeOptionValue } from '@/lib/utils'
+import { isDraftExpired } from '@/lib/draft-utils'
+import { PdfVerificationDialog } from '../components/entries/PdfVerificationDialog'
+import type { ExtractedProduct } from '../utils/series-batch-validator'
 
 // FunciÃ³n para obtener el userId del token JWT almacenado en localStorage
 async function getUserIdFromToken(): Promise<number | null> {
@@ -65,6 +70,9 @@ async function getUserIdFromToken(): Promise<number | null> {
     return null;
   }
 }
+
+// Stable empty array to prevent infinite re-render loops in bridge useEffects.
+const STABLE_EMPTY: any[] = []
 
 //definir el esquema de validacion
 const entriesSchema = z.object({
@@ -168,7 +176,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingStores, setLoadingStores] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(!categories?.length);
-  const { version, selection } = useTenantSelection();
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
   const { userId } = useAuth();
   const hasEntryDraftAppliedRef = useRef(false);
   const isApplyingEntryDraftRef = useRef(false);
@@ -181,35 +190,15 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setCategories(categories ?? []);
   }, [categories]);
 
+  const { data: categoriesFromQuery = STABLE_EMPTY, isLoading: categoriesQueryLoading } = useQuery({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: () => getCategories(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let isActive = true;
-
-    async function fetchCategoriesByTenant() {
-      try {
-        setLoadingCategories(true);
-        setCategories([]);
-        const nextCategories = await getCategories();
-        if (isActive) {
-          setCategories(Array.isArray(nextCategories) ? nextCategories : []);
-        }
-      } catch (error) {
-        console.error('Error al obtener las categorias:', error);
-        if (isActive) {
-          setCategories([]);
-        }
-      } finally {
-        if (isActive) {
-          setLoadingCategories(false);
-        }
-      }
-    }
-
-    fetchCategoriesByTenant();
-
-    return () => {
-      isActive = false;
-    };
-  }, [version]);
+    setCategories(Array.isArray(categoriesFromQuery) ? categoriesFromQuery : []);
+    setLoadingCategories(categoriesQueryLoading);
+  }, [categoriesFromQuery, categoriesQueryLoading]);
   const [isDialogOpenProduct, setIsDialogOpenProduct] = useState(false);
   // Estado adicional para manejar el checkbox
   const [isNewCategoryBoolean, setIsNewCategoryBoolean] = useState(false);
@@ -246,6 +235,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     name: string, price: number, priceSell: number, description: string, categoryId: number, category_name: string }[]>([]); // Estado para los productos
   const [open, setOpen] = React.useState(false)
   const [value, setValueProduct] = React.useState("")
+
+  // VERIFICACIÓN PDF
+  const [pendingExtractedProducts, setPendingExtractedProducts] = useState<ExtractedProduct[]>([]);
+  const [isVerificationOpen, setIsVerificationOpen] = useState(false);
 
   // ENVIAR GUIA PDF
   const [pdfGuiaFile, setPdfGuiaFile] = useState<File | null>(null);
@@ -735,6 +728,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       if (success) {
         entryReferenceIdRef.current = null;
         clearEntryDraft();
+        // Invalidate related caches so /inventory and /products show fresh data
+        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) });
       }
     } finally {
       setIsSubmitting(false); // âœ… Libera el botÃ³n cuando termina
@@ -921,17 +918,22 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           const extractedText = await processPDF(file); // Llama a la funciÃ³n de la API
           const provider = detectInvoiceProvider(extractedText);
 
+        let extractedProducts: ExtractedProduct[] = [];
         if (provider === "deltron") {
-          processExtractedText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          extractedProducts = processExtractedText(extractedText, form.setValue, setCurrency);
         } else if (provider === "ingram") {
-          processIngramInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          extractedProducts = processIngramInvoiceText(extractedText, form.setValue, setCurrency);
         } else if (provider === "nexsys") {
-          processNexsysInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          extractedProducts = processNexsysInvoiceText(extractedText, form.setValue, setCurrency);
         } else {
-          processInvoiceText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          extractedProducts = processInvoiceText(extractedText, form.setValue, setCurrency);
           if (provider === "unknown") {
             toast.warning("Formato de factura no reconocido.");
           }
+        }
+        if (extractedProducts.length > 0) {
+          setPendingExtractedProducts(extractedProducts);
+          setIsVerificationOpen(true);
         }
         setIsNewInvoiceBoolean(true);
         setShowInvoiceFields(true);
@@ -987,10 +989,15 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
         // Route to provider-specific guide processor
         const guideProvider = detectInvoiceProvider(extractedText);
+        let extractedGuideProducts: ExtractedProduct[] = [];
         if (guideProvider === "deltron") {
-          processDeltronGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          extractedGuideProducts = processDeltronGuideText(extractedText, form.setValue, setCurrency);
         } else {
-          processGuideText(extractedText, setSelectedProducts, form.setValue, setCurrency);
+          extractedGuideProducts = processGuideText(extractedText, form.setValue, setCurrency);
+        }
+        if (extractedGuideProducts.length > 0) {
+          setPendingExtractedProducts(extractedGuideProducts);
+          setIsVerificationOpen(true);
         }
         setShowGuideFields(true);
         setShowInvoiceFields(false);
@@ -1115,36 +1122,16 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     }
   }, [errors]);
 
-  // Cargar los productos al montar el componente
+  // Cargar los productos via useQuery
+  const { data: productsFromQuery = STABLE_EMPTY, isLoading: productsQueryLoading } = useQuery({
+    queryKey: queryKeys.products.list(selection.orgId, selection.companyId),
+    queryFn: () => getProducts(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let isActive = true;
-
-    async function fetchProducts() {
-      try {
-        const productsResponse = await getProducts();
-        if (isActive) {
-          setProducts(productsResponse);
-        }
-      } catch (error) {
-        console.error('Error al obtener los productos:', error);
-        if (isActive) {
-          setProducts([]);
-        }
-      } finally {
-        if (isActive) {
-          setLoadingProducts(false);
-        }
-      }
-     }
-
-    setLoadingProducts(true);
-    setProducts([]);
-    fetchProducts();
-
-    return () => {
-      isActive = false;
-    };
-  }, [version]);
+    setProducts(Array.isArray(productsFromQuery) ? productsFromQuery : []);
+    setLoadingProducts(productsQueryLoading);
+  }, [productsFromQuery, productsQueryLoading]);
   //
 
   useEffect(() => {
@@ -1186,6 +1173,10 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         return;
       }
       const parsed = JSON.parse(raw);
+      if (isDraftExpired(parsed?.savedAt)) {
+        window.localStorage.removeItem(entryDraftKey);
+        return;
+      }
       isApplyingEntryDraftRef.current = true;
 
       const draftValues = parsed?.values ?? {};
@@ -1310,6 +1301,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           draftGuideUrl: draftGuide?.url ?? null,
           referenceId: entryReferenceIdRef.current,
           updatedAt: new Date().toISOString(),
+          savedAt: Date.now(),
         });
         if (payload === entryDraftLastPayloadRef.current) {
           return;
@@ -1386,70 +1378,34 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     }
   }, [recentProductsKey]);
 
-  // Cargar los proveedores al montar el componente
+  // Cargar los proveedores via useQuery
+  const { data: providersFromQuery = STABLE_EMPTY, isLoading: providersQueryLoading } = useQuery({
+    queryKey: queryKeys.providers.list(selection.orgId, selection.companyId),
+    queryFn: () => getProviders(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let isActive = true;
-
-    async function fetchProviders() {
-      try {
-          const providersResponse = await getProviders();
-          if (isActive) {
-            setProviders(providersResponse);
-          }
-      } catch (error) {
-          console.error('Error al obtener los proveedores:', error);
-          if (isActive) {
-            setProviders([]);
-          }
-        } finally {
-          if (isActive) {
-            setLoadingProviders(false);
-          }
-        }
-      }
-  
-    setLoadingProviders(true);
-    setProviders([]);
-    fetchProviders();
-
-    return () => {
-      isActive = false;
-    };
-  }, [version]);
+    setProviders(Array.isArray(providersFromQuery) ? providersFromQuery : []);
+    setLoadingProviders(providersQueryLoading);
+  }, [providersFromQuery, providersQueryLoading]);
   //
 
-    // Cargar lass tiendas al montar el componente
+    // Cargar las tiendas via useQuery
+  const { data: storesFromQuery = STABLE_EMPTY, isLoading: storesQueryLoading } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    let isActive = true;
+    setStores(Array.isArray(storesFromQuery) ? storesFromQuery : []);
+    setLoadingStores(storesQueryLoading);
+  }, [storesFromQuery, storesQueryLoading]);
 
-    async function fetchStores() {
-      try {
-          const storesResponse = await getStores();
-          if (isActive) {
-            setStores(storesResponse);
-          }
-      } catch (error) {
-          console.error('Error al obtener las tiendas:', error);
-          if (isActive) {
-            setStores([]);
-          }
-        } finally {
-          if (isActive) {
-            setLoadingStores(false);
-          }
-        }
-      }
-  
-    setLoadingStores(true);
-    setStores([]);
-    fetchStores();
-
-    return () => {
-      isActive = false;
-    };
-  }, [version]);
-
+  const tenantKey = `${selection.orgId}-${selection.companyId}`;
+  const prevTenantRef = useRef(tenantKey);
   useEffect(() => {
+    if (prevTenantRef.current === tenantKey) return;
+    prevTenantRef.current = tenantKey;
     setSelectedProducts([]);
     setSeries([]);
     setCurrentProduct(null);
@@ -1465,7 +1421,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     setIsNewInvoiceBoolean(false);
     form.reset(buildDefaultEntryValues());
     hasAppliedDefaultsRef.current = false;
-  }, [version, form]);
+  }, [tenantKey, form]);
   //
 
   useEffect(() => {
@@ -1876,6 +1832,25 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
             <span className="ml-2 text-gray-800 dark:text-white">Procesando...</span>
           </div>
         )}
+
+        <PdfVerificationDialog
+          open={isVerificationOpen}
+          onOpenChange={setIsVerificationOpen}
+          extractedProducts={pendingExtractedProducts}
+          existingProducts={products}
+          onConfirm={(verifiedProducts) => {
+            setSelectedProducts(verifiedProducts.map((p, idx) => ({
+              id: p.id ?? idx + 1,
+              name: p.name,
+              quantity: p.quantity,
+              price: p.price,
+              priceSell: p.priceSell,
+              category_name: p.category_name,
+              series: p.series,
+            })));
+            setPendingExtractedProducts([]);
+          }}
+        />
       </form>
     </div>
   )

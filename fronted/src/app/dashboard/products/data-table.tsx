@@ -52,6 +52,9 @@ import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 import { IconName, icons } from "@/lib/icons"
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useAuth } from "@/context/auth-context"
@@ -125,6 +128,10 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
 }: DataTableProps<TData, TValue>) {
   const { settings } = useSiteSettings()
   const { role } = useAuth()
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
+  const invalidateProducts = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
   const normalizedRole = role ? role.toUpperCase() : null
   const canViewCosts =
     normalizedRole === "SUPER_ADMIN_GLOBAL" ||
@@ -570,7 +577,7 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
       //alert('Productos eliminados correctamente');
       toast.success("Producto(s) eliminado(s) correctamente."); // Notificación de éxito
       table.resetRowSelection(); // Limpia la selección después de eliminar
-      location.reload(); // Refresca la página para actualizar los datos
+      invalidateProducts(); // Refresca los datos via React Query
     } catch (error: any) {
       console.error("Error al eliminar productos:", error)
       toast.error(error.message || "No se pudo eliminar el producto(s).");
@@ -775,10 +782,10 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
         }));   
         //console.log("Datos actualizados para enviar al backend:", updatedData);   
         // Llamar a la API para actualizar los datos
-        await updateManyProducts(updatedData);    
-        toast.success("Productos actualizados correctamente.");    
+        await updateManyProducts(updatedData);
+        toast.success("Productos actualizados correctamente.");
         // Actualizar los datos en el frontend
-        location.reload(); // O actualiza el estado local si no quieres recargar la página   
+        invalidateProducts(); // Refresca los datos via React Query
         setIsEditModalOpen(false); // Cierra el modal
       } catch (error) {
         //console.error("Error al actualizar productos:", error);

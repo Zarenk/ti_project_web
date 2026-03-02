@@ -31,6 +31,7 @@ export const ProductPricingFields = memo(function ProductPricingFields({
   hasInitialStock,
   isEditing,
   hideStock,
+  addStockMode,
   OptionalChip,
 }: ProductPricingFieldsProps) {
   return (
@@ -159,10 +160,10 @@ export const ProductPricingFields = memo(function ProductPricingFields({
         )}
       </div>
 
-      {!isEditing && !hideStock && (
+      {(!isEditing || addStockMode) && !hideStock && (
         <div className="flex flex-col">
           <Label className='py-3'>
-            Cantidad / Stock inicial
+            {addStockMode ? 'Cantidad a agregar' : 'Cantidad / Stock inicial'}
             {<OptionalChip filled={hasInitialStock} />}
           </Label>
           <div className="flex items-center gap-2">

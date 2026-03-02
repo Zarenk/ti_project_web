@@ -5,10 +5,13 @@ declare global {
   namespace Cypress {
     interface Chainable {
       loginViaApi(): Chainable<void>
+      loginAs(email: string, password: string): Chainable<void>
       setTenantSelection(orgId: number | null, companyId: number | null): Chainable<void>
       login(email: string, password: string): Chainable<void>
       logout(): Chainable<void>
       loginAsAdmin(): Chainable<void>
+      apiGet(path: string): Chainable<Cypress.Response<any>>
+      apiPost(path: string, body?: object): Chainable<Cypress.Response<any>>
     }
   }
 }
@@ -85,20 +88,19 @@ Cypress.Commands.add('login', (email: string, password: string) => {
     [email, password],
     () => {
       cy.visit('/login')
-      cy.get('input[name="email"]').or('input[type="email"]').type(email)
-      cy.get('input[name="password"]').or('input[type="password"]').type(password)
-      cy.get('button[type="submit"]').click()
+      cy.get('#email').type(email)
+      cy.get('#password').type(password)
+      cy.contains('button', 'Iniciar Sesion').click()
 
       // Esperar a que redirija al dashboard
-      cy.url().should('include', '/dashboard', { timeout: 10000 })
+      cy.url({ timeout: 10000 }).should('include', '/dashboard')
 
-      // Verificar que el token esté en las cookies o localStorage
-      cy.getCookie('authToken').or(cy.getCookie('token')).should('exist')
+      // Verificar que el token esté en las cookies
+      cy.getCookie('token').should('exist')
     },
     {
       validate() {
-        // Validar que la sesión sigue activa
-        cy.getCookie('authToken').or(cy.getCookie('token')).should('exist')
+        cy.getCookie('token').should('exist')
       },
     }
   )
@@ -115,6 +117,73 @@ Cypress.Commands.add('loginAsAdmin', () => {
   const adminEmail = Cypress.env('ADMIN_EMAIL') || 'superadmin@test.com'
   const adminPassword = Cypress.env('ADMIN_PASSWORD') || 'admin123'
   cy.login(adminEmail, adminPassword)
+})
+
+// ==================== E2E CRITICAL COMMANDS ====================
+
+/**
+ * Login via API with explicit credentials. Sets token in cookie + localStorage.
+ * Does NOT use cy.session() — each call performs a fresh login.
+ */
+Cypress.Commands.add("loginAs", (email: string, password: string) => {
+  const backendUrl = Cypress.env("BACKEND_URL")
+  cy.request({
+    method: "POST",
+    url: `${backendUrl}/users/login`,
+    body: { email, password },
+    failOnStatusCode: false,
+  }).then((response) => {
+    if (response.status !== 201 && response.status !== 200) {
+      throw new Error(
+        `Login as ${email} failed (${response.status}): ${JSON.stringify(response.body)}`,
+      )
+    }
+    const token = response.body?.access_token
+    if (!token) {
+      throw new Error(`Login response for ${email} missing access_token.`)
+    }
+    cy.setCookie("token", token)
+    cy.window().then((win) => {
+      win.localStorage.setItem("token", token)
+    })
+  })
+})
+
+/**
+ * Authenticated GET request to the backend API.
+ * Uses the token stored in localStorage.
+ */
+Cypress.Commands.add("apiGet", (path: string) => {
+  const backendUrl = Cypress.env("BACKEND_URL")
+  cy.window().then((win) => {
+    const token = win.localStorage.getItem("token") ?? ""
+    return cy.request({
+      method: "GET",
+      url: `${backendUrl}${path}`,
+      headers: { Authorization: `Bearer ${token}` },
+      failOnStatusCode: false,
+    })
+  })
+})
+
+/**
+ * Authenticated POST request to the backend API.
+ */
+Cypress.Commands.add("apiPost", (path: string, body?: object) => {
+  const backendUrl = Cypress.env("BACKEND_URL")
+  cy.window().then((win) => {
+    const token = win.localStorage.getItem("token") ?? ""
+    return cy.request({
+      method: "POST",
+      url: `${backendUrl}${path}`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: body ?? {},
+      failOnStatusCode: false,
+    })
+  })
 })
 
 export {}

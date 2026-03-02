@@ -15,6 +15,7 @@ export async function createSale(data: {
   payments: { paymentMethodId: number; amount: number; currency: string }[];
   source?: 'POS' | 'WEB';
   referenceId?: string;
+  fechaEmision?: string;
 }) {
   const { orgId, companyId } = await getTenantSelection();
   const payload = {
@@ -67,7 +68,7 @@ export async function lookupSunatDocument(document: string): Promise<LookupRespo
 
   const isRuc = trimmed.length === 11
   const endpoint = isRuc
-    ? `${BACKEND_URL}/api/lookups/decolecta/ruc/${trimmed}`
+    ? `${BACKEND_URL}/api/lookups/ruc/${trimmed}`
     : `${BACKEND_URL}/api/lookups/dni/${trimmed}`
 
   const res = await authFetch(endpoint)
@@ -80,29 +81,36 @@ export async function lookupSunatDocument(document: string): Promise<LookupRespo
   }
 
   const data = await res.json()
+
   if (isRuc) {
-  return {
-    identifier: trimmed,
-    name: data?.razon_social ?? data?.nombre ?? "—",
-    address: data?.direccion ?? null,
-    status: data?.estado ?? null,
-    condition: data?.condicion ?? null,
-    type: "RUC",
+    // LookupResultDto format (name, address, status, condition, identifier)
+    return {
+      identifier: data?.identifier ?? trimmed,
+      name: data?.name ?? data?.razon_social ?? "—",
+      address: data?.address ?? data?.direccion ?? null,
+      status: data?.status ?? data?.estado ?? null,
+      condition: data?.condition ?? data?.condicion ?? null,
+      type: "RUC",
       raw: data,
     }
   }
 
-  const nombres = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
-    .filter((value: string | undefined) => !!value && value.trim().length > 0)
+  // DNI: backend /lookups/dni/:dni returns LookupResultDto { name, address, status, ... }
+  // Prioritize mapped DTO fields, fallback to raw API field names
+  const mappedName = data?.name
+  const rawNombres = [data?.nombres, data?.apellidoPaterno, data?.apellidoMaterno]
+    .filter((v: string | undefined) => !!v && v.trim().length > 0)
     .join(" ")
     .trim()
 
   return {
-    identifier: trimmed,
-    name: nombres || data?.nombreCompleto || "—",
-    address: data?.direccion ?? null,
+    identifier: data?.identifier ?? trimmed,
+    name: (mappedName && mappedName !== "--") ? mappedName : rawNombres || data?.nombreCompleto || "—",
+    address: data?.address ?? data?.direccion ?? null,
+    status: data?.status ?? null,
+    condition: data?.condition ?? null,
     type: "DNI",
-    raw: data,
+    raw: data?.raw ?? data,
   }
 }
 
@@ -827,6 +835,66 @@ export async function deleteSale(id: number) {
       // ignore parse errors
     }
     throw new Error(message);
+  }
+}
+
+export async function annulSale(id: number) {
+  const response = await authFetch(`${BACKEND_URL}/api/sales/${id}/annul`, {
+    method: 'PATCH',
+  });
+
+  if (!response.ok) {
+    let message = 'Error al anular la venta';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function sendInvoiceWhatsApp(saleId: number, phone?: string) {
+  const response = await fetch(`/api/whatsapp/send-invoice/${saleId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: phone || undefined }),
+  });
+
+  if (!response.ok) {
+    let message = 'Error al enviar por WhatsApp';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function getWhatsAppSendCounts(saleIds: number[]): Promise<Record<number, number>> {
+  if (saleIds.length === 0) return {};
+  try {
+    const response = await fetch('/api/whatsapp/invoice-send-counts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saleIds }),
+    });
+    if (!response.ok) return {};
+    const data = await response.json();
+    return data.counts ?? {};
+  } catch {
+    return {};
   }
 }
 

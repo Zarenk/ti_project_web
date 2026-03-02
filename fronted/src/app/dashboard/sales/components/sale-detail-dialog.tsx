@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +13,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Banknote, CreditCard, Landmark, Loader2, Smartphone } from "lucide-react";
+import { Ban, Banknote, CreditCard, FileText, FileX2, Landmark, Loader2, MessageCircle, ReceiptText, Send, Smartphone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { toast } from "sonner";
+import { annulSale, sendInvoiceWhatsApp, getWhatsAppSendCounts } from "../sales.api";
 import { Sale } from "../columns";
+import { CreditNoteDialog } from "./credit-note-dialog";
+import { useModulePermission } from "@/hooks/use-module-permission";
+import { useDeleteActionVisibility } from "@/hooks/use-delete-action-visibility";
+import { useAuth } from "@/context/auth-context";
+
 
 const parseNumber = (value: unknown): number => {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -68,6 +88,7 @@ export interface SaleDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loading?: boolean;
+  onRefresh?: (saleId: number) => void;
 }
 
 export function SaleDetailDialog({
@@ -75,7 +96,78 @@ export function SaleDetailDialog({
   open,
   onOpenChange,
   loading = false,
+  onRefresh,
 }: SaleDetailDialogProps) {
+  const [creditNoteOpen, setCreditNoteOpen] = useState(false);
+  const [isAnnulling, setIsAnnulling] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [whatsappPhone, setWhatsappPhone] = useState("");
+  const [whatsappPopoverOpen, setWhatsappPopoverOpen] = useState(false);
+  const [whatsappSendCount, setWhatsappSendCount] = useState(0);
+  const checkPermission = useModulePermission();
+  const whatsappAllowed = checkPermission("whatsapp");
+  const canSeeDeleteActions = useDeleteActionVisibility();
+  const { role } = useAuth();
+  const isEmployee = role?.trim().toUpperCase() === "EMPLOYEE";
+  const canEmitCreditNote = canSeeDeleteActions && !isEmployee;
+
+  // Fetch WhatsApp send count when dialog opens with a sale (only if user has whatsapp permission)
+  useEffect(() => {
+    if (!open || !sale?.id || !whatsappAllowed) {
+      setWhatsappSendCount(0);
+      return;
+    }
+    getWhatsAppSendCounts([sale.id]).then((counts) => {
+      setWhatsappSendCount(counts[sale.id] ?? 0);
+    });
+  }, [open, sale?.id, whatsappAllowed]);
+
+  const hasAcceptedCreditNote = useMemo(() => {
+    return (sale?.creditNotes ?? []).some((cn) => cn.status === "ACCEPTED");
+  }, [sale?.creditNotes]);
+
+  const handleAnnul = async () => {
+    if (!sale) return;
+    if (!window.confirm("¿Está seguro de anular esta venta? Se revertirá el stock, pagos y movimientos de caja.")) return;
+
+    setIsAnnulling(true);
+    try {
+      await annulSale(sale.id);
+      toast.success("Venta anulada correctamente.");
+      if (onRefresh) {
+        onRefresh(sale.id);
+      } else {
+        onOpenChange(false);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error al anular la venta";
+      toast.error(message);
+    } finally {
+      setIsAnnulling(false);
+    }
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!sale) return;
+    const phone = whatsappPhone.trim();
+    if (!phone) {
+      toast.warning("Ingresa un numero de telefono");
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    try {
+      await sendInvoiceWhatsApp(sale.id, phone);
+      setWhatsappSendCount((prev) => prev + 1);
+      toast.success("Comprobante enviado por WhatsApp");
+      setWhatsappPopoverOpen(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al enviar por WhatsApp";
+      toast.error(message);
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
   const currency = useMemo(() => {
     if (!sale) {
       return "PEN";
@@ -149,6 +241,22 @@ export function SaleDetailDialog({
   const sunatLogs = Array.isArray(sale?.sunatTransmissions)
     ? sale!.sunatTransmissions
     : [];
+
+  const invoice = sale?.invoices ?? null;
+  const sunatAccepted = sunatLogs.some(
+    (log) => log.status?.toUpperCase() === "ACCEPTED",
+  );
+
+  const invoicePdfUrl = useMemo(() => {
+    if (!invoice?.tipoComprobante || !invoice?.serie || !invoice?.nroCorrelativo) {
+      return null;
+    }
+    const tipo = invoice.tipoComprobante.toLowerCase();
+    const code = tipo === "boleta" ? "03" : "01";
+    const ruc = sale?.companyRuc ?? "00000000000";
+    const file = `${ruc}-${code}-${invoice.serie}-${invoice.nroCorrelativo}.pdf`;
+    return `/api/sunat/pdf/${tipo}/${file}`;
+  }, [invoice, sale?.companyRuc]);
 
   const formattedDateTime = useMemo(() => {
     if (!sale?.createdAt) {
@@ -385,6 +493,25 @@ export function SaleDetailDialog({
               <span>Actualizando información de la venta...</span>
             </div>
           )}
+          {sale?.status === "ANULADA" && (
+            <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3 dark:bg-rose-950/20 dark:border-rose-700 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 w-full min-w-0">
+                <Ban className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">
+                  Venta Anulada
+                </p>
+                {sale.annulledAt && (
+                  <span className="text-xs text-rose-600 dark:text-rose-400 ml-auto flex-shrink-0">
+                    {format(new Date(sale.annulledAt), "dd/MM/yyyy")}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-rose-700 dark:text-rose-300 mt-1 break-words">
+                Esta venta fue anulada mediante nota de crédito.
+                Los comprobantes se mantienen para auditoría SUNAT.
+              </p>
+            </div>
+          )}
           {sale ? (
             <div className="space-y-6 text-sm">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -392,6 +519,16 @@ export function SaleDetailDialog({
                   <p className="text-xs font-medium text-muted-foreground">Cliente</p>
                   <p className="text-base font-semibold">{sale.client?.name ?? "—"}</p>
                 </div>
+                {(sale.client?.type || sale.client?.documentNumber || sale.client?.ruc || sale.client?.dni) && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {sale.client?.type ?? "Documento"}
+                    </p>
+                    <p className="text-base font-semibold break-words">
+                      {sale.client?.ruc ?? sale.client?.dni ?? sale.client?.documentNumber ?? "—"}
+                    </p>
+                  </div>
+                )}
                 <div>
                 <p className="text-xs font-medium text-muted-foreground">Usuario</p>
                 <p className="text-base font-semibold">{sale.user?.username ?? "—"}</p>
@@ -406,7 +543,7 @@ export function SaleDetailDialog({
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Tipo de comprobante</p>
-                <p className="text-base font-semibold">{sale.tipoComprobante ?? "—"}</p>
+                <p className="text-base font-semibold">{invoice?.tipoComprobante ?? sale.tipoComprobante ?? "SIN COMPROBANTE"}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Moneda</p>
@@ -423,55 +560,207 @@ export function SaleDetailDialog({
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold">Envíos SUNAT</h3>
-              {sunatStatus ? (
-                <div className="rounded-md border border-dashed p-3 text-sm">
-                  <div className="mb-2">{renderSunatStatusBadge(sunatStatus)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {sunatStatus.updatedAt
-                      ? `Actualizado el ${formatSunatDate(sunatStatus.updatedAt)}`
-                      : "Estado más reciente registrado."}
-                  </p>
-                  {sunatStatus.ticket ? (
-                    <p className="text-xs text-muted-foreground">Ticket: {sunatStatus.ticket}</p>
-                  ) : null}
-                  {sunatStatus.errorMessage ? (
+              <h3 className="text-sm font-semibold">Comprobante</h3>
+              {invoice ? (
+                <div className="rounded-md border p-3 space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Tipo</p>
+                      <p className="text-sm font-semibold">{invoice.tipoComprobante ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Serie - Correlativo</p>
+                      <p className="text-sm font-semibold">
+                        {invoice.serie && invoice.nroCorrelativo
+                          ? `${invoice.serie}-${invoice.nroCorrelativo}`
+                          : "—"}
+                      </p>
+                    </div>
+                    {invoice.fechaEmision && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Fecha de emisión</p>
+                        <p className="text-sm">{formatSunatDate(invoice.fechaEmision)}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Estado SUNAT</p>
+                      <div className="mt-0.5">
+                        {sunatAccepted ? (
+                          <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs font-medium">
+                            ACEPTADO
+                          </Badge>
+                        ) : sunatStatus ? (
+                          renderSunatStatusBadge(sunatStatus)
+                        ) : (
+                          <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 text-xs font-medium">
+                            NO ENVIADO
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {invoicePdfUrl && (
+                    <a
+                      href={invoicePdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted cursor-pointer"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Ver PDF del comprobante
+                    </a>
+                  )}
+
+                  {sunatStatus?.errorMessage && (
                     <p className="text-xs text-destructive">Error: {sunatStatus.errorMessage}</p>
-                  ) : null}
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Aún no se han registrado envíos automáticos para esta venta.
+                  Esta venta no tiene comprobante generado.
                 </p>
               )}
+
               {sunatLogs.length > 0 && (
-                <div className="max-h-48 overflow-auto rounded-md border text-xs">
-                  <table className="w-full text-left">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Fecha</th>
-                        <th className="px-3 py-2 font-medium">Estado</th>
-                        <th className="px-3 py-2 font-medium">Ticket</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sunatLogs.map((log, index) => (
-                        <tr
-                          key={log.id ?? `${log.status}-${log.updatedAt ?? log.createdAt ?? index}`}
-                          className="border-t"
-                        >
-                          <td className="px-3 py-2">
-                            {formatSunatDate(log.updatedAt ?? log.createdAt)}
-                          </td>
-                          <td className="px-3 py-2">{renderSunatStatusBadge(log)}</td>
-                          <td className="px-3 py-2">{log.ticket ?? "—"}</td>
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Historial de envíos SUNAT</p>
+                  <div className="max-h-48 overflow-auto rounded-md border text-xs">
+                    <table className="w-full text-left">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Fecha</th>
+                          <th className="px-3 py-2 font-medium">Estado</th>
+                          <th className="px-3 py-2 font-medium">Respuesta SUNAT</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {sunatLogs.map((log, index) => (
+                          <tr
+                            key={log.id ?? `${log.status}-${log.updatedAt ?? log.createdAt ?? index}`}
+                            className="border-t"
+                          >
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {formatSunatDate(log.updatedAt ?? log.createdAt)}
+                            </td>
+                            <td className="px-3 py-2">{renderSunatStatusBadge(log)}</td>
+                            <td className="px-3 py-2">
+                              {renderSunatResponse(log)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
+
+            {sale.creditNotes && sale.creditNotes.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <ReceiptText className="h-4 w-4 text-amber-600" />
+                  Nota de Crédito
+                </h3>
+                {sale.creditNotes.map((cn) => {
+                  const cnStatusColor =
+                    cn.status === "ACCEPTED"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                      : cn.status === "REJECTED"
+                      ? "bg-red-100 text-red-800 border-red-200"
+                      : "bg-amber-100 text-amber-800 border-amber-200";
+                  const cnStatusLabel =
+                    cn.status === "ACCEPTED"
+                      ? "ACEPTADA"
+                      : cn.status === "REJECTED"
+                      ? "RECHAZADA"
+                      : cn.status === "DRAFT"
+                      ? "BORRADOR"
+                      : cn.status === "TRANSMITTED"
+                      ? "TRANSMITIDA"
+                      : cn.status;
+                  return (
+                    <div
+                      key={cn.id}
+                      className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2 dark:bg-amber-950/20 dark:border-amber-700"
+                    >
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Serie - Correlativo</p>
+                          <p className="text-sm font-semibold">{cn.serie}-{cn.correlativo}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Estado</p>
+                          <Badge variant="outline" className={`text-xs font-medium ${cnStatusColor}`}>
+                            {cnStatusLabel}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Motivo</p>
+                          <p className="text-sm break-words">{cn.motivo}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Total</p>
+                          <p className="text-sm font-semibold">{formatCurrency(cn.total)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Fecha de emisión</p>
+                          <p className="text-sm">{formatSunatDate(cn.fechaEmision ?? cn.createdAt)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Fecha de creación</p>
+                          <p className="text-sm">{formatSunatDate(cn.createdAt)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Código SUNAT</p>
+                          <p className="text-sm">{cn.codigoMotivo}</p>
+                        </div>
+                      </div>
+
+                      {sale?.companyRuc && (
+                        <a
+                          href={`/api/sunat/pdf/nota_credito/${sale.companyRuc}-07-${cn.serie}-${cn.correlativo}.pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted cursor-pointer"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Ver PDF de la Nota de Crédito
+                        </a>
+                      )}
+
+                      {cn.sunatTransmissions && cn.sunatTransmissions.length > 0 && (
+                        <div className="space-y-1 pt-1">
+                          <p className="text-xs font-medium text-muted-foreground">Historial de envíos SUNAT (NC)</p>
+                          <div className="max-h-36 overflow-auto rounded-md border text-xs">
+                            <table className="w-full text-left">
+                              <thead className="bg-muted/50">
+                                <tr>
+                                  <th className="px-3 py-2 font-medium">Fecha</th>
+                                  <th className="px-3 py-2 font-medium">Estado</th>
+                                  <th className="px-3 py-2 font-medium">Respuesta SUNAT</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cn.sunatTransmissions.map((t, ti) => (
+                                  <tr key={t.id ?? ti} className="border-t">
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      {formatSunatDate(t.updatedAt ?? t.createdAt)}
+                                    </td>
+                                    <td className="px-3 py-2">{renderSunatStatusBadge(t)}</td>
+                                    <td className="px-3 py-2">{renderSunatResponse(t)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {Array.isArray(detailRows) && detailRows.length > 0 && (
               <div className="space-y-2">
@@ -546,27 +835,150 @@ export function SaleDetailDialog({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="shrink-0 pt-2 flex-col gap-2 sm:flex-row">
+          {sale?.status !== "ANULADA" && sunatAccepted && canEmitCreditNote && (!sale?.creditNotes || sale.creditNotes.length === 0) && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setCreditNoteOpen(true)}
+              className="cursor-pointer gap-1.5"
+            >
+              <FileX2 className="h-4 w-4" />
+              Emitir Nota de Crédito
+            </Button>
+          )}
+          {sale?.status !== "ANULADA" && sunatAccepted && whatsappAllowed && (
+            <TooltipProvider delayDuration={200}>
+            <Popover open={whatsappPopoverOpen} onOpenChange={(popOpen) => {
+              setWhatsappPopoverOpen(popOpen);
+              if (popOpen) {
+                setWhatsappPhone((sale?.client as any)?.phone || "");
+              }
+            }}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="relative cursor-pointer gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Enviar por WhatsApp
+                  {whatsappSendCount > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[10px] font-bold text-white">
+                          {whatsappSendCount}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p className="text-xs">
+                          Enviado {whatsappSendCount} {whatsappSendCount === 1 ? "vez" : "veces"} por WhatsApp
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-4 space-y-3" align="end">
+                <div className="space-y-1">
+                  <Label htmlFor="whatsapp-phone" className="text-sm font-medium">
+                    Numero de WhatsApp
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Ingresa el numero al que enviar el comprobante
+                  </p>
+                </div>
+                <Input
+                  id="whatsapp-phone"
+                  type="tel"
+                  placeholder="Ej: 51987654321"
+                  value={whatsappPhone}
+                  onChange={(e) => setWhatsappPhone(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !isSendingWhatsApp) {
+                      handleSendWhatsApp();
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  onClick={handleSendWhatsApp}
+                  disabled={isSendingWhatsApp || !whatsappPhone.trim()}
+                  className="w-full cursor-pointer gap-1.5"
+                >
+                  {isSendingWhatsApp ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Enviar
+                </Button>
+              </PopoverContent>
+            </Popover>
+            </TooltipProvider>
+          )}
+          {sale?.status === "ACTIVE" && hasAcceptedCreditNote && canEmitCreditNote && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleAnnul}
+              disabled={isAnnulling}
+              className="cursor-pointer gap-1.5"
+            >
+              {isAnnulling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+              Anular Venta
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="cursor-pointer">
             Cerrar
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {sale && (
+        <CreditNoteDialog
+          sale={sale}
+          open={creditNoteOpen}
+          onOpenChange={setCreditNoteOpen}
+          onSuccess={() => {
+            if (sale && onRefresh) {
+              onRefresh(sale.id);
+            } else {
+              onOpenChange(false);
+            }
+          }}
+        />
+      )}
     </Dialog>
   );
 }
 
-type SaleSunatTransmissionItem = Sale["sunatTransmissions"] extends Array<infer T>
+type SaleSunatTransmissionItem = NonNullable<Sale["sunatTransmissions"]> extends Array<infer T>
   ? T
   : never;
 
 const STATUS_COLORS: Record<string, string> = {
-  SENT: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  ACCEPTED: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  OBSERVED: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  SENT: "bg-amber-100 text-amber-800 border-amber-200",
   SENDING: "bg-blue-100 text-blue-800 border-blue-200",
   PENDING: "bg-amber-100 text-amber-800 border-amber-200",
   FAILED: "bg-red-100 text-red-800 border-red-200",
   ERROR: "bg-red-100 text-red-800 border-red-200",
+  REJECTED: "bg-red-100 text-red-800 border-red-200",
   RETRYING: "bg-indigo-100 text-indigo-800 border-indigo-200",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  ACCEPTED: "ACEPTADO",
+  SENT: "ENVIADO (sin CDR)",
+  SENDING: "ENVIANDO",
+  PENDING: "PENDIENTE",
+  FAILED: "ERROR",
+  ERROR: "ERROR",
+  REJECTED: "RECHAZADO",
+  OBSERVED: "OBSERVADO",
+  RETRYING: "REINTENTANDO",
 };
 
 function renderSunatStatusBadge(
@@ -577,9 +989,16 @@ function renderSunatStatusBadge(
   }
   const normalized = status.status?.toUpperCase() ?? "DESCONOCIDO";
   const colorClass = STATUS_COLORS[normalized] ?? "bg-slate-100 text-slate-800 border-slate-200";
+  const label = STATUS_LABELS[normalized] ?? normalized;
   const tooltipParts: string[] = [];
   if (status.environment) tooltipParts.push(`Ambiente: ${status.environment}`);
   if (status.ticket) tooltipParts.push(`Ticket: ${status.ticket}`);
+  if ("cdrCode" in status && status.cdrCode) {
+    tooltipParts.push(`Código CDR: ${status.cdrCode}`);
+  }
+  if ("cdrDescription" in status && status.cdrDescription) {
+    tooltipParts.push(`CDR: ${status.cdrDescription}`);
+  }
   if ("errorMessage" in status && status.errorMessage) {
     tooltipParts.push(`Error: ${status.errorMessage}`);
   }
@@ -590,9 +1009,32 @@ function renderSunatStatusBadge(
       className={`text-xs font-medium ${colorClass}`}
       title={tooltipParts.join(" • ") || undefined}
     >
-      {normalized}
+      {label}
     </Badge>
   );
+}
+
+function renderSunatResponse(
+  log: SaleSunatTransmissionItem,
+) {
+  const cdrCode = "cdrCode" in log ? log.cdrCode : null;
+  const cdrDescription = "cdrDescription" in log ? log.cdrDescription : null;
+  const errorMessage = "errorMessage" in log ? log.errorMessage : null;
+
+  if (cdrCode && cdrDescription) {
+    return (
+      <span className="break-words">
+        <span className="font-medium">[{cdrCode}]</span> {cdrDescription}
+      </span>
+    );
+  }
+  if (cdrDescription) {
+    return <span className="break-words">{cdrDescription}</span>;
+  }
+  if (errorMessage) {
+    return <span className="break-words text-destructive">{errorMessage}</span>;
+  }
+  return <span className="text-muted-foreground">—</span>;
 }
 
 function formatSunatDate(value?: string | Date | null) {

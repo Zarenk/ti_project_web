@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -8,6 +9,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { BusinessVertical } from '../../types/business-vertical.enum';
 
 export class PublicSignupDto {
   @IsString()
@@ -44,6 +46,10 @@ export class PublicSignupDto {
   @IsString()
   @MaxLength(40)
   industry?: string;
+
+  @IsOptional()
+  @IsIn(Object.values(BusinessVertical))
+  businessVertical?: BusinessVertical;
 
   @IsOptional()
   @IsString()

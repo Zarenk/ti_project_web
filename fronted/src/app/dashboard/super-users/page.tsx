@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { AlertTriangle, Check } from "lucide-react"
 
@@ -24,6 +25,7 @@ import { useTenantSelection } from "@/context/tenant-selection-context"
 import { useAuth } from "@/context/auth-context"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { SUPER_USERS_GUIDE_STEPS } from "./super-users-guide-steps"
+import { queryKeys } from "@/lib/query-keys"
 
 const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Administrador" },
@@ -32,18 +34,47 @@ const ROLE_OPTIONS = [
 
 export default function SuperUsersAdminPage() {
   const router = useRouter()
-  const { version } = useTenantSelection()
+  const { selection } = useTenantSelection()
   const { authPending, sessionExpiring } = useAuth()
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [role, setRole] = useState<typeof ROLE_OPTIONS[number]["value"]>("ADMIN")
   const [organizationId, setOrganizationId] = useState("")
-  const [organizations, setOrganizations] = useState<OrganizationResponse[]>([])
-  const [organizationsLoading, setOrganizationsLoading] = useState(false)
   const [status, setStatus] = useState("ACTIVO")
   const [submitting, setSubmitting] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  // Auth guard effect - keep as-is
+  useEffect(() => {
+    if (authPending || sessionExpiring) return
+
+    async function checkAccess() {
+      const session = await getUserDataFromToken()
+      if (!session || !(await isTokenValid())) {
+        router.replace("/login?returnTo=/dashboard/super-users")
+        return
+      }
+      if (session.role !== "SUPER_ADMIN_GLOBAL") {
+        router.replace("/unauthorized")
+        return
+      }
+      setAuthChecked(true)
+    }
+
+    void checkAccess()
+  }, [router, authPending, sessionExpiring])
+
+  // Data fetch via useQuery
+  const { data: organizations = [], isLoading: organizationsLoading } = useQuery({
+    queryKey: queryKeys.superUsers.organizations(),
+    queryFn: async () => {
+      const list = await listOrganizations()
+      return list
+    },
+    enabled: authChecked && !authPending && !sessionExpiring,
+  })
 
   useEffect(() => {
     if (role !== "SUPER_ADMIN_ORG") {
@@ -58,6 +89,7 @@ export default function SuperUsersAdminPage() {
     }
   }, [role, organizations, organizationId])
 
+  // Form reset on tenant change
   useEffect(() => {
     setEmail("")
     setUsername("")
@@ -67,55 +99,7 @@ export default function SuperUsersAdminPage() {
     setOrganizationId("")
     setSubmitting(false)
     setShowErrors(false)
-  }, [version])
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function checkAccess() {
-      if (authPending || sessionExpiring) {
-        return
-      }
-      if (!cancelled) {
-        setOrganizations([])
-        setOrganizationsLoading(true)
-      }
-
-      const session = await getUserDataFromToken()
-      if (!session || !(await isTokenValid())) {
-        router.replace("/login?returnTo=/dashboard/super-users")
-        return
-      }
-
-      if (session.role !== "SUPER_ADMIN_GLOBAL") {
-        router.replace("/unauthorized")
-        return
-      }
-
-      try {
-        const list = await listOrganizations()
-        if (!cancelled) {
-          setOrganizations(list)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Error cargando organizaciones", error)
-          toast.error("No se pudieron cargar las organizaciones disponibles.")
-          setOrganizations([])
-        }
-      } finally {
-        if (!cancelled) {
-          setOrganizationsLoading(false)
-        }
-      }
-    }
-
-    void checkAccess()
-
-    return () => {
-      cancelled = true
-    }
-  }, [router, version, authPending, sessionExpiring])
+  }, [selection.orgId, selection.companyId])
 
   const requiresOrganizationSelection = role === "SUPER_ADMIN_ORG"
   const normalizedOrganizationId = organizationId.trim()

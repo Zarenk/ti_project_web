@@ -10,7 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 
 type ProductFeature = {
   title?: string | null
@@ -97,7 +97,7 @@ export function SaleProductCard({
   const images = Array.isArray(product.images)
     ? product.images.filter(Boolean)
     : []
-  const imageUrl = images[0] ? resolveImageUrl(images[0]) : null
+  const imageUrl = images[0] ? resolveImageVariant(images[0], "card") : null
   const specSummary = getSpecSummary(product.specification)
   const brandName =
     typeof product.brand === "string"

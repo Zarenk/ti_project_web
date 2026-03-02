@@ -1,5 +1,6 @@
 "use client"
 
+import { usePathname } from "next/navigation"
 import { type LucideIcon } from "lucide-react"
 
 import {
@@ -23,6 +24,7 @@ export function NavProjects({
 }) {
   const { setIsOpen } = useHelpAssistant()
   const { setOpenMobile, isMobile } = useSidebar()
+  const pathname = usePathname()
 
   const handleChatbotClick = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -34,26 +36,40 @@ export function NavProjects({
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Otras Opciones</SidebarGroupLabel>
       <SidebarMenu>
-        {projects.map((item) => (
-          <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild>
-              {item.url === "#chatbot" ? (
-                <button
-                  onClick={handleChatbotClick}
-                  className="group relative flex w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1.5 text-sm font-medium outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <item.icon className="h-4 w-4 transition-transform group-hover:scale-110" />
-                  <span>{item.name}</span>
-                </button>
-              ) : (
-                <a href={item.url}>
-                  <item.icon />
-                  <span>{item.name}</span>
-                </a>
-              )}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ))}
+        {projects.map((item) => {
+          const isActive =
+            item.url !== "#" &&
+            item.url !== "#chatbot" &&
+            pathname.startsWith(item.url)
+
+          return (
+            <SidebarMenuItem key={item.name}>
+              <SidebarMenuButton asChild isActive={isActive}>
+                {item.url === "#chatbot" ? (
+                  <button
+                    onClick={handleChatbotClick}
+                    className="group/proj flex w-full cursor-pointer items-center gap-2 transition-all duration-200 ease-out active:scale-[0.98]"
+                  >
+                    <item.icon className="h-4 w-4 transition-transform duration-200 ease-out group-hover/proj:translate-x-0.5 group-hover/proj:scale-110" />
+                    <span className="transition-transform duration-150 ease-out group-hover/proj:translate-x-0.5">
+                      {item.name}
+                    </span>
+                  </button>
+                ) : (
+                  <a
+                    href={item.url}
+                    className="group/proj transition-all duration-200 ease-out active:scale-[0.98]"
+                  >
+                    <item.icon className="transition-transform duration-200 ease-out group-hover/proj:translate-x-0.5 group-hover/proj:scale-110" />
+                    <span className="transition-transform duration-150 ease-out group-hover/proj:translate-x-0.5">
+                      {item.name}
+                    </span>
+                  </a>
+                )}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )
+        })}
       </SidebarMenu>
     </SidebarGroup>
   )

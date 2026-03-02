@@ -1,705 +1,237 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { BarChart3, Box, DollarSign, Package, ShoppingCart, TrendingUp, Truck, Users } from "lucide-react"
 import Link from "next/link"
-import { useCallback, useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { useModulePermission } from "@/hooks/use-module-permission"
-import { getOrdersDashboardOverview } from "./orders/orders.api"
-import { fetchDashboardOverview, fetchDashboardSparklines, type DashboardSparklines } from "@/lib/dashboard/overview"
-import { DashboardMetricCard } from "@/components/dashboard-metric-card"
-import { formatDistanceToNow } from "date-fns"
-import { es } from "date-fns/locale"
-import { UnauthenticatedError } from "@/utils/auth-fetch"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { listOrganizations, type OrganizationResponse } from "./tenancy/tenancy.api"
-import { clearTenantSelection, getTenantSelection, setTenantSelection } from "@/utils/tenant-preferences"
-import { wasManualLogoutRecently } from "@/utils/manual-logout"
-import { useTenantSelection } from "@/context/tenant-selection-context"
-import { useAuth } from "@/context/auth-context"
+import { DashboardMetricCard } from "@/components/dashboard-metric-card"
+import { DashboardFinancialCard } from "./dashboard-financial-card"
+import { DashboardActivityFeed } from "./dashboard-activity-feed"
+import { DashboardQuickLinks } from "./dashboard-quick-links"
+import { EmployeeKPISection } from "./employee-kpi-section"
+import { useDashboardData } from "./use-dashboard-data"
 
-type ActivityItem = {
-  id: number | string
-  type: "order" | "sale" | "entry" | "alert"
-  description: string
-  createdAt: string
-  href: string
-}
+// ── Loading skeleton ──────────────────────────────────────────────────────────
 
-type Order = { id: number; code: string; createdAt: string }
-type Sale = { id: number; createdAt: string }
-type Entry = { id: number; createdAt: string }
-type LowStockItem = {
-  productId: number
-  productName: string
-  storeName: string
-  stock: number
-}
-
-export default function WelcomeDashboard() {
-  const [organizations, setOrganizations] = useState<OrganizationResponse[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
-  const [organizationsLoading, setOrganizationsLoading] = useState(false)
-  const [bootstrapReady, setBootstrapReady] = useState(false)
-  const [totalInventory, setTotalInventory] = useState<{ name: string; totalStock: number }[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const [monthlySales, setMonthlySales] = useState<{ total: number; growth: number | null } | null>(null)
-
-  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
-  const [pendingOrders, setPendingOrders] = useState(0)
-  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
-  const [sparklines, setSparklines] = useState<DashboardSparklines>({ inventory: [], sales: [], outOfStock: [], pendingOrders: [] })
-
-  const checkPermission = useModulePermission()
-  const router = useRouter()
-  const authErrorShown = useRef(false)
-  const { selection, version } = useTenantSelection()
-  const { role: authRole, authPending, sessionExpiring } = useAuth()
-  const userRole = authRole ?? null
-
-  const handleAuthError = useCallback(async (err: unknown) => {
-    if (authErrorShown.current) return true
-    if (authPending || sessionExpiring) return true
-    if (err instanceof UnauthenticatedError) {
-      if (wasManualLogoutRecently()) {
-        authErrorShown.current = true
-        return true
-      }
-      authErrorShown.current = true
-      if (await isTokenValid()) {
-        // Token is locally valid but API rejected — degrade gracefully
-        // instead of redirecting (common for new accounts with incomplete tenant setup)
-        console.warn("Dashboard data fetch rejected despite valid token.")
-        toast.error("No se pudieron cargar algunos datos del dashboard.")
-      } else {
-        toast.error("Tu sesion ha expirado. Vuelve a iniciar sesion.")
-        const path = window.location.pathname
-        router.replace(`/login?returnTo=${encodeURIComponent(path)}`)
-      }
-      return true
-    }
-    return false
-  }, [router, authPending, sessionExpiring])
-
-  const isGlobalSuperAdmin = userRole?.trim().toUpperCase() === "SUPER_ADMIN_GLOBAL"
-
-  const handleOrganizationChange = useCallback(
-    (value: string) => {
-      if (!isGlobalSuperAdmin) return
-      const trimmed = value.trim()
-      if (trimmed.length === 0) {
-        setSelectedOrgId(null)
-        setTenantSelection({ orgId: null, companyId: null })
-        router.refresh()
-        return
-      }
-
-      const nextId = Number.parseInt(trimmed, 10)
-      if (!Number.isFinite(nextId)) {
-        toast.error("Identificador de organizacion invalido.")
-        return
-      }
-
-      const target = nextId != null ? organizations.find((org) => org.id === nextId) ?? null : null
-      const nextCompanyId = target?.companies?.[0]?.id ?? null
-      setSelectedOrgId(nextId)
-      setTenantSelection({ orgId: nextId, companyId: nextCompanyId })
-      router.refresh()
-    },
-    [isGlobalSuperAdmin, organizations, router],
-  )
-
-  useEffect(() => {
-    if (authPending || sessionExpiring) {
-      return
-    }
-    if (!userRole) {
-      return
-    }
-    let cancelled = false
-
-    async function bootstrap() {
-      try {
-        const allowedRoles = ["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN", "EMPLOYEE"]
-        const normalizedUserRole = userRole.trim().toUpperCase()
-        if (!allowedRoles.includes(normalizedUserRole)) {
-          router.push("/unauthorized")
-          return
-        }
-
-        if (userRole === "SUPER_ADMIN_GLOBAL") {
-          setOrganizationsLoading(true)
-          try {
-            const orgList = await listOrganizations()
-            if (cancelled) return
-            setOrganizations(orgList)
-
-            const stored = await getTenantSelection()
-            const resolvedOrg =
-              stored.orgId != null && orgList.some((org) => org.id === stored.orgId)
-                ? stored.orgId
-                : orgList[0]?.id ?? null
-
-            let resolvedCompany: number | null = null
-            if (resolvedOrg != null) {
-              const target = orgList.find((org) => org.id === resolvedOrg)
-              resolvedCompany =
-                target?.companies?.some((company) => company.id === stored.companyId) === true
-                  ? stored.companyId
-                  : target?.companies?.[0]?.id ?? null
-            }
-
-            setSelectedOrgId(resolvedOrg)
-            setTenantSelection({ orgId: resolvedOrg, companyId: resolvedCompany })
-          } catch (error) {
-            if (!cancelled) {
-              console.error("Error cargando organizaciones", error)
-              toast.error("No se pudieron cargar las organizaciones disponibles.")
-              setOrganizations([])
-              setSelectedOrgId(null)
-              clearTenantSelection()
-            }
-          } finally {
-            if (!cancelled) {
-              setOrganizationsLoading(false)
-            }
-          }
-        } else {
-          const stored = await getTenantSelection()
-          setSelectedOrgId(stored.orgId ?? null)
-        }
-      } catch (error) {
-        console.error("Error inicializando el dashboard", error)
-        toast.error("No se pudo inicializar el panel de control.")
-      } finally {
-        if (!cancelled) {
-          setBootstrapReady(true)
-        }
-      }
-    }
-
-    bootstrap()
-
-    return () => {
-      cancelled = true
-    }
-  }, [router, userRole, authPending, sessionExpiring])
-
-  useEffect(() => {
-    if (!bootstrapReady || userRole === null) return
-    if (selection.orgId !== selectedOrgId) {
-      setSelectedOrgId(selection.orgId ?? null)
-    }
-  }, [bootstrapReady, selection.orgId, selectedOrgId, userRole])
-
-  useEffect(() => {
-    if (authPending || sessionExpiring) {
-      return
-    }
-    if (!bootstrapReady || userRole === null) return
-
-    const normalizedRole = userRole.trim().toUpperCase()
-    if (normalizedRole === "EMPLOYEE") {
-      setLoading(false)
-      setTotalInventory([])
-      setMonthlySales(null)
-      setPendingOrders(0)
-      setLowStockItems([])
-      setRecentActivity([])
-      return
-    }
-
-    if (isGlobalSuperAdmin) {
-      if (organizationsLoading) return
-
-      if (organizations.length === 0) {
-        setLoading(false)
-        setTotalInventory([])
-        setMonthlySales(null)
-        setPendingOrders(0)
-        setLowStockItems([])
-        setRecentActivity([])
-        return
-      }
-
-      if (selectedOrgId == null) {
-        setLoading(false)
-        return
-      }
-    }
-
-    let cancelled = false
-
-    async function fetchDashboardData() {
-      setLoading(true)
-      try {
-        const canInventory = checkPermission("inventory")
-        const canSales = checkPermission("sales")
-        const canOrders = checkPermission("sales")
-
-        const shouldFetchOverview = canInventory || canSales
-        const [
-          ordersOverview,
-          overviewData,
-          sparklineData,
-        ] = await Promise.all([
-          canOrders
-            ? getOrdersDashboardOverview({ status: "PENDING", limit: 10 })
-            : Promise.resolve<{ pendingCount: number; recentOrders: any[] } | null>(null),
-          shouldFetchOverview
-            ? fetchDashboardOverview()
-            : Promise.resolve({
-                inventoryTotals: [],
-                lowStock: [],
-                recentSales: [],
-                recentEntries: [],
-                monthlySales: { total: 0, growth: null },
-              }),
-          fetchDashboardSparklines(30),
-        ])
-
-        if (cancelled) return
-
-        const safeInventory =
-          shouldFetchOverview && Array.isArray(overviewData?.inventoryTotals)
-            ? overviewData.inventoryTotals
-            : []
-        const safePendingCount = ordersOverview?.pendingCount ?? 0
-        const safeRecentOrders = Array.isArray(ordersOverview?.recentOrders)
-          ? ordersOverview?.recentOrders ?? []
-          : []
-        const safeEntries = Array.isArray(overviewData?.recentEntries)
-          ? overviewData.recentEntries
-          : []
-        const safeRecentSales = Array.isArray(overviewData?.recentSales)
-          ? overviewData.recentSales
-          : []
-        const safeLowStock = Array.isArray(overviewData?.lowStock)
-          ? overviewData.lowStock
-          : []
-
-        setTotalInventory(safeInventory)
-        const monthlySalesData = canSales ? overviewData.monthlySales ?? { total: 0, growth: null } : null
-        setMonthlySales(monthlySalesData)
-        setPendingOrders(safePendingCount)
-        setLowStockItems(safeLowStock)
-
-        const entryItems = safeEntries
-          .slice()
-          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 10)
-
-        const activities: ActivityItem[] = [
-          ...safeRecentOrders.map((o: any) => ({
-            id: o.id,
-            type: "order" as const,
-            description: `Nueva orden #${o.code}`,
-            createdAt: o.createdAt,
-            href: `/dashboard/orders/${o.id}`,
-          })),
-          ...safeRecentSales.map((s: any) => ({
-            id: s.id,
-            type: "sale" as const,
-            description: `Venta interna #${s.id}`,
-            createdAt: s.createdAt,
-            href: "/dashboard/sales",
-          })),
-          ...entryItems.map((e: any) => ({
-            id: e.id,
-            type: "entry" as const,
-            description: `Ingreso de inventario #${e.id}`,
-            createdAt: e.createdAt,
-            href: "/dashboard/entries",
-          })),
-          ...(() => {
-            const list: ActivityItem[] = []
-            if (safeLowStock.length === 0) return list
-            try {
-              const storageKey = "dashboard.lowstock.seen"
-              const raw = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null
-              const seen: Record<string, number> = raw ? JSON.parse(raw) : {}
-              const now = Date.now()
-              const ttlMs = 24 * 60 * 60 * 1000
-              const newLow = safeLowStock.filter(
-                (i: any) => !seen[String(i.productId)] || now - seen[String(i.productId)] > ttlMs,
-              )
-
-              list.push(
-                ...newLow.slice(0, 3).map((i: any) => ({
-                  id: `lowstock-${i.productId}-${now}`,
-                  type: "alert" as const,
-                  description: `Sin stock: ${i.productName}`,
-                  createdAt: new Date().toISOString(),
-                  href: "/dashboard/inventory",
-                })),
-              )
-
-              const remaining = safeLowStock.length - newLow.length
-              if (newLow.length === 0 && safeLowStock.length > 0) {
-                const first = safeLowStock[0]
-                list.push({
-                  id: "lowstock-summary",
-                  type: "alert" as const,
-                  description:
-                    safeLowStock.length === 1
-                      ? `Sin stock: ${first.productName}`
-                      : `Sin stock: ${first.productName} y ${safeLowStock.length - 1} mas`,
-                  createdAt: new Date().toISOString(),
-                  href: "/dashboard/inventory",
-                })
-              } else if (remaining > 0) {
-                list.push({
-                  id: "lowstock-remaining",
-                  type: "alert" as const,
-                  description: `Otros ${remaining} productos en stock bajo`,
-                  createdAt: new Date().toISOString(),
-                  href: "/dashboard/inventory",
-                })
-              }
-
-              const updated = { ...seen }
-              newLow.forEach((i: any) => {
-                updated[String(i.productId)] = now
-              })
-              if (typeof window !== "undefined") {
-                localStorage.setItem(storageKey, JSON.stringify(updated))
-              }
-            } catch {
-              /* ignore */
-            }
-            return list
-          })(),
-        ]
-
-        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        setRecentActivity(activities.slice(0, 10))
-        setSparklines(sparklineData)
-      } catch (error: unknown) {
-        if (cancelled) return
-        if (!(await handleAuthError(error))) {
-          if (authPending || sessionExpiring) {
-            return
-          }
-          console.error("Error cargando datos:", error)
-          toast.error("No se pudo cargar la informacion del dashboard.")
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchDashboardData()
-
-    return () => {
-      cancelled = true
-    }
-  }, [
-    bootstrapReady,
-    isGlobalSuperAdmin,
-    organizationsLoading,
-    organizations,
-    selectedOrgId,
-    checkPermission,
-    handleAuthError,
-    router,
-    version,
-    userRole,
-    authPending,
-    sessionExpiring,
-  ])
-
-  const showOrganizationSelector =
-    isGlobalSuperAdmin && (organizationsLoading || organizations.length > 0)
-  const organizationSelectValue = selectedOrgId != null ? String(selectedOrgId) : ""
-  if (loading) {
-    return (
-      <div className="flex min-h-screen w-full flex-col bg-muted/40">
-        <div className="flex flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-6 w-6 rounded-full" />
-              <Skeleton className="h-4 w-40" />
-            </div>
-          </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-            <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i}>
-                  <CardHeader className="space-y-2">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-3 w-32" />
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <Skeleton className="h-8 w-28" />
-                    <Skeleton className="h-3 w-20" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
-              <Card className="xl:col-span-2">
-                <CardHeader className="space-y-2">
-                  <Skeleton className="h-5 w-64" />
-                  <Skeleton className="h-4 w-80" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-48" />
-                          <Skeleton className="h-3 w-60" />
-                        </div>
-                      </div>
-                      <Skeleton className="h-8 w-20" />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="space-y-2">
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-4 w-56" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-4">
-                      <Skeleton className="h-8 w-8 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+function DashboardSkeleton() {
   return (
-    <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      <div className="flex flex-col">
-        <header className="sticky top-0 z-10 border-b bg-background px-4 py-3 md:px-6">
-          <div className="flex flex-col gap-2 sm:h-10 sm:flex-row sm:items-center sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Package className="h-6 w-6 shrink-0" />
-              <span className="text-lg font-semibold">Pro V1.3</span>
-            </div>
-            {showOrganizationSelector ? (
-              <div className="flex items-center gap-3 sm:ml-auto">
-                <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
-                  Organizacion
-                </span>
-                <Select
-                  value={organizationSelectValue.length > 0 ? organizationSelectValue : undefined}
-                  onValueChange={handleOrganizationChange}
-                  disabled={organizationsLoading || organizations.length === 0}
-                >
-                  <SelectTrigger className="w-full sm:w-[240px]">
-                    <SelectValue
-                      placeholder={
-                        organizationsLoading
-                          ? "Cargando organizaciones..."
-                          : "Selecciona una organizacion"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {organizations.map((org) => (
-                      <SelectItem key={org.id} value={String(org.id)}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+    <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+      {/* KPI cards skeleton */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="space-y-2 pb-2">
+              <Skeleton className="h-4 w-24" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-3 w-36" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Financial + Activity skeleton */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border p-3 space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-3 w-16" />
               </div>
-            ) : null}
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-          <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-            <Link href="/dashboard/inventory" prefetch={false} className="block">
-              <DashboardMetricCard
-                title="Inventario Total"
-                icon={<Box className="h-4 w-4" />}
-                value={loading ? "Cargando..." : totalInventory.reduce((sum, item) => sum + item.totalStock, 0)}
-                subtitle="Items en stock"
-                data={sparklines.inventory}
-                color="blue"
-              />
-            </Link>
-            <Link href="/dashboard/sales" prefetch={false} className="block">
-              <DashboardMetricCard
-                title="Ventas del mes"
-                icon={<DollarSign className="h-4 w-4" />}
-                value={
-                  loading
-                    ? "Cargando..."
-                    : monthlySales
-                    ? `S/. ${monthlySales.total.toFixed(2)}`
-                    : "Sin datos"
-                }
-                subtitle={
-                  monthlySales?.growth != null
-                    ? `${monthlySales.growth >= 0 ? "+" : ""}${monthlySales.growth.toFixed(1)}% desde el mes anterior`
-                    : "Sin datos del mes anterior"
-                }
-                data={sparklines.sales}
-                color="emerald"
-              />
-            </Link>
-            <Link href="/dashboard/inventory?outOfStock=true" prefetch={false} className="block">
-              <DashboardMetricCard
-                title="Items sin Stock"
-                icon={<TrendingUp className="h-4 w-4" />}
-                value={lowStockItems.length}
-                subtitle="Productos que necesitan reabastecimiento"
-                data={sparklines.outOfStock}
-                color="amber"
-              />
-            </Link>
-            <Link href="/dashboard/orders" prefetch={false} className="block">
-              <DashboardMetricCard
-                title="Ordenes Pendientes"
-                icon={<ShoppingCart className="h-4 w-4" />}
-                value={pendingOrders}
-                subtitle="Ordenes que necesitan ser atendidas"
-                data={sparklines.pendingOrders}
-                color="violet"
-              />
-            </Link>
-          </div>
-          <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle>Bienvenido a tu Sistema de Administracion de Inventarios</CardTitle>
-                <CardDescription>
-                  Administra tu inventario, ventas, y optimiza los negocios de tu negocio en un solo lugar.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <Package className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium leading-none">Administracion de Inventario</p>
-                      <p className="text-sm text-muted-foreground">Busca niveles de stock y detalles de productos</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/inventory">Administrar</Link>
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <ShoppingCart className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium leading-none">Proceso de Ordenes</p>
-                      <p className="text-sm text-muted-foreground">Administra las ordenes de los clientes y ventas</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/orders">Procesar</Link>
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <Truck className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium leading-none">Administracion de Proveedores</p>
-                      <p className="text-sm text-muted-foreground">Administra Proveedores</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/dashboard/providers">Ir</Link>
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <BarChart3 className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium leading-none">Reportes y Analisis</p>
-                      <p className="text-sm text-muted-foreground">Observa tendencias de ventas y reportes de inventarios</p>
-                    </div>
-                  </div>
-                  {checkPermission("salesHistory") ? (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href="/dashboard/sales/salesdashboard">Analizar</Link>
-                    </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full">Empezar</Button>
-              </CardFooter>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Actividad Reciente</CardTitle>
-                <CardDescription>Ultimas actualizaciones del inventario y ordenes</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-6">
-                {recentActivity.map((a) => (
-                  <Link key={`${a.type}-${a.id}`} href={a.href} className="flex items-center space-x-4">
-                    <div className="rounded-full bg-muted p-2">
-                      {a.type === 'order' && <Users className="h-4 w-4" />}
-                      {a.type === 'sale' && <DollarSign className="h-4 w-4" />}
-                      {a.type === 'entry' && <Package className="h-4 w-4" />}
-                      {a.type === 'alert' && <TrendingUp className="h-4 w-4" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium leading-none">{a.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true, locale: es })}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" asChild className="w-full">
-                  <Link href="/dashboard/activity">Ver toda la actividad</Link>
-                </Button>
-              </CardFooter>
-            </Card>
+            ))}
           </div>
         </div>
+        <Card>
+          <CardHeader className="space-y-2 pb-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-56" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
 
+// ── Super admin org selector ──────────────────────────────────────────────────
 
+function OrgSelector({
+  organizations,
+  selectedOrgId,
+  organizationsLoading,
+  onOrganizationChange,
+}: {
+  organizations: { id: number; name: string }[]
+  selectedOrgId: number | null
+  organizationsLoading: boolean
+  onOrganizationChange: (value: string) => void
+}) {
+  const selectValue = selectedOrgId != null ? String(selectedOrgId) : ""
+  return (
+    <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2 w-full min-w-0 overflow-hidden">
+      <span className="text-sm font-medium text-muted-foreground flex-shrink-0">
+        Organizacion
+      </span>
+      <Select
+        value={selectValue.length > 0 ? selectValue : undefined}
+        onValueChange={onOrganizationChange}
+        disabled={organizationsLoading || organizations.length === 0}
+      >
+        <SelectTrigger className="w-full sm:w-[260px] cursor-pointer">
+          <SelectValue
+            placeholder={
+              organizationsLoading ? "Cargando..." : "Selecciona organizacion"
+            }
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {organizations.map((org) => (
+            <SelectItem key={org.id} value={String(org.id)} className="cursor-pointer">
+              {org.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
 
+// ── Main dashboard ────────────────────────────────────────────────────────────
 
+export default function WelcomeDashboard() {
+  const data = useDashboardData()
 
+  const {
+    loading,
+    dashboardRole,
+    permissions,
+    config,
+    vertical,
+    kpiValues,
+    accountingSummary,
+    healthScore,
+    financialLoading,
+    recentActivity,
+    sparklines,
+    employeeKPIs,
+    employeeKPIPeriod,
+    setEmployeeKPIPeriod,
+    organizations,
+    selectedOrgId,
+    organizationsLoading,
+    handleOrganizationChange,
+  } = data
 
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (loading) {
+    return <DashboardSkeleton />
+  }
 
+  // ── Employee view: KPIs + quick links ─────────────────────────────────────
+  if (dashboardRole === "employee") {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+        <DashboardQuickLinks vertical={vertical} />
 
+        {/* Employee sales KPIs */}
+        {employeeKPIs && (
+          <EmployeeKPISection
+            data={employeeKPIs}
+            period={employeeKPIPeriod}
+            onPeriodChange={setEmployeeKPIPeriod}
+          />
+        )}
 
+        {/* Basic activity feed — no amounts */}
+        {recentActivity.length > 0 && (
+          <DashboardActivityFeed
+            activities={recentActivity}
+            showAmounts={false}
+            label={config.activityLabel}
+          />
+        )}
+      </div>
+    )
+  }
 
+  // ── Admin / Super admin view ──────────────────────────────────────────────
+  return (
+    <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+      {/* Org selector for SUPER_ADMIN_GLOBAL */}
+      {permissions.showOrgSelector && (organizationsLoading || organizations.length > 0) && (
+        <OrgSelector
+          organizations={organizations}
+          selectedOrgId={selectedOrgId}
+          organizationsLoading={organizationsLoading}
+          onOrganizationChange={handleOrganizationChange}
+        />
+      )}
 
+      {/* Greeting */}
+      <div>
+        <h2 className="text-lg font-semibold">{config.greeting}</h2>
+        <p className="text-sm text-muted-foreground">
+          Resumen general de tu negocio
+        </p>
+      </div>
 
+      {/* KPI metric cards — vertical-aware */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {config.kpis.map((kpi, i) => {
+          const kpiValue = kpiValues.find((v) => v.key === kpi.key)
+          const Icon = kpi.icon
+          return (
+            <Link key={kpi.key} href={kpi.href} prefetch={false} className="block">
+              <DashboardMetricCard
+                title={kpi.title}
+                icon={<Icon className="h-4 w-4" />}
+                value={kpiValue?.value ?? 0}
+                subtitle={kpiValue?.subtitle ?? ""}
+                data={kpi.sparklineKey ? sparklines[kpi.sparklineKey] : []}
+                color={kpi.color}
+              />
+            </Link>
+          )
+        })}
+      </div>
 
+      {/* Financial summary + Activity feed */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Financial summary — 2/3 width */}
+        {permissions.showFinancialSummary && (
+          <div className="lg:col-span-2">
+            <DashboardFinancialCard
+              summary={accountingSummary}
+              healthScore={healthScore}
+              loading={financialLoading}
+              vertical={vertical}
+            />
+          </div>
+        )}
+
+        {/* Activity feed — 1/3 width (or full if no financial) */}
+        <div className={permissions.showFinancialSummary ? "" : "lg:col-span-3"}>
+          <DashboardActivityFeed
+            activities={recentActivity}
+            showAmounts={permissions.showActivityWithAmounts}
+            label={config.activityLabel}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}

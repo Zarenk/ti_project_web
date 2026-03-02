@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { CalendarDatePicker } from "@/components/calendar-date-picker"
 import { DateRange } from "react-day-picker"
 import {
@@ -32,6 +33,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTenantSelection } from "@/context/tenant-selection-context"
+import { queryKeys } from "@/lib/query-keys"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { LEDGER_GUIDE_STEPS } from "./ledger-guide-steps"
 import {
@@ -363,37 +365,34 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
 /* ------------------------------------------------------------------ */
 
 export default function LedgerReportPage() {
-  const [data, setData] = useState<LedgerResponse | null>(null)
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [searchQuery, setSearchQuery] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { version } = useTenantSelection()
+  const { selection } = useTenantSelection()
 
-  const load = useCallback(
-    async (range?: DateRange) => {
-      setLoading(true)
-      setError(null)
-      try {
-        const result = await fetchLedger({
-          from: range?.from?.toISOString().split("T")[0],
-          to: range?.to?.toISOString().split("T")[0],
-        })
-        setData(result)
-      } catch (err) {
-        console.error("Failed to load ledger", err)
-        setError(err instanceof Error ? err.message : "Error al cargar el libro mayor")
-        setData(null)
-      } finally {
-        setLoading(false)
-      }
-    },
-    [version],
-  )
+  const {
+    data = null,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: [
+      ...queryKeys.accounting.root(selection.orgId, selection.companyId),
+      "ledger",
+      {
+        from: dateRange?.from?.toISOString().split("T")[0] ?? null,
+        to: dateRange?.to?.toISOString().split("T")[0] ?? null,
+      },
+    ],
+    queryFn: () =>
+      fetchLedger({
+        from: dateRange?.from?.toISOString().split("T")[0],
+        to: dateRange?.to?.toISOString().split("T")[0],
+      }),
+    enabled: selection.orgId !== null,
+  })
 
-  useEffect(() => {
-    load(dateRange)
-  }, [dateRange, load])
+  const error = queryError
+    ? (queryError instanceof Error ? queryError.message : "Error al cargar el libro mayor")
+    : null
 
   // Filter accounts by search query
   const filteredAccounts = useMemo(() => {

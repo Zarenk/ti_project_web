@@ -304,7 +304,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('chat:history')
   async handleHistory(
-    @MessageBody() data: { clientId: number },
+    @MessageBody()
+    data: { clientId: number; limit?: number; beforeId?: number },
     @ConnectedSocket() client: Socket,
   ) {
     try {
@@ -338,15 +339,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const tenant = this.buildTenantContextFromSocket(context);
-      const history = await this.chatService.getMessages(clientId, tenant);
-      await client.join(
-        this.getConversationRoom(
-          context.organizationId,
-          context.companyId,
-          clientId,
-        ),
+      const room = this.getConversationRoom(
+        context.organizationId,
+        context.companyId,
+        clientId,
       );
-      client.emit('chat:history', history);
+      await client.join(room);
+
+      const limit = this.parseNumeric(data?.limit);
+      const beforeId = this.parseNumeric(data?.beforeId);
+
+      if (limit && limit > 0) {
+        // Paginated response
+        const result = await this.chatService.getMessagesPaginated(
+          clientId,
+          limit,
+          beforeId ?? undefined,
+          tenant,
+        );
+        client.emit(
+          beforeId ? 'chat:history:older' : 'chat:history',
+          result,
+        );
+      } else {
+        // Legacy: return all messages as array (backward compat)
+        const history = await this.chatService.getMessages(clientId, tenant);
+        client.emit('chat:history', history);
+      }
     } catch (error) {
       client.emit('chat:error', {
         message:

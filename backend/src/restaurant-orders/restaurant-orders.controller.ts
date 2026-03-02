@@ -67,6 +67,18 @@ export class RestaurantOrdersController {
     );
   }
 
+  @Get('dashboard-summary')
+  @ApiOperation({ summary: 'Get restaurant dashboard summary (today orders, tables, kitchen)' })
+  getDashboardSummary(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.service.getDashboardSummary(
+      organizationId === undefined ? undefined : organizationId,
+      companyId === undefined ? undefined : companyId,
+    );
+  }
+
   @Get('kitchen')
   findKitchenQueue(
     @CurrentTenant('organizationId') organizationId: number | null,

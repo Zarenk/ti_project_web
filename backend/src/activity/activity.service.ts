@@ -544,7 +544,7 @@ export class ActivityService {
       companyId,
     );
 
-    const [total, byAction, byEntity, byUser] = await Promise.all([
+    const [total, byAction, byEntity, byUser, byOrg, byCompany] = await Promise.all([
       this.prisma.auditLog.count({ where }),
       this.prisma.auditLog.groupBy({
         by: ['action'],
@@ -563,7 +563,45 @@ export class ActivityService {
         orderBy: { _count: { actorId: 'desc' } },
         take: 10,
       }),
+      this.prisma.auditLog.groupBy({
+        by: ['organizationId'],
+        _count: { organizationId: true },
+        where: { ...where, organizationId: { not: null } },
+      }),
+      this.prisma.auditLog.groupBy({
+        by: ['companyId'],
+        _count: { companyId: true },
+        where: { ...where, companyId: { not: null } },
+      }),
     ]);
+
+    // Resolve org/company names
+    const orgIds = byOrg
+      .map((e) => e.organizationId)
+      .filter((id): id is number => typeof id === 'number');
+    const companyIds = byCompany
+      .map((e) => e.companyId)
+      .filter((id): id is number => typeof id === 'number');
+
+    const [orgNames, companyNames] = await Promise.all([
+      orgIds.length > 0
+        ? this.prisma.organization.findMany({
+            where: { id: { in: orgIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+      companyIds.length > 0
+        ? this.prisma.company.findMany({
+            where: { id: { in: companyIds } },
+            select: { id: true, name: true, organizationId: true },
+          })
+        : [],
+    ]);
+
+    const orgMap = new Map<number, string | null>();
+    for (const o of orgNames) orgMap.set(o.id, o.name);
+    const companyMap = new Map<number, { name: string; organizationId: number }>();
+    for (const c of companyNames) companyMap.set(c.id, { name: c.name, organizationId: c.organizationId });
 
     const usersActive = new Set(
       byUser
@@ -586,6 +624,17 @@ export class ActivityService {
         actorId: entry.actorId,
         actorEmail: entry.actorEmail,
         count: entry._count.actorId ?? 0,
+      })),
+      byOrganization: byOrg.map((entry) => ({
+        organizationId: entry.organizationId,
+        name: orgMap.get(entry.organizationId!) ?? null,
+        count: entry._count.organizationId,
+      })),
+      byCompany: companyNames.map((c) => ({
+        companyId: c.id,
+        name: c.name,
+        organizationId: c.organizationId,
+        count: byCompany.find((e) => e.companyId === c.id)?._count.companyId ?? 0,
       })),
       range: {
         from: dateFrom.toISOString(),
@@ -955,10 +1004,15 @@ export class ActivityService {
       dateTo,
       excludeContextUpdates,
       severity,
+      filterOrgId,
+      filterCompanyId,
     } = query;
 
     const where: Prisma.AuditLogWhereInput = {};
     const andFilters: Prisma.AuditLogWhereInput[] = [];
+
+    if (filterOrgId) where.organizationId = filterOrgId;
+    if (filterCompanyId) where.companyId = filterCompanyId;
 
     if (q) {
       where.OR = [

@@ -31,11 +31,26 @@ const appendSimpleAddress = (
   parent: any,
   data: AddressData | undefined,
   fallbackText?: string,
+  codigoEstablecimiento?: string,
+  rucEstablecimiento?: string,
 ) => {
   if (data?.ubigeo) {
     parent
       .ele('cbc:ID', { schemeAgencyName: 'PE:INEI', schemeName: 'Ubigeos' })
       .txt(data.ubigeo)
+      .up();
+  }
+  if (codigoEstablecimiento) {
+    const attrs: Record<string, string> = {
+      listAgencyName: 'PE:SUNAT',
+      listName: 'Establecimientos anexos',
+    };
+    if (rucEstablecimiento) {
+      attrs.listID = rucEstablecimiento;
+    }
+    parent
+      .ele('cbc:AddressTypeCode', attrs)
+      .txt(codigoEstablecimiento)
       .up();
   }
   const line = buildAddressLine(data, fallbackText);
@@ -362,8 +377,8 @@ export function generateDespatchXML(
     .txt(format(new Date(dto.fechaTraslado), 'yyyy-MM-dd'))
     .up()
     .up();
-  shipmentStage
-    .ele('cac:CarrierParty')
+  const carrierParty = shipmentStage.ele('cac:CarrierParty');
+  carrierParty
     .ele('cac:PartyIdentification')
     .ele('cbc:ID', {
       schemeAgencyName: 'PE:SUNAT',
@@ -373,13 +388,14 @@ export function generateDespatchXML(
     })
     .txt(dto.transportista.numeroDocumento)
     .up()
-    .up()
-    .ele('cac:PartyName')
-    .ele('cbc:Name')
+    .up();
+  carrierParty
+    .ele('cac:PartyLegalEntity')
+    .ele('cbc:RegistrationName')
     .txt(dto.transportista.razonSocial)
     .up()
-    .up()
     .up();
+  carrierParty.up();
 
   shipmentStage
     .ele('cac:TransportMeans')
@@ -391,21 +407,44 @@ export function generateDespatchXML(
     .up();
 
   const delivery = shipment.ele('cac:Delivery');
+  // Punto de llegada (DeliveryAddress)
   const deliveryAddress = delivery.ele('cac:DeliveryAddress');
   appendSimpleAddress(
     deliveryAddress,
     {
-    direccion: dto.puntoLlegadaDireccion,
-    ubigeo: dto.puntoLlegadaUbigeo,
-    departamento: dto.puntoLlegadaDepartamento,
-    provincia: dto.puntoLlegadaProvincia,
-    distrito: dto.puntoLlegadaDistrito,
-    urbanizacion: dto.puntoLlegadaUrbanizacion,
-    paisCodigo: dto.puntoLlegadaPaisCodigo,
+      direccion: dto.puntoLlegadaDireccion,
+      ubigeo: dto.puntoLlegadaUbigeo,
+      departamento: dto.puntoLlegadaDepartamento,
+      provincia: dto.puntoLlegadaProvincia,
+      distrito: dto.puntoLlegadaDistrito,
+      urbanizacion: dto.puntoLlegadaUrbanizacion,
+      paisCodigo: dto.puntoLlegadaPaisCodigo,
     },
     dto.puntoLlegada,
+    dto.codigoEstablecimientoLlegada ?? '0000',
+    dto.destinatario.numeroDocumento,
   );
   deliveryAddress.up();
+  // Punto de partida (Despatch > DespatchAddress)
+  const despatch = delivery.ele('cac:Despatch');
+  const despatchAddress = despatch.ele('cac:DespatchAddress');
+  appendSimpleAddress(
+    despatchAddress,
+    {
+      direccion: dto.puntoPartidaDireccion,
+      ubigeo: dto.puntoPartidaUbigeo,
+      departamento: dto.puntoPartidaDepartamento,
+      provincia: dto.puntoPartidaProvincia,
+      distrito: dto.puntoPartidaDistrito,
+      urbanizacion: dto.puntoPartidaUrbanizacion,
+      paisCodigo: dto.puntoPartidaPaisCodigo,
+    },
+    dto.puntoPartida,
+    dto.codigoEstablecimientoPartida ?? '0000',
+    dto.numeroDocumentoRemitente,
+  );
+  despatchAddress.up();
+  despatch.up();
   delivery.up();
 
   dto.items.forEach((item, index) => {

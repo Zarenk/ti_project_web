@@ -622,6 +622,11 @@
   100% { box-shadow: 0 0 0 0 rgba(var(--guide-ring-rgb, 99 102 241) / 0); }
 }
 
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 @layer utilities {
   .animate-fade-in { animation: fade-in 0.6s ease-out both; }
   .animate-fade-in-up { animation: fade-in-up 0.75s ease-out both; }
@@ -633,6 +638,92 @@
     animation: guide-breathe 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
                guide-ring 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
+  .animate-cursor-blink {
+    animation: cursor-blink 0.8s step-end infinite;
+  }
+  .animate-step-fade-in {
+    animation: step-fade-in 0.4s ease-out both;
+  }
+  .animate-sidebar-badge {
+    animation: sidebar-badge-pulse 2s ease-in-out infinite;
+  }
+  .animate-sidebar-sub-enter {
+    animation: sidebar-sub-enter 0.2s ease-out both;
+  }
+
+  /* Transfers page — staggered card entrance */
+  .animate-card-enter {
+    animation: card-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-card-enter-1 { animation-delay: 0ms; }
+  .animate-card-enter-2 { animation-delay: 80ms; }
+  .animate-card-enter-3 { animation-delay: 160ms; }
+  .animate-card-enter-4 { animation-delay: 240ms; }
+
+  /* Transfers — row slide-in for tables */
+  .animate-row-enter {
+    animation: row-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Transfers — section enter for form cards */
+  .animate-section-enter {
+    animation: section-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Order wizard — step slide-in */
+  .animate-wizard-step {
+    animation: wizard-step-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* SUNAT status badge pulse on new items */
+  .animate-status-glow {
+    animation: status-glow 2s ease-in-out infinite;
+  }
+}
+
+@keyframes step-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Transfers — card entrance with scale + fade */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Transfers — table row slide from left */
+@keyframes row-enter {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Transfers — form section entrance */
+@keyframes section-enter {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Order wizard — step enter with horizontal slide */
+@keyframes wizard-step-enter {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Employee KPI cards — staggered fade-in */
+.animate-kpi-fade-in {
+  animation: kpi-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes kpi-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* SUNAT accepted status soft glow */
+@keyframes status-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15); }
 }
 
 /* Sales dashboard scoped tokens */
@@ -739,6 +830,17 @@
   background: hsl(var(--primary) / 0.7);
   border: 1px solid transparent;
   background-clip: content-box;
+}
+
+/* ── Sidebar micro-animations ──────────────────────── */
+@keyframes sidebar-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+@keyframes sidebar-sub-enter {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 /* Sidebar scrollbar — always visible, subtle */

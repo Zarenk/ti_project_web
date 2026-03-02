@@ -238,7 +238,7 @@ export const QuoteProductCatalog = memo(function QuoteProductCatalog({
                                   }
                                 }}
                                 className={cn(
-                                  "group relative flex cursor-pointer gap-4 rounded-2xl border p-4 text-left transition-all",
+                                  "group relative flex cursor-pointer gap-4 rounded-2xl border p-4 text-left transition-all w-full min-w-0 overflow-hidden",
                                   "border-slate-200/70 bg-white/90 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-lg",
                                   "dark:border-slate-800/70 dark:bg-slate-900/70 dark:hover:border-cyan-700/70",
                                   isSelected &&
@@ -262,12 +262,12 @@ export const QuoteProductCatalog = memo(function QuoteProductCatalog({
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex-1 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                <div className="flex-1 min-w-0 space-y-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 min-w-0 break-words line-clamp-2">
                                       {option.name}
                                     </h4>
-                                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 shrink-0">
                                       {option.price.toFixed(2)}
                                     </span>
                                   </div>

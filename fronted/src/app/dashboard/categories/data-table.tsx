@@ -28,9 +28,12 @@ import { Button } from "@/components/ui/button"
 import { DataTablePagination, ManualPagination } from "../../../components/data-table-pagination"
 
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DateRange } from "react-day-picker";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
-import { deleteCategories } from "./categories.api"
+import { deleteCategories } from "./categories.api";
+import { queryKeys } from "@/lib/query-keys";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
@@ -53,6 +56,8 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const queryClient = useQueryClient();
+  const { selection } = useTenantSelection();
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -158,7 +163,9 @@ export function DataTable<TData extends {id:string, createdAt:Date, name:string,
       await deleteCategories(selectedIds);
       toast.success("Categoría(s) eliminada correctamente.");
       table.resetRowSelection();
-      location.reload();
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.root(selection.orgId, selection.companyId),
+      });
     } catch (error:any) {
       toast.error(error.message || "No se pudo eliminar la() categoria porque esta relacionada con un producto");
     }

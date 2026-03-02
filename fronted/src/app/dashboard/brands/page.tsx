@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, FormEvent, useMemo, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { useTenantSelection } from '@/context/tenant-selection-context';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 import { PageGuideButton } from '@/components/page-guide-dialog';
 import { BRANDS_GUIDE_STEPS } from './brands-guide-steps';
+import { queryKeys } from '@/lib/query-keys';
 
 const JPEG_MIME_TYPES = new Set(['image/jpeg', 'image/jpg']);
 
@@ -82,8 +84,6 @@ interface Brand {
 }
 
 export default function BrandsPage() {
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [allBrands, setAllBrands] = useState<Brand[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortByNewest, setSortByNewest] = useState(false);
@@ -92,7 +92,6 @@ export default function BrandsPage() {
   const [pngFile, setPngFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState<Brand | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [svgPreviewUrl, setSvgPreviewUrl] = useState<string | null>(null);
@@ -106,7 +105,84 @@ export default function BrandsPage() {
       }),
     [],
   );
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
+  const queryClient = useQueryClient();
+
+  // ── Data fetching via TanStack Query ──────────────────────
+  const { data: allBrands = [] } = useQuery<Brand[]>({
+    queryKey: queryKeys.brands.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const batchSize = 50;
+      let currentPage = 1;
+      let aggregated: Brand[] = [];
+      let totalItems = 0;
+
+      while (true) {
+        const { data, total } = await getBrands(currentPage, batchSize);
+        totalItems = total;
+        aggregated = aggregated.concat(data);
+        if (aggregated.length >= totalItems || data.length === 0) {
+          break;
+        }
+        currentPage += 1;
+      }
+
+      return aggregated;
+    },
+    enabled: selection.orgId !== null,
+  });
+
+  const invalidateBrands = {
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.brands.root(selection.orgId, selection.companyId),
+      });
+    },
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteBrand,
+    ...invalidateBrands,
+  });
+
+  const convertMutation = useMutation({
+    mutationFn: convertBrandPngToSvg,
+    ...invalidateBrands,
+  });
+
+  // ── Client-side filtering & pagination (derived) ──────────
+  const { brands, total } = useMemo(() => {
+    const normalizedSearch = debouncedSearch.toLowerCase();
+    let filtered = [...allBrands];
+
+    if (normalizedSearch) {
+      filtered = filtered.filter((brand) =>
+        brand.name.toLowerCase().includes(normalizedSearch),
+      );
+    }
+
+    if (sortByNewest) {
+      filtered.sort((a, b) => {
+        const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bDate - aDate;
+      });
+    } else {
+      filtered.sort((a, b) =>
+        a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }),
+      );
+    }
+
+    const totalItems = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+
+    return {
+      brands: filtered.slice(start, start + pageSize),
+      total: totalItems,
+    };
+  }, [allBrands, debouncedSearch, sortByNewest, page, pageSize]);
 
   const hasName = Boolean(name.trim());
 
@@ -173,14 +249,10 @@ export default function BrandsPage() {
     }
   }, [pngFile]);
 
-
+  // Reset page on filter/sort changes
   useEffect(() => {
     setPage(1);
-    setAllBrands([]);
-    setBrands([]);
-    setTotal(0);
-    fetchBrands();
-  }, [version]);
+  }, [debouncedSearch, sortByNewest]);
 
   useEffect(() => {
     const handler = window.setTimeout(() => {
@@ -191,68 +263,6 @@ export default function BrandsPage() {
       window.clearTimeout(handler);
     };
   }, [searchTerm]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, sortByNewest]);
-
-  useEffect(() => {
-    const normalizedSearch = debouncedSearch.toLowerCase();
-    let filtered = [...allBrands];
-
-    if (normalizedSearch) {
-      filtered = filtered.filter((brand) =>
-        brand.name.toLowerCase().includes(normalizedSearch),
-      );
-    }
-
-    if (sortByNewest) {
-      filtered.sort((a, b) => {
-        const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return bDate - aDate;
-      });
-    } else {
-      filtered.sort((a, b) =>
-        a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }),
-      );
-    }
-
-    const totalItems = filtered.length;
-    setTotal(totalItems);
-
-    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-    if (page > totalPages) {
-      setPage(totalPages);
-      return;
-    }
-
-    const start = (page - 1) * pageSize;
-    setBrands(filtered.slice(start, start + pageSize));
-  }, [allBrands, debouncedSearch, sortByNewest, page, pageSize]);
-
-  async function fetchBrands() {
-    try {
-      const batchSize = Math.max(pageSize, 50);
-      let currentPage = 1;
-      let aggregated: Brand[] = [];
-      let totalItems = 0;
-
-      while (true) {
-        const { data, total } = await getBrands(currentPage, batchSize);
-        totalItems = total;
-        aggregated = aggregated.concat(data);
-        if (aggregated.length >= totalItems || data.length === 0) {
-          break;
-        }
-        currentPage += 1;
-      }
-
-      setAllBrands(aggregated);
-    } catch (err) {
-      console.error(err);
-    }
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -300,7 +310,9 @@ export default function BrandsPage() {
       setPngPreviewUrl(null);
       setEditing(null);
       setShowErrors(false);
-      await fetchBrands();
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.brands.root(selection.orgId, selection.companyId),
+      });
     } catch (err) {
       console.error(err);
     }
@@ -326,8 +338,7 @@ export default function BrandsPage() {
   async function handleDelete(id: number) {
     if (!confirm('¿Eliminar marca?')) return;
     try {
-      await deleteBrand(id);
-      await fetchBrands();
+      await deleteMutation.mutateAsync(id);
     } catch (err) {
       console.error(err);
     }
@@ -335,8 +346,7 @@ export default function BrandsPage() {
 
   async function handleConvert(id: number) {
     try {
-      await convertBrandPngToSvg(id);
-      await fetchBrands();
+      await convertMutation.mutateAsync(id);
     } catch (err) {
       console.error(err);
     }

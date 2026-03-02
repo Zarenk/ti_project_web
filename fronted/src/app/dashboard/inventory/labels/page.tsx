@@ -53,6 +53,7 @@ interface AggregatedProduct {
   categoryName: string;
   serialNumbers: string[];
   stock: number;
+  priceSell: number | null;
   createdAt: Date;
 }
 
@@ -215,6 +216,7 @@ function aggregateInventory(items: InventoryApiItem[]): AggregatedProduct[] {
         categoryName: product.category?.name ?? "Sin categoria",
         serialNumbers: [],
         stock: 0,
+        priceSell: product.priceSell != null ? Number(product.priceSell) : null,
         createdAt: product.createdAt ? new Date(product.createdAt) : new Date(),
       });
     }
@@ -964,6 +966,11 @@ export default function InventoryLabelsPage(): ReactElement {
                     <p className="label-code text-[10px] font-medium leading-tight text-foreground">
                       {product.code}
                     </p>
+                    {product.priceSell != null && (
+                      <p className="label-price text-[10px] font-bold leading-tight text-foreground">
+                        S/ {product.priceSell.toFixed(2)}
+                      </p>
+                    )}
                     <p className="label-category text-[9px] text-muted-foreground leading-tight">
                       {product.categoryName}
                     </p>

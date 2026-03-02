@@ -138,6 +138,25 @@ let pendingSessions: LearningSession[] = [];
 let flushTimeout: NodeJS.Timeout | null = null;
 const FLUSH_INTERVAL_MS = 5000; // 5 segundos
 
+// ==================== BACKEND SYNC ====================
+
+/** Callback registered by HelpAssistantContext to send sessions to backend */
+type BackendSender = (sessions: LearningSession[]) => Promise<void>;
+let registeredBackendSender: BackendSender | null = null;
+
+/** Register a backend sender (called from HelpAssistantContext which has authFetch) */
+export function registerBackendSender(sender: BackendSender): void {
+  registeredBackendSender = sender;
+}
+
+/** Flush pending sessions to backend (fire-and-forget) */
+function flushToBackend(sessions: LearningSession[]): void {
+  if (!registeredBackendSender || sessions.length === 0) return;
+  registeredBackendSender(sessions).catch((err) => {
+    console.warn("[AdaptiveLearning] Backend flush failed:", err);
+  });
+}
+
 // 🚀 WEB WORKER: Reference to analysis worker (lazy loaded)
 let analysisWorker: Worker | null = null;
 let workerLoadFailed = false; // Track if worker failed to load
@@ -215,23 +234,28 @@ function analyzeInWorker(sessions: LearningSession[]): void {
 }
 
 /**
- * Flush inmediato de sesiones pendientes a localStorage
+ * Flush inmediato de sesiones pendientes a localStorage + backend
  */
 function flushPendingSessions(): void {
   if (pendingSessions.length === 0) return;
 
+  const toFlush = [...pendingSessions];
+
   try {
     const sessions = getLearningSession(MAX_SESSIONS);
-    sessions.push(...pendingSessions);
+    sessions.push(...toFlush);
 
     // Mantener solo las últimas MAX_SESSIONS
     const trimmed = sessions.slice(-MAX_SESSIONS);
     localStorage.setItem(LEARNING_SESSIONS_KEY, JSON.stringify(trimmed));
 
     // 🚀 OPTIMIZACIÓN: Analizar patrones en worker solo si hay suficientes nuevas sesiones
-    if (pendingSessions.length >= 10) {
+    if (toFlush.length >= 10) {
       analyzeInWorker(trimmed);
     }
+
+    // Enviar al backend (fire-and-forget)
+    flushToBackend(toFlush);
 
     pendingSessions = [];
     flushTimeout = null;

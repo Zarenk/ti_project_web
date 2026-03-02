@@ -10,6 +10,7 @@ import { ActivityService } from 'src/activity/activity.service';
 import { AuditAction } from '@prisma/client';
 import { Request } from 'express';
 import { TenantContextService } from 'src/tenancy/tenant-context.service';
+import { buildOrganizationFilter } from 'src/tenancy/organization.utils';
 
 @Injectable()
 export class BrandsService {
@@ -49,8 +50,9 @@ export class BrandsService {
       throw new BadRequestException('El nombre de la marca es obligatorio');
     }
     const name = this.normalizeName(rawName);
+    const orgFilter = buildOrganizationFilter(orgId);
     const existing = await this.prisma.brand.findFirst({
-      where: { organizationId: orgId, name },
+      where: { ...orgFilter, name },
     });
     if (existing) {
       throw new ConflictException('La marca ya existe');
@@ -86,8 +88,9 @@ export class BrandsService {
       );
     }
     const normalized = this.normalizeName(name);
+    const orgFilter = buildOrganizationFilter(orgId);
     const existing = await this.prisma.brand.findFirst({
-      where: { organizationId: orgId, name: normalized },
+      where: { ...orgFilter, name: normalized },
     });
     if (existing) return existing;
     const brand = await this.prisma.brand.create({
@@ -107,27 +110,26 @@ export class BrandsService {
       );
     }
     const skip = (page - 1) * limit;
+    const orgFilter = buildOrganizationFilter(orgId);
     const [data, total] = await this.prisma.$transaction([
       this.prisma.brand.findMany({
         skip,
         take: limit,
-        where: { organizationId: orgId },
+        where: orgFilter,
         orderBy: { name: 'asc' },
       }),
-      this.prisma.brand.count({ where: { organizationId: orgId } }),
+      this.prisma.brand.count({ where: orgFilter }),
     ]);
     return { data, total };
   }
 
   async findOne(id: number) {
-    const orgId = this.orgId();
     return this.prisma.brand.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, ...buildOrganizationFilter(this.orgId()) },
     });
   }
 
   async update(id: number, updateBrandDto: UpdateBrandDto, req: Request) {
-    const orgId = this.orgId();
     const before = await this.findOne(id);
     if (!before) {
       throw new BadRequestException('La marca no pertenece a tu organizacion.');
@@ -141,7 +143,7 @@ export class BrandsService {
       }
       const name = this.normalizeName(rawName);
       const existing = await this.prisma.brand.findFirst({
-        where: { organizationId: orgId, name },
+        where: { ...buildOrganizationFilter(this.orgId()), name },
       });
       if (existing && existing.id !== id) {
         throw new ConflictException('La marca ya existe');
@@ -185,9 +187,8 @@ export class BrandsService {
   }
 
   async remove(id: number, req: Request) {
-    const orgId = this.orgId();
     const brand = await this.prisma.brand.findFirst({
-      where: { id, organizationId: orgId },
+      where: { id, ...buildOrganizationFilter(this.orgId()) },
     });
     if (!brand) {
       throw new BadRequestException('La marca no pertenece a tu organizacion.');

@@ -1,17 +1,27 @@
+"use client";
+
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { columns } from './columns';
 import { DataTable } from './data-table';
 import { getStores } from './stores.api';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { StoresGuideButton } from './stores-guide-button';
+import { useTenantSelection } from '@/context/tenant-selection-context';
+import { queryKeys } from '@/lib/query-keys';
+import { TablePageSkeleton } from '@/components/table-page-skeleton';
 
-export const dynamic = "force-dynamic";
+export default function Page() {
+  const { selection } = useTenantSelection();
 
-export default async function Page() {
-  const stores = await getStores()
+  const { data: stores = [], isLoading } = useQuery<any[]>({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  });
 
-  const mappedData = stores.map((store:any) => ({
+  const mappedData = stores.map((store: any) => ({
     ...store,
   }));
 
@@ -52,9 +62,13 @@ export default async function Page() {
               </Button>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <DataTable columns={columns} data={mappedData}></DataTable>
-          </div>
+          {isLoading ? (
+            <TablePageSkeleton title={false} columns={5} rows={6} actions={false} />
+          ) : (
+            <div className="overflow-x-auto">
+              <DataTable columns={columns} data={mappedData} />
+            </div>
+          )}
         </div>
       </section>
     </>

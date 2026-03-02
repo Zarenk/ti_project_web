@@ -66,3 +66,21 @@ export function getBrandLogoSources(brand?: BrandLike | null): string[] {
 export function resolveBrandLogo(brand?: BrandLike | null): string {
   return getBrandLogoSources(brand)[0] ?? ""
 }
+
+/**
+ * Resolve a WebP image variant (card or thumb) from the full-size path.
+ * For .webp files: /uploads/products/abc.webp → /uploads/products/abc-card.webp
+ * For legacy formats (jpg, png): returns the original resolved URL (no variant).
+ */
+export function resolveImageVariant(
+  path: string | undefined,
+  variant: "card" | "thumb",
+): string {
+  if (!path) return ""
+  // Only .webp files have generated variants
+  if (path.endsWith(".webp")) {
+    const base = path.slice(0, -5) // remove .webp
+    return resolveImageUrl(`${base}-${variant}.webp`)
+  }
+  return resolveImageUrl(path)
+}

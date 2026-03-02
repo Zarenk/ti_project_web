@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +29,7 @@ import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useTenantFeatures } from "@/context/tenant-features-context";
 import { PageGuideButton } from "@/components/page-guide-dialog";
 import { PRODUCTS_BY_STORE_GUIDE_STEPS } from "./products-by-store-guide-steps";
+import { queryKeys } from "@/lib/query-keys";
 
 type SortKey =
   | "product"
@@ -39,6 +41,11 @@ type SortKey =
   | "lastSaleAt";
 
 type StoreSelection = number | "all" | null;
+
+// Stable empty array to prevent infinite re-render loops.
+// Inline `= []` defaults create a new reference each render when query data
+// is undefined, causing useEffect dependencies to re-fire indefinitely.
+const STABLE_EMPTY: any[] = [];
 
 const selectMostRecentSalesDetails = (
   currentDetails: any[] | undefined,
@@ -93,14 +100,10 @@ const aggregateProductsAcrossStores = (items: any[]) => {
 };
 
 export default function ProductsByStorePage() {
-  const [stores, setStores] = useState<{ id: number; name: string }[]>([]);
   const [selectedStore, setSelectedStore] = useState<StoreSelection>(null);
-  const [products, setProducts] = useState<any[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
-  const [brands, setBrands] = useState<{ id: number; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const debouncedSearchTerm = useDebounce(searchTerm, 1000); // 👈 Aplica debounce
   const debouncedSelectedStore = useDebounce<StoreSelection>(selectedStore, 600)
@@ -111,7 +114,6 @@ export default function ProductsByStorePage() {
   const [limit, setLimit] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
-  const [globalInventoryValue, setGlobalInventoryValue] = useState(0);
   const [filteredInventoryValue, setFilteredInventoryValue] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: "asc" | "desc" } | null>(null);
   const { settings } = useSiteSettings();
@@ -131,15 +133,7 @@ export default function ProductsByStorePage() {
   // Dentro del componente:
   const [open, setOpen] = useState(false)
   const [brandOpen, setBrandOpen] = useState(false)
-  const { version } = useTenantSelection();
-  const selectedCategoryName =
-    selectedCategory === 0
-      ? "Todas las categorías"
-      : categories.find((cat) => cat.id === selectedCategory)?.name || "Selecciona una Categoria"
-  const selectedBrandName =
-    selectedBrand === 0
-      ? "Todas las marcas"
-      : brands.find((brand) => brand.id === selectedBrand)?.name || "Selecciona una Marca"
+  const { selection } = useTenantSelection();
 
   const variantEntries = useMemo(() => {
     if (!hasSizeField && !hasColorField) {
@@ -332,7 +326,7 @@ export default function ProductsByStorePage() {
     );
   };
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     if (typeof selectedStore !== "number" || isExporting) {
       return;
     }
@@ -340,16 +334,20 @@ export default function ProductsByStorePage() {
     toast.info("Generando archivo Excel...");
     setIsExporting(true);
 
-    setTimeout(() => {
-      exportInventoryExcel({
+    try {
+      await exportInventoryExcel({
         storeId: selectedStore,
         categoryId: selectedCategory ?? undefined,
         brandId: selectedBrand ?? undefined,
         search: searchTerm.trim(),
         withStockOnly,
       });
+      toast.success("Excel descargado correctamente");
+    } catch (err: any) {
+      toast.error(err?.message || "Error al exportar inventario");
+    } finally {
       setIsExporting(false);
-    }, 800);
+    }
   }, [isExporting, searchTerm, selectedBrand, selectedCategory, selectedStore, withStockOnly]);
 
   const handleClearFilters = useCallback(() => {
@@ -359,7 +357,6 @@ export default function ProductsByStorePage() {
     setSearchTerm("");
     setWithStockOnly(false);
     setCurrentPage(1);
-    setProducts([]);
     setFilteredProducts([]);
     setTotalItems(0);
     setFilteredInventoryValue(0);
@@ -369,122 +366,78 @@ export default function ProductsByStorePage() {
 
   useEffect(() => {
     handleClearFilters();
-  }, [version, handleClearFilters]);
+  }, [selection.orgId, selection.companyId, handleClearFilters]);
 
-  useEffect(() => {
-    async function fetchGlobalInventoryValue() {
-      try {
-        const data = await getInventory();
+  // Global inventory value
+  const { data: fetchedGlobalInventoryValue = 0 } = useQuery({
+    queryKey: [...queryKeys.inventory.root(selection.orgId, selection.companyId), "globalValue"],
+    queryFn: async () => {
+      const data = await getInventory();
+      if (!Array.isArray(data)) return 0;
+      return data.reduce((acc: number, item: any) => {
+        const purchasePrice = Number(item?.product?.price ?? 0);
+        const totalStock = Array.isArray(item?.storeOnInventory)
+          ? item.storeOnInventory.reduce(
+              (sum: number, store: any) => sum + Number(store?.stock ?? 0),
+              0,
+            )
+          : 0;
+        return acc + purchasePrice * totalStock;
+      }, 0);
+    },
+    enabled: selection.orgId !== null,
+  });
 
-        if (!Array.isArray(data)) {
-          setGlobalInventoryValue(0);
-          return;
-        }
+  const globalInventoryValue = fetchedGlobalInventoryValue;
 
-        const totalValue = data.reduce((acc, item) => {
-          const purchasePrice = Number(item?.product?.price ?? 0);
+  // Stores list
+  const { data: stores = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const data = await getStores();
+      return data as { id: number; name: string }[];
+    },
+    enabled: selection.orgId !== null,
+  });
 
-          const totalStock = Array.isArray(item?.storeOnInventory)
-            ? item.storeOnInventory.reduce(
-                (sum, store) => sum + Number(store?.stock ?? 0),
-                0,
-              )
-            : 0;
+  // Products fetch
+  const { data: products = STABLE_EMPTY } = useQuery<any[]>({
+    queryKey: [...queryKeys.inventory.root(selection.orgId, selection.companyId), "byStore", {
+      store: debouncedSelectedStore,
+      filters: filtersQuery,
+      withStockOnly,
+    }],
+    queryFn: async () => {
+      if (debouncedSelectedStore === null) return [];
 
-          return acc + purchasePrice * totalStock;
-        }, 0);
-
-        setGlobalInventoryValue(totalValue);
-      } catch (error) {
-        console.error("Error al obtener el valor total del inventario:", error);
+      if (debouncedSelectedStore === "all") {
+        if (stores.length === 0) return [];
+        const responses = await Promise.all(
+          stores.map((store) =>
+            (withStockOnly
+              ? getProductsByStore(store.id, filtersQuery)
+              : getAllProductsByStore(store.id, filtersQuery)
+            ).catch((error) => {
+              console.error(`Error al obtener los productos de la tienda ${store.id}:`, error);
+              return [];
+            }),
+          ),
+        );
+        return aggregateProductsAcrossStores(responses.flat());
       }
-    }
 
-    setGlobalInventoryValue(0);
-    fetchGlobalInventoryValue();
-  }, [version]);
-
-  useEffect(() => {
-    async function fetchStores() {
-      try {
-        const data = await getStores();
-        setStores(data);
-      } catch (error) {
-        console.error("Error al obtener las tiendas:", error);
-      }
-    }
-    setStores([]);
-    fetchStores();
-  }, [version]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchProducts = async () => {
-      if (debouncedSelectedStore === null) {
-        if (isMounted) {
-          setProducts([]);
-        }
-        return;
-      }
-
-      try {
-        if (debouncedSelectedStore === "all") {
-          if (stores.length === 0) {
-            if (isMounted) {
-              setProducts([]);
-            }
-            return;
-          }
-
-          const responses = await Promise.all(
-            stores.map((store) =>
-              (withStockOnly
-                ? getProductsByStore(store.id, filtersQuery)
-                : getAllProductsByStore(store.id, filtersQuery)
-              ).catch((error) => {
-                console.error(`Error al obtener los productos de la tienda ${store.id}:`, error);
-                return [];
-              }),
-            ),
-          );
-
-          if (!isMounted) {
-            return;
-          }
-
-          setProducts(aggregateProductsAcrossStores(responses.flat()));
-          return;
-        }
-
-        const storeId = debouncedSelectedStore;
-        const data = withStockOnly
-          ? await getProductsByStore(storeId, filtersQuery)
-          : await getAllProductsByStore(storeId, filtersQuery);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setProducts(data);
-      } catch (error) {
-        console.error("Error al obtener los productos:", error);
-        if (isMounted) {
-          setProducts([]);
-        }
-      }
-    };
-
-    fetchProducts();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [debouncedSelectedStore, filtersQuery, withStockOnly, stores, version]);
+      const storeId = debouncedSelectedStore;
+      const data = withStockOnly
+        ? await getProductsByStore(storeId, filtersQuery)
+        : await getAllProductsByStore(storeId, filtersQuery);
+      return data;
+    },
+    enabled: selection.orgId !== null && debouncedSelectedStore !== null,
+  });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtersQuery, debouncedSelectedStore, version]);
+  }, [filtersQuery, debouncedSelectedStore, selection.orgId, selection.companyId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -505,38 +458,36 @@ export default function ProductsByStorePage() {
     };
   }, [handleExport, isExporting, selectedStore]);
 
-  useEffect(() => {
-    async function fetchCategories() {
-      try {
-        const data = await getCategories();
-        setCategories(data);
-      } catch (error) {
-        console.error("Error al obtener las categorías:", error);
-        setCategories([]);
-      }
-    }
+  // Categories list
+  const { data: categories = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const data = await getCategories();
+      return data as { id: number; name: string }[];
+    },
+    enabled: selection.orgId !== null,
+  });
 
-    setCategories([]);
-    fetchCategories();
-  }, [version]);
+  // Brands list
+  const { data: brands = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.brands.list(selection.orgId, selection.companyId),
+    queryFn: async () => {
+      const response = await getBrands(1, 1000);
+      return Array.isArray(response?.data)
+        ? response.data.map((brand: any) => ({ id: brand.id, name: brand.name }))
+        : [];
+    },
+    enabled: selection.orgId !== null,
+  });
 
-  useEffect(() => {
-    async function fetchBrands() {
-      try {
-        const response = await getBrands(1, 1000);
-        const normalizedBrands = Array.isArray(response?.data)
-          ? response.data.map((brand: any) => ({ id: brand.id, name: brand.name }))
-          : [];
-        setBrands(normalizedBrands);
-      } catch (error) {
-        console.error("Error al obtener las marcas:", error);
-        setBrands([]);
-      }
-    }
-
-    setBrands([]);
-    fetchBrands();
-  }, [version]);
+  const selectedCategoryName =
+    selectedCategory === 0
+      ? "Todas las categorías"
+      : categories.find((cat: any) => cat.id === selectedCategory)?.name || "Selecciona una Categoria"
+  const selectedBrandName =
+    selectedBrand === 0
+      ? "Todas las marcas"
+      : brands.find((brand: any) => brand.id === selectedBrand)?.name || "Selecciona una Marca"
 
   // Filtrar productos por término de búsqueda
   useEffect(() => {
@@ -590,7 +541,7 @@ export default function ProductsByStorePage() {
           .toLowerCase();
 
         const selectedBrandLabel =
-          brands.find((brand) => brand.id === debouncedSelectedBrand)?.name
+          brands.find((brand: any) => brand.id === debouncedSelectedBrand)?.name
             ?.trim()
             .toLowerCase() ?? "";
 
@@ -823,8 +774,8 @@ export default function ProductsByStorePage() {
                     Todas las marcas
                   </CommandItem>
                   {brands
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((brand) => (
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                    .map((brand: any) => (
                       <CommandItem
                         key={brand.id}
                         onSelect={() => {

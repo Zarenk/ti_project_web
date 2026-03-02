@@ -16,6 +16,9 @@ import {
   Calendar,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useTenantSelection } from "@/context/tenant-selection-context"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -40,6 +43,10 @@ type ProvidersGalleryProps = {
 
 export function ProvidersGallery({ data }: ProvidersGalleryProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
+  const invalidateProviders = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.providers.root(selection.orgId, selection.companyId) })
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Providers | null>(null)
   const [viewTarget, setViewTarget] = useState<Providers | null>(null)
@@ -50,7 +57,7 @@ export function ProvidersGallery({ data }: ProvidersGalleryProps) {
     try {
       await deleteProvider(deleteTarget.id)
       toast.success("Proveedor eliminado correctamente.")
-      router.refresh()
+      invalidateProviders()
     } catch (error: any) {
       toast.error(error?.message || "No se pudo eliminar el proveedor.")
     } finally {

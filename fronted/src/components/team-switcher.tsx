@@ -125,6 +125,9 @@ export function TeamSwitcher(): React.ReactElement | null {
       RESTAURANTS: "Restaurante",
       SERVICES: "Servicios",
       MANUFACTURING: "Manufactura",
+      COMPUTERS: "Computacion",
+      LAW_FIRM: "Abogados",
+      GYM: "Gimnasio",
     }
     return labels[normalized] ?? normalized.toLowerCase()
   }, [])
@@ -620,14 +623,26 @@ export function TeamSwitcher(): React.ReactElement | null {
     const isRetailVertical = /RETAIL/.test(verticalTone)
     const isComputersVertical = /COMPUTER|COMPUTERS/.test(verticalTone)
     const isGeneralVertical = /GENERAL/.test(verticalTone)
+    const isLawFirmVertical = /LAW_FIRM|LAW/.test(verticalTone)
+    const isGymVertical = /GYM/.test(verticalTone)
+    const isServicesVertical = /SERVICES/.test(verticalTone)
+    const isManufacturingVertical = /MANUFACTURING/.test(verticalTone)
     const verticalBarClass =
       isRestaurantVertical
         ? "bg-amber-400/90"
-        : isRetailVertical || isComputersVertical
-          ? "bg-sky-400/90"
-          : isGeneralVertical
-            ? "bg-emerald-400/90"
-            : "bg-transparent"
+        : isLawFirmVertical
+          ? "bg-rose-500/90"
+          : isGymVertical
+            ? "bg-violet-500/90"
+            : isRetailVertical || isComputersVertical
+              ? "bg-sky-400/90"
+              : isServicesVertical
+                ? "bg-teal-400/90"
+                : isManufacturingVertical
+                  ? "bg-orange-400/90"
+                  : isGeneralVertical
+                    ? "bg-emerald-400/90"
+                    : "bg-transparent"
 
     return (
       <SidebarMenu>
@@ -813,49 +828,17 @@ export function TeamSwitcher(): React.ReactElement | null {
                           <span
                             aria-hidden="true"
                             className={`pointer-events-none absolute inset-x-0 bottom-0 h-0.5 ${
-                              /RESTAURANT|RESTAURANTE/.test(
-                                (
-                                  activeCompany?.businessVertical ??
-                                  activeOrganization?.businessVertical ??
-                                  resolveVerticalLabel(
-                                    activeCompany?.businessVertical ??
-                                      activeOrganization?.businessVertical,
-                                  )
-                                )
-                                  .toString()
-                                  .trim()
-                                  .toUpperCase(),
-                              )
-                                ? "bg-amber-400/90"
-                                : /RETAIL|COMPUTER|COMPUTERS/.test(
-                                      (
-                                        activeCompany?.businessVertical ??
-                                        activeOrganization?.businessVertical ??
-                                        resolveVerticalLabel(
-                                          activeCompany?.businessVertical ??
-                                            activeOrganization?.businessVertical,
-                                        )
-                                      )
-                                        .toString()
-                                        .trim()
-                                        .toUpperCase(),
-                                    )
-                                  ? "bg-sky-400/90"
-                                  : /GENERAL/.test(
-                                        (
-                                          activeCompany?.businessVertical ??
-                                          activeOrganization?.businessVertical ??
-                                          resolveVerticalLabel(
-                                            activeCompany?.businessVertical ??
-                                              activeOrganization?.businessVertical,
-                                          )
-                                        )
-                                          .toString()
-                                          .trim()
-                                          .toUpperCase(),
-                                      )
-                                    ? "bg-emerald-400/90"
-                                    : "bg-transparent"
+                              (() => {
+                                const vt = (activeCompany?.businessVertical ?? (activeOrganization as any)?.businessVertical ?? "").toString().trim().toUpperCase()
+                                if (/RESTAURANT|RESTAURANTE/.test(vt)) return "bg-amber-400/90"
+                                if (/LAW_FIRM|LAW/.test(vt)) return "bg-rose-500/90"
+                                if (/GYM/.test(vt)) return "bg-violet-500/90"
+                                if (/RETAIL|COMPUTER|COMPUTERS/.test(vt)) return "bg-sky-400/90"
+                                if (/SERVICES/.test(vt)) return "bg-teal-400/90"
+                                if (/MANUFACTURING/.test(vt)) return "bg-orange-400/90"
+                                if (/GENERAL/.test(vt)) return "bg-emerald-400/90"
+                                return "bg-transparent"
+                              })()
                             }`}
                           />
                         </SidebarMenuButton>

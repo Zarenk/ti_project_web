@@ -58,3 +58,19 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # local backup payloads (may contain sensitive data)
 /storage/auto-backups
+
+# SUNAT certificates and private keys
+/sunat/
+
+# Temporary SUNAT/GRE files
+/temp/
+/sunat.zip/
+
+# Generated PDFs
+/comprobantes/
+
+# WhatsApp auth data (sensitive)
+/whatsapp_auth/
+
+# ML trained models (large binaries)
+/ml/models/

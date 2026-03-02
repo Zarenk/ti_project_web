@@ -432,6 +432,33 @@ export const checkSeries = async (serial: string): Promise<{ exists: boolean }> 
 };
 //
 
+// Verificar múltiples series de una vez
+export const batchCheckSeries = async (
+  serials: string[],
+): Promise<{ serial: string; exists: boolean }[]> => {
+  if (!serials.length) return []
+
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/series/batch-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serials }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Error al verificar series en lote.')
+    }
+
+    return (await response.json()) as { serial: string; exists: boolean }[]
+  } catch (error: any) {
+    if (error instanceof UnauthenticatedError) {
+      return serials.map((serial) => ({ serial, exists: false }))
+    }
+    console.error('Error al verificar series en lote:', error)
+    throw error
+  }
+}
+
 export async function getRecentEntries(limit = 5) {
   try {
     const res = await authFetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {

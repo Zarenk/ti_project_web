@@ -26,9 +26,11 @@ import {
   setTenantSelection,
 } from "@/utils/tenant-preferences"
 import { clearContextPreferences } from "@/utils/context-preferences"
+import { clearFormDrafts } from "@/lib/draft-utils"
 import { userContextStorage } from "@/utils/user-context-storage"
 import { useUserContextSync } from "@/hooks/use-user-context-sync"
 import { getCurrentTenant } from "@/app/dashboard/tenancy/tenancy.api"
+import { fetchOnboardingProgress } from "@/lib/onboarding-progress"
 import { SESSION_EXPIRED_EVENT } from "@/utils/session-expired-event"
 import { logoutSession } from "./auth.api"
 import { SessionExpiryOverlay } from "@/components/session-expiry-overlay"
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionExpiryOverlay, setSessionExpiryOverlay] = useState(false)
   const lastUserIdRef = useRef<number | null>(null)
   const authRedirectInProgressRef = useRef(false)
+  const lastMouseMoveRef = useRef<number>(0)
   const lastPathKey = "ti.lastPath"
   useUserContextSync(userId, role)
   const ensureTenantDefaults = useCallback(async (ownerId?: number | null): Promise<boolean> => {
@@ -118,6 +121,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionExpiryInProgressRef.current = false
       setSessionExpiryOverlay(false)
       clearManualLogout()
+
+      // Redirect public-signup users to onboarding if not completed
+      if (
+        hasChangedUser &&
+        data.isPublicSignup === true &&
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/dashboard/onboarding") &&
+        !window.location.pathname.startsWith("/login") &&
+        !window.location.pathname.startsWith("/signup")
+      ) {
+        try {
+          const progress = await fetchOnboardingProgress()
+          if (!progress.isCompleted && !progress.wizardDismissedAt) {
+            router.push("/dashboard/onboarding")
+          }
+        } catch {
+          // If onboarding progress check fails, continue normally
+        }
+      }
     } else {
       setUserName(null)
       setUserId(null)
@@ -159,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userContextStorage.setUserHint(null)
         clearTenantSelection()
         clearContextPreferences()
+        clearFormDrafts()
         if (!silent) {
           try { toast.success('Sesión cerrada') } catch {}
         }
@@ -371,13 +394,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       registerInteraction()
     }
 
+    const handleMouseMove = () => {
+      const now = Date.now()
+      if (now - lastMouseMoveRef.current < 300) return
+      lastMouseMoveRef.current = now
+      registerInteraction()
+    }
+
     window.addEventListener('authchange', handleAuthChange)
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('storage', handleStorage)
     window.addEventListener('pointerdown', handleUserInteraction, true)
     window.addEventListener('keydown', handleUserInteraction, true)
     window.addEventListener('focus', handleUserInteraction, true)
-    window.addEventListener('mousemove', handleUserInteraction, true)
+    window.addEventListener('mousemove', handleMouseMove, true)
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpiredEvent as EventListener)
 
     return () => {
@@ -387,7 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pointerdown', handleUserInteraction, true)
       window.removeEventListener('keydown', handleUserInteraction, true)
       window.removeEventListener('focus', handleUserInteraction, true)
-      window.removeEventListener('mousemove', handleUserInteraction, true)
+      window.removeEventListener('mousemove', handleMouseMove, true)
       window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpiredEvent as EventListener)
       clearSessionTimer()
     }

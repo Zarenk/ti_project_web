@@ -60,19 +60,30 @@ export async function uploadPdfToServer({
   correlativo,
 }: {
   blob: Blob;
-  ruc: number;
-  tipoComprobante: string; // "boleta" | "factura"
+  ruc: string | number;
+  tipoComprobante: string; // "boleta" | "factura" | "nota_credito"
   serie: string;
   correlativo: string;
 }) {
   const formData = new FormData();
 
-  const filename = `${ruc}-${tipoComprobante === "boleta" ? "03" : "01"}-${
-    serie
-  }-${correlativo}.pdf`;
+  const typeCode =
+    tipoComprobante === "nota_credito"
+      ? "07"
+      : tipoComprobante === "boleta"
+        ? "03"
+        : "01";
+
+  const filename = `${ruc}-${typeCode}-${serie}-${correlativo}.pdf`;
 
   formData.append("pdf", blob, filename);
-  formData.append("tipo", tipoComprobante === "invoice" ? "factura" : "boleta");
+  const effectiveTipo =
+    tipoComprobante === "nota_credito"
+      ? "nota_credito"
+      : tipoComprobante === "invoice"
+        ? "factura"
+        : "boleta";
+  formData.append("tipo", effectiveTipo);
 
   const authHeaders = await getAuthHeaders();
   if (!authHeaders.Authorization) {

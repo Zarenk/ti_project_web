@@ -1,7 +1,8 @@
 "use client"
 
 import { useTenantSelection } from "@/context/tenant-selection-context"
-import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { getTopProducts } from "../sales.api"
 import { DateRange } from "react-day-picker"
@@ -25,36 +26,23 @@ function truncateByWords(text: string, maxLen: number): string {
 }
 
 export function TopProductsChart({ dateRange }: Props) {
-  const [data, setData] = useState<{ name: string; sales: number }[]>([])
   const { theme } = useTheme()
   const textColor = theme === "dark" ? "#FFFFFF" : "#000000"
-  const { selection, version } = useTenantSelection()
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  )
+  const { selection } = useTenantSelection()
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        let topProducts
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to?.toISOString() ?? ""
 
-        if (dateRange?.from && dateRange?.to) {
-          const from = dateRange.from.toISOString()
-          const to = dateRange.to.toISOString()
-          topProducts = await getTopProducts({ from, to })
-        } else {
-          topProducts = await getTopProducts({ type: "month" })
-        }
-
-        setData(topProducts)
-      } catch (error) {
-        console.error("Error al obtener productos más vendidos:", error)
+  const { data = [] } = useQuery<{ name: string; sales: number }[]>({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "topProductsChart", { from, to }],
+    queryFn: async () => {
+      if (dateRange?.from && dateRange?.to) {
+        return await getTopProducts({ from: dateRange.from.toISOString(), to: dateRange.to.toISOString() })
       }
-    }
-
-    fetchData()
-  }, [dateRange, selectionKey])
+      return await getTopProducts({ type: "month" })
+    },
+    enabled: selection.orgId !== null,
+  })
 
   // Altura dinámica: 40px por producto, mínimo 300px, máximo 800px
   const chartHeight = Math.min(800, Math.max(300, data.length * 40))

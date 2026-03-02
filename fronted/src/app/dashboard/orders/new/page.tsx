@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, ArrowLeft, ArrowRight } from "lucide-react";
 import { getClients } from "@/app/dashboard/clients/clients.api";
 import { createRestaurantOrder } from "@/app/dashboard/orders/orders.api";
 import { getRestaurantTables, type RestaurantTable } from "@/app/dashboard/tables/tables.api";
@@ -28,9 +28,28 @@ import ProductsSection from "./ProductsSection";
 import SummaryCard from "./SummaryCard";
 import ClientCombobox from "./ClientCombobox";
 import { useTenantSelection } from "@/context/tenant-selection-context";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { useAuth } from "@/context/auth-context";
 import { PageGuideButton } from "@/components/page-guide-dialog";
 import { ORDER_FORM_GUIDE_STEPS } from "./order-form-guide-steps";
+import { CatalogStepper, type StepDef } from "../../catalog/catalog-stepper";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+
+// Stable empty array to prevent infinite re-render loops in bridge useEffects.
+const STABLE_EMPTY: any[] = []
+
+const WEB_STEPS: StepDef[] = [
+  { label: "Cliente", description: "Datos personales" },
+  { label: "Productos", description: "Selecciona items" },
+  { label: "Pago y Envío", description: "Facturación y entrega" },
+];
+
+const RESTAURANT_STEPS: StepDef[] = [
+  { label: "Orden", description: "Tipo y mesa" },
+  { label: "Productos", description: "Selecciona items" },
+];
 
 // (Combos de bÃƒÂºsqueda se aislaron en componentes)
 
@@ -290,7 +309,7 @@ type OrderItem = {
 
 export default function NewOrderPage() {
   const router = useRouter();
-  const { version } = useTenantSelection();
+  const { selection } = useTenantSelection();
   const { authPending, sessionExpiring } = useAuth();
   const { info: verticalInfo } = useVerticalConfig();
   const isRestaurant = verticalInfo?.businessVertical === "RESTAURANTS";
@@ -346,6 +365,7 @@ export default function NewOrderPage() {
   const [billingRuc, setBillingRuc] = useState<string>('');
   const [billingRazonSocial, setBillingRazonSocial] = useState<string>('');
   const [billingAddress, setBillingAddress] = useState<string>('');
+  const [currentStep, setCurrentStep] = useState(0);
   const [storesLoading, setStoresLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
   const [clientsLoading, setClientsLoading] = useState(true);
@@ -421,70 +441,56 @@ export default function NewOrderPage() {
       setAuthChecked(true);
     }
     guard();
-  }, [router, version, authPending, sessionExpiring]);
+  }, [router, authPending, sessionExpiring]);
 
+  const { data: storesFromQuery = STABLE_EMPTY, isLoading: storesQueryLoading } = useQuery({
+    queryKey: queryKeys.stores.list(selection.orgId, selection.companyId),
+    queryFn: () => getStores(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    async function loadStores() {
-      try {
-        const data = await getStores();
-        const list = Array.isArray(data) ? data.map((s: any) => ({ id: s.id, name: s.name })) : [];
-        setStores(list);
-        if (!list.find((s) => s.id === storeId) && list.length > 0) {
-          setStoreId(list[0].id);
-        }
-      } catch (err) {
-        console.error("Error loading stores", err);
-      } finally {
-        setStoresLoading(false);
-      }
+    const list = Array.isArray(storesFromQuery) ? storesFromQuery.map((s: any) => ({ id: s.id, name: s.name })) : [];
+    setStores(list);
+    setStoresLoading(storesQueryLoading);
+    if (!list.find((s) => s.id === storeId) && list.length > 0) {
+      setStoreId(list[0].id);
     }
-    loadStores();
-  }, [version]);
+  }, [storesFromQuery, storesQueryLoading]);
 
+  const { data: tablesFromQuery = STABLE_EMPTY, isLoading: tablesQueryLoading } = useQuery({
+    queryKey: [...queryKeys.restaurant.tables(selection.orgId, selection.companyId), orderType],
+    queryFn: () => getRestaurantTables(),
+    enabled: selection.orgId !== null && isRestaurant,
+  });
   useEffect(() => {
     if (!isRestaurant) {
       setTables([]);
       setTablesLoading(false);
       return;
     }
-    async function loadTables() {
-      setTablesLoading(true);
-      try {
-        const data = await getRestaurantTables();
-        const list = Array.isArray(data) ? data : [];
-        setTables(list);
-        if (orderType === "DINE_IN" && list.length > 0) {
-          setSelectedTableId((prev) => prev ?? list[0].id);
-        }
-      } catch (err) {
-        console.error("Error loading tables", err);
-        setTables([]);
-      } finally {
-        setTablesLoading(false);
-      }
+    const list = Array.isArray(tablesFromQuery) ? tablesFromQuery : [];
+    setTables(list);
+    setTablesLoading(tablesQueryLoading);
+    if (orderType === "DINE_IN" && list.length > 0) {
+      setSelectedTableId((prev) => prev ?? list[0].id);
     }
-    loadTables();
-  }, [version, isRestaurant, orderType]);
+  }, [tablesFromQuery, tablesQueryLoading, isRestaurant, orderType]);
 
-  // Load categories once
+  // Load categories via useQuery
+  const { data: categoriesFromQuery = STABLE_EMPTY } = useQuery({
+    queryKey: queryKeys.categories.list(selection.orgId, selection.companyId),
+    queryFn: () => getCategories(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    async function loadCats() {
-      try {
-        const cats = await getCategories();
-        const list = Array.isArray(cats)
-          ? cats
-              .filter((c: any) => c && typeof c.id === 'number' && typeof c.name === 'string')
-              .sort((a: any, b: any) => a.name.localeCompare(b.name))
-              .map((c: any) => ({ id: c.id, name: c.name }))
-          : [];
-        setCategories(list);
-      } catch (e) {
-        console.error('Error loading categories', e);
-        setCategories([]);
-      }
-    }
-    loadCats();
-  }, [version]);
+    const list = Array.isArray(categoriesFromQuery)
+      ? categoriesFromQuery
+          .filter((c: any) => c && typeof c.id === 'number' && typeof c.name === 'string')
+          .sort((a: any, b: any) => a.name.localeCompare(b.name))
+          .map((c: any) => ({ id: c.id, name: c.name }))
+      : [];
+    setCategories(list);
+  }, [categoriesFromQuery]);
 
   // Keep popover logic inside child components now
 
@@ -500,7 +506,7 @@ export default function NewOrderPage() {
     setShippingName(name);
     setSelectedClientId(c.id ?? null);
     setSelectedClientLabel(name);
-  }, [version]);
+  }, []);
 
   const handleProductPick = useCallback((p: { id: number; name: string; price: number }) => {
     setSelectedProductId(p.id);
@@ -591,34 +597,28 @@ export default function NewOrderPage() {
     setSelectedProductId(null);
     setSelectedPrice(0);
     setQuantity(1);
-  }, [storeId, version, storesLoading, stores]);
+  }, [storeId, storesLoading, stores]);
 
+  const { data: clientsFromQuery = STABLE_EMPTY, isLoading: clientsQueryLoading } = useQuery({
+    queryKey: queryKeys.clients.list(selection.orgId, selection.companyId),
+    queryFn: () => getClients(),
+    enabled: selection.orgId !== null,
+  });
   useEffect(() => {
-    async function loadClients() {
-      try {
-        const data = await getClients();
-        // Backend ya excluye genÃ¯Â¿Â½ricos; cortesÃ¯Â¿Â½a: descartar nombres/usuarios con prefijo generic_
-        const safe = Array.isArray(data)
-          ? data.filter((c: any) => {
-              const name = String(c?.name ?? '').toLowerCase();
-              if (name.startsWith('generic_')) return false;
-              const type = String(c?.type ?? '').toUpperCase();
-              const num = String(c?.typeNumber ?? '').trim();
-              const isDni = type === 'DNI' && /^\d{8}$/.test(num);
-              const isRuc = type === 'RUC' && /^\d{11}$/.test(num);
-              return isDni || isRuc;
-            })
-          : [];
-        setClients(safe);
-      } catch (err) {
-        console.error("Error loading clients", err);
-        setClients([]);
-      } finally {
-        setClientsLoading(false);
-      }
-    }
-    loadClients();
-  }, [version]);
+    const safe = Array.isArray(clientsFromQuery)
+      ? clientsFromQuery.filter((c: any) => {
+          const name = String(c?.name ?? '').toLowerCase();
+          if (name.startsWith('generic_')) return false;
+          const type = String(c?.type ?? '').toUpperCase();
+          const num = String(c?.typeNumber ?? '').trim();
+          const isDni = type === 'DNI' && /^\d{8}$/.test(num);
+          const isRuc = type === 'RUC' && /^\d{11}$/.test(num);
+          return isDni || isRuc;
+        })
+      : [];
+    setClients(safe);
+    setClientsLoading(clientsQueryLoading);
+  }, [clientsFromQuery, clientsQueryLoading]);
 
   const subtotal = useMemo(() => items.reduce((s, it) => s + it.quantity * it.price, 0), [items]);
   const shipping = 0;
@@ -812,68 +812,28 @@ export default function NewOrderPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-950">
         <div className="container mx-auto px-4 py-6">
-          <div className="mb-6">
-            <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-8 w-72 mb-4" />
+          <div className="flex items-center gap-4 mb-6 max-w-3xl">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 flex-1">
+                <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+                <Skeleton className="h-3 flex-1 rounded-full" />
+              </div>
+            ))}
           </div>
           <div className="grid lg:grid-cols-3 gap-6 max-w-7xl">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2">
               <Card className="shadow-sm p-0">
                 <CardHeader className="p-4">
                   <Skeleton className="h-6 w-48" />
                 </CardHeader>
                 <CardContent className="px-4 pb-4 grid md:grid-cols-2 gap-3">
-                  <div className="md:col-span-2 flex items-center gap-3 pb-1">
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="h-5 w-40" />
-                  </div>
-                  {Array.from({ length: 5 }).map((_, i) => (
+                  {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="space-y-2">
                       <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-10 w-full" />
                     </div>
                   ))}
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm p-0">
-                <CardHeader className="px-4 pt-4 pb-2">
-                  <Skeleton className="h-6 w-40" />
-                </CardHeader>
-                <CardContent className="px-4 pb-4 grid md:grid-cols-2 gap-3">
-                  <div className="md:col-span-2 flex items-center gap-3 pb-1">
-                    <Skeleton className="h-5 w-40" />
-                    <Skeleton className="h-5 w-40" />
-                  </div>
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm p-0">
-                <CardHeader className="px-4 pt-4 pb-2">
-                  <Skeleton className="h-6 w-32" />
-                </CardHeader>
-                <CardContent className="p-6 space-y-4">
-                  <div className="grid md:grid-cols-4 gap-3 items-end">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="space-y-2">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="flex items-center justify-between rounded-md border p-3">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-5 w-20" />
-                      </div>
-                    ))}
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -883,15 +843,13 @@ export default function NewOrderPage() {
                   <Skeleton className="h-6 w-32" />
                 </CardHeader>
                 <CardContent className="p-6 space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
+                  {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="flex items-center justify-between">
                       <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-4 w-20" />
                     </div>
                   ))}
-                  <div className="pt-4">
-                    <Skeleton className="h-10 w-full" />
-                  </div>
+                  <Skeleton className="h-10 w-full mt-4" />
                 </CardContent>
               </Card>
             </div>
@@ -899,6 +857,8 @@ export default function NewOrderPage() {
         </div>
       </div>
     );
+  }
+
   if (isRestaurant) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -919,8 +879,19 @@ export default function NewOrderPage() {
             </Badge>
           </div>
 
+          <div className="mb-6 max-w-2xl">
+            <CatalogStepper
+              steps={RESTAURANT_STEPS}
+              currentStep={currentStep}
+              onStepClick={(i) => setCurrentStep(i)}
+              canReachStep={(i) => i !== currentStep}
+            />
+          </div>
+
           <div className="grid lg:grid-cols-3 gap-6 max-w-7xl">
             <div className="lg:col-span-2 space-y-6">
+             <div key={`r-step-${currentStep}`} className="animate-wizard-step space-y-6">
+              {currentStep === 0 && (<>
               <Card className="border-white/10 bg-background/60">
                 <CardHeader className="px-4 pt-4 pb-2">
                   <CardTitle>Tipo de orden</CardTitle>
@@ -1002,6 +973,22 @@ export default function NewOrderPage() {
                 </CardContent>
               </Card>
 
+              <Card className="border-white/10 bg-background/60">
+                <CardHeader className="px-4 pt-4 pb-2">
+                  <CardTitle>Notas adicionales</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <Textarea
+                    value={orderNotes}
+                    onChange={(event) => setOrderNotes(event.target.value)}
+                    placeholder="Notas para cocina o el salon"
+                    className="min-h-[90px]"
+                  />
+                </CardContent>
+              </Card>
+              </>)}
+
+              {currentStep === 1 && (<>
               <ProductsSection
                 storeId={storeId}
                 stores={stores}
@@ -1028,20 +1015,22 @@ export default function NewOrderPage() {
                   No hay tiendas configuradas. Crea una tienda para habilitar la carga de productos.
                 </div>
               )}
+              </>)}
+             </div>
 
-              <Card className="border-white/10 bg-background/60">
-                <CardHeader className="px-4 pt-4 pb-2">
-                  <CardTitle>Notas adicionales</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <Textarea
-                    value={orderNotes}
-                    onChange={(event) => setOrderNotes(event.target.value)}
-                    placeholder="Notas para cocina o el salon"
-                    className="min-h-[90px]"
-                  />
-                </CardContent>
-              </Card>
+              {/* Step navigation */}
+              <div className="flex justify-between items-center pt-2">
+                {currentStep > 0 ? (
+                  <Button variant="outline" onClick={() => setCurrentStep((s) => Math.max(0, s - 1))} className="cursor-pointer">
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
+                  </Button>
+                ) : <div />}
+                {currentStep < RESTAURANT_STEPS.length - 1 ? (
+                  <Button onClick={() => setCurrentStep((s) => Math.min(RESTAURANT_STEPS.length - 1, s + 1))} className="cursor-pointer">
+                    Siguiente <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <div className="lg:col-span-1">
@@ -1092,16 +1081,28 @@ export default function NewOrderPage() {
     );
   }
 
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-950">
       <div className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 text-blue-900 dark:text-blue-100">Nueva Orden</h1>
+        <div className="mb-4 flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-900 dark:text-blue-100">Nueva Orden</h1>
+          <PageGuideButton steps={ORDER_FORM_GUIDE_STEPS} tooltipLabel="Guía de la orden" />
+        </div>
+
+        <div className="mb-6 max-w-3xl">
+          <CatalogStepper
+            steps={WEB_STEPS}
+            currentStep={currentStep}
+            onStepClick={(i) => setCurrentStep(i)}
+            canReachStep={(i) => i !== currentStep}
+          />
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-6 max-w-7xl">
           {/* Left: Form */}
           <div className="lg:col-span-2 space-y-6">
+           <div key={`w-step-${currentStep}`} className="animate-wizard-step space-y-6">
+            {currentStep === 0 && (<>
             <Card className="border-blue-200 dark:border-blue-700 shadow-sm">
               <CardHeader className="px-4 pt-4 pb-2 items-center">
                 <CardTitle className="text-center">Datos del Cliente</CardTitle>
@@ -1137,7 +1138,37 @@ export default function NewOrderPage() {
                 />
               </CardContent>
             </Card>
+            </>)}
 
+            {currentStep === 1 && (<>
+            <ProductsSection
+              storeId={storeId}
+              stores={stores}
+              setStoreId={setStoreId}
+              categories={categories}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              selectedProductId={selectedProductId}
+              products={products}
+              handleProductPick={handleProductPick}
+              selectedStock={selectedStock}
+              remainingStock={remainingStock}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              selectedPrice={selectedPrice}
+              setSelectedPrice={setSelectedPrice}
+              addItem={addItem}
+              items={items}
+              removeItem={removeItem}
+            />
+            {!storesLoading && stores.length === 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                No hay tiendas configuradas. Crea una tienda para habilitar la carga de productos.
+              </div>
+            )}
+            </>)}
+
+            {currentStep === 2 && (<>
             <Card className="border-blue-200 dark:border-blue-700 shadow-sm">
               <CardHeader className="px-4 pt-4 pb-2 items-center">
                 <CardTitle className="text-center">Facturacion</CardTitle>
@@ -1265,32 +1296,22 @@ export default function NewOrderPage() {
                 />
               </CardContent>
             </Card>
+            </>)}
+           </div>
 
-            <ProductsSection
-              storeId={storeId}
-              stores={stores}
-              setStoreId={setStoreId}
-              categories={categories}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-              selectedProductId={selectedProductId}
-              products={products}
-              handleProductPick={handleProductPick}
-              selectedStock={selectedStock}
-              remainingStock={remainingStock}
-              quantity={quantity}
-              setQuantity={setQuantity}
-              selectedPrice={selectedPrice}
-              setSelectedPrice={setSelectedPrice}
-              addItem={addItem}
-              items={items}
-              removeItem={removeItem}
-            />
-            {!storesLoading && stores.length === 0 && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                No hay tiendas configuradas. Crea una tienda para habilitar la carga de productos.
-              </div>
-            )}
+            {/* Step navigation */}
+            <div className="flex justify-between items-center pt-2">
+              {currentStep > 0 ? (
+                <Button variant="outline" onClick={() => setCurrentStep((s) => Math.max(0, s - 1))} className="cursor-pointer">
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Anterior
+                </Button>
+              ) : <div />}
+              {currentStep < WEB_STEPS.length - 1 ? (
+                <Button onClick={() => setCurrentStep((s) => Math.min(WEB_STEPS.length - 1, s + 1))} className="cursor-pointer">
+                  Siguiente <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {/* Right: Summary */}

@@ -909,6 +909,7 @@ export default function QuotesPage() {
       companyAddress: meta?.company.address ?? '',
       companyPhone: meta?.company.phone ?? '',
       companyEmail: meta?.company.email ?? '',
+      companyRuc: meta?.company.ruc ?? '',
       clientName,
       contactName,
       clientDocType,
@@ -1326,8 +1327,8 @@ export default function QuotesPage() {
           </div>
         </header>
 
-        <main className="mx-auto grid max-w-7xl gap-6 px-6 py-6 pb-40 lg:grid-cols-[1.7fr_0.8fr]">
-          <section className="space-y-6 pb-8">
+        <main className="mx-auto grid max-w-7xl gap-6 px-6 py-6 pb-40 lg:grid-cols-[1.7fr_0.8fr] w-full min-w-0">
+          <section className="space-y-6 pb-8 min-w-0">
             <QuoteProductCatalog
               tab={tab}
               catalog={catalog}
@@ -1349,7 +1350,7 @@ export default function QuotesPage() {
             />
           </section>
 
-          <aside className="sticky top-4 space-y-3 self-start">
+          <aside className="sticky top-4 space-y-3 self-start min-w-0 overflow-hidden">
             <QuoteContextBar
               storeId={storeId}
               stores={stores}

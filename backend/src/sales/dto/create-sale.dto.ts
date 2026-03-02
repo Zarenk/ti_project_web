@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsDateString,
   IsIn,
   IsNumber,
   IsOptional,
@@ -99,4 +100,8 @@ export class CreateSaleDto {
   @IsOptional()
   @IsString()
   referenceId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaEmision?: string;
 }

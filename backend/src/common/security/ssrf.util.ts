@@ -27,9 +27,25 @@ function isPrivateAddress(ip: string): boolean {
   return false;
 }
 
+/** Trusted government domains that are safe to call (skip DNS check). */
+const TRUSTED_DOMAINS = [
+  'sunat.gob.pe',
+];
+
+function isTrustedDomain(hostname: string): boolean {
+  return TRUSTED_DOMAINS.some(
+    (d) => hostname === d || hostname.endsWith(`.${d}`),
+  );
+}
+
 /** Ensures the provided URL does not resolve to a private IP address. */
 export async function assertSafeUrl(rawUrl: string): Promise<void> {
   const { hostname } = new URL(rawUrl);
+
+  if (isTrustedDomain(hostname)) {
+    return;
+  }
+
   const records = await dns.lookup(hostname, { all: true });
   for (const record of records) {
     if (isPrivateAddress(record.address)) {

@@ -44,6 +44,7 @@ model Product {
   finishedProductBOMs  BillOfMaterials[]     @relation("FinishedProduct")
   componentBOMs        BillOfMaterials[]     @relation("Component")
   workOrders           WorkOrder[]
+  adGenerations        AdGeneration[]
 
   @@unique([organizationId, name])
   @@index([categoryId])
@@ -163,66 +164,69 @@ model Category {
 }
 
 model User {
-  id                          Int                          @id @default(autoincrement())
-  email                       String                       @unique
-  username                    String                       @unique
-  password                    String
-  createdAt                   DateTime                     @default(now())
-  updatedAt                   DateTime                     @updatedAt
-  role                        UserRole                     @default(CLIENT)
-  tokenVersion                Int                          @default(0)
-  status                      String                       @default("ACTIVO")
-  failedLoginAttempts         Int                          @default(0)
-  isPermanentlyLocked         Boolean                      @default(false)
-  lockUntil                   DateTime?
-  organizationId              Int?
-  lastCompanyId               Int?
-  lastContextHash             String?
-  lastContextUpdatedAt        DateTime?
-  lastOrgId                   Int?
-  isDemo                      Boolean                      @default(false)
-  emailVerificationToken      String?                      @unique
-  emailVerifiedAt             DateTime?
-  isPublicSignup              Boolean                      @default(false)
-  lastActiveAt                DateTime?
-  accountingMode              String?                      @default("simple")
-  clientMessages              ChatMessage[]                @relation("ClientMessages")
-  sentMessages                ChatMessage[]                @relation("SenderMessages")
-  client                      Client?
-  companyVerticalChangeAudits CompanyVerticalChangeAudit[]
-  entrys                      Entry[]
-  favorites                   Favorite[]
-  helpConversations           HelpConversation[]
-  helpKBCandidatesApproved    HelpKBCandidate[]            @relation("HelpKBCandidateApprovedBy")
-  ingredientMovements         IngredientMovement[]
-  inventoryHistory            InventoryHistory[]
-  createdInvoiceTemplates     InvoiceTemplate[]            @relation("InvoiceTemplateCreatedBy")
-  updatedInvoiceTemplates     InvoiceTemplate[]            @relation("InvoiceTemplateUpdatedBy")
-  requestedExports            OrganizationDataExport[]     @relation("OrganizationDataExportsRequestedBy")
-  memberships                 OrganizationMembership[]
-  quotesCreated               Quote[]
-  restaurantOrdersCreated     RestaurantOrder[]            @relation("RestaurantOrderCreatedBy")
-  reviews                     Review[]
-  sales                       Sales[]
-  sunatStoredPdfs             SunatStoredPdf[]
-  lastCompany                 Company?                     @relation("UserLastCompany", fields: [lastCompanyId], references: [id])
-  lastOrg                     Organization?                @relation("UserLastOrganization", fields: [lastOrgId], references: [id])
-  contextHistory              UserContextHistory[]
-  contextPreferences          UserContextPreference[]
-  verticalChangeAudits        VerticalChangeAudit[]
-  cashClosures                CashClosure[]
-  cashTransactions            CashTransaction[]
-  legalMattersAssigned        LegalMatter[]                @relation("LegalMatterAssignedTo")
-  legalMattersCreated         LegalMatter[]                @relation("LegalMatterCreatedBy")
-  legalDocumentsUploaded      LegalDocument[]              @relation("LegalDocumentUploadedBy")
-  legalEventsAssigned         LegalEvent[]                 @relation("LegalEventAssignedTo")
-  legalEventsCreated          LegalEvent[]                 @relation("LegalEventCreatedBy")
-  legalTimeEntries            LegalTimeEntry[]             @relation("LegalTimeEntryUser")
-  legalNotesCreated           LegalNote[]                  @relation("LegalNoteCreatedBy")
-  calendarNotesCreated        CalendarNote[]               @relation("CalendarNoteCreatedBy")
-  jurisprudenceDocumentsUploaded JurisprudenceDocument[]   @relation("JurisprudenceDocumentUploadedBy")
-  jurisprudenceQueries        JurisprudenceQuery[]
-  jurisprudenceScrapeJobsCreated JurisprudenceScrapeJob[]  @relation("JurisprudenceScrapeJobCreatedBy")
+  id                             Int                          @id @default(autoincrement())
+  email                          String                       @unique
+  username                       String                       @unique
+  password                       String
+  createdAt                      DateTime                     @default(now())
+  updatedAt                      DateTime                     @updatedAt
+  role                           UserRole                     @default(CLIENT)
+  tokenVersion                   Int                          @default(0)
+  status                         String                       @default("ACTIVO")
+  failedLoginAttempts            Int                          @default(0)
+  isPermanentlyLocked            Boolean                      @default(false)
+  lockUntil                      DateTime?
+  organizationId                 Int?
+  lastCompanyId                  Int?
+  lastContextHash                String?
+  lastContextUpdatedAt           DateTime?
+  lastOrgId                      Int?
+  isDemo                         Boolean                      @default(false)
+  emailVerificationToken         String?                      @unique
+  emailVerificationTokenExpiresAt DateTime?
+  emailVerifiedAt                DateTime?
+  isPublicSignup                 Boolean                      @default(false)
+  lastActiveAt                   DateTime?
+  accountingMode                 String?                      @default("simple")
+  refreshTokenHash               String?
+  clientMessages                 ChatMessage[]                @relation("ClientMessages")
+  sentMessages                   ChatMessage[]                @relation("SenderMessages")
+  client                         Client?
+  companyVerticalChangeAudits    CompanyVerticalChangeAudit[]
+  entrys                         Entry[]
+  favorites                      Favorite[]
+  helpConversations              HelpConversation[]
+  helpKBCandidatesApproved       HelpKBCandidate[]            @relation("HelpKBCandidateApprovedBy")
+  ingredientMovements            IngredientMovement[]
+  inventoryHistory               InventoryHistory[]
+  createdInvoiceTemplates        InvoiceTemplate[]            @relation("InvoiceTemplateCreatedBy")
+  updatedInvoiceTemplates        InvoiceTemplate[]            @relation("InvoiceTemplateUpdatedBy")
+  requestedExports               OrganizationDataExport[]     @relation("OrganizationDataExportsRequestedBy")
+  memberships                    OrganizationMembership[]
+  quotesCreated                  Quote[]
+  restaurantOrdersCreated        RestaurantOrder[]            @relation("RestaurantOrderCreatedBy")
+  reviews                        Review[]
+  sales                          Sales[]
+  sunatStoredPdfs                SunatStoredPdf[]
+  lastCompany                    Company?                     @relation("UserLastCompany", fields: [lastCompanyId], references: [id])
+  lastOrg                        Organization?                @relation("UserLastOrganization", fields: [lastOrgId], references: [id])
+  contextHistory                 UserContextHistory[]
+  contextPreferences             UserContextPreference[]
+  verticalChangeAudits           VerticalChangeAudit[]
+  cashClosures                   CashClosure[]
+  cashTransactions               CashTransaction[]
+  legalMattersAssigned           LegalMatter[]                @relation("LegalMatterAssignedTo")
+  legalMattersCreated            LegalMatter[]                @relation("LegalMatterCreatedBy")
+  legalDocumentsUploaded         LegalDocument[]              @relation("LegalDocumentUploadedBy")
+  legalEventsAssigned            LegalEvent[]                 @relation("LegalEventAssignedTo")
+  legalEventsCreated             LegalEvent[]                 @relation("LegalEventCreatedBy")
+  legalTimeEntries               LegalTimeEntry[]             @relation("LegalTimeEntryUser")
+  legalNotesCreated              LegalNote[]                  @relation("LegalNoteCreatedBy")
+  calendarNotesCreated           CalendarNote[]               @relation("CalendarNoteCreatedBy")
+  jurisprudenceDocumentsUploaded JurisprudenceDocument[]      @relation("JurisprudenceDocumentUploadedBy")
+  jurisprudenceQueries           JurisprudenceQuery[]
+  jurisprudenceScrapeJobsCreated JurisprudenceScrapeJob[]     @relation("JurisprudenceScrapeJobCreatedBy")
+  creditNotesCreated             CreditNote[]
 
   @@index([email])
   @@index([username])
@@ -316,6 +320,22 @@ model Organization {
   calendarNotes                    CalendarNote[]
   jurisprudenceDocuments           JurisprudenceDocument[]
   jurisprudenceConfigs             JurisprudenceConfig[]
+  gymMembers                       GymMember[]
+  gymMemberships                   GymMembership[]
+  gymCheckins                      GymCheckin[]
+  gymTrainers                      GymTrainer[]
+  gymClasses                       GymClass[]
+  gymClassSchedules                GymClassSchedule[]
+  gymClassBookings                 GymClassBooking[]
+  whatsappSessions                 WhatsAppSession[]
+  whatsappMessages                 WhatsAppMessage[]
+  whatsappTemplates                WhatsAppTemplate[]
+  whatsappAutomations              WhatsAppAutomation[]
+  whatsappAutoReplyConfigs         WhatsAppAutoReplyConfig[]
+  whatsappAutoReplyLogs            WhatsAppAutoReplyLog[]
+  adGenerations                    AdGeneration[]
+  socialAccounts                   SocialAccount[]
+  creditNotes                      CreditNote[]
 
   @@index([status])
   @@index([businessVertical])
@@ -352,6 +372,7 @@ model Company {
   sunatBusinessName                String?
   sunatAddress                     String?
   sunatPhone                       String?
+  whatsappAutoSendInvoice          Boolean                           @default(false)
   logoUrl                          String?
   primaryColor                     String?
   secondaryColor                   String?
@@ -409,6 +430,20 @@ model Company {
   inventorySnapshots               InventorySnapshot[]
   calendarNotes                    CalendarNote[]
   jurisprudenceDocuments           JurisprudenceDocument[]
+  gymMembers                       GymMember[]
+  gymMemberships                   GymMembership[]
+  gymCheckins                      GymCheckin[]
+  gymTrainers                      GymTrainer[]
+  gymClasses                       GymClass[]
+  gymClassSchedules                GymClassSchedule[]
+  gymClassBookings                 GymClassBooking[]
+  whatsappSessions                 WhatsAppSession[]
+  whatsappMessages                 WhatsAppMessage[]
+  whatsappTemplates                WhatsAppTemplate[]
+  whatsappAutomations              WhatsAppAutomation[]
+  whatsappAutoReplyConfigs         WhatsAppAutoReplyConfig[]
+  whatsappAutoReplyLogs            WhatsAppAutoReplyLog[]
+  creditNotes                      CreditNote[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -598,19 +633,23 @@ model SunatTransmission {
   updatedAt             DateTime             @updatedAt
   payload               Json?
   saleId                Int?
+  creditNoteId          Int?
   subscriptionInvoiceId Int?
   cdrCode               String?
   cdrDescription        String?
   cdrFilePath           String?
   xmlFilePath           String?
+  retryCount            Int                  @default(0)
   company               Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   organization          Organization?        @relation(fields: [organizationId], references: [id])
   sale                  Sales?               @relation(fields: [saleId], references: [id])
+  creditNote            CreditNote?          @relation(fields: [creditNoteId], references: [id])
   subscriptionInvoice   SubscriptionInvoice? @relation(fields: [subscriptionInvoiceId], references: [id])
 
   @@index([companyId, status])
   @@index([organizationId])
   @@index([saleId])
+  @@index([creditNoteId])
   @@index([subscriptionInvoiceId])
 }
 
@@ -784,7 +823,7 @@ model Client {
   image            String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
-  typeNumber       String?           @unique
+  typeNumber       String?
   organizationId   Int?
   companyId        Int?
   isDemo           Boolean           @default(false)
@@ -794,11 +833,12 @@ model Client {
   restaurantOrders RestaurantOrder[]
   sales            Sales[]
   legalMatters     LegalMatter[]
+  whatsappMessages WhatsAppMessage[]
 
+  @@unique([organizationId, typeNumber])
   @@index([organizationId, name])
   @@index([companyId])
   @@index([email])
-  @@index([typeNumber])
 }
 
 model Provider {
@@ -1013,11 +1053,14 @@ model EntryDetailSeries {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   organizationId Int?
+  storeId        Int?
   entryDetail    EntryDetail   @relation(fields: [entryDetailId], references: [id], onDelete: Cascade)
   organization   Organization? @relation(fields: [organizationId], references: [id])
+  store          Store?        @relation(fields: [storeId], references: [id])
 
   @@unique([organizationId, serial])
   @@index([organizationId, serial])
+  @@index([storeId])
 }
 
 model Store {
@@ -1033,6 +1076,8 @@ model Store {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   ruc              String?
+  ubigeo           String?
+  district         String?
   organizationId   Int?
   companyId        Int?
   entries          Entry[]
@@ -1043,6 +1088,9 @@ model Store {
   transfersTo      Transfer[]         @relation("DestinationStore")
   transfersFrom    Transfer[]         @relation("SourceStore")
   CashRegister     CashRegister[]
+  seriesInStore    EntryDetailSeries[]
+  guidesFrom       ShippingGuide[]    @relation("SourceStore")
+  guidesTo         ShippingGuide[]    @relation("DestinationStore")
 
   @@unique([organizationId, name])
 }
@@ -1086,20 +1134,20 @@ model InventoryHistory {
 }
 
 model InventorySnapshot {
-  id                  Int          @id @default(autoincrement())
-  month               Int          // 1-12
+  id                  Int           @id @default(autoincrement())
+  month               Int // 1-12
   year                Int
-  totalInventoryValue Float        // Valor total del inventario en ese mes
-  totalProducts       Int          // Cantidad total de productos
-  totalUnits          Int          // Cantidad total de unidades en stock
+  totalInventoryValue Float // Valor total del inventario en ese mes
+  totalProducts       Int // Cantidad total de productos
+  totalUnits          Int // Cantidad total de unidades en stock
   organizationId      Int?
   companyId           Int?
-  snapshotType        SnapshotType @default(ACTUAL) // ACTUAL (cron real) vs CALCULATED (backfill)
-  calculatedAt        DateTime?    // Cuando fue calculado retroactivamente (solo para CALCULATED)
-  dataSourcePeriod    String?      // Rango de datos usado para calcular (ej: "2023-01-01 to 2025-12-31")
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  company             Company?     @relation(fields: [companyId], references: [id])
+  snapshotType        SnapshotType  @default(ACTUAL) // ACTUAL (cron real) vs CALCULATED (backfill)
+  calculatedAt        DateTime? // Cuando fue calculado retroactivamente (solo para CALCULATED)
+  dataSourcePeriod    String? // Rango de datos usado para calcular (ej: "2023-01-01 to 2025-12-31")
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  company             Company?      @relation(fields: [companyId], references: [id])
   organization        Organization? @relation(fields: [organizationId], references: [id])
 
   @@unique([organizationId, companyId, year, month])
@@ -1109,22 +1157,26 @@ model InventorySnapshot {
 }
 
 model Transfer {
-  id                 Int      @id @default(autoincrement())
+  id                 Int            @id @default(autoincrement())
   sourceStoreId      Int
   destinationStoreId Int
   productId          Int
   quantity           Int
+  serials            String[]       @default([])
   description        String?
-  createdAt          DateTime @default(now())
+  createdAt          DateTime       @default(now())
   organizationId     Int?
-  destinationStore   Store    @relation("DestinationStore", fields: [destinationStoreId], references: [id])
-  product            Product  @relation(fields: [productId], references: [id])
-  sourceStore        Store    @relation("SourceStore", fields: [sourceStoreId], references: [id])
+  shippingGuideId    Int?
+  destinationStore   Store          @relation("DestinationStore", fields: [destinationStoreId], references: [id])
+  product            Product        @relation(fields: [productId], references: [id])
+  sourceStore        Store          @relation("SourceStore", fields: [sourceStoreId], references: [id])
+  shippingGuide      ShippingGuide? @relation(fields: [shippingGuideId], references: [id])
 
   @@index([sourceStoreId])
   @@index([destinationStoreId])
   @@index([productId])
   @@index([organizationId, createdAt])
+  @@index([shippingGuideId])
 }
 
 model RestaurantTable {
@@ -1494,6 +1546,10 @@ model Sales {
   salesDetails       SalesDetail[]
   shippingGuides     ShippingGuide[]
   sunatTransmissions SunatTransmission[]
+  whatsappMessages   WhatsAppMessage[]
+  creditNotes        CreditNote[]
+  status             String              @default("ACTIVE")
+  annulledAt         DateTime?
 
   @@index([userId])
   @@index([storeId])
@@ -1501,6 +1557,7 @@ model Sales {
   @@index([createdAt])
   @@index([source])
   @@index([organizationId, createdAt])
+  @@index([status])
 }
 
 model PaymentMethod {
@@ -1556,19 +1613,22 @@ model SalesDetail {
 }
 
 model InvoiceSales {
-  id              Int       @id @default(autoincrement())
-  salesId         Int       @unique
-  serie           String
-  nroCorrelativo  String
-  tipoComprobante String
-  tipoMoneda      String?
-  total           Float?
-  fechaEmision    DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  companyId       Int
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  sales           Sales     @relation(fields: [salesId], references: [id], onDelete: Cascade)
+  id               Int               @id @default(autoincrement())
+  salesId          Int               @unique
+  serie            String
+  nroCorrelativo   String
+  tipoComprobante  String
+  tipoMoneda       String?
+  total            Float?
+  fechaEmision     DateTime?
+  verificationCode String?           @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  companyId        Int
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sales            Sales             @relation(fields: [salesId], references: [id], onDelete: Cascade)
+  whatsappMessages WhatsAppMessage[]
+  creditNotes      CreditNote[]
 
   @@unique([companyId, tipoComprobante, serie, nroCorrelativo])
 }
@@ -1585,6 +1645,37 @@ model CompanyDocumentSequence {
   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, documentType])
+}
+
+model CreditNote {
+  id                Int          @id @default(autoincrement())
+  organizationId    Int
+  companyId         Int
+  originalSaleId    Int
+  originalInvoiceId Int
+  serie             String
+  correlativo       String
+  motivo            String
+  codigoMotivo      String       @default("01")
+  subtotal          Float        @default(0)
+  igv               Float        @default(0)
+  total             Float
+  status            String       @default("DRAFT")
+  fechaEmision      DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  createdById       Int?
+
+  organization        Organization        @relation(fields: [organizationId], references: [id])
+  company             Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  originalSale        Sales               @relation(fields: [originalSaleId], references: [id])
+  originalInvoice     InvoiceSales        @relation(fields: [originalInvoiceId], references: [id])
+  createdBy           User?               @relation(fields: [createdById], references: [id])
+  sunatTransmissions  SunatTransmission[]
+
+  @@unique([companyId, serie, correlativo])
+  @@index([organizationId])
+  @@index([originalSaleId])
 }
 
 model QuoteSequence {
@@ -1838,9 +1929,33 @@ model ShippingGuide {
   cdrDescription               String?
   ventaId                      Int?
   entryId                      Int?
+  organizationId               Int?
+  companyId                    Int?
+  guideData                    Json?
+  puntoPartidaDireccion        String?
+  puntoPartidaUbigeo           String?
+  puntoLlegadaDireccion        String?
+  puntoLlegadaUbigeo           String?
+  pesoBrutoTotal               Float?
+  pesoBrutoUnidad              String?
+  modalidadTraslado            String?
+  remitenteRuc                 String?
+  remitenteRazonSocial         String?
+  status                       String   @default("ACTIVE")
+  voidedAt                     DateTime?
+  voidReason                   String?
+  isInterStore                 Boolean  @default(false)
+  sourceStoreId                Int?
+  destinationStoreId           Int?
+  transferIds                  Int[]
   createdAt                    DateTime @default(now())
   entry                        Entry?   @relation(fields: [entryId], references: [id])
   sale                         Sales?   @relation(fields: [ventaId], references: [id])
+  sourceStore                  Store?   @relation("SourceStore", fields: [sourceStoreId], references: [id])
+  destinationStore             Store?   @relation("DestinationStore", fields: [destinationStoreId], references: [id])
+  transfers                    Transfer[]
+
+  @@index([organizationId, createdAt])
 }
 
 model Review {
@@ -2384,6 +2499,7 @@ enum BusinessVertical {
   MANUFACTURING
   COMPUTERS
   LAW_FIRM
+  GYM
 }
 
 enum RestaurantTableStatus {
@@ -2567,6 +2683,12 @@ enum TemplateVersion {
 
 enum PublishAdapter {
   LOCAL_STUB
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
 }
 
 enum AccountType {
@@ -2766,46 +2888,46 @@ enum JurisprudenceStructureType {
 }
 
 enum SnapshotType {
-  ACTUAL      // Snapshot capturado en tiempo real por el cron
-  CALCULATED  // Snapshot calculado retroactivamente (backfill)
+  ACTUAL // Snapshot capturado en tiempo real por el cron
+  CALCULATED // Snapshot calculado retroactivamente (backfill)
 }
 
 model LegalMatter {
-  id               Int                @id @default(autoincrement())
-  organizationId   Int?
-  companyId        Int?
-  title            String
-  internalCode     String?
-  externalCode     String?
-  description      String?
-  area             LegalArea          @default(CIVIL)
-  status           LegalMatterStatus  @default(DRAFT)
-  priority         LegalMatterPriority @default(MEDIUM)
-  court            String?
-  judge            String?
-  jurisdiction     String?
-  caseValue        Float?
-  currency         String             @default("PEN")
-  openedAt         DateTime           @default(now())
-  closedAt         DateTime?
-  nextDeadline     DateTime?
-  assignedToId     Int?
-  clientId         Int?
-  createdById      Int?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id             Int                 @id @default(autoincrement())
+  organizationId Int?
+  companyId      Int?
+  title          String
+  internalCode   String?
+  externalCode   String?
+  description    String?
+  area           LegalArea           @default(CIVIL)
+  status         LegalMatterStatus   @default(DRAFT)
+  priority       LegalMatterPriority @default(MEDIUM)
+  court          String?
+  judge          String?
+  jurisdiction   String?
+  caseValue      Float?
+  currency       String              @default("PEN")
+  openedAt       DateTime            @default(now())
+  closedAt       DateTime?
+  nextDeadline   DateTime?
+  assignedToId   Int?
+  clientId       Int?
+  createdById    Int?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
-  organization     Organization?      @relation(fields: [organizationId], references: [id])
-  company          Company?           @relation(fields: [companyId], references: [id])
-  assignedTo       User?              @relation("LegalMatterAssignedTo", fields: [assignedToId], references: [id])
-  client           Client?            @relation(fields: [clientId], references: [id])
-  createdBy        User?              @relation("LegalMatterCreatedBy", fields: [createdById], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  assignedTo   User?         @relation("LegalMatterAssignedTo", fields: [assignedToId], references: [id])
+  client       Client?       @relation(fields: [clientId], references: [id])
+  createdBy    User?         @relation("LegalMatterCreatedBy", fields: [createdById], references: [id])
 
-  parties          LegalMatterParty[]
-  documents        LegalDocument[]
-  events           LegalEvent[]
-  timeEntries      LegalTimeEntry[]
-  notes            LegalNote[]
+  parties              LegalMatterParty[]
+  documents            LegalDocument[]
+  events               LegalEvent[]
+  timeEntries          LegalTimeEntry[]
+  notes                LegalNote[]
   jurisprudenceQueries JurisprudenceQuery[]
 
   @@unique([organizationId, internalCode])
@@ -2818,21 +2940,21 @@ model LegalMatter {
 }
 
 model LegalMatterParty {
-  id            Int            @id @default(autoincrement())
-  matterId      Int
-  role          LegalPartyRole @default(OTRO)
-  name          String
-  documentType  String?
+  id             Int            @id @default(autoincrement())
+  matterId       Int
+  role           LegalPartyRole @default(OTRO)
+  name           String
+  documentType   String?
   documentNumber String?
-  email         String?
-  phone         String?
-  address       String?
-  lawyerName    String?
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  email          String?
+  phone          String?
+  address        String?
+  lawyerName     String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  matter        LegalMatter    @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  matter LegalMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
 
   @@index([matterId])
   @@index([documentNumber])
@@ -2857,11 +2979,11 @@ model LegalDocument {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  matter         LegalMatter       @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  organization   Organization?     @relation(fields: [organizationId], references: [id])
-  uploadedBy     User?             @relation("LegalDocumentUploadedBy", fields: [uploadedById], references: [id])
-  parent         LegalDocument?    @relation("LegalDocumentVersions", fields: [parentId], references: [id])
-  versions       LegalDocument[]   @relation("LegalDocumentVersions")
+  matter       LegalMatter     @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  organization Organization?   @relation(fields: [organizationId], references: [id])
+  uploadedBy   User?           @relation("LegalDocumentUploadedBy", fields: [uploadedById], references: [id])
+  parent       LegalDocument?  @relation("LegalDocumentVersions", fields: [parentId], references: [id])
+  versions     LegalDocument[] @relation("LegalDocumentVersions")
 
   @@index([matterId])
   @@index([organizationId])
@@ -2870,25 +2992,25 @@ model LegalDocument {
 }
 
 model LegalEvent {
-  id             Int              @id @default(autoincrement())
-  matterId       Int
-  type           LegalEventType   @default(OTRO)
-  status         LegalEventStatus @default(PENDING)
-  title          String
-  description    String?
-  location       String?
-  scheduledAt    DateTime
-  endAt          DateTime?
-  reminderAt     DateTime?
-  completedAt    DateTime?
-  assignedToId   Int?
-  createdById    Int?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id           Int              @id @default(autoincrement())
+  matterId     Int
+  type         LegalEventType   @default(OTRO)
+  status       LegalEventStatus @default(PENDING)
+  title        String
+  description  String?
+  location     String?
+  scheduledAt  DateTime
+  endAt        DateTime?
+  reminderAt   DateTime?
+  completedAt  DateTime?
+  assignedToId Int?
+  createdById  Int?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  matter         LegalMatter      @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  assignedTo     User?            @relation("LegalEventAssignedTo", fields: [assignedToId], references: [id])
-  createdBy      User?            @relation("LegalEventCreatedBy", fields: [createdById], references: [id])
+  matter     LegalMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  assignedTo User?       @relation("LegalEventAssignedTo", fields: [assignedToId], references: [id])
+  createdBy  User?       @relation("LegalEventCreatedBy", fields: [createdById], references: [id])
 
   @@index([matterId])
   @@index([scheduledAt])
@@ -2898,20 +3020,20 @@ model LegalEvent {
 }
 
 model LegalTimeEntry {
-  id            Int          @id @default(autoincrement())
-  matterId      Int
-  userId        Int
-  description   String
-  hours         Float
-  rate          Float?
-  amount        Float?
-  billable      Boolean      @default(true)
-  date          DateTime     @default(now())
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id          Int      @id @default(autoincrement())
+  matterId    Int
+  userId      Int
+  description String
+  hours       Float
+  rate        Float?
+  amount      Float?
+  billable    Boolean  @default(true)
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  matter        LegalMatter  @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  user          User         @relation("LegalTimeEntryUser", fields: [userId], references: [id])
+  matter LegalMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  user   User        @relation("LegalTimeEntryUser", fields: [userId], references: [id])
 
   @@index([matterId])
   @@index([userId])
@@ -2920,62 +3042,62 @@ model LegalTimeEntry {
 }
 
 model LegalNote {
-  id            Int          @id @default(autoincrement())
-  matterId      Int
-  content       String
-  isPrivate     Boolean      @default(false)
-  createdById   Int?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id          Int      @id @default(autoincrement())
+  matterId    Int
+  content     String
+  isPrivate   Boolean  @default(false)
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  matter        LegalMatter  @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  createdBy     User?        @relation("LegalNoteCreatedBy", fields: [createdById], references: [id])
+  matter    LegalMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  createdBy User?       @relation("LegalNoteCreatedBy", fields: [createdById], references: [id])
 
   @@index([matterId])
   @@index([createdById])
 }
 
 model JurisprudenceDocument {
-  id               Int                          @id @default(autoincrement())
-  organizationId   Int
-  companyId        Int
+  id             Int @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
 
-  title            String
-  court            String
-  chamber          String?
-  expediente       String
-  year             Int
-  publishDate      DateTime
+  title       String
+  court       String
+  chamber     String?
+  expediente  String
+  year        Int
+  publishDate DateTime?
 
-  sourceType       JurisprudenceSourceType      @default(SCRAPED)
-  sourceUrl        String?
-  sourceDocId      String?
+  sourceType  JurisprudenceSourceType @default(SCRAPED)
+  sourceUrl   String?
+  sourceDocId String?
 
-  pdfPath          String
-  fileName         String?
-  fileSize         Int?
-  mimeType         String?
-  fileHash         String
+  pdfPath  String
+  fileName String?
+  fileSize Int?
+  mimeType String?
+  fileHash String
 
   processingStatus JurisprudenceProcessingStatus @default(PENDING)
   processedAt      DateTime?
-  retryCount       Int                          @default(0)
-  failedReason     String?                      @db.Text
+  retryCount       Int                           @default(0)
+  failedReason     String?                       @db.Text
   lastAttemptAt    DateTime?
 
-  deletedAt        DateTime?
+  deletedAt DateTime?
 
-  uploadedById     Int?
-  createdAt        DateTime                     @default(now())
-  updatedAt        DateTime                     @updatedAt
+  uploadedById Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  organization     Organization                 @relation(fields: [organizationId], references: [id])
-  company          Company                      @relation(fields: [companyId], references: [id])
-  uploadedBy       User?                        @relation("JurisprudenceDocumentUploadedBy", fields: [uploadedById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  company      Company      @relation(fields: [companyId], references: [id])
+  uploadedBy   User?        @relation("JurisprudenceDocumentUploadedBy", fields: [uploadedById], references: [id])
 
-  pages            JurisprudenceDocumentPage[]
-  sections         JurisprudenceDocumentSection[]
-  embeddings       JurisprudenceEmbedding[]
+  pages      JurisprudenceDocumentPage[]
+  sections   JurisprudenceDocumentSection[]
+  embeddings JurisprudenceEmbedding[]
 
   @@unique([organizationId, sourceUrl, fileHash])
   @@index([organizationId, companyId])
@@ -2986,24 +3108,24 @@ model JurisprudenceDocument {
 }
 
 model JurisprudenceDocumentPage {
-  id             Int                   @id @default(autoincrement())
+  id             Int @id @default(autoincrement())
   documentId     Int
   organizationId Int
   companyId      Int
 
-  pageNumber     Int
-  rawText        String?               @db.Text
-  hasText        Boolean               @default(false)
+  pageNumber Int
+  rawText    String? @db.Text
+  hasText    Boolean @default(false)
 
-  ocrRequired    Boolean               @default(false)
-  ocrCompleted   Boolean               @default(false)
-  ocrJobId       Int?
+  ocrRequired  Boolean @default(false)
+  ocrCompleted Boolean @default(false)
+  ocrJobId     Int?
 
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  document       JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  ocrJob         JurisprudenceOcrJob?  @relation(fields: [ocrJobId], references: [id])
+  document JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ocrJob   JurisprudenceOcrJob?  @relation(fields: [ocrJobId], references: [id])
 
   @@unique([documentId, pageNumber])
   @@index([documentId])
@@ -3011,44 +3133,44 @@ model JurisprudenceDocumentPage {
 }
 
 model JurisprudenceDocumentSection {
-  id             Int                        @id @default(autoincrement())
+  id             Int @id @default(autoincrement())
   documentId     Int
   organizationId Int
   companyId      Int
 
-  structureType  JurisprudenceStructureType
-  sectionName    String
-  startPage      Int
-  endPage        Int
-  sectionText    String                     @db.Text
+  structureType JurisprudenceStructureType
+  sectionName   String
+  startPage     Int
+  endPage       Int
+  sectionText   String                     @db.Text
 
-  createdAt      DateTime                   @default(now())
+  createdAt DateTime @default(now())
 
-  document       JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId, structureType])
 }
 
 model JurisprudenceEmbedding {
-  id             Int                   @id @default(autoincrement())
+  id             Int @id @default(autoincrement())
   documentId     Int
   organizationId Int
   companyId      Int
 
-  chunkIndex     Int
-  chunkText      String                @db.Text
+  chunkIndex Int
+  chunkText  String @db.Text
   // TODO: Cambiar a Unsupported("vector(1536)") cuando pgvector esté instalado
   // embedding      Unsupported("vector(1536)")
-  embedding      Bytes                 // Temporal: usar Bytes hasta que pgvector esté disponible
+  embedding  Bytes // Temporal: usar Bytes hasta que pgvector esté disponible
 
-  embeddingModel   String              @default("text-embedding-3-small")
-  embeddingVersion String              @default("v1")
+  embeddingModel   String @default("text-embedding-3-small")
+  embeddingVersion String @default("v1")
 
-  metadata       Json
+  metadata Json
 
-  createdAt      DateTime              @default(now())
+  createdAt DateTime @default(now())
 
-  document       JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document JurisprudenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
   @@index([organizationId, companyId])
@@ -3056,31 +3178,31 @@ model JurisprudenceEmbedding {
 }
 
 model JurisprudenceQuery {
-  id             Int           @id @default(autoincrement())
+  id             Int  @id @default(autoincrement())
   organizationId Int
   companyId      Int
   userId         Int
   legalMatterId  Int?
 
-  query          String        @db.Text
-  answer         String        @db.Text
-  confidence     String
+  query      String @db.Text
+  answer     String @db.Text
+  confidence String
 
-  hasValidCitations Boolean    @default(false)
-  needsHumanReview  Boolean    @default(false)
+  hasValidCitations Boolean @default(false)
+  needsHumanReview  Boolean @default(false)
 
-  documentsUsed  Json
+  documentsUsed Json
 
-  userFeedback   Json?
+  userFeedback Json?
 
-  tokensUsed     Int           @default(0)
-  costUsd        Decimal       @default(0) @db.Decimal(10, 6)
-  responseTime   Int
+  tokensUsed   Int     @default(0)
+  costUsd      Decimal @default(0) @db.Decimal(10, 6)
+  responseTime Int
 
-  createdAt      DateTime      @default(now())
+  createdAt DateTime @default(now())
 
-  user           User          @relation(fields: [userId], references: [id])
-  legalMatter    LegalMatter?  @relation(fields: [legalMatterId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  legalMatter LegalMatter? @relation(fields: [legalMatterId], references: [id])
 
   @@index([organizationId, userId])
   @@index([legalMatterId])
@@ -3090,29 +3212,29 @@ model JurisprudenceQuery {
 }
 
 model JurisprudenceScrapeJob {
-  id             Int                      @id @default(autoincrement())
+  id             Int @id @default(autoincrement())
   organizationId Int
   companyId      Int
 
-  court          String
-  startYear      Int?
-  endYear        Int?
-  scrapeType     JurisprudenceScrapeType  @default(MANUAL)
-  status         JurisprudenceJobStatus   @default(PENDING)
+  court      String
+  startYear  Int?
+  endYear    Int?
+  scrapeType JurisprudenceScrapeType @default(MANUAL)
+  status     JurisprudenceJobStatus  @default(PENDING)
 
-  documentsFound    Int                   @default(0)
-  documentsDownloaded Int                 @default(0)
-  documentsFailed   Int                   @default(0)
+  documentsFound      Int @default(0)
+  documentsDownloaded Int @default(0)
+  documentsFailed     Int @default(0)
 
-  startedAt      DateTime?
-  completedAt    DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
 
-  errorLog       String?                  @db.Text
+  errorLog String? @db.Text
 
-  createdById    Int?
-  createdAt      DateTime                 @default(now())
+  createdById Int?
+  createdAt   DateTime @default(now())
 
-  createdBy      User?                    @relation("JurisprudenceScrapeJobCreatedBy", fields: [createdById], references: [id])
+  createdBy User? @relation("JurisprudenceScrapeJobCreatedBy", fields: [createdById], references: [id])
 
   @@index([status])
   @@index([organizationId, companyId])
@@ -3120,98 +3242,616 @@ model JurisprudenceScrapeJob {
 }
 
 model JurisprudenceOcrJob {
-  id             Int                    @id @default(autoincrement())
+  id             Int @id @default(autoincrement())
   documentId     Int
   organizationId Int
   companyId      Int
 
-  status         JurisprudenceJobStatus @default(PENDING)
-  provider       String
+  status   JurisprudenceJobStatus @default(PENDING)
+  provider String
 
-  startedAt      DateTime?
-  completedAt    DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
 
-  pagesProcessed Int                    @default(0)
+  pagesProcessed Int @default(0)
   pagesTotal     Int
 
-  costUsd        Decimal                @default(0) @db.Decimal(10, 4)
-  errorLog       String?                @db.Text
+  costUsd  Decimal @default(0) @db.Decimal(10, 4)
+  errorLog String? @db.Text
 
-  createdAt      DateTime               @default(now())
+  createdAt DateTime @default(now())
 
-  pages          JurisprudenceDocumentPage[]
+  pages JurisprudenceDocumentPage[]
 
   @@index([status])
   @@index([organizationId, companyId])
 }
 
 model JurisprudenceUsageStats {
-  id                 Int      @id @default(autoincrement())
-  organizationId     Int
-  companyId          Int
-  date               DateTime @db.Date
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+  date           DateTime @db.Date
 
-  queriesCount       Int      @default(0)
-  documentsIndexed   Int      @default(0)
-  embeddingsCreated  Int      @default(0)
-  tokensUsed         Int      @default(0)
-  costUsd            Decimal  @default(0) @db.Decimal(10, 6)
+  queriesCount      Int     @default(0)
+  documentsIndexed  Int     @default(0)
+  embeddingsCreated Int     @default(0)
+  tokensUsed        Int     @default(0)
+  costUsd           Decimal @default(0) @db.Decimal(10, 6)
 
-  createdAt          DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([organizationId, companyId, date])
   @@index([date])
 }
 
 model JurisprudenceConfig {
-  id                    Int      @id @default(autoincrement())
-  organizationId        Int      @unique
-  companyId             Int?
+  id             Int  @id @default(autoincrement())
+  organizationId Int  @unique
+  companyId      Int?
 
-  ragEnabled            Boolean  @default(false)
-  scrapingEnabled       Boolean  @default(false)
+  ragEnabled      Boolean @default(false)
+  scrapingEnabled Boolean @default(false)
 
-  scrapingFrequency     String   @default("monthly")
-  courtsEnabled         Json
+  scrapingFrequency String @default("monthly")
+  courtsEnabled     Json
 
-  maxDocumentsPerMonth  Int      @default(1000)
-  maxQueriesPerDay      Int      @default(100)
+  maxDocumentsPerMonth Int @default(1000)
+  maxQueriesPerDay     Int @default(100)
 
-  chatModel             String   @default("gpt-4o-mini")
-  embeddingModel        String   @default("text-embedding-3-small")
-  embeddingVersion      String   @default("v1")
-  topK                  Int      @default(5)
-  minSimilarity         Decimal  @default(0.7) @db.Decimal(3, 2)
-  minYear               Int      @default(2015)
+  chatModel        String  @default("gpt-4o-mini")
+  embeddingModel   String  @default("text-embedding-3-small")
+  embeddingVersion String  @default("v1")
+  topK             Int     @default(5)
+  minSimilarity    Decimal @default(0.7) @db.Decimal(3, 2)
+  minYear          Int     @default(2015)
 
-  ocrProvider           String   @default("tesseract")
-  ocrEnabled            Boolean  @default(true)
+  ocrProvider String  @default("tesseract")
+  ocrEnabled  Boolean @default(true)
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization          Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 }
 
 model CalendarNote {
-  id             Int           @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   organizationId Int?
   companyId      Int?
-  date           DateTime      @db.Date
+  date           DateTime  @db.Date
   content        String
-  color          String?       @db.VarChar(7)
+  color          String?   @db.VarChar(7)
   reminderAt     DateTime?
-  reminderSent   Boolean       @default(false)
-  isPrivate      Boolean       @default(false)
+  reminderSent   Boolean   @default(false)
+  isPrivate      Boolean   @default(false)
   createdById    Int?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  company        Company?      @relation(fields: [companyId], references: [id])
-  createdBy      User?         @relation("CalendarNoteCreatedBy", fields: [createdById], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  createdBy    User?         @relation("CalendarNoteCreatedBy", fields: [createdById], references: [id])
 
   @@index([organizationId, companyId, date])
   @@index([reminderAt, reminderSent])
   @@index([createdById])
+}
+
+// ── GYM Vertical ──────────────────────────────────────────────────────────────
+
+enum GymMemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum GymMembershipStatus {
+  PROSPECT
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  FROZEN
+  PENDING_CANCEL
+  CANCELLED
+  EXPIRED
+}
+
+model GymMember {
+  id                    Int             @id @default(autoincrement())
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?
+  dni                   String?
+  dateOfBirth           DateTime?
+  medicalConditions     String?
+  injuries              String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  photo                 String?
+  status                GymMemberStatus @default(ACTIVE)
+  notes                 String?
+  companyId             Int
+  organizationId        Int?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization  Organization?     @relation(fields: [organizationId], references: [id])
+  memberships   GymMembership[]
+  checkins      GymCheckin[]
+  classBookings GymClassBooking[]
+
+  @@unique([companyId, dni])
+  @@unique([companyId, email])
+  @@index([organizationId, companyId])
+  @@index([companyId, status])
+  @@index([lastName, firstName])
+}
+
+model GymMembership {
+  id                  Int                 @id @default(autoincrement())
+  memberId            Int
+  planName            String
+  status              GymMembershipStatus @default(PROSPECT)
+  startDate           DateTime
+  endDate             DateTime
+  price               Float
+  freezesUsed         Int                 @default(0)
+  maxFreezes          Int                 @default(0)
+  frozenAt            DateTime?
+  scheduledCancelDate DateTime?
+  pastDueSince        DateTime?
+  gracePeriodDays     Int                 @default(7)
+  companyId           Int
+  organizationId      Int?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  member       GymMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  checkins     GymCheckin[]
+
+  @@index([companyId, status])
+  @@index([companyId, memberId])
+  @@index([endDate])
+  @@index([status, endDate])
+  @@index([organizationId, companyId])
+}
+
+model GymCheckin {
+  id             Int       @id @default(autoincrement())
+  memberId       Int
+  membershipId   Int?
+  checkinAt      DateTime  @default(now())
+  checkoutAt     DateTime?
+  method         String?
+  companyId      Int
+  organizationId Int?
+  createdAt      DateTime  @default(now())
+
+  member       GymMember      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  membership   GymMembership? @relation(fields: [membershipId], references: [id])
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization?  @relation(fields: [organizationId], references: [id])
+
+  @@index([companyId, checkinAt])
+  @@index([memberId, checkinAt])
+  @@index([organizationId, companyId])
+}
+
+// ── Gym Trainer ─────────────────────────────────────────────────────────────
+
+model GymTrainer {
+  id             Int              @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  specialty      String?
+  bio            String?
+  photo          String?
+  status         GymTrainerStatus @default(ACTIVE)
+  companyId      Int
+  organizationId Int?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization?      @relation(fields: [organizationId], references: [id])
+  schedules    GymClassSchedule[]
+
+  @@index([companyId, status])
+  @@index([organizationId, companyId])
+}
+
+enum GymTrainerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ── Gym Class ───────────────────────────────────────────────────────────────
+
+model GymClass {
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  category       String?
+  durationMin    Int      @default(60)
+  maxCapacity    Int      @default(20)
+  isActive       Boolean  @default(true)
+  companyId      Int
+  organizationId Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization?      @relation(fields: [organizationId], references: [id])
+  schedules    GymClassSchedule[]
+
+  @@index([companyId, isActive])
+  @@index([organizationId, companyId])
+}
+
+// ── Gym Class Schedule (recurring weekly slots) ─────────────────────────────
+
+model GymClassSchedule {
+  id             Int      @id @default(autoincrement())
+  classId        Int
+  trainerId      Int?
+  dayOfWeek      Int // 0=Sunday .. 6=Saturday
+  startTime      String // "HH:mm" format
+  endTime        String // "HH:mm" format
+  isActive       Boolean  @default(true)
+  companyId      Int
+  organizationId Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  gymClass     GymClass          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  trainer      GymTrainer?       @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization?     @relation(fields: [organizationId], references: [id])
+  bookings     GymClassBooking[]
+
+  @@index([companyId, dayOfWeek])
+  @@index([classId])
+  @@index([trainerId])
+  @@index([organizationId, companyId])
+}
+
+// ── Gym Class Booking (member reserves a spot) ──────────────────────────────
+
+model GymClassBooking {
+  id             Int              @id @default(autoincrement())
+  scheduleId     Int
+  memberId       Int
+  bookingDate    DateTime // The specific date of the class
+  status         GymBookingStatus @default(BOOKED)
+  companyId      Int
+  organizationId Int?
+  createdAt      DateTime         @default(now())
+
+  schedule     GymClassSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  member       GymMember        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id])
+
+  @@unique([scheduleId, memberId, bookingDate])
+  @@index([companyId, bookingDate])
+  @@index([memberId])
+  @@index([organizationId, companyId])
+}
+
+enum GymBookingStatus {
+  BOOKED
+  ATTENDED
+  NO_SHOW
+  CANCELLED
+}
+
+// ============================================================================
+// WhatsApp Module - Messaging & Automation
+// ============================================================================
+
+enum WhatsAppMessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum WhatsAppMessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+  TEMPLATE
+}
+
+enum WhatsAppSessionStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+  QR_PENDING
+  FAILED
+}
+
+// ── WhatsApp Session (connection state) ────────────────────────────────────
+
+model WhatsAppSession {
+  id             Int                   @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+  phoneNumber    String? // WhatsApp number connected
+  status         WhatsAppSessionStatus @default(DISCONNECTED)
+  qrCode         String?               @db.Text // QR code for scanning
+  authData       Json? // Baileys auth state
+  lastConnected  DateTime?
+  isActive       Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages     WhatsAppMessage[]
+  automations  WhatsAppAutomation[]
+
+  @@unique([organizationId, companyId])
+  @@index([status])
+  @@index([organizationId, companyId])
+}
+
+// ── WhatsApp Message (sent/received messages) ───────────────────────────────
+
+model WhatsAppMessage {
+  id             Int @id @default(autoincrement())
+  sessionId      Int
+  organizationId Int
+  companyId      Int
+
+  // Message details
+  remoteJid   String // recipient/sender JID
+  messageType WhatsAppMessageType @default(TEXT)
+  content     String              @db.Text
+  mediaUrl    String? // For images/documents/audio
+
+  // Direction
+  isFromMe Boolean @default(true) // true = sent, false = received
+
+  // Status
+  status       WhatsAppMessageStatus @default(PENDING)
+  errorMessage String?
+
+  // Metadata
+  quotedMessageId Int? // Reply to message
+  clientId        Int? // Client related to message
+  salesId         Int? // Sale related to message
+  invoiceId       Int? // Invoice related to message
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  session       WhatsAppSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client        Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  sale          Sales?            @relation(fields: [salesId], references: [id], onDelete: SetNull)
+  invoice       InvoiceSales?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  quotedMessage WhatsAppMessage?  @relation("MessageQuotes", fields: [quotedMessageId], references: [id], onDelete: SetNull)
+  replies       WhatsAppMessage[] @relation("MessageQuotes")
+
+  @@index([sessionId])
+  @@index([remoteJid])
+  @@index([organizationId, companyId])
+  @@index([clientId])
+  @@index([salesId])
+  @@index([createdAt])
+}
+
+// ── WhatsApp Template (message templates) ───────────────────────────────────
+
+model WhatsAppTemplate {
+  id             Int @id @default(autoincrement())
+  organizationId Int
+  companyId      Int
+
+  name        String // Template identifier (e.g., "order_confirmation")
+  displayName String // Human-readable name
+  content     String  @db.Text // Template with {{variables}}
+  description String?
+  category    String? // "sales", "support", "marketing"
+
+  // Variables that can be used
+  variables String[] // ["clientName", "orderId", "total"]
+
+  isActive   Boolean @default(true)
+  usageCount Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  automations  WhatsAppAutomation[]
+
+  @@unique([organizationId, companyId, name])
+  @@index([organizationId, companyId])
+  @@index([category])
+}
+
+// ── WhatsApp Automation (trigger-based automated messages) ──────────────────
+
+model WhatsAppAutomation {
+  id             Int  @id @default(autoincrement())
+  sessionId      Int
+  organizationId Int
+  companyId      Int
+  templateId     Int?
+
+  name        String
+  description String?
+
+  // Trigger configuration
+  triggerEvent   String // "sale.created", "payment.overdue", "inventory.low_stock"
+  triggerFilters Json? // Additional conditions
+
+  // Message configuration
+  recipients   String[] // Phone numbers or "client", "admin"
+  delayMinutes Int      @default(0) // Delay before sending
+
+  isActive      Boolean   @default(true)
+  lastTriggered DateTime?
+  triggerCount  Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session      WhatsAppSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  template     WhatsAppTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  logs         WhatsAppAutomationLog[]
+
+  @@index([sessionId])
+  @@index([organizationId, companyId])
+  @@index([triggerEvent])
+  @@index([isActive])
+}
+
+// ── WhatsApp Automation Log (execution history) ─────────────────────────────
+
+model WhatsAppAutomationLog {
+  id           Int @id @default(autoincrement())
+  automationId Int
+
+  triggeredBy  String // Event that triggered
+  payload      Json // Event payload
+  recipient    String // Phone number
+  messageSent  Boolean @default(false)
+  errorMessage String?
+
+  executedAt DateTime @default(now())
+
+  automation WhatsAppAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+  @@index([executedAt])
+}
+
+// ── WhatsApp Auto-Reply (Chatbot / Auto-Responder) ──────────────────────────
+
+model WhatsAppAutoReplyConfig {
+  id                         Int      @id @default(autoincrement())
+  organizationId             Int
+  companyId                  Int
+  isEnabled                  Boolean  @default(false)
+  greetingMessage            String   @default("Hola! Soy el asistente virtual. En que puedo ayudarte?")
+  fallbackMessage            String   @default("No tengo esa informacion en este momento. Un agente te contactara pronto.")
+  maxRepliesPerContactPerDay Int      @default(10)
+  aiEnabled                  Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rules        WhatsAppAutoReplyRule[]
+
+  @@unique([organizationId, companyId])
+}
+
+model WhatsAppAutoReplyRule {
+  id        Int      @id @default(autoincrement())
+  configId  Int
+  keywords  String[]
+  answer    String
+  priority  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  config WhatsAppAutoReplyConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
+}
+
+model WhatsAppAutoReplyLog {
+  id              Int      @id @default(autoincrement())
+  organizationId  Int
+  companyId       Int
+  contactPhone    String
+  incomingMessage String
+  replyMessage    String
+  matchType       String   // 'greeting' | 'rule' | 'kb' | 'ai' | 'fallback'
+  matchScore      Float?
+  ruleId          Int?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, companyId, createdAt])
+  @@index([contactPhone, createdAt])
+}
+
+// ── Ad Generation (Product-to-Social-Media Pipeline) ────────────────────────
+
+model AdGeneration {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?
+  productId      Int
+  product        Product  @relation(fields: [productId], references: [id])
+
+  // Gemini outputs
+  analysis   Json?    // ProductAnalysis from Vision
+  variations Json     // Array of 3 AdCopyVariation
+  imageUrls  String[] // URLs of generated images
+
+  // Editor state
+  selectedIndex Int?    // Which variation the user chose
+  editorState   Json?   // Konva canvas state (serialized)
+  exportedImage String? // URL of final exported image
+
+  // Publishing
+  publishedTo   String[] // ['facebook', 'instagram']
+  publishStatus Json?    // { facebook: 'success', instagram: 'error' }
+  publishedAt   DateTime?
+
+  // Meta
+  tone    String? // Tone used for generation
+  style   String? // Style used for generation
+  costUsd Float?  // Generation cost in USD
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, productId])
+  @@index([productId])
+}
+
+// ── Social Accounts (OAuth tokens for publishing to social networks) ────────
+model SocialAccount {
+  id             Int            @id @default(autoincrement())
+  organizationId Int
+  platform       SocialPlatform
+  accountName    String
+  accountId      String
+  accessToken    String
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  metadata       Json?
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, platform, accountId])
+  @@index([organizationId])
 }

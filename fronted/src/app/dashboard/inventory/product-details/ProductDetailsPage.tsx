@@ -3,8 +3,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import UpdatePriceDialog from "./inventory-product-details-components/UpdatePriceModal";
-import { getProductSales } from "../inventory.api";
-import { ArrowLeft, Book, DollarSign, LayoutGrid, Table, Tag, TrendingDown, TrendingUp, ShoppingCart, Package, CalendarDays, Hash, Store, QrCode, Barcode, Download, Printer } from "lucide-react";
+import { getProductSales, getProductTransfers } from "../inventory.api";
+import { ArrowLeft, ArrowLeftRight, Book, CheckCircle2, DollarSign, FileText, LayoutGrid, Table, Tag, TrendingDown, TrendingUp, ShoppingCart, Package, CalendarDays, Hash, Store, QrCode, Barcode, Download, Printer, Receipt } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import UpdateCategoryDialog from "./inventory-product-details-components/UpdateCategoryModal";
 import { QRCodeCanvas } from "qrcode.react";
 import { useSiteSettings } from "@/context/site-settings-context";
@@ -210,8 +216,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
 
   const productId = product?.id ?? null;
 
-  // Obtener las salidas del producto
+  // Obtener las salidas y traslados del producto
   const [sales, setSales] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<"cards" | "tables">("cards");
   const dateTimeFormatter = useMemo(
     () =>
@@ -248,20 +255,24 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
     );
   };
   useEffect(() => {
-    async function fetchProductSales() {
+    async function fetchProductData() {
       try {
         if (productId != null) {
-          const data = await getProductSales(productId);
-          setSales(data);
+          const [salesData, transfersData] = await Promise.all([
+            getProductSales(productId),
+            getProductTransfers(productId),
+          ]);
+          setSales(salesData);
+          setTransfers(Array.isArray(transfersData) ? transfersData : []);
         }
       } catch (error) {
-        console.error("Error al obtener las salidas del producto:", error);
+        console.error("Error al obtener datos del producto:", error);
       } finally {
         setIsLoading(false);
       }
     }
 
-    fetchProductSales();
+    fetchProductData();
   }, [productId]);
   //
 
@@ -281,6 +292,18 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
 
   // Series disponibles en todas las tiendas
   const availableSeries = series.flatMap((item) => item.series);
+
+  // Calcular min/max de precios de venta desde las salidas reales
+  const salePriceStats = useMemo(() => {
+    if (sales.length === 0) return { min: 0, max: 0, hasData: false };
+    const prices = sales.map((s) => Number(s.price ?? 0)).filter((p) => p > 0);
+    if (prices.length === 0) return { min: 0, max: 0, hasData: false };
+    return {
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      hasData: true,
+    };
+  }, [sales]);
 
   // Calcular la última fecha de actualización entre todas las tiendas
   const latestUpdateAt = product.storeOnInventory.reduce(
@@ -535,9 +558,9 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
         </div>
 
         {/* Info Cards Grid */}
-        <div className={`grid gap-3 ${hidePurchaseCost ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+        <div className={`grid gap-3 ${hidePurchaseCost ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'}`}>
 
-          {/* Prices Card */}
+          {/* Purchase Prices Card */}
           {!hidePurchaseCost && (
             <Card className="border-border/60">
               <CardHeader className="pb-2 pt-4 px-4">
@@ -571,22 +594,59 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
             </Card>
           )}
 
-          {/* Sale Price & Stock Card */}
+          {/* Sale Prices Card */}
           <Card className="border-border/60">
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <ShoppingCart className="h-3.5 w-3.5" />
-                Venta y Stock
+                <Receipt className="h-3.5 w-3.5" />
+                Precios de Venta
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {salePriceStats.hasData ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <TrendingDown className="h-3 w-3 text-blue-500" /> Mínimo
+                    </span>
+                    <span className="text-sm font-semibold">S/. {salePriceStats.min.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3 text-orange-500" /> Máximo
+                    </span>
+                    <span className="text-sm font-semibold">S/. {salePriceStats.max.toFixed(2)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Historial</span>
+                  <span className="text-sm text-muted-foreground">Sin ventas registradas</span>
+                </div>
+              )}
+              <div className="border-t pt-2 flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Precio Actual</span>
+                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                  {Number.isFinite(priceSellValue) && priceSellValue > 0
+                    ? `S/. ${priceSellValue.toFixed(2)}`
+                    : <span className="text-muted-foreground font-normal">Sin precio</span>}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stock Card */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5" />
+                Stock
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Precio de Venta</span>
-                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">S/. {Number(product.priceSell ?? 0).toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Package className="h-3 w-3" /> Stock General
+                  <ShoppingCart className="h-3 w-3" /> Stock General
                 </span>
                 <span className={`text-sm font-bold ${totalStock === 0 ? "text-red-500" : ""}`}>
                   {totalStock}
@@ -759,42 +819,99 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
               </div>
             )}
           </div>
-          {stockDetails ? (
+          {stockDetails || product.storeOnInventory?.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Object.entries(stockDetails.stockByStoreAndCurrency)
-                .sort(([, a], [, b]) => a.storeName.localeCompare(b.storeName))
-                .map(([storeId, { storeName, USD, PEN }]) => {
-                  const storeSeries = series.find((s) => s.storeId === parseInt(storeId, 10))?.series ?? []
-                  return (
-                    <Card key={storeId} className="border-border/60">
-                      <CardContent className="p-4 space-y-2">
-                        <p className="font-medium text-sm flex items-center gap-1.5">
-                          <Store className="h-3.5 w-3.5 text-muted-foreground" />
-                          {storeName}
-                        </p>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">USD</p>
-                            <p className="text-sm font-bold">{Math.floor(USD)}</p>
-                          </div>
-                          <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">PEN</p>
-                            <p className="text-sm font-bold">{Math.floor(PEN)}</p>
-                          </div>
-                          <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total</p>
-                            <p className="text-sm font-bold">{Math.floor(USD + PEN)}</p>
-                          </div>
-                        </div>
-                        {storeSeries.length > 0 && (
-                          <p className="text-xs text-muted-foreground truncate">
-                            <strong>Series:</strong> {storeSeries.join(", ")}
+              {(() => {
+                // Build store map from storeOnInventory (source of truth for stock)
+                const storeMap = new Map<string, {
+                  storeName: string;
+                  realStock: number;
+                  USD: number;
+                  PEN: number;
+                }>();
+                // Populate from storeOnInventory (real stock)
+                for (const soi of product.storeOnInventory ?? []) {
+                  const sid = String(soi.storeId);
+                  const existing = storeMap.get(sid);
+                  storeMap.set(sid, {
+                    storeName: soi.store?.name ?? existing?.storeName ?? "Tienda",
+                    realStock: (existing?.realStock ?? 0) + (soi.stock ?? 0),
+                    USD: existing?.USD ?? 0,
+                    PEN: existing?.PEN ?? 0,
+                  });
+                }
+                // Enrich with currency breakdown from stockDetails
+                if (stockDetails) {
+                  for (const [sid, det] of Object.entries(stockDetails.stockByStoreAndCurrency)) {
+                    const existing = storeMap.get(sid);
+                    storeMap.set(sid, {
+                      storeName: det.storeName || existing?.storeName || "Tienda",
+                      realStock: existing?.realStock ?? Math.floor(det.USD + det.PEN),
+                      USD: det.USD,
+                      PEN: det.PEN,
+                    });
+                  }
+                }
+                return [...storeMap.entries()]
+                  .sort(([, a], [, b]) => a.storeName.localeCompare(b.storeName))
+                  .map(([storeId, { storeName, realStock, USD, PEN }]) => {
+                    const storeSeries = series.find((s) => s.storeId === parseInt(storeId, 10))?.series ?? [];
+                    return (
+                      <Card key={storeId} className="border-border/60">
+                        <CardContent className="p-4 space-y-2">
+                          <p className="font-medium text-sm flex items-center gap-1.5">
+                            <Store className="h-3.5 w-3.5 text-muted-foreground" />
+                            {storeName}
                           </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="rounded-md bg-muted/50 px-2 py-1.5">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">USD</p>
+                              <p className="text-sm font-bold">{Math.floor(USD)}</p>
+                            </div>
+                            <div className="rounded-md bg-muted/50 px-2 py-1.5">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">PEN</p>
+                              <p className="text-sm font-bold">{Math.floor(PEN)}</p>
+                            </div>
+                            <div className="rounded-md bg-muted/50 px-2 py-1.5">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total</p>
+                              <p className="text-sm font-bold">{realStock}</p>
+                            </div>
+                          </div>
+                          {storeSeries.length > 0 && (
+                            <TooltipProvider delayDuration={100}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <p className="text-xs text-muted-foreground truncate cursor-pointer hover:text-foreground transition-colors">
+                                    <strong># Series:</strong> {storeSeries.join(", ")}
+                                  </p>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="bottom"
+                                  className="max-w-sm p-3 bg-popover/95 backdrop-blur-sm border shadow-lg"
+                                >
+                                  <p className="text-xs font-semibold mb-1.5">
+                                    Series en {storeName} ({storeSeries.length})
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {storeSeries.map((s, i) => (
+                                      <Badge
+                                        key={i}
+                                        variant="secondary"
+                                        className="text-[10px] font-mono px-1.5 py-0.5"
+                                      >
+                                        {s}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  });
+              })()}
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">No hay detalles por tienda disponibles.</p>
@@ -804,28 +921,38 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xl font-semibold">Entradas del Producto</h2>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="icon"
-                variant={viewMode === "cards" ? "default" : "outline"}
-                className="h-9 w-9 cursor-pointer"
-                onClick={() => setViewMode("cards")}
-                title="Vista en tarjetas"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant={viewMode === "tables" ? "default" : "outline"}
-                className="h-9 w-9 cursor-pointer"
-                onClick={() => setViewMode("tables")}
-                title="Vista comparativa en tablas"
-              >
-                <Table className="h-4 w-4" />
-              </Button>
-            </div>
+            <TooltipProvider delayDuration={150}>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={viewMode === "cards" ? "default" : "outline"}
+                      className="h-9 w-9 cursor-pointer"
+                      onClick={() => setViewMode("cards")}
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Vista en tarjetas</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={viewMode === "tables" ? "default" : "outline"}
+                      className="h-9 w-9 cursor-pointer"
+                      onClick={() => setViewMode("tables")}
+                    >
+                      <Table className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Vista comparativa en tablas</TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </div>
 
           {viewMode === "cards" ? (
@@ -865,7 +992,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                         <th className="px-3 py-2 text-left font-semibold">Responsable</th>
                         <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
                         {!hidePurchaseCost && (
-                          <th className="px-3 py-2 text-right font-semibold">Precio</th>
+                          <th className="px-3 py-2 text-right font-semibold">Precio Compra</th>
                         )}
                       </tr>
                     </thead>
@@ -906,7 +1033,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                         <th className="px-3 py-2 text-left font-semibold">Cliente</th>
                         <th className="px-3 py-2 text-left font-semibold">Responsable</th>
                         <th className="px-3 py-2 text-right font-semibold">Cantidad</th>
-                        <th className="px-3 py-2 text-right font-semibold">Precio</th>
+                        <th className="px-3 py-2 text-right font-semibold">Precio Venta</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -920,7 +1047,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                               <td className="px-3 py-2">{sale.clientName}</td>
                               <td className="px-3 py-2">{resolveResponsibleName(sale)}</td>
                               <td className="px-3 py-2 text-right">{sale.quantity}</td>
-                              <td className="px-3 py-2 text-right">S/. {sale.price.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-400">S/. {sale.price.toFixed(2)}</td>
                             </tr>
                           ))
                       ) : (
@@ -947,7 +1074,7 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
                     <div key={index} className="border rounded-md p-4 shadow-sm space-y-1 text-sm">
                       <p><strong>Fecha y hora:</strong> {formatDateTime(sale.createdAt)}</p>
                       <p><strong>Cantidad:</strong> {sale.quantity}</p>
-                      <p><strong>Precio:</strong> S/. {sale.price.toFixed(2)}</p>
+                      <p><strong>Precio de Venta:</strong> <span className="text-emerald-600 dark:text-emerald-400">S/. {sale.price.toFixed(2)}</span></p>
                       <p><strong>Tienda:</strong> {sale.storeName}</p>
                       <p><strong>Cliente:</strong> {sale.clientName}</p>
                       <p><strong>Responsable:</strong> {resolveResponsibleName(sale)}</p>
@@ -960,6 +1087,92 @@ export default function ProductDetailsPage({ product, stockDetails, entries, ser
             ) : (
               <p className="text-muted-foreground text-sm">No hay salidas disponibles para este producto.</p>
             )}
+          </div>
+        )}
+
+        {/* ── Traslados entre Tiendas ─────────────────────────────── */}
+        {transfers.length > 0 && (
+          <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
+                <ArrowLeftRight className="h-4 w-4 text-violet-500" />
+              </div>
+              <h2 className="text-xl font-semibold">Traslados entre Tiendas</h2>
+              <Badge variant="secondary" className="ml-auto text-xs">
+                {transfers.length} {transfers.length === 1 ? "traslado" : "traslados"}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {transfers.map((t: any, idx: number) => (
+                <div
+                  key={t.id}
+                  className="group relative border rounded-lg p-4 shadow-sm space-y-3 transition-all duration-200 hover:shadow-md hover:border-violet-500/30 w-full min-w-0 overflow-hidden animate-in fade-in-0 slide-in-from-bottom-2"
+                  style={{ animationDelay: `${idx * 60}ms`, animationFillMode: "backwards" }}
+                >
+                  {/* Header: route arrow */}
+                  <div className="flex items-center gap-2 w-full min-w-0">
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/60 text-xs font-medium w-full min-w-0 overflow-hidden">
+                      <Store className="h-3 w-3 flex-shrink-0 text-blue-500" />
+                      <span className="truncate">{t.sourceStore?.name || "Origen"}</span>
+                      <ArrowLeftRight className="h-3 w-3 flex-shrink-0 text-muted-foreground mx-0.5" />
+                      <Store className="h-3 w-3 flex-shrink-0 text-emerald-500" />
+                      <span className="truncate">{t.destinationStore?.name || "Destino"}</span>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground text-xs">
+                        <CalendarDays className="h-3 w-3 inline mr-1" />
+                        {formatDateTime(t.createdAt)}
+                      </p>
+                      {t.description && (
+                        <p className="text-xs text-muted-foreground/80 break-words">{t.description}</p>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0 pl-3">
+                      <p className="text-lg font-bold text-violet-600 dark:text-violet-400">
+                        {t.quantity}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">unidades</p>
+                    </div>
+                  </div>
+
+                  {/* Serials */}
+                  {t.serials && t.serials.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {t.serials.map((s: string, i: number) => (
+                        <Badge
+                          key={i}
+                          variant="secondary"
+                          className="text-[10px] font-mono px-1.5 py-0 h-4 bg-violet-500/10 text-violet-600 dark:text-violet-400"
+                        >
+                          {s}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Guide badge */}
+                  {t.shippingGuide && (
+                    <div className="flex items-center gap-1.5 pt-1 border-t">
+                      <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                      <span className="text-xs font-mono text-muted-foreground">
+                        {t.shippingGuide.serie}-{t.shippingGuide.correlativo}
+                      </span>
+                      {t.shippingGuide.cdrAceptado && (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 gap-0.5">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          SUNAT
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

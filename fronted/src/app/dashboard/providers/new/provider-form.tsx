@@ -14,6 +14,8 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounce } from '@/app/hooks/useDebounce'
 import { toast } from 'sonner'
 import { useTenantSelection } from '@/context/tenant-selection-context'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 import { AlertTriangle, Check } from 'lucide-react'
 import { resolveImageUrl } from '@/lib/images'
 import {
@@ -112,7 +114,10 @@ export function ProviderForm({provider}: {provider: any}) {
       image: '',
     }), []);
 
-    const { version } = useTenantSelection();
+    const { selection } = useTenantSelection();
+    const queryClient = useQueryClient();
+    const invalidateProviders = () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.providers.root(selection.orgId, selection.companyId) });
 
     //hook de react-hook-form
     const form = useForm<ProviderType>({
@@ -154,7 +159,9 @@ export function ProviderForm({provider}: {provider: any}) {
     status?: "idle" | "checking" | "valid" | "invalid"
     message?: string
   }>({})
-  const initializedVersion = useRef(false);
+
+  const tenantKey = `${selection.orgId}-${selection.companyId}`;
+  const prevTenantRef = useRef(tenantKey);
 
   useEffect(() => {
     form.reset(mapProviderToFormValues);
@@ -164,17 +171,15 @@ export function ProviderForm({provider}: {provider: any}) {
   }, [form, mapProviderToFormValues]);
 
   useEffect(() => {
-    if (!initializedVersion.current) {
-      initializedVersion.current = true;
-      return;
-    }
+    if (prevTenantRef.current === tenantKey) return;
+    prevTenantRef.current = tenantKey;
 
     setNameError(null);
     setNameValidation({ status: "idle", message: undefined })
     setDocumentValidation({ status: "idle", message: undefined })
     form.reset(emptyFormValues);
-    router.refresh();
-  }, [version, form, emptyFormValues, router]);
+    invalidateProviders();
+  }, [tenantKey, form, emptyFormValues, invalidateProviders]);
 
   useEffect(() => {
     const trimmedName = String(debouncedNameValidation ?? "").trim()
@@ -290,15 +295,15 @@ export function ProviderForm({provider}: {provider: any}) {
 
         if(params?.id){
             await updateProvider(params.id, {...data})
-            toast.success("Proveedor actualizado correctamente."); // NotificaciИn de ゼxito
-            router.push("/dashboard/providers"),
-            router.refresh();
+            toast.success("Proveedor actualizado correctamente.");
+            invalidateProviders();
+            router.push("/dashboard/providers");
         }
         else{
             await createProvider({...data});
-            toast.success("Proveedor creado correctamente."); // NotificaciИn de ゼxito
+            toast.success("Proveedor creado correctamente.");
+            invalidateProviders();
             router.push("/dashboard/providers");
-            router.refresh();
         }
     }
     catch(error: any){

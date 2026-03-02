@@ -83,7 +83,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', // nuevo para centrar verticalmente
   },
   cell: {
-    flex: 1,
     textAlign: 'left',
   },
   totalsRight: {
@@ -169,8 +168,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   cellCenter: {
-    flex: 1,
-    textAlign: 'center',  // nuevo para centrar horizontalmente
+    textAlign: 'center',
   },
   // NUEVO ESTILO para valores alineados a la izquierda (solo para box y fechaBox)
   valueLeft: {
@@ -248,6 +246,11 @@ export function InvoiceDocument({
 
   const Moneda =
   data.tipoMoneda === 'PEN' ? 'SOLES' : data.tipoMoneda.toUpperCase();
+
+  const currencySymbol = data.tipoMoneda === 'PEN' ? 'S/.' : '$';
+
+  const pagos: { metodo: string; monto: number; moneda: string }[] =
+    Array.isArray(data.pagos) ? data.pagos : [];
 
   const direccionFormateada = wrapText(data.cliente.direccion || 'N/A', 40);
   const emitter = data?.emisor ?? {};
@@ -350,30 +353,31 @@ export function InvoiceDocument({
         {/* Tabla de productos */}
         <View style={styles.table}>
           <View style={[styles.tableHeader, { backgroundColor: secondaryColor }]}>
-            <Text style={styles.cellCenter}>Cantidad</Text>
-            <Text style={styles.cellCenter}>UM</Text>
-            <Text style={[styles.cell, { flex: 3 }]}>Descripción</Text>
-            <Text style={styles.cell}>V/U</Text>
-            <Text style={styles.cell}>P/U</Text>
-            <Text style={styles.cell}>Total</Text>
+            <Text style={[styles.cellCenter, { width: '8%' }]}>Cant.</Text>
+            <Text style={[styles.cellCenter, { width: '7%' }]}>UM</Text>
+            <Text style={[styles.cell, { width: '45%' }]}>Descripción</Text>
+            <Text style={[styles.cell, { width: '12%', textAlign: 'right' }]}>V/U</Text>
+            <Text style={[styles.cell, { width: '13%', textAlign: 'right' }]}>P/U</Text>
+            <Text style={[styles.cell, { width: '15%', textAlign: 'right' }]}>Total</Text>
           </View>
           {data.items.map((item: any, idx: number) => (
-            <View style={styles.tableRow} key={idx}>
-              <Text style={styles.cellCenter}>{item.cantidad}</Text>
-              <Text style={styles.cellCenter}>NIU</Text>
-              <Text style={[styles.cell, { flex: 3 }]}>
-                {(item.descripcion || '').replace(/\\n/g, '\n')}
+            <View style={[styles.tableRow, { alignItems: 'flex-start' }]} key={idx}>
+              <Text style={[styles.cellCenter, { width: '8%' }]}>{item.cantidad}</Text>
+              <Text style={[styles.cellCenter, { width: '7%' }]}>NIU</Text>
+              <View style={{ width: '45%' }}>
+                <Text style={{ fontSize: 10 }}>
+                  {(item.descripcion || '').replace(/\\n/g, '\n')}
+                </Text>
                 {item.series && item.series.length > 0 && (
-                  <Text style={{ fontSize: 9 }}>
-                    {"\n"}
-                    {item.series.length === 1 ? 'SERIE N°:\n' : 'SERIES N°:\n'}
+                  <Text style={{ fontSize: 8, marginTop: 2, color: '#333' }}>
+                    {item.series.length === 1 ? 'SERIE N°: ' : 'SERIES N°: '}
                     {item.series.join(', ')}
                   </Text>
                 )}
-              </Text>
-              <Text style={styles.cell}>{(item.precioUnitario / 1.18).toFixed(2)}</Text>
-              <Text style={styles.cell}>{item.precioUnitario.toFixed(2)}</Text>
-              <Text style={styles.cell}>{item.total.toFixed(2)}</Text>
+              </View>
+              <Text style={[styles.cell, { width: '12%', textAlign: 'right' }]}>{(item.precioUnitario / 1.18).toFixed(2)}</Text>
+              <Text style={[styles.cell, { width: '13%', textAlign: 'right' }]}>{item.precioUnitario.toFixed(2)}</Text>
+              <Text style={[styles.cell, { width: '15%', textAlign: 'right' }]}>{item.total.toFixed(2)}</Text>
             </View>
           ))}
         </View>
@@ -409,21 +413,26 @@ export function InvoiceDocument({
 
         <View>
         <Text style={styles.observaciones}>
-            OBSERVACIONES: PAGO AL CONTADO - TRANSFERENCIA BANCARIA
+            FORMA DE PAGO: {pagos.length > 0 ? pagos.map((p) => p.metodo).join(' / ') : 'CONTADO'}
         </Text>
-        <Text style={styles.observaciones}>
-            FORMA DE PAGO: [CONTADO]
-        </Text>
+        {pagos.length > 1 && pagos.map((p, i) => (
+          <Text key={i} style={styles.observaciones}>
+            {p.metodo}: {currencySymbol} {p.monto.toFixed(2)}
+          </Text>
+        ))}
         </View>
 
         {/* QR */}
         <View style={styles.qrSection}>
-          <View>
-            <Text style={{ fontSize: 9 }}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text style={{ fontSize: 9, marginBottom: 4 }}>
               Representación impresa de la {documentTypeLabel} ELECTRÓNICA
             </Text>
-            <Text style={{ fontSize: 9 }}>
+            <Text style={{ fontSize: 9, marginBottom: 6 }}>
               N° {data.serie}-{data.correlativo}
+            </Text>
+            <Text style={{ fontSize: 7, color: '#555', lineHeight: 1.4 }}>
+              Este documento es una representación impresa de la {documentTypeLabel.toLowerCase()} de venta electrónica. Para verificar su autenticidad, escanee el código QR o ingrese a nuestro portal de verificación con el RUC del emisor, la serie y el correlativo del comprobante.
             </Text>
           </View>
           {qrCode && <Image src={qrCode} style={styles.qrImage} />}

@@ -18,6 +18,9 @@ import Link from "next/link"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
+import { useTenantSelection } from '@/context/tenant-selection-context';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 import { toast } from 'sonner';
 
@@ -211,13 +214,14 @@ export const columns: ColumnDef<Providers>[] = [
         const providers = row.original
         const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-        const router = useRouter(); // Usa useRouter dentro del componente React
+        const router = useRouter();
+        const queryClient = useQueryClient();
+        const { selection } = useTenantSelection();
         const handleRemoveStore = async (id: string) => {
           try {
-            //console.log(id)
-            await deleteProvider(id); // Llama a la API para eliminar el producto
-            toast.success("Proveedor eliminado correctamente."); // Notificación de éxito
-            router.refresh(); // Refresca los datos de la página
+            await deleteProvider(id);
+            toast.success("Proveedor eliminado correctamente.");
+            queryClient.invalidateQueries({ queryKey: queryKeys.providers.root(selection.orgId, selection.companyId) });
           } catch (error: any) {
             toast.error(errorMessage || "No se pudo eliminar el/los provedor(es) porque tienen entradas relacionadas.");
           }

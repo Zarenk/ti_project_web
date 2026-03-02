@@ -26,3 +26,9 @@ backend/uploads/
 
 # Docs that are local-only
 CHECKLIST_PRE_DEPLOY.md
+
+# Playwright CLI captures
+.playwright-cli/
+
+# Cypress screenshots (generated on test runs)
+fronted/cypress/screenshots/

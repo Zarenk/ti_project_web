@@ -1,10 +1,9 @@
 import { wasManualLogoutRecently } from "@/utils/manual-logout"
 
-const REFRESH_ENDPOINT = '/api/auth/refresh'
-
-function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_BACKEND_URL || ''
-}
+// Always go through the frontend proxy so cookies are sent same-origin.
+// The proxy at /api/auth/refresh reads the httpOnly refresh_token cookie,
+// forwards it to the backend, and sets the rotated cookies on the response.
+const REFRESH_URL = '/api/auth/refresh'
 
 let refreshPromise: Promise<boolean> | null = null
 
@@ -22,9 +21,8 @@ async function doRefresh(): Promise<boolean> {
   if (wasManualLogoutRecently()) {
     return false
   }
-  const base = getBaseUrl()
   try {
-    const res = await fetch(`${base}${REFRESH_ENDPOINT}`, {
+    const res = await fetch(REFRESH_URL, {
       method: 'POST',
       credentials: 'include',
     })
@@ -33,25 +31,13 @@ async function doRefresh(): Promise<boolean> {
       return false
     }
 
-    let refreshed = res.ok
-
-    if (typeof window !== 'undefined') {
-      try {
-        const data = await res.json()
-        if (data && typeof data === 'object' && 'access_token' in data) {
-          const token = (data as { access_token?: string }).access_token
-          if (token) {
-            localStorage.setItem('token', token)
-            window.dispatchEvent(new Event('authchange'))
-            refreshed = true
-          }
-        }
-      } catch {
-        // ignore body parse errors; some APIs may not return JSON here
-      }
+    // Token is managed exclusively via httpOnly cookies set by the proxy.
+    // Never store tokens in localStorage as that exposes them to XSS attacks.
+    if (res.ok && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('authchange'))
     }
 
-    return refreshed
+    return res.ok
   } catch {
     return false
   }

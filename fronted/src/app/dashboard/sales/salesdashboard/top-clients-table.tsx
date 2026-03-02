@@ -1,7 +1,9 @@
 "use client"
 
 import { useTenantSelection } from "@/context/tenant-selection-context";
-import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -19,33 +21,22 @@ interface Props {
 }
 
 export function TopClientsTable({ dateRange }: Props) {
-  const [data, setData] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
-  const { selection, version } = useTenantSelection();
-  const selectionKey = useMemo(
-    () => `${selection.orgId ?? "none"}-${selection.companyId ?? "none"}-${version}`,
-    [selection.orgId, selection.companyId, version],
-  );
+  const { selection } = useTenantSelection();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        if (dateRange?.from && dateRange?.to) {
-          const from = dateRange.from.toISOString();
-          const to = dateRange.to.toISOString();
-          const res = await getTopClients({ from, to });
-          setData(res);
-        } else {
-          const res = await getTopClients({});
-          setData(res);
-        }
-      } catch (err) {
-        console.error("Error al obtener top clientes:", err);
+  const from = dateRange?.from?.toISOString() ?? ""
+  const to = dateRange?.to?.toISOString() ?? ""
+
+  const { data = [] } = useQuery<any[]>({
+    queryKey: [...queryKeys.sales.dashboard(selection.orgId, selection.companyId), "topClients", { from, to }],
+    queryFn: async () => {
+      if (dateRange?.from && dateRange?.to) {
+        return await getTopClients({ from: dateRange.from.toISOString(), to: dateRange.to.toISOString() });
       }
-    };
-
-    fetchData();
-  }, [dateRange, selectionKey]);
+      return await getTopClients({});
+    },
+    enabled: selection.orgId !== null,
+  });
 
   return (
     <div className="rounded-xl border bg-card shadow-md overflow-x-auto">

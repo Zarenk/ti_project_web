@@ -132,7 +132,7 @@ export class JurisprudenceEmbeddingService {
               court: document.court,
               expediente: document.expediente,
               year: document.year,
-              publishDate: document.publishDate.toISOString(),
+              publishDate: document.publishDate?.toISOString() ?? '',
             },
           });
         });
@@ -156,7 +156,7 @@ export class JurisprudenceEmbeddingService {
               court: document.court,
               expediente: document.expediente,
               year: document.year,
-              publishDate: document.publishDate.toISOString(),
+              publishDate: document.publishDate?.toISOString() ?? '',
             },
           });
         });

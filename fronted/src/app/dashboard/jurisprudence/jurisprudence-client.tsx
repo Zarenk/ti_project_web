@@ -13,11 +13,18 @@ import {
   MessageSquare,
   Upload,
   Trash2,
+  Download,
+  Globe,
+  Loader2,
+  RefreshCw,
+  Eye,
+  FileDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -43,6 +50,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { JURISPRUDENCE_GUIDE_STEPS } from "./jurisprudence-guide-steps"
 import { ManualPagination } from "@/components/data-table-pagination"
@@ -51,8 +66,12 @@ import {
   getJurisprudenceDocuments,
   getCoverageStats,
   deleteJurisprudenceDocument,
+  downloadJurisprudenceDocument,
+  triggerScraping,
+  getScrapingJobs,
   type JurisprudenceDocument,
   type CoverageStats,
+  type ScrapeJob,
 } from "./jurisprudence.api"
 
 const STATUS_LABELS: Record<string, string> = {
@@ -100,6 +119,14 @@ export function JurisprudenceClient() {
   // Delete confirmation
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<number | null>(null)
+
+  // Scraping
+  const [scrapeDialogOpen, setScrapeDialogOpen] = useState(false)
+  const [scrapeStartYear, setScrapeStartYear] = useState("")
+  const [scrapeEndYear, setScrapeEndYear] = useState("")
+  const [scrapingInProgress, setScrapingInProgress] = useState(false)
+  const [scrapeJobs, setScrapeJobs] = useState<ScrapeJob[]>([])
+  const [showJobs, setShowJobs] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -172,6 +199,62 @@ export function JurisprudenceClient() {
     setDeleteDialogOpen(true)
   }
 
+  const handleStartScraping = async () => {
+    try {
+      setScrapingInProgress(true)
+      const result = await triggerScraping(
+        "Corte Suprema",
+        scrapeStartYear ? parseInt(scrapeStartYear) : undefined,
+        scrapeEndYear ? parseInt(scrapeEndYear) : undefined,
+      )
+      toast.success(
+        `Importación iniciada (Job #${result.jobId}). Los documentos se descargarán y procesarán automáticamente.`,
+      )
+      setScrapeDialogOpen(false)
+      setScrapeStartYear("")
+      setScrapeEndYear("")
+      // Reload jobs
+      loadScrapeJobs()
+      setShowJobs(true)
+    } catch (err: any) {
+      toast.error(err.message || "Error al iniciar la importación")
+    } finally {
+      setScrapingInProgress(false)
+    }
+  }
+
+  const loadScrapeJobs = async () => {
+    try {
+      const data = await getScrapingJobs(1, 10)
+      setScrapeJobs(data.jobs)
+    } catch {
+      // Ignore — not critical
+    }
+  }
+
+  useEffect(() => {
+    if (showJobs) {
+      loadScrapeJobs()
+      // Auto-refresh every 10 seconds while jobs panel is open
+      const interval = setInterval(loadScrapeJobs, 10000)
+      return () => clearInterval(interval)
+    }
+  }, [showJobs])
+
+  const JOB_STATUS_LABELS: Record<string, string> = {
+    PENDING: "Pendiente",
+    RUNNING: "En progreso",
+    COMPLETED: "Completado",
+    FAILED: "Fallido",
+  }
+
+  const JOB_STATUS_COLORS: Record<string, string> = {
+    PENDING: "bg-gray-100 text-gray-800",
+    RUNNING: "bg-blue-100 text-blue-800",
+    COMPLETED: "bg-green-100 text-green-800",
+    FAILED: "bg-red-100 text-red-800",
+  }
+
   return (
     <div className="space-y-6 p-4">
       {/* Header */}
@@ -181,15 +264,32 @@ export function JurisprudenceClient() {
           <h1 className="text-2xl font-bold">Jurisprudencia</h1>
           <PageGuideButton steps={JURISPRUDENCE_GUIDE_STEPS} tooltipLabel="Guía de jurisprudencia" />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => router.push("/dashboard/jurisprudence/assistant")}
+            className="cursor-pointer"
           >
             <MessageSquare className="mr-2 h-4 w-4" />
             Asistente
           </Button>
-          <Button onClick={() => router.push("/dashboard/jurisprudence/upload")}>
+          <Button
+            variant="outline"
+            onClick={() => setScrapeDialogOpen(true)}
+            className="cursor-pointer"
+          >
+            <Globe className="mr-2 h-4 w-4" />
+            Importar de PJ
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowJobs(!showJobs)}
+            className="cursor-pointer"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {showJobs ? "Ocultar Jobs" : "Ver Jobs"}
+          </Button>
+          <Button onClick={() => router.push("/dashboard/jurisprudence/upload")} className="cursor-pointer">
             <Upload className="mr-2 h-4 w-4" />
             Subir Documento
           </Button>
@@ -360,9 +460,9 @@ export function JurisprudenceClient() {
                       )
                     })
                     .map((doc) => (
-                      <TableRow key={doc.id}>
+                      <TableRow key={doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/dashboard/jurisprudence/${doc.id}`)}>
                         <TableCell>
-                          <div className="font-medium">{doc.expediente}</div>
+                          <div className="font-medium text-primary">{doc.expediente}</div>
                           {doc.chamber && (
                             <div className="text-xs text-muted-foreground">
                               {doc.chamber}
@@ -388,15 +488,43 @@ export function JurisprudenceClient() {
                               doc.processingStatus}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => confirmDelete(doc.id)}
-                            className="cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/dashboard/jurisprudence/${doc.id}`)}
+                              className="cursor-pointer"
+                              title="Ver detalle"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await downloadJurisprudenceDocument(doc.id)
+                                  toast.success("PDF descargado")
+                                } catch (err: any) {
+                                  toast.error(err.message || "Error al descargar")
+                                }
+                              }}
+                              className="cursor-pointer"
+                              title="Descargar PDF"
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => confirmDelete(doc.id)}
+                              className="cursor-pointer"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -422,6 +550,180 @@ export function JurisprudenceClient() {
           pageSizeOptions={[10, 20, 30, 50]}
         />
       )}
+
+      {/* Scraping Jobs Panel */}
+      {showJobs && (
+        <Card className="w-full min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-lg">Jobs de Importación</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadScrapeJobs}
+              className="cursor-pointer"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="overflow-hidden">
+            {scrapeJobs.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No hay jobs de importación. Usa &quot;Importar de PJ&quot; para comenzar.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Corte</TableHead>
+                      <TableHead>Años</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Encontrados</TableHead>
+                      <TableHead>Descargados</TableHead>
+                      <TableHead>Fallidos</TableHead>
+                      <TableHead>Fecha</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {scrapeJobs.map((job) => (
+                      <TableRow key={job.id}>
+                        <TableCell className="font-mono text-xs">#{job.id}</TableCell>
+                        <TableCell className="text-sm">{job.court}</TableCell>
+                        <TableCell className="text-sm">
+                          {job.startYear && job.endYear
+                            ? `${job.startYear}-${job.endYear}`
+                            : job.startYear
+                              ? `Desde ${job.startYear}`
+                              : "Todos"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={JOB_STATUS_COLORS[job.status] || "bg-gray-100"}
+                          >
+                            {job.status === "RUNNING" && (
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                            )}
+                            {JOB_STATUS_LABELS[job.status] || job.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{job.documentsFound}</TableCell>
+                        <TableCell className="text-sm text-green-600">
+                          {job.documentsDownloaded}
+                        </TableCell>
+                        <TableCell className="text-sm text-red-600">
+                          {job.documentsFailed}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(job.createdAt).toLocaleDateString("es-PE", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Scraping Dialog */}
+      <Dialog open={scrapeDialogOpen} onOpenChange={setScrapeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              Importar Jurisprudencia
+            </DialogTitle>
+            <DialogDescription>
+              Descarga automáticamente documentos de jurisprudencia desde el Poder Judicial
+              del Perú (Corte Suprema). Los PDFs se descargan, se extrae el texto y se
+              generan embeddings para consultas con IA.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Corte</Label>
+              <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span>Corte Suprema del Perú</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Se importará de todas las secciones: Jurisprudencia Vinculante (Civil, Penal,
+                Contencioso Administrativo), Plenos Casatorios, Sentencias Plenarias y Precedentes.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="startYear">Año inicio (opcional)</Label>
+                <Input
+                  id="startYear"
+                  type="number"
+                  placeholder="ej: 2015"
+                  min={2000}
+                  max={new Date().getFullYear()}
+                  value={scrapeStartYear}
+                  onChange={(e) => setScrapeStartYear(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endYear">Año fin (opcional)</Label>
+                <Input
+                  id="endYear"
+                  type="number"
+                  placeholder="ej: 2025"
+                  min={2000}
+                  max={new Date().getFullYear()}
+                  value={scrapeEndYear}
+                  onChange={(e) => setScrapeEndYear(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground space-y-1">
+              <p>- Los documentos duplicados se detectan automáticamente y no se re-descargan.</p>
+              <p>- Se respeta un límite de velocidad de 2 segundos entre cada descarga.</p>
+              <p>- El proceso puede tomar varios minutos dependiendo de la cantidad de documentos.</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setScrapeDialogOpen(false)}
+              className="cursor-pointer"
+              disabled={scrapingInProgress}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleStartScraping}
+              disabled={scrapingInProgress}
+              className="cursor-pointer"
+            >
+              {scrapingInProgress ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Iniciando...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Iniciar Importación
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

@@ -11,7 +11,7 @@ export default function UnauthorizedPage() {
       <div className="text-center space-y-2 z-0 mt-6 select-none">
         <h1 className="text-3xl font-bold">Acceso no autorizado</h1>
         <p className="opacity-80">No tienes permisos para ver esta sección.</p>
-        <Button asChild variant="link" className="text-base">
+        <Button asChild variant="link" className="text-base cursor-pointer">
           <Link href="/login">Volver a iniciar sesión</Link>
         </Button>
       </div>

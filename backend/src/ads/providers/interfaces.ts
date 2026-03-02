@@ -20,3 +20,42 @@ export interface ImageGenerationProvider {
   /** Generate image according to request */
   generate(request: GenerationRequest): Promise<GenerationResult>;
 }
+
+// ── Ad Generation from Product ──────────────────────────────────────────────
+
+export interface ProductContext {
+  name: string;
+  description?: string;
+  price: number;
+  priceSell?: number;
+  brand?: string;
+  category?: string;
+  features?: Array<{ title: string; description?: string }>;
+  images: string[];
+}
+
+export interface ProductAnalysis {
+  dominantColors: string[];
+  productType: string;
+  mood: string;
+  targetAudience: string;
+  keyFeatures: string[];
+}
+
+export interface AdCopyVariation {
+  title: string;
+  description: string;
+  hashtags: string[];
+  cta: string;
+  tone: string;
+}
+
+export type AdTone = 'profesional' | 'casual' | 'urgente' | 'aspiracional';
+export type AdStyle = 'moderno' | 'minimalista' | 'vibrante' | 'elegante';
+
+export interface AdGenerationResult {
+  analysis: ProductAnalysis;
+  variations: AdCopyVariation[];
+  imageUrls: string[];
+  costUsd: number;
+}

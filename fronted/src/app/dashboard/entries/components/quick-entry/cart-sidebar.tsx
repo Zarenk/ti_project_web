@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { resolveImageUrl } from "@/lib/images"
+import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
 import type { ProductCardItem } from "./product-card"
 
 export type CartItem = {
@@ -78,7 +78,7 @@ export function CartSidebar({
               ? item.product.images.filter(Boolean)
               : []
             const imageUrl = images[0]
-              ? resolveImageUrl(images[0])
+              ? resolveImageVariant(images[0], "thumb")
               : null
             const subtotal = item.quantity * item.unitPrice
             const serialCount = serialsMap?.get(item.product.id)?.length ?? 0

@@ -39,8 +39,11 @@ import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 import { DataTablePagination } from "../../../components/data-table-pagination"
 
 import { useMemo, useRef, useState } from "react";
-import { DateRange } from "react-day-picker"; // Asegúrate de que este tipo esté disponible
+import { useQueryClient } from "@tanstack/react-query";
+import { DateRange } from "react-day-picker";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
+import { queryKeys } from "@/lib/query-keys";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -71,6 +74,14 @@ export function DataTable<TData extends {id:string, name:string,
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const queryClient = useQueryClient();
+  const { selection } = useTenantSelection();
+
+  const invalidateStores = () => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.stores.root(selection.orgId, selection.companyId),
+    });
+  };
 
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -223,9 +234,9 @@ export function DataTable<TData extends {id:string, name:string,
     try {
       await deleteStores(selectedIds); // Llama a la API para eliminar las tiendas
       //alert('Tiendas eliminadas correctamente');
-      toast.success("Tienda(s) eliminada(s) correctamente."); // Notificación de éxito
-      table.resetRowSelection(); // Limpia la selección después de eliminar
-      location.reload(); // Refresca la página para actualizar los datos
+      toast.success("Tienda(s) eliminada(s) correctamente.");
+      table.resetRowSelection();
+      invalidateStores();
     } catch (error: any) {
       console.error("Error al eliminar tiendas:", error)
       toast.error(error.message || "No se pudo eliminar la(s) tienda(s).");
@@ -433,9 +444,8 @@ export function DataTable<TData extends {id:string, name:string,
         //console.log("Datos actualizados para enviar al backend:", updatedData);   
         // Llamar a la API para actualizar los datos
         await updateManyStores(updatedData);    
-        toast.success("Tiendas actualizadas correctamente.");    
-        // Actualizar los datos en el frontend
-        location.reload(); // O actualiza el estado local si no quieres recargar la página   
+        toast.success("Tiendas actualizadas correctamente.");
+        invalidateStores();   
         setIsEditModalOpen(false); // Cierra el modal
       } catch (error) {
         //console.error("Error al actualizar tiendas:", error);

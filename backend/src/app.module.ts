@@ -17,6 +17,7 @@ import { MLModule } from './ml/ml.module';
 import { SalesModule } from './sales/sales.module';
 import { ClientsModule } from './clients/clients.module';
 import { SunatModule } from './sunat/sunat.module';
+import { CreditNotesModule } from './credit-notes/credit-notes.module';
 import { SeriesModule } from './series/series.module';
 import { ExchangeModule } from './exchange/exchange.module';
 import { PaymentmethodsModule } from './paymentmethods/paymentmethods.module';
@@ -75,6 +76,8 @@ import { JurisprudenceScraperModule } from './jurisprudence-scraper/jurisprudenc
 import { JurisprudenceDocumentsModule } from './jurisprudence-documents/jurisprudence-documents.module';
 import { JurisprudenceAssistantModule } from './jurisprudence-assistant/jurisprudence-assistant.module';
 import { JurisprudenceAdminModule } from './jurisprudence-admin/jurisprudence-admin.module';
+import { GymModule } from './gym/gym.module';
+import { WhatsAppModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -91,6 +94,7 @@ import { JurisprudenceAdminModule } from './jurisprudence-admin/jurisprudence-ad
     SalesModule,
     ClientsModule,
     SunatModule,
+    CreditNotesModule,
     SeriesModule,
     ExchangeModule,
     PaymentmethodsModule,
@@ -142,6 +146,8 @@ import { JurisprudenceAdminModule } from './jurisprudence-admin/jurisprudence-ad
     JurisprudenceDocumentsModule,
     JurisprudenceAssistantModule,
     JurisprudenceAdminModule,
+    GymModule,
+    WhatsAppModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

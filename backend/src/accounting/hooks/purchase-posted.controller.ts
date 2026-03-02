@@ -9,10 +9,9 @@ import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
 
-const IGV_RATE = 0.18;
-
 @Controller('accounting/hooks/purchase-posted')
-// TODO: Re-enable guards after adding auth headers to AccountingHookService
+// FIXME: Guards disabled — hooks llamados internamente sin headers de auth.
+// Re-habilitar cuando AccountingHookService propague JWT en llamadas internas.
 // @UseGuards(JwtAuthGuard, TenantRequiredGuard)
 export class PurchasePostedController {
   private readonly logger = new Logger(PurchasePostedController.name);

@@ -82,7 +82,7 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang="en" suppressHydrationWarning className={htmlClassName} style={htmlStyle}>
+    <html lang="en" suppressHydrationWarning className={htmlClassName} style={htmlStyle} data-scroll-behavior="smooth">
       <body className="antialiased font-site">
         <SiteSettingsProvider
           initialSettings={settings}

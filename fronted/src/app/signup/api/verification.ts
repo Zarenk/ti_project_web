@@ -1,9 +1,5 @@
-import { BACKEND_URL } from '@/lib/utils';
-
-const publicSignupBase = `${BACKEND_URL}/api/public/signup`;
-
 export async function resendVerificationEmail(email: string) {
-  const response = await fetch(`${publicSignupBase}/resend-verification`, {
+  const response = await fetch('/api/public/signup/resend-verification', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -17,7 +13,7 @@ export async function resendVerificationEmail(email: string) {
 }
 
 export async function verifySignupToken(token: string) {
-  const response = await fetch(`${publicSignupBase}/verify-email`, {
+  const response = await fetch('/api/public/signup/verify-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token }),

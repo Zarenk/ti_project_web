@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenantSelection } from "@/context/tenant-selection-context";
@@ -16,44 +17,28 @@ const ALLOWED_ROLES = new Set(["SUPER_ADMIN_GLOBAL", "SUPER_ADMIN_ORG", "ADMIN"]
 
 export default function UserNewPage(): React.ReactElement | null {
   const router = useRouter();
-  const { version } = useTenantSelection();
-  const [checking, setChecking] = useState(true);
+  const { selection } = useTenantSelection();
   const [authorized, setAuthorized] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  const { isLoading: checking } = useQuery({
+    queryKey: ["tenant", selection.orgId, selection.companyId, "userNewPageAuth"],
+    queryFn: async () => {
+      const user = await getUserDataFromToken();
+      const validToken = await isTokenValid();
+      const role = (user?.role ?? "").toUpperCase();
+      const allowed = Boolean(user) && validToken && ALLOWED_ROLES.has(role);
 
-    const verifyAccess = async () => {
-      setChecking(true);
-
-      try {
-        const user = await getUserDataFromToken();
-        const validToken = await isTokenValid();
-        const role = (user?.role ?? "").toUpperCase();
-        const allowed = Boolean(user) && validToken && ALLOWED_ROLES.has(role);
-
-        if (!allowed && active) {
-          setAuthorized(false);
-          router.replace("/dashboard");
-          return;
-        }
-
-        if (active) {
-          setAuthorized(true);
-        }
-      } finally {
-        if (active) {
-          setChecking(false);
-        }
+      if (!allowed) {
+        setAuthorized(false);
+        router.replace("/dashboard");
+        return { authorized: false };
       }
-    };
 
-    void verifyAccess();
-
-    return () => {
-      active = false;
-    };
-  }, [router, version]);
+      setAuthorized(true);
+      return { authorized: true };
+    },
+    enabled: selection.orgId !== null,
+  });
 
   if (checking) {
     return (

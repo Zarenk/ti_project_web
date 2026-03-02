@@ -151,6 +151,7 @@ export interface UpdateCompanyPayload {
   sunatSolPasswordBeta?: string | null
   sunatSolUserProd?: string | null
   sunatSolPasswordProd?: string | null
+  whatsappAutoSendInvoice?: boolean
   documentSequences?: CompanyDocumentSequenceInput[]
 }
 
@@ -1115,6 +1116,7 @@ export type VerticalName =
   | "SERVICES"
   | "MANUFACTURING"
   | "LAW_FIRM"
+  | "GYM"
 
 export interface VerticalCompatibilityResult {
   isCompatible: boolean
