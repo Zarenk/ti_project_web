@@ -29,11 +29,34 @@ export async function firmarDocumentoUBL(
 
   // 3. Leer clave privada y certificado
   const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-  const cert = fs
-    .readFileSync(certificatePath, 'utf8')
+  const rawCert = fs.readFileSync(certificatePath, 'utf8');
+
+  // Diagnostic: detect certificate format issues
+  const hasPemHeader = rawCert.includes('-----BEGIN CERTIFICATE-----');
+  const hasPfxMagic = rawCert.charCodeAt(0) === 0x30; // DER/PFX binary starts with 0x30
+  console.log(
+    `[signer] cert file: ${certificatePath} | size=${rawCert.length} | PEM=${hasPemHeader} | binaryDetected=${hasPfxMagic} | first40=${JSON.stringify(rawCert.substring(0, 40))}`,
+  );
+
+  if (!hasPemHeader) {
+    console.error(
+      '[signer] WARNING: Certificate file does NOT have PEM header. Expected -----BEGIN CERTIFICATE-----. File may be in wrong format (.pfx, .p12, .cer DER).',
+    );
+  }
+
+  const cert = rawCert
     .replace('-----BEGIN CERTIFICATE-----', '')
     .replace('-----END CERTIFICATE-----', '')
     .replace(/\r?\n|\r/g, '');
+
+  // Validate base64
+  const isValidBase64 = /^[A-Za-z0-9+/=]+$/.test(cert);
+  console.log(
+    `[signer] processed cert: length=${cert.length} | validBase64=${isValidBase64} | last20=${JSON.stringify(cert.slice(-20))}`,
+  );
+  if (!isValidBase64) {
+    console.error('[signer] ERROR: Certificate contains non-base64 characters. SUNAT will reject with Client.2335.');
+  }
 
   // 4. Configurar xml-crypto con los algoritmos requeridos por SUNAT
   const sig = new SignedXml({
