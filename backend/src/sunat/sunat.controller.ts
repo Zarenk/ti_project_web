@@ -95,7 +95,15 @@ export class SunatController {
       };
     } catch (error: any) {
       console.error('Error al enviar el documento a la SUNAT:', error?.message);
-      throw new BadRequestException('Error al enviar el documento a la SUNAT.');
+      const detail = error?.response?.data
+        ? (typeof error.response.data === 'string'
+            ? error.response.data.substring(0, 300)
+            : '')
+        : '';
+      const msg = error?.message
+        ? `Error SUNAT: ${error.message}${detail ? ` — ${detail}` : ''}`
+        : 'Error al enviar el documento a la SUNAT.';
+      throw new BadRequestException(msg);
     }
   }
 
