@@ -63,10 +63,18 @@ export async function sendToSunat(
     // Leer el contenido del archivo ZIP y convertirlo a base64
     const zipContent = fs.readFileSync(zipFilePath).toString('base64');
 
-    // Construir el sobre SOAP para enviar a la SUNAT
+    // Construir el sobre SOAP con WS-Security UsernameToken para autenticación.
+    // SUNAT SEE-Del Contribuyente requiere WS-Security (no HTTP Basic Auth).
     const soapEnvelope = `<?xml version="1.0" encoding="UTF-8"?>
-      <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.sunat.gob.pe">
-        <soapenv:Header/>
+      <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.sunat.gob.pe" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+        <soapenv:Header>
+          <wsse:Security>
+            <wsse:UsernameToken>
+              <wsse:Username>${username}</wsse:Username>
+              <wsse:Password>${password}</wsse:Password>
+            </wsse:UsernameToken>
+          </wsse:Security>
+        </soapenv:Header>
         <soapenv:Body>
           <ser:sendBill>
             <fileName>${fileName}.zip</fileName>
@@ -80,9 +88,10 @@ export async function sendToSunat(
     // - timeout: 45s for axios (covers response wait)
     // - signal: AbortSignal.timeout 60s as absolute hard limit (covers DNS + TLS + response)
     // - Uses fallback DNS lookup for .gob.pe domains that may not resolve on cloud providers
+    // - NO HTTP Basic Auth: authentication is done via WS-Security UsernameToken in SOAP header
     const response = await axios.post(sunatUrl, soapEnvelope, {
       headers: {
-        'Content-Type': 'text/xml',
+        'Content-Type': 'text/xml; charset=UTF-8',
         SOAPAction: '',
       },
       timeout: 45_000,
@@ -92,10 +101,6 @@ export async function sendToSunat(
         lookup: createFallbackLookup() as any,
         timeout: 15_000,
       }),
-      auth: {
-        username,
-        password,
-      },
     });
 
     const cdr = extractCdrFromSoap(response.data);
@@ -110,13 +115,15 @@ export async function sendToSunat(
       soapFault,
     };
   } catch (error: any) {
-    console.error('Error al enviar el archivo a la SUNAT:', error.message);
+    console.error('[sendToSunat] Error:', error.message);
     if (error.response) {
+      const body = typeof error.response.data === 'string'
+        ? error.response.data.substring(0, 1500)
+        : JSON.stringify(error.response.data).substring(0, 1500);
       console.error(
-        'Respuesta de SUNAT:',
-        error.response.status,
-        error.response.data,
+        `[sendToSunat] HTTP ${error.response.status} | auth=WS-Security | url=${sunatUrl} | user=${username}`,
       );
+      console.error('[sendToSunat] Response body:', body);
     }
     throw error;
   }
