@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Ban, Banknote, CreditCard, FileText, FileX2, Landmark, Loader2, MessageCircle, ReceiptText, Send, Smartphone } from "lucide-react";
+import { Ban, Banknote, CreditCard, FileText, FileX2, Landmark, Loader2, MessageCircle, ReceiptText, RefreshCw, Send, Smartphone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,7 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { annulSale, sendInvoiceWhatsApp, getWhatsAppSendCounts } from "../sales.api";
+import { annulSale, retrySunatTransmission, sendInvoiceWhatsApp, getWhatsAppSendCounts } from "../sales.api";
 import { Sale } from "../columns";
 import { CreditNoteDialog } from "./credit-note-dialog";
 import { useModulePermission } from "@/hooks/use-module-permission";
@@ -100,6 +100,7 @@ export function SaleDetailDialog({
 }: SaleDetailDialogProps) {
   const [creditNoteOpen, setCreditNoteOpen] = useState(false);
   const [isAnnulling, setIsAnnulling] = useState(false);
+  const [isRetryingSunat, setIsRetryingSunat] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [whatsappPopoverOpen, setWhatsappPopoverOpen] = useState(false);
@@ -146,6 +147,39 @@ export function SaleDetailDialog({
       setIsAnnulling(false);
     }
   };
+
+  const handleRetrySunat = useCallback(async () => {
+    if (!sale || isRetryingSunat) return;
+
+    const logs = Array.isArray(sale.sunatTransmissions) ? sale.sunatTransmissions : [];
+    const latestTransmission = logs.length > 0
+      ? logs.reduce((latest, log) => {
+          if (!latest) return log;
+          const latestDate = new Date(latest.updatedAt ?? latest.createdAt ?? 0).getTime();
+          const logDate = new Date(log.updatedAt ?? log.createdAt ?? 0).getTime();
+          return logDate > latestDate ? log : latest;
+        }, logs[0])
+      : null;
+
+    if (!latestTransmission?.id) {
+      toast.error("No se encontró una transmisión SUNAT para reintentar.");
+      return;
+    }
+
+    setIsRetryingSunat(true);
+    try {
+      await retrySunatTransmission(latestTransmission.id);
+      toast.success("Reintento de envío a SUNAT iniciado. El resultado puede tardar unos segundos.");
+      if (onRefresh) {
+        setTimeout(() => onRefresh(sale.id), 3000);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error al reintentar el envío a SUNAT";
+      toast.error(message);
+    } finally {
+      setIsRetryingSunat(false);
+    }
+  }, [sale, isRetryingSunat, onRefresh]);
 
   const handleSendWhatsApp = async () => {
     if (!sale) return;
@@ -615,6 +649,30 @@ export function SaleDetailDialog({
                   {sunatStatus?.errorMessage && (
                     <p className="text-xs text-destructive">Error: {sunatStatus.errorMessage}</p>
                   )}
+
+                  {/* Retry button — visible when SUNAT status is a retryable error */}
+                  {(() => {
+                    const status = sunatStatus?.status?.toUpperCase();
+                    const isRetryable = status === "ERROR" || status === "FAILED" || status === "REJECTED";
+                    if (!isRetryable || sale?.status === "ANULADA" || isEmployee) return null;
+
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRetrySunat}
+                        disabled={isRetryingSunat}
+                        className="cursor-pointer gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30 transition-all duration-200"
+                      >
+                        {isRetryingSunat ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                        {isRetryingSunat ? "Reintentando..." : "Reintentar envío SUNAT"}
+                      </Button>
+                    );
+                  })()}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

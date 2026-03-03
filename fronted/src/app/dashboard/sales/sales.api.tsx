@@ -516,6 +516,27 @@ export async function getSeriesByProductAndStore(storeId: number, productId: num
   }
 }
 
+export async function retrySunatTransmission(transmissionId: number) {
+  const response = await authFetch(`${BACKEND_URL}/api/sunat/transmissions/${transmissionId}/retry`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    let message = 'Error al reintentar el envío a SUNAT';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = typeof errorData.message === 'string' ? errorData.message : String(errorData.message);
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
 export async function sendInvoiceToSunat(invoiceData: any) {
   const response = await authFetch(`${BACKEND_URL}/api/sunat/send-document`, {
     method: 'POST',

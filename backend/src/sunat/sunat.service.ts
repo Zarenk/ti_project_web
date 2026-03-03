@@ -324,7 +324,7 @@ export class SunatService {
   ) {
     if (!tenant?.isSuperAdmin && !tenant?.isOrganizationSuperAdmin) {
       throw new ForbiddenException(
-        'Solo los super administradores pueden reintentar envÃ­os.',
+        'Solo administradores pueden reintentar envíos a SUNAT.',
       );
     }
 
