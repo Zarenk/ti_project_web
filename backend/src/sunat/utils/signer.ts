@@ -31,31 +31,29 @@ export async function firmarDocumentoUBL(
   const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
   const rawCert = fs.readFileSync(certificatePath, 'utf8');
 
-  // Diagnostic: detect certificate format issues
-  const hasPemHeader = rawCert.includes('-----BEGIN CERTIFICATE-----');
-  const hasPfxMagic = rawCert.charCodeAt(0) === 0x30; // DER/PFX binary starts with 0x30
-  console.log(
-    `[signer] cert file: ${certificatePath} | size=${rawCert.length} | PEM=${hasPemHeader} | binaryDetected=${hasPfxMagic} | first40=${JSON.stringify(rawCert.substring(0, 40))}`,
+  // Extract ONLY the base64 content between PEM markers.
+  // This handles files exported from .pfx that include "Bag Attributes" metadata
+  // before the actual certificate block.
+  const certMatch = rawCert.match(
+    /-----BEGIN CERTIFICATE-----\s*([\s\S]*?)\s*-----END CERTIFICATE-----/,
   );
-
-  if (!hasPemHeader) {
-    console.error(
-      '[signer] WARNING: Certificate file does NOT have PEM header. Expected -----BEGIN CERTIFICATE-----. File may be in wrong format (.pfx, .p12, .cer DER).',
+  if (!certMatch) {
+    throw new Error(
+      `El archivo de certificado no contiene un bloque PEM válido (-----BEGIN CERTIFICATE-----). ` +
+        `Archivo: ${certificatePath} | Primeros 60 chars: ${rawCert.substring(0, 60)}`,
     );
   }
-
-  const cert = rawCert
-    .replace('-----BEGIN CERTIFICATE-----', '')
-    .replace('-----END CERTIFICATE-----', '')
-    .replace(/\r?\n|\r/g, '');
+  const cert = certMatch[1].replace(/\r?\n|\r|\s/g, '');
 
   // Validate base64
   const isValidBase64 = /^[A-Za-z0-9+/=]+$/.test(cert);
   console.log(
-    `[signer] processed cert: length=${cert.length} | validBase64=${isValidBase64} | last20=${JSON.stringify(cert.slice(-20))}`,
+    `[signer] cert: length=${cert.length} | validBase64=${isValidBase64}`,
   );
   if (!isValidBase64) {
-    console.error('[signer] ERROR: Certificate contains non-base64 characters. SUNAT will reject with Client.2335.');
+    throw new Error(
+      '[signer] Certificate contains non-base64 characters after extraction. SUNAT will reject.',
+    );
   }
 
   // 4. Configurar xml-crypto con los algoritmos requeridos por SUNAT
