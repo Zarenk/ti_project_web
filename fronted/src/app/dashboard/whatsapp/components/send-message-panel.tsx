@@ -66,43 +66,45 @@ export default function SendMessagePanel({ isConnected }: SendMessagePanelProps)
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Send className="h-5 w-5" />
-          Enviar Mensaje Individual
+    <Card className="w-full min-w-0 overflow-hidden">
+      <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
+        <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
+          <Send className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+          Enviar Mensaje
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs sm:text-sm">
           Envía un mensaje de WhatsApp a cualquier número
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="recipient">Número de Teléfono</Label>
+      <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label htmlFor="recipient" className="text-xs sm:text-sm">Número de Teléfono</Label>
           <Input
             id="recipient"
             type="text"
-            placeholder="51999999999 (código de país + número)"
+            placeholder="51999999999"
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
             disabled={!isConnected}
+            className="h-8 sm:h-9 text-sm"
           />
-          <p className="text-xs text-muted-foreground">
-            Formato: código de país + número sin espacios ni símbolos (ej: 51999999999)
+          <p className="text-[10px] sm:text-xs text-muted-foreground">
+            Código de país + número sin espacios (ej: 51999999999)
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="message">Mensaje</Label>
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label htmlFor="message" className="text-xs sm:text-sm">Mensaje</Label>
           <Textarea
             id="message"
             placeholder="Escribe tu mensaje aquí..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             disabled={!isConnected}
-            rows={6}
+            rows={5}
+            className="text-sm resize-none"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[10px] sm:text-xs text-muted-foreground">
             {message.length} caracteres
           </p>
         </div>
@@ -110,24 +112,23 @@ export default function SendMessagePanel({ isConnected }: SendMessagePanelProps)
         <Button
           onClick={handleSend}
           disabled={!isConnected || isSending || !recipient || !message}
-          className="w-full"
-          size="lg"
+          className="w-full cursor-pointer text-xs sm:text-sm h-9 sm:h-10"
         >
           {isSending ? (
             <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               Enviando...
             </>
           ) : (
             <>
-              <Send className="mr-2 h-5 w-5" />
+              <Send className="mr-1.5 h-4 w-4" />
               Enviar Mensaje
             </>
           )}
         </Button>
 
         {!isConnected && (
-          <p className="text-sm text-muted-foreground text-center pt-2">
+          <p className="text-xs sm:text-sm text-muted-foreground text-center pt-1 sm:pt-2">
             Conecta WhatsApp primero para enviar mensajes
           </p>
         )}

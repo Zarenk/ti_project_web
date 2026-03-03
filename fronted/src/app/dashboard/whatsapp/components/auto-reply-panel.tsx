@@ -326,16 +326,16 @@ export default function AutoReplyPanel() {
   }
 
   return (
-    <div className="space-y-6 w-full min-w-0">
+    <div className="space-y-4 sm:space-y-6 w-full min-w-0">
       {/* ================================================================== */}
       {/* CONFIG CARD                                                        */}
       {/* ================================================================== */}
       <Card className="border shadow-md w-full min-w-0 overflow-hidden">
-        <CardHeader className="pb-4">
+        <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
           <div className="flex items-center justify-between w-full min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <Bot className="h-5 w-5 text-primary flex-shrink-0" />
-              <CardTitle className="text-lg">Asistente Virtual</CardTitle>
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <Bot className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+              <CardTitle className="text-sm sm:text-lg">Asistente Virtual</CardTitle>
             </div>
             {config && (
               <Switch
@@ -345,15 +345,15 @@ export default function AutoReplyPanel() {
               />
             )}
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             {config?.isEnabled
-              ? 'El asistente responde automaticamente a los mensajes entrantes'
-              : 'Activa el asistente para responder automaticamente por WhatsApp'}
+              ? 'Responde automaticamente a mensajes entrantes'
+              : 'Activa el asistente para responder por WhatsApp'}
           </CardDescription>
         </CardHeader>
 
         {config && (
-          <CardContent className="space-y-5 overflow-hidden">
+          <CardContent className="space-y-4 sm:space-y-5 px-3 sm:px-6 pb-3 sm:pb-6 overflow-hidden">
             {/* Greeting message */}
             <div className="space-y-1.5">
               <Label htmlFor="greeting" className="text-sm font-medium">
@@ -470,20 +470,20 @@ export default function AutoReplyPanel() {
       {/* RULES CARD                                                         */}
       {/* ================================================================== */}
       <Card className="border shadow-md w-full min-w-0 overflow-hidden">
-        <CardHeader className="pb-4">
+        <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
           <div className="flex items-center justify-between w-full min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <BookOpen className="h-5 w-5 text-primary flex-shrink-0" />
-              <CardTitle className="text-lg">Reglas personalizadas</CardTitle>
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+              <CardTitle className="text-sm sm:text-lg">Reglas personalizadas</CardTitle>
             </div>
             <Dialog open={isRuleDialogOpen} onOpenChange={setIsRuleDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="cursor-pointer gap-1.5 flex-shrink-0">
-                  <Plus className="h-4 w-4" />
+                <Button size="sm" className="cursor-pointer gap-1.5 flex-shrink-0 h-7 sm:h-8 text-xs sm:text-sm">
+                  <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   Nueva regla
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="w-[95vw] sm:w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Nueva regla de auto-respuesta</DialogTitle>
                   <DialogDescription>
@@ -570,19 +570,19 @@ export default function AutoReplyPanel() {
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="overflow-hidden">
+        <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6 overflow-hidden">
           {isLoadingRules ? (
-            <div className="text-center py-8">
+            <div className="text-center py-6 sm:py-8">
               <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
             </div>
           ) : rules.length === 0 ? (
-            <div className="text-center py-8">
-              <BookOpen className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">
+            <div className="text-center py-6 sm:py-8">
+              <BookOpen className="h-8 w-8 sm:h-10 sm:w-10 mx-auto text-muted-foreground/50 mb-2" />
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 No hay reglas configuradas
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Agrega tu primera regla para responder automaticamente
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                Agrega tu primera regla
               </p>
             </div>
           ) : (
@@ -640,29 +640,29 @@ export default function AutoReplyPanel() {
       {/* LOGS CARD                                                          */}
       {/* ================================================================== */}
       <Card className="border shadow-md w-full min-w-0 overflow-hidden">
-        <CardHeader className="pb-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <MessageCircle className="h-5 w-5 text-primary flex-shrink-0" />
-            <CardTitle className="text-lg">Historial de auto-respuestas</CardTitle>
+        <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" />
+            <CardTitle className="text-sm sm:text-lg">Historial de auto-respuestas</CardTitle>
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Ultimas respuestas automaticas enviadas
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="overflow-hidden">
+        <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6 overflow-hidden">
           {isLoadingLogs ? (
-            <div className="text-center py-8">
+            <div className="text-center py-6 sm:py-8">
               <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8">
-              <MessageCircle className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-              <p className="text-sm text-muted-foreground">
+            <div className="text-center py-6 sm:py-8">
+              <MessageCircle className="h-8 w-8 sm:h-10 sm:w-10 mx-auto text-muted-foreground/50 mb-2" />
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 No hay respuestas automaticas registradas
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Las respuestas apareceran aqui cuando el asistente responda mensajes
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                Apareceran cuando el asistente responda mensajes
               </p>
             </div>
           ) : (
@@ -719,14 +719,14 @@ export default function AutoReplyPanel() {
       {/* HOW IT WORKS INFO                                                  */}
       {/* ================================================================== */}
       <Card className="border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 w-full min-w-0 overflow-hidden">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex items-start gap-3 w-full min-w-0">
-            <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+        <CardContent className="pt-3 sm:pt-4 pb-3 sm:pb-4 px-3 sm:px-6">
+          <div className="flex items-start gap-2.5 sm:gap-3 w-full min-w-0">
+            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="space-y-1 min-w-0">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              <p className="text-xs sm:text-sm font-medium text-blue-900 dark:text-blue-100">
                 Como funciona el asistente
               </p>
-              <ol className="text-xs text-blue-800 dark:text-blue-300 space-y-0.5 list-decimal list-inside">
+              <ol className="text-[10px] sm:text-xs text-blue-800 dark:text-blue-300 space-y-0.5 list-decimal list-inside">
                 <li>Un cliente envia un mensaje por WhatsApp</li>
                 <li>Si es un saludo, responde con el mensaje de bienvenida</li>
                 <li>Si coincide con una regla personalizada, envia esa respuesta</li>

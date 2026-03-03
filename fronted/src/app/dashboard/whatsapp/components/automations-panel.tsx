@@ -214,78 +214,80 @@ export default function AutomationsPanel() {
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5" />
+    <div className="space-y-3 sm:space-y-4 w-full min-w-0">
+      <Card className="w-full min-w-0 overflow-hidden">
+        <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
+                <Zap className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                 Automatizaciones
               </CardTitle>
-              <CardDescription>
-                Configura mensajes automáticos para eventos del sistema
+              <CardDescription className="text-xs sm:text-sm">
+                Mensajes automáticos para eventos del sistema
               </CardDescription>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nueva Automatización
+                <Button size="sm" className="cursor-pointer self-start sm:self-auto h-8 sm:h-9 text-xs sm:text-sm flex-shrink-0">
+                  <Plus className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  Nueva
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="w-[95vw] sm:w-full sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Crear Automatización</DialogTitle>
                   <DialogDescription>
                     Configura un mensaje automático que se enviará cuando ocurra un evento específico
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nombre *</Label>
+                <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name" className="text-xs sm:text-sm">Nombre *</Label>
                     <Input
                       id="name"
                       placeholder="Notificación de venta"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      className="h-8 sm:h-9 text-sm"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Descripción</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="description" className="text-xs sm:text-sm">Descripción</Label>
                     <Input
                       id="description"
                       placeholder="Breve descripción"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
+                      className="h-8 sm:h-9 text-sm"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="triggerEvent">Evento Disparador *</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="triggerEvent" className="text-xs sm:text-sm">Evento Disparador *</Label>
                       <Select value={triggerEvent} onValueChange={setTriggerEvent}>
-                        <SelectTrigger id="triggerEvent">
-                          <SelectValue placeholder="Selecciona un evento" />
+                        <SelectTrigger id="triggerEvent" className="h-8 sm:h-9 text-sm cursor-pointer">
+                          <SelectValue placeholder="Selecciona evento" />
                         </SelectTrigger>
                         <SelectContent>
                           {TRIGGER_EVENTS.map((event) => (
-                            <SelectItem key={event.value} value={event.value}>
+                            <SelectItem key={event.value} value={event.value} className="cursor-pointer">
                               {event.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="templateId">Plantilla (Opcional)</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="templateId" className="text-xs sm:text-sm">Plantilla (Opcional)</Label>
                       <Select value={templateId} onValueChange={setTemplateId}>
-                        <SelectTrigger id="templateId">
+                        <SelectTrigger id="templateId" className="h-8 sm:h-9 text-sm cursor-pointer">
                           <SelectValue placeholder="Sin plantilla" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Sin plantilla</SelectItem>
+                          <SelectItem value="none" className="cursor-pointer">Sin plantilla</SelectItem>
                           {templates.map((template) => (
-                            <SelectItem key={template.id} value={template.id.toString()}>
+                            <SelectItem key={template.id} value={template.id.toString()} className="cursor-pointer">
                               {template.displayName}
                             </SelectItem>
                           ))}
@@ -293,20 +295,21 @@ export default function AutomationsPanel() {
                       </Select>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="recipients">
-                      Destinatarios * <span className="text-xs text-muted-foreground">(uno por línea o separados por comas)</span>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="recipients" className="text-xs sm:text-sm">
+                      Destinatarios * <span className="text-[10px] sm:text-xs text-muted-foreground">(uno por línea o comas)</span>
                     </Label>
                     <Textarea
                       id="recipients"
-                      placeholder={`client (para enviar al cliente de la venta/cotización)\nadmin (para enviar a administradores)\n987654321 (número específico)`}
+                      placeholder={`client\nadmin\n987654321`}
                       value={recipients}
                       onChange={(e) => setRecipients(e.target.value)}
-                      rows={5}
+                      rows={4}
+                      className="text-sm resize-none"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="delayMinutes">Retraso (minutos, opcional)</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="delayMinutes" className="text-xs sm:text-sm">Retraso (minutos, opcional)</Label>
                     <Input
                       id="delayMinutes"
                       type="number"
@@ -314,21 +317,22 @@ export default function AutomationsPanel() {
                       placeholder="0"
                       value={delayMinutes}
                       onChange={(e) => setDelayMinutes(e.target.value)}
+                      className="h-8 sm:h-9 text-sm"
                     />
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="cursor-pointer text-xs sm:text-sm h-8 sm:h-9">
                     Cancelar
                   </Button>
-                  <Button onClick={handleCreate} disabled={isSaving}>
+                  <Button onClick={handleCreate} disabled={isSaving} className="cursor-pointer text-xs sm:text-sm h-8 sm:h-9">
                     {isSaving ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                         Guardando...
                       </>
                     ) : (
-                      'Crear Automatización'
+                      'Crear'
                     )}
                   </Button>
                 </DialogFooter>
@@ -336,89 +340,88 @@ export default function AutomationsPanel() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
           {isLoading ? (
-            <div className="text-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mt-2">Cargando automatizaciones...</p>
+            <div className="text-center py-8 sm:py-12">
+              <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto text-muted-foreground" />
+              <p className="text-xs sm:text-sm text-muted-foreground mt-2">Cargando automatizaciones...</p>
             </div>
           ) : automations.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Zap className="h-12 w-12 mx-auto mb-2 opacity-20" />
-              <p>No hay automatizaciones configuradas</p>
-              <p className="text-sm">Crea tu primera automatización para comenzar</p>
+            <div className="text-center py-8 sm:py-12 text-muted-foreground">
+              <Zap className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">No hay automatizaciones configuradas</p>
+              <p className="text-xs sm:text-sm">Crea tu primera automatización</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5 sm:space-y-3">
               {automations.map((automation) => (
                 <Collapsible key={automation.id}>
-                  <div className="border rounded-lg p-4 hover:bg-accent/50 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-medium">{automation.name}</h4>
-                          <Badge variant={automation.isActive ? 'default' : 'secondary'} className="text-xs">
+                  <div className="border rounded-lg p-3 sm:p-4 hover:bg-accent/50 transition-colors w-full min-w-0 overflow-hidden">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                          <h4 className="font-medium text-sm sm:text-base break-words">{automation.name}</h4>
+                          <Badge variant={automation.isActive ? 'default' : 'secondary'} className="text-[10px] sm:text-xs flex-shrink-0">
                             {automation.isActive ? 'Activa' : 'Inactiva'}
                           </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {automation.usageCount} ejecuciones
+                          <Badge variant="outline" className="text-[10px] sm:text-xs flex-shrink-0">
+                            {automation.usageCount}×
                           </Badge>
                         </div>
                         {automation.description && (
-                          <p className="text-sm text-muted-foreground mb-2">{automation.description}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-2 break-words">{automation.description}</p>
                         )}
-                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
-                            <Zap className="h-3 w-3" />
+                            <Zap className="h-3 w-3 flex-shrink-0" />
                             {TRIGGER_EVENTS.find((e) => e.value === automation.triggerEvent)?.label || automation.triggerEvent}
                           </div>
                           <div className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {automation.recipients.length} destinatario(s)
+                            <Users className="h-3 w-3 flex-shrink-0" />
+                            {automation.recipients.length}
                           </div>
                           {automation.template && (
                             <div className="flex items-center gap-1">
-                              <FileText className="h-3 w-3" />
-                              {automation.template.displayName}
+                              <FileText className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate max-w-[100px] sm:max-w-none">{automation.template.displayName}</span>
                             </div>
                           )}
                           {automation.delayMinutes !== undefined && automation.delayMinutes > 0 && (
                             <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
+                              <Clock className="h-3 w-3 flex-shrink-0" />
                               {automation.delayMinutes} min
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={automation.isActive}
-                            onCheckedChange={(checked) => handleToggleActive(automation.id, checked)}
-                          />
-                          <Power className="h-4 w-4 text-muted-foreground" />
-                        </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                        <Switch
+                          checked={automation.isActive}
+                          onCheckedChange={(checked) => handleToggleActive(automation.id, checked)}
+                          className="cursor-pointer"
+                        />
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-7 w-7 sm:h-8 sm:w-8 cursor-pointer"
                           onClick={() => handleDelete(automation.id)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
                         </Button>
                       </div>
                     </div>
                     <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm" className="w-full mt-2">
-                        <ChevronDown className="h-4 w-4 mr-2" />
+                      <Button variant="ghost" size="sm" className="w-full mt-1.5 sm:mt-2 cursor-pointer text-xs sm:text-sm h-7 sm:h-8">
+                        <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
                         Ver destinatarios
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2">
-                      <div className="bg-muted/50 rounded p-3">
-                        <p className="text-xs font-medium mb-2">Destinatarios:</p>
+                      <div className="bg-muted/50 rounded p-2.5 sm:p-3">
+                        <p className="text-[10px] sm:text-xs font-medium mb-1.5 sm:mb-2">Destinatarios:</p>
                         <div className="flex flex-wrap gap-1">
                           {automation.recipients.map((recipient, idx) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">
+                            <Badge key={idx} variant="secondary" className="text-[10px] sm:text-xs">
                               {recipient}
                             </Badge>
                           ))}

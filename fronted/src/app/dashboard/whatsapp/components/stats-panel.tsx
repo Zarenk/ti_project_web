@@ -65,28 +65,28 @@ export default function StatsPanel() {
   const activeAuto = stats.activeAutomations ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full min-w-0">
       {/* Estadísticas principales */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Mensajes</CardTitle>
-            <MessageCircle className="h-4 w-4 text-muted-foreground" />
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Mensajes</CardTitle>
+            <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{total.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Enviados y recibidos</p>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold">{total.toLocaleString()}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Enviados y recibidos</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensajes Enviados</CardTitle>
-            <Send className="h-4 w-4 text-muted-foreground" />
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Enviados</CardTitle>
+            <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{sent.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold">{sent.toLocaleString()}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               {total > 0
                 ? `${((sent / total) * 100).toFixed(1)}% del total`
                 : 'Sin mensajes'}
@@ -94,14 +94,14 @@ export default function StatsPanel() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensajes Recibidos</CardTitle>
-            <Inbox className="h-4 w-4 text-muted-foreground" />
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Recibidos</CardTitle>
+            <Inbox className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{received.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold">{received.toLocaleString()}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               {total > 0
                 ? `${((received / total) * 100).toFixed(1)}% del total`
                 : 'Sin mensajes'}
@@ -109,16 +109,16 @@ export default function StatsPanel() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensajes Fallidos</CardTitle>
-            <AlertCircle className="h-4 w-4 text-destructive" />
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Fallidos</CardTitle>
+            <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{failed.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold text-destructive">{failed.toLocaleString()}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               {sent > 0
-                ? `${((failed / sent) * 100).toFixed(1)}% de los enviados`
+                ? `${((failed / sent) * 100).toFixed(1)}% enviados`
                 : 'Sin envíos'}
             </p>
           </CardContent>
@@ -126,30 +126,30 @@ export default function StatsPanel() {
       </div>
 
       {/* Automatizaciones y Rendimiento */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Automatizaciones Activas</CardTitle>
-            <Zap className="h-4 w-4 text-primary" />
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Automatizaciones</CardTitle>
+            <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeAuto}</div>
-            <p className="text-xs text-muted-foreground">Configuradas y habilitadas</p>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold">{activeAuto}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Activas</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Exito</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Tasa de Éxito</CardTitle>
+            <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-xl sm:text-2xl font-bold">
               {sent > 0
                 ? `${(((sent - failed) / sent) * 100).toFixed(1)}%`
                 : 'N/A'}
             </div>
-            <p className="text-xs text-muted-foreground">Mensajes enviados exitosamente</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Enviados exitosamente</p>
           </CardContent>
         </Card>
       </div>

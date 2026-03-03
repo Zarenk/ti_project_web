@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { BACKEND_URL } from "@/lib/utils";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   try {
@@ -20,11 +20,19 @@ export async function GET(
       );
     }
 
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Forward tenant headers if present
+    const orgId = request.headers.get("x-org-id");
+    const companyId = request.headers.get("x-company-id");
+    if (orgId) headers["x-org-id"] = orgId;
+    if (companyId) headers["x-company-id"] = companyId;
+
     const response = await fetch(
       `${BACKEND_URL}/api/sunat/pdf/${segments}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      { headers },
     );
 
     if (!response.ok) {

@@ -237,7 +237,7 @@ export class SunatController {
     @CurrentTenant() tenant: TenantContext | null,
     @Res() res: Response,
   ) {
-    // 1. Try stored PDF record (tenant-aware path)
+    // 1. Try stored PDF record with tenant-aware access check
     try {
       const record = await this.sunatService.getStoredPdfForTenant({
         filename,
@@ -252,10 +252,29 @@ export class SunatController {
       res.setHeader('Content-Type', 'application/pdf');
       return res.sendFile(filePath);
     } catch {
+      // Tenant check failed or record not found — try direct DB lookup
+    }
+
+    // 2. Direct DB lookup by filename+type (authenticated users, no tenant restriction)
+    try {
+      const record = await this.sunatService.findStoredPdfByFilename(
+        filename,
+        tipo,
+      );
+      if (record?.relativePath) {
+        const filePath = this.sunatService.getComprobantePdfPath(
+          tipo,
+          record.filename,
+          record.relativePath,
+        );
+        res.setHeader('Content-Type', 'application/pdf');
+        return res.sendFile(filePath);
+      }
+    } catch {
       // Record not found or file missing — try fallback
     }
 
-    // 2. Fallback: standard path (comprobantes/pdf/{tipo}/{filename})
+    // 3. Fallback: standard path (comprobantes/pdf/{tipo}/{filename})
     try {
       const filePath = this.sunatService.getComprobantePdfPath(
         tipo,

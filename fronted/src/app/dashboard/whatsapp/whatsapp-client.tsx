@@ -191,25 +191,25 @@ export default function WhatsAppClient() {
 
   return (
     <section className="py-2 sm:py-6">
-      <div className="container mx-auto px-3 sm:px-6 lg:px-8 space-y-6">
+      <div className="container mx-auto px-2 sm:px-6 lg:px-8 space-y-4 sm:space-y-6 w-full min-w-0 overflow-hidden">
       {/* Header */}
-      <div>
+      <div className="px-1 sm:px-0">
         <h1 className="text-xl sm:text-3xl font-bold">WhatsApp Business</h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-sm sm:text-base text-muted-foreground mt-0.5 sm:mt-1">
           Gestiona tu WhatsApp y automatiza mensajes a tus clientes
         </p>
       </div>
 
       {/* Connection Status Banner */}
-      <Card className={isConnected
+      <Card className={`w-full min-w-0 overflow-hidden ${isConnected
         ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/40'
         : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'
-      }>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+      }`}>
+        <CardContent className="pt-4 sm:pt-6 pb-4 px-3 sm:px-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+            <div className="flex items-start gap-2.5 min-w-0">
               <div
-                className={`h-4 w-4 rounded-full ${
+                className={`h-3 w-3 sm:h-4 sm:w-4 rounded-full flex-shrink-0 mt-1 ${
                   isConnected
                     ? 'bg-green-500'
                     : status === 'QR_PENDING'
@@ -219,15 +219,15 @@ export default function WhatsAppClient() {
                     : 'bg-gray-400'
                 }`}
               />
-              <div>
-                <p className={`font-medium ${isConnected ? 'text-green-900 dark:text-green-300' : 'text-amber-900 dark:text-amber-300'}`}>
+              <div className="min-w-0">
+                <p className={`text-sm sm:text-base font-medium break-words ${isConnected ? 'text-green-900 dark:text-green-300' : 'text-amber-900 dark:text-amber-300'}`}>
                   {status === 'CONNECTED' && `Conectado como ${phoneNumber}`}
                   {status === 'QR_PENDING' && 'Esperando escaneo de QR'}
                   {status === 'CONNECTING' && 'Conectando...'}
-                  {status === 'DISCONNECTED' && (hasAuth ? 'Sesión guardada — no conectado' : 'WhatsApp no conectado')}
+                  {status === 'DISCONNECTED' && (hasAuth ? 'Sesión guardada' : 'WhatsApp no conectado')}
                   {status === 'FAILED' && 'Conexión fallida'}
                 </p>
-                <p className={`text-sm ${isConnected ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                <p className={`text-xs sm:text-sm ${isConnected ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
                   {isConnected
                     ? 'Puedes enviar mensajes y gestionar automatizaciones'
                     : hasAuth
@@ -237,19 +237,19 @@ export default function WhatsAppClient() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-shrink-0 self-end sm:self-auto">
               {isConnected ? (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleDisconnect}
                   disabled={isDisconnecting}
-                  className="cursor-pointer"
+                  className="cursor-pointer text-xs sm:text-sm h-8 sm:h-9"
                 >
                   {isDisconnecting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Unplug className="mr-2 h-4 w-4" />
+                    <Unplug className="mr-1.5 h-3.5 w-3.5" />
                   )}
                   Desconectar
                 </Button>
@@ -257,17 +257,17 @@ export default function WhatsAppClient() {
                 <Button
                   onClick={() => handleConnect(false)}
                   disabled={isConnecting || status === 'CONNECTING'}
-                  className="cursor-pointer"
+                  className="cursor-pointer text-xs sm:text-sm h-8 sm:h-9"
                 >
                   {isConnecting || status === 'CONNECTING' ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {hasAuth ? 'Reconectando...' : 'Conectando...'}
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      <span>{hasAuth ? 'Reconectando...' : 'Conectando...'}</span>
                     </>
                   ) : (
                     <>
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      {hasAuth ? 'Reconectar' : 'Conectar WhatsApp'}
+                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                      <span>{hasAuth ? 'Reconectar' : 'Conectar WhatsApp'}</span>
                     </>
                   )}
                 </Button>
@@ -278,41 +278,43 @@ export default function WhatsAppClient() {
       </Card>
 
       {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8">
-          <TabsTrigger value="connection" className="gap-1.5 cursor-pointer">
-            <Phone className="h-4 w-4" />
-            <span className="hidden sm:inline">Conexion</span>
-          </TabsTrigger>
-          <TabsTrigger value="send" disabled={!isConnected} className="gap-1.5 cursor-pointer">
-            <Send className="h-4 w-4" />
-            <span className="hidden sm:inline">Enviar</span>
-          </TabsTrigger>
-          <TabsTrigger value="bulk" disabled={!isConnected} className="gap-1.5 cursor-pointer">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Masivo</span>
-          </TabsTrigger>
-          <TabsTrigger value="messages" disabled={!isConnected} className="gap-1.5 cursor-pointer">
-            <MessageCircle className="h-4 w-4" />
-            <span className="hidden sm:inline">Mensajes</span>
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="gap-1.5 cursor-pointer">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Plantillas</span>
-          </TabsTrigger>
-          <TabsTrigger value="automations" className="gap-1.5 cursor-pointer">
-            <Zap className="h-4 w-4" />
-            <span className="hidden sm:inline">Automaciones</span>
-          </TabsTrigger>
-          <TabsTrigger value="auto-reply" className="gap-1.5 cursor-pointer">
-            <Bot className="h-4 w-4" />
-            <span className="hidden sm:inline">Chatbot</span>
-          </TabsTrigger>
-          <TabsTrigger value="stats" className="gap-1.5 cursor-pointer">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Stats</span>
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3 sm:space-y-4">
+        <div className="w-full min-w-0 overflow-x-auto -mx-2 px-2 sm:mx-0 sm:px-0">
+          <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-8 h-auto p-1 gap-0.5 sm:gap-0">
+            <TabsTrigger value="connection" className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Conexion</span>
+            </TabsTrigger>
+            <TabsTrigger value="send" disabled={!isConnected} className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Enviar</span>
+            </TabsTrigger>
+            <TabsTrigger value="bulk" disabled={!isConnected} className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Masivo</span>
+            </TabsTrigger>
+            <TabsTrigger value="messages" disabled={!isConnected} className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Mensajes</span>
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Plantillas</span>
+            </TabsTrigger>
+            <TabsTrigger value="automations" className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Automaciones</span>
+            </TabsTrigger>
+            <TabsTrigger value="auto-reply" className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Chatbot</span>
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+              <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Stats</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="connection" className="space-y-4">
           <ConnectionPanel

@@ -590,6 +590,12 @@
   .diag-shimmer::after { animation: none; opacity: 0; }
 }
 
+/* Horizontal shimmer sweep for gradient buttons */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 /* Simple reusable fade utilities for signup landing */
 @keyframes fade-in {
   from { opacity: 0; }

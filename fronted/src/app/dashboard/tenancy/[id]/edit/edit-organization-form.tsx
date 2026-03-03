@@ -82,7 +82,6 @@ export function EditOrganizationForm({ organization, canEdit }: EditOrganization
         window.dispatchEvent(new Event(TENANT_ORGANIZATIONS_EVENT))
       }
 
-      router.push(`/dashboard/tenancy/${updated.id}`)
       router.refresh()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo actualizar la organizacion"
