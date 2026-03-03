@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Navbar from "@/components/navbar"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -74,8 +73,7 @@ export default function VerifySearchPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
-      <Navbar />
-      <div className="container mx-auto px-4 py-12 max-w-md">
+      <div className="container mx-auto px-4 py-8 sm:py-12 max-w-md">
         <div className="flex flex-col items-center gap-3 mb-8 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
           <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
             <ShieldCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />

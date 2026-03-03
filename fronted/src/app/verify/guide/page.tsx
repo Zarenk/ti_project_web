@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import Navbar from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -163,7 +162,6 @@ export default function VerifyGuidePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
-        <Navbar />
         <div className="container mx-auto px-4 py-16 flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
           <p className="text-muted-foreground">Verificando guia de remision...</p>
@@ -175,7 +173,6 @@ export default function VerifyGuidePage() {
   if (notFound || !data) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
-        <Navbar />
         <div className="container mx-auto px-4 py-16 max-w-md flex flex-col items-center gap-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
           <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8 text-red-500" />
@@ -201,7 +198,6 @@ export default function VerifyGuidePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
-      <Navbar />
       <div className="container mx-auto px-4 py-8 max-w-2xl w-full min-w-0">
         {/* Header */}
         <div className="flex flex-col items-center gap-3 mb-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
