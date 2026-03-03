@@ -545,7 +545,18 @@ export async function sendInvoiceToSunat(invoiceData: any) {
   });
 
   if (!response.ok) {
-    throw new Error('Error al enviar la factura a la SUNAT');
+    let message = 'Error al enviar la factura a la SUNAT';
+    try {
+      const errorData = await response.json();
+      if (errorData?.message) {
+        message = typeof errorData.message === 'string'
+          ? errorData.message
+          : String(errorData.message);
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
   }
 
   return await response.json();

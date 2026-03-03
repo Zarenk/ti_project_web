@@ -301,18 +301,34 @@ export class SunatService {
 
       return response;
     } catch (error: any) {
-      console.error('Error en el proceso:', error.message);
+      // Build a detailed error message for diagnostics
+      let errorMsg = error?.message ?? 'Error desconocido';
+      if (error?.response?.status) {
+        errorMsg = `HTTP ${error.response.status}: ${errorMsg}`;
+      }
+      if (error?.response?.data) {
+        const body = typeof error.response.data === 'string'
+          ? error.response.data.substring(0, 500)
+          : JSON.stringify(error.response.data).substring(0, 500);
+        errorMsg += ` | Response: ${body}`;
+      }
+      this.logger.error(`SUNAT sendDocument failed: ${errorMsg}`);
+
       if (transmissionId !== null) {
         await this.prismaService.sunatTransmission
           .update({
             where: { id: transmissionId },
             data: {
               status: 'FAILED',
-              errorMessage: error?.message ?? 'Error desconocido',
-              response: this.wrapJsonResponse(error?.response ?? null),
+              errorMessage: errorMsg.substring(0, 1000),
+              response: this.wrapJsonResponse(error?.response?.data ?? null),
             },
           })
-          .catch(() => undefined);
+          .catch((dbErr) => {
+            this.logger.error(
+              `Failed to update transmission ${transmissionId} to FAILED: ${dbErr?.message}`,
+            );
+          });
       }
       throw error;
     }

@@ -1411,51 +1411,56 @@ const getSaleReferenceId = () => {
 
           console.log("Payload para SUNAT:", invoicePayload);
 
-          const sunatResponse = await sendInvoiceToSunat(invoicePayload);
-          console.log("Respuesta de la SUNAT:", sunatResponse);
+          // 1) Send to SUNAT (non-blocking — PDF opens regardless)
+          sendInvoiceToSunat(invoicePayload)
+            .then((sunatResponse) => {
+              console.log("Respuesta de la SUNAT:", sunatResponse);
+              if (sunatResponse.message?.toLowerCase().includes("exitosamente")) {
+                toast.success("Factura enviada a la SUNAT correctamente.");
+              } else if (sunatResponse.message) {
+                toast.error(`Error SUNAT: ${sunatResponse.message}`);
+              }
+            })
+            .catch((sunatErr) => {
+              console.error("Error al enviar a SUNAT:", sunatErr);
+              toast.error("No se pudo enviar el comprobante a SUNAT. Puede reintentar desde el detalle de la venta.");
+            });
 
-          // Luego dentro de onSubmit, después de calcular `total`:
-          const totalTexto = numeroALetrasCustom(total, 'PEN'); // 'PEN' | 'USD'
-          console.log("Importe en letras:", totalTexto); // Verificar el resultado
+          // 2) Generate PDF and open in new window (always runs regardless of SUNAT result)
+          try {
+            const totalTexto = numeroALetrasCustom(total, 'PEN');
+            const verificationCode = createdSale.invoice?.verificationCode;
+            const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+            const qrData = verificationCode
+              ? `${baseUrl}/verify/${verificationCode}`
+              : `Representación impresa de la ${data.tipoComprobante.toUpperCase()} ELECTRÓNICA\nN° ${data.serie}-${data.nroCorrelativo}`;
+            const qrCode = await QRCode.toDataURL(qrData);
 
-          // Generar el código QR con URL de verificación pública
-          const verificationCode = createdSale.invoice?.verificationCode;
-          const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-          const qrData = verificationCode
-            ? `${baseUrl}/verify/${verificationCode}`
-            : `Representación impresa de la ${data.tipoComprobante.toUpperCase()} ELECTRÓNICA\nN° ${data.serie}-${data.nroCorrelativo}`;
-          const qrCode = await QRCode.toDataURL(qrData);
+            const invoiceProps = {
+              data: { ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice },
+              qrCode,
+              importeEnLetras: totalTexto,
+            };
+            const invoiceDoc = receiptFormat === "ticket"
+              ? <TicketInvoiceDocument {...invoiceProps} />
+              : <InvoiceDocument {...invoiceProps} />;
 
-          // ✅ Mostrar el PDF en nueva ventana
-          const invoiceProps = {
-            data: { ...invoicePayload, serie: serieInvoice, correlativo: correlativoInvoice },
-            qrCode,
-            importeEnLetras: totalTexto,
-          };
-          const invoiceDoc = receiptFormat === "ticket"
-            ? <TicketInvoiceDocument {...invoiceProps} />
-            : <InvoiceDocument {...invoiceProps} />;
+            await openPDFInNewWindow(invoiceDoc);
 
-          await openPDFInNewWindow(invoiceDoc);
+            const blob = await pdf(invoiceDoc).toBlob();
 
-          const blob = await pdf(invoiceDoc).toBlob();
-          
-          await uploadPdfToServer({
-            blob,
-            ruc: emitterRuc || "00000000000",
-            tipoComprobante: comprobante ?? "SIN_COMPROBANTE", // "boleta" o "invoice"
-            serie: serieInvoice!,
-            correlativo: correlativoInvoice!,
-          });
+            await uploadPdfToServer({
+              blob,
+              ruc: emitterRuc || "00000000000",
+              tipoComprobante: comprobante ?? "SIN_COMPROBANTE",
+              serie: serieInvoice!,
+              correlativo: correlativoInvoice!,
+            });
 
-          setShowPDF(true);
-
-          if (sunatResponse.message && sunatResponse.message.toLowerCase().includes("exitosamente")) {
-            toast.success("Factura enviada a la SUNAT correctamente.");
-          } else if (sunatResponse.message) {
-            toast.error(`Error al enviar la factura a la SUNAT: ${sunatResponse.message}`);
-          } else {
-            toast.error("Error desconocido al enviar la factura a la SUNAT.");
+            setShowPDF(true);
+          } catch (pdfErr) {
+            console.error("Error al generar comprobante PDF:", pdfErr);
+            toast.error("Venta registrada pero hubo un error al generar el comprobante.");
           }
         }
 
