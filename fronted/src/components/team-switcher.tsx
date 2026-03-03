@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, Pencil, Plus, Settings } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -733,8 +733,20 @@ export function TeamSwitcher(): React.ReactElement | null {
                 side={isMobile ? "bottom" : "right"}
                 sideOffset={4}
               >
-                <DropdownMenuLabel className="text-muted-foreground text-xs">
-                  {organizationLabel}
+                <DropdownMenuLabel className="group/org relative flex items-center justify-between px-2 py-1.5 text-muted-foreground text-xs">
+                  <span className="truncate">{organizationLabel}</span>
+                  <button
+                    type="button"
+                    className="flex size-6 items-center justify-center rounded-md opacity-0 scale-90 group-hover/org:opacity-100 group-hover/org:scale-100 sm:transition-all sm:duration-200 sm:ease-out max-sm:opacity-100 max-sm:scale-100 text-muted-foreground hover:text-primary hover:bg-primary/10 cursor-pointer active:scale-90"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      router.push(`/dashboard/tenancy/${selection.orgId}`)
+                    }}
+                    aria-label={`Editar organización ${organizationLabel}`}
+                  >
+                    <Pencil className="size-3" />
+                  </button>
                 </DropdownMenuLabel>
                 {employeeCompanies.length > 0 ? (
                   employeeCompanies.map((company) => (
@@ -750,6 +762,17 @@ export function TeamSwitcher(): React.ReactElement | null {
                       {company.id === activeCompanyId ? (
                         <span className="text-[11px] text-muted-foreground">Actual</span>
                       ) : null}
+                      <button
+                        type="button"
+                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer active:scale-95"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/dashboard/tenancy/companies/${company.id}/edit`)
+                        }}
+                        aria-label={`Configurar ${company.name}`}
+                      >
+                        <Settings className="size-3.5" />
+                      </button>
                     </DropdownMenuItem>
                   ))
                 ) : (
@@ -902,8 +925,20 @@ export function TeamSwitcher(): React.ReactElement | null {
               >
                 {organizations.map((organization) => (
                   <React.Fragment key={organization.id}>
-                    <DropdownMenuLabel className="text-muted-foreground text-xs">
-                      {organization.name}
+                    <DropdownMenuLabel className="group/org relative flex items-center justify-between px-2 py-1.5 text-muted-foreground text-xs">
+                      <span className="truncate">{organization.name}</span>
+                      <button
+                        type="button"
+                        className="flex size-6 items-center justify-center rounded-md opacity-0 scale-90 group-hover/org:opacity-100 group-hover/org:scale-100 sm:transition-all sm:duration-200 sm:ease-out max-sm:opacity-100 max-sm:scale-100 text-muted-foreground hover:text-primary hover:bg-primary/10 cursor-pointer active:scale-90"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          router.push(`/dashboard/tenancy/${organization.id}`)
+                        }}
+                        aria-label={`Editar organización ${organization.name}`}
+                      >
+                        <Pencil className="size-3" />
+                      </button>
                     </DropdownMenuLabel>
                     {organization.companies.length > 0 ? (
                       organization.companies.map((company) => (
@@ -915,7 +950,18 @@ export function TeamSwitcher(): React.ReactElement | null {
                           <div className="flex size-6 items-center justify-center rounded-md border">
                             <Building2 className="size-3.5 shrink-0" />
                           </div>
-                          {company.name}
+                          <span className="flex-1 truncate">{company.name}</span>
+                          <button
+                            type="button"
+                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer active:scale-95"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              router.push(`/dashboard/tenancy/companies/${company.id}/edit`)
+                            }}
+                            aria-label={`Configurar ${company.name}`}
+                          >
+                            <Settings className="size-3.5" />
+                          </button>
                         </DropdownMenuItem>
                       ))
                     ) : (

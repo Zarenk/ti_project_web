@@ -10,7 +10,7 @@ import type {
   UpdateCompanyPayload,
 } from "../../../tenancy.api";
 import { updateCompany } from "../../../tenancy.api";
-import { setTenantSelection } from "@/utils/tenant-preferences";
+
 
 // ── Constants ────────────────────────────────────────────────
 export const MAX_NAME_LENGTH = 200;
@@ -366,12 +366,7 @@ export function useCompanyForm(company: CompanyDetail) {
           whatsappAutoSendInvoice: formState.whatsappAutoSendInvoice ?? false,
           documentSequences: sequencePayload,
         });
-        await setTenantSelection({
-          orgId: company.organization.id,
-          companyId: company.id,
-        });
         toast.success("Empresa actualizada correctamente.");
-        router.push("/dashboard/tenancy/companies");
         router.refresh();
       } catch (error: unknown) {
         const msg = getErrorMessage(error);

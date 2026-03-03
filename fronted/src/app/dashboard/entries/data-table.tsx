@@ -45,7 +45,7 @@ import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { EyeIcon, FileText, PrinterIcon, Store, User, Calendar, DollarSign, Package, CheckCircle, MapPin } from "lucide-react"
+import { ChevronDown, EyeIcon, FileText, PrinterIcon, SlidersHorizontal, Store, User, Calendar, DollarSign, Package, CheckCircle, MapPin, X } from "lucide-react"
 
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -111,6 +111,7 @@ details: { product_name: string; quantity: number; price: number; series?: strin
   
   // Filtrar los datos según el rango de fechas seleccionado
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const filteredData = useMemo(() => {
     if (!selectedDateRange?.from || !selectedDateRange?.to) {
@@ -250,7 +251,16 @@ details: { product_name: string; quantity: number; price: number; series?: strin
     const isFiltered =
     !!table.getColumn("user_username")?.getFilterValue() || // Filtro de búsqueda
     !!selectedDateRange || // Rango de fechas
-    table.getState().columnFilters.length > 0; // Filtros de columnas 
+    table.getState().columnFilters.length > 0; // Filtros de columnas
+
+    const activeFilterCount = (() => {
+      let count = 0;
+      if (table.getColumn("user_username")?.getFilterValue()) count++;
+      if (selectedDateRange) count++;
+      // Faceted filters (usuario, proveedor, tienda) from toolbar
+      count += table.getState().columnFilters.filter(f => f.id !== "user_username").length;
+      return count;
+    })();
   //
 
   // Mapa de traducción para los nombres de las columnas
@@ -418,81 +428,159 @@ details: { product_name: string; quantity: number; price: number; series?: strin
 
   return (
     <div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py4- px-4 gap-4 mb-6">
-            <Input
-              placeholder="Filtrar por nombre de Usuario..."
-              value={(table.getColumn("user_username")?.getFilterValue() as string) ?? ""}
-              onChange={(event) =>
-                table.getColumn("user_username")?.setFilterValue(event.target.value)
-              }
-              className="w-full sm:w-1/3 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {/* Selector de Rango de Fechas con CalendarDatePicker */}
-            <div className="px-0 sm:px-2">
-              <CalendarDatePicker 
-              className="h-9 w-[300px]"
-              variant="outline"
-              date={selectedDateRange || { from: undefined, to: undefined }} 
-              onDateSelect={handleDateSelect} />
-            </div>
-            <div className="px-0 sm:px-2">
-              <DataTableToolbar table={table} />
-            </div>
-            {/* Botón Reset: Solo aparece si hay filtros activos */}
-            {(totalSelectedRows > 0 || isFiltered) && (
-            <div className="px-0 sm:px-2 self-start sm:self-auto">
+          <div className="flex flex-col gap-3 px-4 mb-6">
+
+            {/* ── Mobile: compact search + filter toggle ── */}
+            <div className="flex gap-2 sm:hidden w-full min-w-0">
+              <Input
+                placeholder="Filtrar por usuario..."
+                value={(table.getColumn("user_username")?.getFilterValue() as string) ?? ""}
+                onChange={(event) =>
+                  table.getColumn("user_username")?.setFilterValue(event.target.value)
+                }
+                className="h-9 text-sm flex-1 min-w-0"
+              />
               <Button
-                  variant="ghost"
-                  onClick={handleResetDateRange}
-                  className="h-8 px-2 lg:px-3"
+                variant={mobileFiltersOpen ? "secondary" : "outline"}
+                size="sm"
+                className="h-9 gap-1.5 cursor-pointer flex-shrink-0 relative"
+                onClick={() => setMobileFiltersOpen((prev) => !prev)}
               >
-                Reset
-              <Cross2Icon className="ml-2 h-4 w-4" />
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span className="text-xs">Filtros</span>
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${mobileFiltersOpen ? "rotate-180" : ""}`} />
               </Button>
-            </div>              
-            )}
-          
-          <div className="sm:mt-0 sm:ml-auto">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="ml-auto">
-                  Vistas
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-              align="start" // Alinea el menú al final del botón
-              side="bottom" // Posiciona el menú debajo del botón
-              sideOffset={4} // Agrega un pequeño espacio entre el botón y el menú
-              className="w-48 sm:w-48 sm:align-end" // Cambia el comportamiento en pantallas medianas y grandes      
-              >
-              {/* Título encima de las opciones */}
-              <div className="px-4 py-2 text-sm font-medium border-b text-center">
-                Opciones
+            </div>
+
+            {/* ── Mobile: collapsible filter panel ── */}
+            <div
+              className={`sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+                mobileFiltersOpen
+                  ? "max-h-[500px] opacity-100"
+                  : "max-h-0 opacity-0"
+              }`}
+            >
+              <div className="space-y-2 pt-1 pb-0.5">
+                <CalendarDatePicker
+                  className="h-9 w-full justify-between text-sm"
+                  variant="outline"
+                  date={selectedDateRange || { from: undefined, to: undefined }}
+                  onDateSelect={handleDateSelect}
+                />
+                <DataTableToolbar table={table} />
+                <div className="flex items-center gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 cursor-pointer text-xs">
+                        Vistas
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" side="bottom" sideOffset={4} className="w-48">
+                      <div className="px-4 py-2 text-sm font-medium border-b text-center">Opciones</div>
+                      {table
+                        .getAllColumns()
+                        .filter((column) => column.getCanHide() && column.id !== "actions")
+                        .map((column) => (
+                          <DropdownMenuCheckboxItem
+                            key={column.id}
+                            className="capitalize"
+                            checked={column.getIsVisible()}
+                            onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                          >
+                            {columnLabels[column.id] || column.id}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {isFiltered && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        handleResetDateRange();
+                        setMobileFiltersOpen(false);
+                      }}
+                      className="h-8 text-xs text-muted-foreground cursor-pointer"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Limpiar filtros
+                    </Button>
+                  )}
+                </div>
               </div>
-                {table
-                  .getAllColumns()
-                  .filter(
-                    (column) => column.getCanHide() && column.id !== "actions" // Excluye la columna "actions"
-                  )
-                  .map((column) => {
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        className="capitalize"
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) =>
-                          column.toggleVisibility(!!value)
-                        }
-                      >
-                        {/* Usa el mapa de traducción para mostrar nombres amigables */}
-                        {columnLabels[column.id] || column.id}
-                      </DropdownMenuCheckboxItem>
-                    )
-                  })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            </div>
+
+            {/* ── Desktop: full filter row (unchanged) ── */}
+            <div className="hidden sm:flex sm:flex-row sm:items-center sm:justify-between gap-4">
+              <Input
+                placeholder="Filtrar por nombre de Usuario..."
+                value={(table.getColumn("user_username")?.getFilterValue() as string) ?? ""}
+                onChange={(event) =>
+                  table.getColumn("user_username")?.setFilterValue(event.target.value)
+                }
+                className="w-full sm:w-1/3 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="px-0 sm:px-2">
+                <CalendarDatePicker
+                  className="h-9 w-[300px]"
+                  variant="outline"
+                  date={selectedDateRange || { from: undefined, to: undefined }}
+                  onDateSelect={handleDateSelect}
+                />
+              </div>
+              <div className="px-0 sm:px-2">
+                <DataTableToolbar table={table} />
+              </div>
+              {(totalSelectedRows > 0 || isFiltered) && (
+                <div className="px-0 sm:px-2 self-start sm:self-auto">
+                  <Button
+                    variant="ghost"
+                    onClick={handleResetDateRange}
+                    className="h-8 px-2 lg:px-3 cursor-pointer"
+                  >
+                    Reset
+                    <Cross2Icon className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              <div className="sm:mt-0 sm:ml-auto">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="ml-auto cursor-pointer">
+                      Vistas
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    side="bottom"
+                    sideOffset={4}
+                    className="w-48 sm:w-48 sm:align-end"
+                  >
+                    <div className="px-4 py-2 text-sm font-medium border-b text-center">Opciones</div>
+                    {table
+                      .getAllColumns()
+                      .filter((column) => column.getCanHide() && column.id !== "actions")
+                      .map((column) => (
+                        <DropdownMenuCheckboxItem
+                          key={column.id}
+                          className="capitalize"
+                          checked={column.getIsVisible()}
+                          onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                        >
+                          {columnLabels[column.id] || column.id}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
           </div>
-        </div>
       {/* Aquí agregamos el contador de datos */}
       <div className="py-2 px-4 flex flex-col sm:flex-row items-start sm:items-center space-x-4">
           <label className="text-sm text-muted-foreground">

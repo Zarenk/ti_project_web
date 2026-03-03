@@ -631,6 +631,20 @@ export class SunatService {
     return record;
   }
 
+  /**
+   * Simple DB lookup by filename + type — no tenant restriction.
+   * Used as fallback when tenant context is unavailable (e.g., proxy without headers).
+   * The endpoint is already protected by JWT auth guard.
+   */
+  async findStoredPdfByFilename(
+    filename: string,
+    type: string,
+  ) {
+    return this.prismaService.sunatStoredPdf.findFirst({
+      where: { filename, type },
+    });
+  }
+
   async listStoredPdfsForTenant(tenant: TenantContext | null) {
     if (!tenant) {
       throw new ForbiddenException('Contexto de tenant no disponible.');
@@ -791,38 +805,52 @@ export class SunatService {
   async getPublicPdfPath(code: string): Promise<string | null> {
     const invoice = await this.prismaService.invoiceSales.findUnique({
       where: { verificationCode: code },
-      select: {
-        companyId: true,
-        tipoComprobante: true,
-        serie: true,
-        nroCorrelativo: true,
-      },
     });
 
     if (!invoice) return null;
 
-    const tipo = invoice.tipoComprobante?.toUpperCase() === 'FACTURA' ? 'factura' : 'boleta';
-    const filename = `${invoice.serie}-${invoice.nroCorrelativo}.pdf`;
-
-    const storedPdf = await this.prismaService.sunatStoredPdf.findFirst({
-      where: {
-        companyId: invoice.companyId,
-        filename,
-      },
-      select: { relativePath: true },
+    // Get company RUC for the full filename format
+    const company = await this.prismaService.company.findUnique({
+      where: { id: invoice.companyId },
+      select: { sunatRuc: true },
     });
 
-    if (storedPdf?.relativePath) {
-      const filePath = resolveStoragePath(storedPdf.relativePath);
-      if (fs.existsSync(filePath)) return filePath;
+    const isFac = invoice.tipoComprobante?.toUpperCase() === 'FACTURA';
+    const tipo = isFac ? 'factura' : 'boleta';
+    const typeCode = isFac ? '01' : '03';
+    const ruc = company?.sunatRuc ?? '';
+
+    // Full filename format: {ruc}-{typeCode}-{serie}-{correlativo}.pdf
+    const fullFilename = ruc
+      ? `${ruc}-${typeCode}-${invoice.serie}-${invoice.nroCorrelativo}.pdf`
+      : '';
+    // Short filename format: {serie}-{correlativo}.pdf (legacy)
+    const shortFilename = `${invoice.serie}-${invoice.nroCorrelativo}.pdf`;
+
+    // Try full filename first (current format), then short (legacy)
+    for (const fname of [fullFilename, shortFilename].filter(Boolean)) {
+      const storedPdf = await this.prismaService.sunatStoredPdf.findFirst({
+        where: {
+          companyId: invoice.companyId,
+          filename: fname,
+        },
+        select: { relativePath: true },
+      });
+
+      if (storedPdf?.relativePath) {
+        const filePath = resolveStoragePath(storedPdf.relativePath);
+        if (fs.existsSync(filePath)) return filePath;
+      }
     }
 
-    // Fallback: try the standard path
-    const standardPath = path.join(
-      resolveStoragePath('comprobantes/pdf', tipo),
-      filename,
-    );
-    if (fs.existsSync(standardPath)) return standardPath;
+    // Fallback: try the standard paths
+    for (const fname of [fullFilename, shortFilename].filter(Boolean)) {
+      const standardPath = path.join(
+        resolveStoragePath('comprobantes/pdf', tipo),
+        fname,
+      );
+      if (fs.existsSync(standardPath)) return standardPath;
+    }
 
     return null;
   }

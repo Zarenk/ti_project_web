@@ -81,7 +81,7 @@ function ComboboxField({
   const selected = options.find((o) => o.id === value)
 
   return (
-    <div className="min-w-0 flex-1 basis-[140px] space-y-1">
+    <div className="w-full sm:w-auto min-w-0 sm:flex-1 sm:basis-[140px] space-y-1">
       <Label className="text-xs">{label}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -395,7 +395,7 @@ function ClientComboboxField({
   }
 
   return (
-    <div className="min-w-0 flex-1 basis-[140px] space-y-1">
+    <div className="w-full sm:w-auto min-w-0 sm:flex-1 sm:basis-[140px] space-y-1">
       <Label className="text-xs">Cliente</Label>
       <div className="flex gap-1.5">
         <Popover open={open} onOpenChange={setOpen}>

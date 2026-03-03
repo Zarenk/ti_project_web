@@ -20,7 +20,7 @@ import {
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { DateRange } from "react-day-picker";
 import Link from "next/link";
-import { Ban, BarChart3, CheckCircle2, CircleDot, FileSpreadsheet, LayoutGrid, List, Loader2, XCircle } from "lucide-react";
+import { Ban, BarChart3, CheckCircle2, ChevronDown, CircleDot, FileSpreadsheet, LayoutGrid, List, Loader2, SlidersHorizontal, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { TablePageSkeleton } from "@/components/table-page-skeleton";
 import { PageGuideButton } from "@/components/page-guide-dialog";
@@ -406,6 +406,7 @@ export default function Page() {
   const [selectedSunatFilter, setSelectedSunatFilter] = useState("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const { selection } = useTenantSelection();
 
   const queryClient = useQueryClient();
@@ -655,6 +656,18 @@ export default function Page() {
       ),
     [storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, selectedSunatFilter, selectedStatusFilter, dateRange],
   );
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (storeQuery.trim()) count++;
+    if (clientQuery.trim()) count++;
+    if (minTotal.trim() || maxTotal.trim()) count++;
+    if (selectedPaymentMethod !== "ALL") count++;
+    if (selectedSunatFilter !== "ALL") count++;
+    if (selectedStatusFilter !== "ALL") count++;
+    if (dateRange?.from || dateRange?.to) count++;
+    return count;
+  }, [storeQuery, clientQuery, minTotal, maxTotal, selectedPaymentMethod, selectedSunatFilter, selectedStatusFilter, dateRange]);
 
   const handleResetFilters = useCallback(() => {
     setStoreQuery("");
@@ -1359,10 +1372,203 @@ export default function Page() {
             </div>
           </div>
           <div className="px-3 sm:px-5">
-            <div className="space-y-2.5 sm:space-y-4 rounded-xl sm:rounded-2xl bg-card p-3 sm:p-4 shadow-sm">
-              <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+            <div className="space-y-2.5 sm:space-y-4 rounded-xl sm:rounded-2xl bg-card p-3 sm:p-4 shadow-sm w-full min-w-0 overflow-hidden">
+
+              {/* ── Mobile: compact search + filter toggle ── */}
+              <div className="flex gap-2 sm:hidden w-full min-w-0">
+                <Input
+                  type="search"
+                  value={clientQuery}
+                  onChange={(event) => setClientQuery(event.target.value)}
+                  placeholder="Buscar cliente / doc."
+                  className="h-9 text-sm flex-1 min-w-0"
+                />
+                <Button
+                  variant={mobileFiltersOpen ? "secondary" : "outline"}
+                  size="sm"
+                  className="h-9 gap-1.5 cursor-pointer flex-shrink-0 relative"
+                  onClick={() => setMobileFiltersOpen((prev) => !prev)}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  <span className="text-xs">Filtros</span>
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${mobileFiltersOpen ? "rotate-180" : ""}`} />
+                </Button>
+              </div>
+
+              {/* ── Mobile: collapsible filter panel ── */}
+              <div
+                className={`sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+                  mobileFiltersOpen
+                    ? "max-h-[500px] opacity-100"
+                    : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="space-y-2 pt-1 pb-0.5">
+                  <Input
+                    type="search"
+                    value={storeQuery}
+                    onChange={(event) => setStoreQuery(event.target.value)}
+                    placeholder="Buscar tienda"
+                    className="h-9 text-sm"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={minTotal}
+                      onChange={(event) => setMinTotal(event.target.value)}
+                      placeholder="S/ Mín."
+                      className="h-9 text-sm"
+                      inputMode="decimal"
+                    />
+                    <Input
+                      value={maxTotal}
+                      onChange={(event) => setMaxTotal(event.target.value)}
+                      placeholder="S/ Máx."
+                      className="h-9 text-sm"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                      <SelectTrigger className="h-9 w-full cursor-pointer text-sm">
+                        <SelectValue placeholder="Método de pago" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL" className="cursor-pointer">Todos los métodos</SelectItem>
+                        {paymentMethodOptions.map((method) => (
+                          <SelectItem key={method} value={method} className="cursor-pointer">
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedStatusFilter} onValueChange={setSelectedStatusFilter}>
+                      <SelectTrigger
+                        className={`h-9 w-full cursor-pointer text-sm transition-colors duration-200 ${
+                          selectedStatusFilter === "ANULADA"
+                            ? "border-rose-400 bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-700"
+                            : selectedStatusFilter === "ACTIVE"
+                            ? "border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700"
+                            : ""
+                        }`}
+                      >
+                        <SelectValue placeholder="Estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL" className="cursor-pointer">
+                          <span className="flex items-center gap-2">
+                            <CircleDot className="h-3.5 w-3.5 text-muted-foreground" />
+                            Todas
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="ACTIVE" className="cursor-pointer">
+                          <span className="flex items-center gap-2">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                            Activas
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="ANULADA" className="cursor-pointer">
+                          <span className="flex items-center gap-2">
+                            <Ban className="h-3.5 w-3.5 text-rose-500" />
+                            Anuladas
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Select value={selectedSunatFilter} onValueChange={setSelectedSunatFilter}>
+                    <SelectTrigger
+                      className={`h-9 w-full cursor-pointer text-sm transition-colors duration-200 ${
+                        selectedSunatFilter === "ACCEPTED"
+                          ? "border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700"
+                          : selectedSunatFilter === "REJECTED" || selectedSunatFilter === "FAILED"
+                          ? "border-red-400 bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-300 dark:border-red-700"
+                          : selectedSunatFilter === "PENDING"
+                          ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-700"
+                          : selectedSunatFilter === "HAS_NC"
+                          ? "border-violet-400 bg-violet-50 text-violet-800 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-700"
+                          : ""
+                      }`}
+                    >
+                      <SelectValue placeholder="Estado SUNAT" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CircleDot className="h-3.5 w-3.5 text-muted-foreground" />
+                          Todos los estados
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ACCEPTED" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          Aceptado
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="REJECTED" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <XCircle className="h-3.5 w-3.5 text-red-500" />
+                          Rechazado
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="PENDING" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 text-amber-500" />
+                          Pendiente
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="FAILED" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <XCircle className="h-3.5 w-3.5 text-red-400" />
+                          Error
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="NOT_SENT" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <CircleDot className="h-3.5 w-3.5 text-slate-400" />
+                          Sin envío
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="HAS_NC" className="cursor-pointer">
+                        <span className="flex items-center gap-2">
+                          <FileSpreadsheet className="h-3.5 w-3.5 text-violet-500" />
+                          Con nota de crédito
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <CalendarDatePicker
+                    className="h-9 w-full justify-between text-sm"
+                    variant="outline"
+                    date={dateRange ?? { from: undefined, to: undefined }}
+                    onDateSelect={({ from, to }) => setDateRange({ from, to })}
+                    closeOnSelect
+                  />
+                  {isFiltered && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        handleResetFilters();
+                        setMobileFiltersOpen(false);
+                      }}
+                      className="h-8 w-full text-xs text-muted-foreground cursor-pointer"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Limpiar todos los filtros
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Desktop: full filter grid (unchanged) ── */}
+              <div className="hidden sm:grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
                 <div className="space-y-1">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Tienda
                   </p>
                   <Input
@@ -1370,11 +1576,11 @@ export default function Page() {
                     value={storeQuery}
                     onChange={(event) => setStoreQuery(event.target.value)}
                     placeholder="Buscar tienda"
-                    className="h-9 sm:h-10 text-sm"
+                    className="h-10 text-sm"
                   />
                 </div>
                 <div className="space-y-1">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Cliente
                   </p>
                   <Input
@@ -1382,11 +1588,11 @@ export default function Page() {
                     value={clientQuery}
                     onChange={(event) => setClientQuery(event.target.value)}
                     placeholder="Cliente / doc."
-                    className="h-9 sm:h-10 text-sm"
+                    className="h-10 text-sm"
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1 space-y-1">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Monto total (S/)
                   </p>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1394,24 +1600,24 @@ export default function Page() {
                       value={minTotal}
                       onChange={(event) => setMinTotal(event.target.value)}
                       placeholder="S/ Mín."
-                      className="h-9 sm:h-10 text-sm"
+                      className="h-10 text-sm"
                       inputMode="decimal"
                     />
                     <Input
                       value={maxTotal}
                       onChange={(event) => setMaxTotal(event.target.value)}
                       placeholder="S/ Máx."
-                      className="h-9 sm:h-10 text-sm"
+                      className="h-10 text-sm"
                       inputMode="decimal"
                     />
                   </div>
                 </div>
                 <div className="space-y-1 flex flex-col justify-center">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Método de pago
                   </p>
                   <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                    <SelectTrigger className="h-9 sm:h-10 w-full cursor-pointer text-sm">
+                    <SelectTrigger className="h-10 w-full cursor-pointer text-sm">
                       <SelectValue placeholder="Método de pago" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1425,12 +1631,12 @@ export default function Page() {
                   </Select>
                 </div>
                 <div className="space-y-1 flex flex-col justify-center">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Estado Venta
                   </p>
                   <Select value={selectedStatusFilter} onValueChange={setSelectedStatusFilter}>
                     <SelectTrigger
-                      className={`h-9 sm:h-10 w-full cursor-pointer text-sm transition-colors duration-200 ${
+                      className={`h-10 w-full cursor-pointer text-sm transition-colors duration-200 ${
                         selectedStatusFilter === "ANULADA"
                           ? "border-rose-400 bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-700"
                           : selectedStatusFilter === "ACTIVE"
@@ -1463,12 +1669,12 @@ export default function Page() {
                   </Select>
                 </div>
                 <div className="space-y-1 flex flex-col justify-center">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Estado SUNAT
                   </p>
                   <Select value={selectedSunatFilter} onValueChange={setSelectedSunatFilter}>
                     <SelectTrigger
-                      className={`h-9 sm:h-10 w-full cursor-pointer text-sm transition-colors duration-200 ${
+                      className={`h-10 w-full cursor-pointer text-sm transition-colors duration-200 ${
                         selectedSunatFilter === "ACCEPTED"
                           ? "border-emerald-400 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700"
                           : selectedSunatFilter === "REJECTED" || selectedSunatFilter === "FAILED"
@@ -1529,11 +1735,11 @@ export default function Page() {
                   </Select>
                 </div>
                 <div className="space-y-1 sm:col-span-2 lg:col-span-1 xl:col-span-2 2xl:col-span-2">
-                  <p className="hidden text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:block">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Rango de fechas
                   </p>
                   <CalendarDatePicker
-                    className="h-9 sm:h-10 w-full justify-between text-sm"
+                    className="h-10 w-full justify-between text-sm"
                     variant="outline"
                     date={dateRange ?? { from: undefined, to: undefined }}
                     onDateSelect={({ from, to }) => setDateRange({ from, to })}
@@ -1541,14 +1747,21 @@ export default function Page() {
                   />
                 </div>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Mostrando {" "}
-                  <span className="font-semibold text-foreground">{filteredSales.length}</span>{" "}
-                  de {sales.length} venta{sales.length === 1 ? "" : "s"}
+
+              {/* ── Summary row ── */}
+              <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center justify-between sm:justify-start gap-3 text-sm">
+                  <span className="text-muted-foreground">
+                    Mostrando{" "}
+                    <span className="font-semibold text-foreground">{filteredSales.length}</span>{" "}
+                    de {sales.length} venta{sales.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="font-medium text-foreground sm:hidden">
+                    {formatCurrency(filteredTotalSalesAmount)}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="hidden sm:inline text-sm font-medium text-foreground">
                     Total filtrado:{" "}
                     <span className="text-primary">
                       {formatCurrency(filteredTotalSalesAmount)}
@@ -1558,7 +1771,7 @@ export default function Page() {
                     <Button
                       variant="ghost"
                       onClick={handleResetFilters}
-                      className="h-9 px-3"
+                      className="hidden sm:inline-flex h-9 px-3 cursor-pointer"
                     >
                       Limpiar filtros
                     </Button>

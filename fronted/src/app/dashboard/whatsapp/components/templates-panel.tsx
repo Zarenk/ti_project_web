@@ -155,71 +155,75 @@ export default function TemplatesPanel() {
   const variables = extractVariables(content);
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+    <div className="space-y-3 sm:space-y-4">
+      <Card className="w-full min-w-0 overflow-hidden">
+        <CardHeader className="px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                 Plantillas de Mensajes
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs sm:text-sm">
                 Crea plantillas reutilizables con variables dinámicas
               </CardDescription>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button size="sm" className="cursor-pointer self-start sm:self-auto h-8 sm:h-9 text-xs sm:text-sm">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
                   Nueva Plantilla
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="w-[95vw] sm:w-full sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Crear Plantilla</DialogTitle>
-                  <DialogDescription>
+                  <DialogTitle className="text-base sm:text-lg">Crear Plantilla</DialogTitle>
+                  <DialogDescription className="text-xs sm:text-sm">
                     Usa variables con el formato {"{{nombreVariable}}"} para contenido dinámico
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Nombre Técnico *</Label>
+                <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="name" className="text-xs sm:text-sm">Nombre Técnico *</Label>
                       <Input
                         id="name"
                         placeholder="sale_confirmation"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        className="h-8 sm:h-9 text-sm"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="displayName">Nombre para Mostrar *</Label>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="displayName" className="text-xs sm:text-sm">Nombre para Mostrar *</Label>
                       <Input
                         id="displayName"
                         placeholder="Confirmación de Pedido"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
+                        className="h-8 sm:h-9 text-sm"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Categoría</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="category" className="text-xs sm:text-sm">Categoría</Label>
                       <Input
                         id="category"
                         placeholder="ventas"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
+                        className="h-8 sm:h-9 text-sm"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Descripción</Label>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="description" className="text-xs sm:text-sm">Descripción</Label>
                       <Input
                         id="description"
                         placeholder="Breve descripción"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
+                        className="h-8 sm:h-9 text-sm"
                       />
                     </div>
                   </div>
@@ -265,63 +269,65 @@ export default function TemplatesPanel() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           {isLoading ? (
-            <div className="text-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mt-2">Cargando plantillas...</p>
+            <div className="text-center py-8 sm:py-12">
+              <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto text-muted-foreground" />
+              <p className="text-xs sm:text-sm text-muted-foreground mt-2">Cargando plantillas...</p>
             </div>
           ) : templates.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-2 opacity-20" />
-              <p>No hay plantillas creadas</p>
-              <p className="text-sm">Crea tu primera plantilla para comenzar</p>
+            <div className="text-center py-8 sm:py-12 text-muted-foreground">
+              <FileText className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">No hay plantillas creadas</p>
+              <p className="text-xs sm:text-sm">Crea tu primera plantilla para comenzar</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5 sm:space-y-3">
               {templates.map((template) => (
-                <div key={template.id} className="border rounded-lg p-4 hover:bg-accent/50 transition-colors">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium">{template.displayName}</h4>
+                <div key={template.id} className="border rounded-lg p-3 sm:p-4 hover:bg-accent/50 transition-colors w-full min-w-0 overflow-hidden">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <h4 className="text-sm sm:text-base font-medium break-words">{template.displayName}</h4>
                         {template.category && (
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs flex-shrink-0">
                             {template.category}
                           </Badge>
                         )}
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] sm:text-xs flex-shrink-0">
                           {template.usageCount} usos
                         </Badge>
                       </div>
                       {template.description && (
-                        <p className="text-sm text-muted-foreground">{template.description}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{template.description}</p>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleCopyContent(template.content)}
+                        className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 p-0"
                       >
-                        <Copy className="h-4 w-4" />
+                        <Copy className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(template.id)}
+                        className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 p-0"
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
                     </div>
                   </div>
-                  <div className="bg-muted/50 rounded p-3">
-                    <p className="text-sm whitespace-pre-wrap font-mono">{template.content}</p>
+                  <div className="bg-muted/50 rounded p-2 sm:p-3">
+                    <p className="text-xs sm:text-sm whitespace-pre-wrap font-mono break-words">{template.content}</p>
                   </div>
                   {template.variables.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-1.5 sm:mt-2">
                       {template.variables.map((v) => (
-                        <Badge key={v} variant="secondary" className="text-xs">
+                        <Badge key={v} variant="secondary" className="text-[10px] sm:text-xs">
                           {v}
                         </Badge>
                       ))}

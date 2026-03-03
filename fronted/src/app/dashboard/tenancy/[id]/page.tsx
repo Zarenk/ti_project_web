@@ -16,8 +16,10 @@ import {
   CheckCircle2,
   Clock,
   Check,
+  Pencil,
   Plus,
   Info,
+  Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -646,9 +648,17 @@ export default function OrganizationDetailPage({
             <section className="space-y-6">
               <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
-                  <Building2 className="size-5 text-sky-600 dark:text-slate-100" />
-                  {organization.name}
+                <CardTitle className="group/title flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
+                  <Building2 className="size-5 flex-shrink-0 text-sky-600 dark:text-slate-100" />
+                  <span className="truncate">{organization.name}</span>
+                  <button
+                    type="button"
+                    className="flex size-7 items-center justify-center rounded-md opacity-0 scale-90 group-hover/title:opacity-100 group-hover/title:scale-100 sm:transition-all sm:duration-200 sm:ease-out max-sm:opacity-100 max-sm:scale-100 text-muted-foreground hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-950/40 cursor-pointer active:scale-90"
+                    onClick={() => router.push(`/dashboard/tenancy/${organization.id}/edit`)}
+                    aria-label={`Editar ${organization.name}`}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
@@ -713,7 +723,7 @@ export default function OrganizationDetailPage({
             </Card>
 
             <Card>
-              <CardHeader className="flex flex-wrap items-start justify-between gap-3">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                 <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
                   <Building2 className="size-5 text-sky-600 dark:text-slate-100" />
                   Empresas de la organizacion
@@ -721,10 +731,11 @@ export default function OrganizationDetailPage({
                 <Button
                   type="button"
                   onClick={() => setCompanyDialogOpen(true)}
-                  className="gap-2 cursor-pointer"
+                  className="group/add relative w-full cursor-pointer gap-2 overflow-hidden rounded-lg border-0 bg-gradient-to-r from-sky-500 to-indigo-500 px-5 py-2.5 text-sm font-medium text-white shadow-md shadow-sky-500/20 transition-all duration-300 hover:shadow-lg hover:shadow-sky-500/30 hover:brightness-110 active:scale-[0.97] sm:w-auto"
                 >
-                  <Plus className="size-4" />
-                  Agregar empresa
+                  <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 transition-opacity duration-500 group-hover/add:opacity-100 group-hover/add:animate-[shimmer_1.5s_ease-in-out]" />
+                  <Plus className="relative size-4 transition-transform duration-300 group-hover/add:rotate-90" />
+                  <span className="relative">Agregar empresa</span>
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
@@ -1019,9 +1030,16 @@ export default function OrganizationDetailPage({
                       </p>
                     )}
                     <div className="pt-3">
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href={`/dashboard/account/plan?orgId=${organizationId}&focus=plan#plan-selection`}>
-                          Actualizar suscripcion
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        asChild
+                        className="group/upgrade relative cursor-pointer overflow-hidden border-violet-200 bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2 text-white shadow-md shadow-violet-500/20 transition-all duration-300 hover:border-violet-300 hover:shadow-lg hover:shadow-violet-500/30 hover:brightness-110 active:scale-[0.97] dark:border-violet-700"
+                      >
+                        <Link href={`/dashboard/account/plan?orgId=${organizationId}&focus=plan#plan-selection`} className="flex items-center gap-2">
+                          <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 transition-opacity duration-500 group-hover/upgrade:opacity-100 group-hover/upgrade:animate-[shimmer_1.5s_ease-in-out]" />
+                          <Sparkles className="relative size-3.5 transition-transform duration-300 group-hover/upgrade:rotate-12 group-hover/upgrade:scale-110" />
+                          <span className="relative text-sm font-medium">Actualizar suscripcion</span>
                         </Link>
                       </Button>
                     </div>
@@ -1032,20 +1050,42 @@ export default function OrganizationDetailPage({
                   {/* Trial Information */}
                   {subscription.trial.isTrial && (
                     <>
-                      <div>
-                        <p className="mb-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Periodo de prueba
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Clock className="size-4 text-blue-600 dark:text-blue-400" />
-                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                            {subscription.trial.daysLeft !== null && subscription.trial.daysLeft > 0
-                              ? `${subscription.trial.daysLeft} días restantes`
-                              : "Prueba finalizada"}
+                      <div className="relative overflow-hidden rounded-lg border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-3 dark:border-amber-800/50 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-yellow-950/20">
+                        <span className="absolute -right-4 -top-4 size-20 rounded-full bg-amber-400/10 blur-2xl dark:bg-amber-500/10" />
+                        <span className="absolute -bottom-3 -left-3 size-16 rounded-full bg-orange-400/10 blur-xl dark:bg-orange-500/10" />
+
+                        <div className="relative mb-2 flex items-center gap-2">
+                          <span className="flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm shadow-amber-500/30">
+                            <Clock className="size-3 text-white" />
+                          </span>
+                          <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                            Periodo de prueba
+                          </span>
+                          <span className="relative flex size-2">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                            <span className="relative inline-flex size-2 rounded-full bg-amber-500" />
                           </span>
                         </div>
+
+                        <div className="relative flex items-baseline gap-1.5 pl-8">
+                          {subscription.trial.daysLeft !== null && subscription.trial.daysLeft > 0 ? (
+                            <>
+                              <span className="text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-200">
+                                {subscription.trial.daysLeft}
+                              </span>
+                              <span className="text-sm font-medium text-amber-600/80 dark:text-amber-300/80">
+                                días restantes
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+                              Prueba finalizada
+                            </span>
+                          )}
+                        </div>
+
                         {subscription.trial.endsAt && (
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          <p className="relative mt-1 pl-8 text-xs text-amber-600/70 dark:text-amber-400/70">
                             Finaliza: {formatDate(subscription.trial.endsAt)}
                           </p>
                         )}

@@ -314,6 +314,95 @@ import { ManualPagination } from "@/components/data-table-pagination"
 - Componentes de ejemplo: `TopProfitableProducts.tsx`, `LowProfitProducts.tsx`
 - Problema documentado: 2026-02-21 - Overflow en dashboard de ventas
 
+#### Filtros Colapsables en Mobile (PATRÓN ESTÁNDAR)
+
+**REGLA:** Todas las páginas de listado con múltiples filtros DEBEN usar este patrón para mobile. Los filtros saturan la pantalla en viewports pequeños y deben colapsarse detrás de un botón toggle.
+
+**Estructura del patrón (3 zonas):**
+
+1. **Mobile: Compact bar** (`sm:hidden`) — Búsqueda principal + botón "Filtros" con badge
+2. **Mobile: Collapsible panel** (`sm:hidden`) — Panel con transición CSS `max-h` + `opacity`
+3. **Desktop: Full grid** (`hidden sm:grid` o `hidden sm:flex`) — Layout completo sin cambios
+
+```typescript
+// Estado necesario
+const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
+// Contador de filtros activos (para badge)
+const activeFilterCount = (() => {
+  let count = 0;
+  if (searchQuery.trim()) count++;
+  if (dateRange) count++;
+  if (selectedFilter !== "ALL") count++;
+  // ... etc
+  return count;
+})();
+
+// ── Mobile: compact search + filter toggle ──
+<div className="flex gap-2 sm:hidden w-full min-w-0">
+  <Input
+    placeholder="Buscar..."
+    className="h-9 text-sm flex-1 min-w-0"
+  />
+  <Button
+    variant={mobileFiltersOpen ? "secondary" : "outline"}
+    size="sm"
+    className="h-9 gap-1.5 cursor-pointer flex-shrink-0 relative"
+    onClick={() => setMobileFiltersOpen((prev) => !prev)}
+  >
+    <SlidersHorizontal className="h-3.5 w-3.5" />
+    <span className="text-xs">Filtros</span>
+    {activeFilterCount > 0 && (
+      <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+        {activeFilterCount}
+      </span>
+    )}
+    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${
+      mobileFiltersOpen ? "rotate-180" : ""
+    }`} />
+  </Button>
+</div>
+
+// ── Mobile: collapsible filter panel ──
+<div className={`sm:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+  mobileFiltersOpen
+    ? "max-h-[500px] opacity-100"
+    : "max-h-0 opacity-0"
+}`}>
+  <div className="space-y-2 pt-1 pb-0.5">
+    {/* All filter controls stacked vertically */}
+    {isFiltered && (
+      <Button variant="ghost" size="sm" onClick={() => {
+        handleResetFilters();
+        setMobileFiltersOpen(false);
+      }} className="h-8 w-full text-xs text-muted-foreground cursor-pointer">
+        <X className="h-3 w-3 mr-1" /> Limpiar filtros
+      </Button>
+    )}
+  </div>
+</div>
+
+// ── Desktop: full filter grid (unchanged) ──
+<div className="hidden sm:grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+  {/* Existing desktop layout exactly as before */}
+</div>
+```
+
+**Imports requeridos:** `SlidersHorizontal`, `ChevronDown`, `X` de `lucide-react`
+
+**Páginas que ya lo implementan:**
+- `fronted/src/app/dashboard/sales/page.tsx` — Ventas
+- `fronted/src/app/dashboard/entries/data-table.tsx` — Entradas
+
+**Reglas del patrón:**
+- El campo de búsqueda principal siempre visible en mobile (fuera del collapsible)
+- Badge numérico en el botón indica cantidad de filtros activos
+- Transición: `max-h-0 opacity-0` ↔ `max-h-[500px] opacity-100`, `duration-300 ease-in-out`
+- ChevronDown rota 180° al abrir
+- Botón "Limpiar filtros" dentro del panel colapsable (solo visible si hay filtros)
+- Al limpiar filtros, cerrar el panel automáticamente (`setMobileFiltersOpen(false)`)
+- Desktop layout NO se modifica — solo se oculta con `hidden sm:*`
+
 ### Backend (NestJS)
 
 #### Módulos (~65+ módulos NestJS)
