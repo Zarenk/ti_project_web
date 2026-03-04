@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload, Megaphone } from "lucide-react"
+import { LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload, Megaphone, Loader2 } from "lucide-react"
 import { ManualPagination } from "@/components/data-table-pagination"
 
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,9 @@ import {
 } from "@/components/ui/tooltip"
 import { ProductsTable } from "./products-table"
 import { ProductsGallery } from "./products-gallery"
+import { ProductDetailDialog } from "./product-detail-dialog"
 import { resolveImageUrl, resolveImageVariant } from "@/lib/images"
+import type { Products } from "./columns"
 import { Badge } from "@/components/ui/badge"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { PRODUCTS_LIST_GUIDE_STEPS } from "./products-guide-steps"
@@ -35,6 +37,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useProductsData, type MigrationFilter, type CategoryFilter } from "./use-products-data"
+import { uploadProductImage, updateProduct, deleteProduct } from "./products.api"
+import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useTenantSelection } from "@/context/tenant-selection-context"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { DeleteActionsGuard } from "@/components/delete-actions-guard"
 
 type ViewMode = "table" | "gallery"
 const VIEW_MODE_KEY = "products-view-mode"
@@ -64,6 +82,58 @@ export function ProductsClient() {
     if (typeof window === "undefined") return 24
     return Number(localStorage.getItem(ITEMS_PER_PAGE_KEY)) || 24
   })
+
+  const [detailProduct, setDetailProduct] = useState<Products | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Products | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const { selection } = useTenantSelection()
+
+  const handleDialogImageUpload = useCallback(async (productId: string, file: File) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Solo se permiten imágenes JPG, PNG, GIF o WebP.")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen no debe exceder los 5 MB.")
+      return
+    }
+    try {
+      const { url } = await uploadProductImage(file)
+      let normalizedPath = url
+      try {
+        const parsed = new URL(url)
+        if (parsed.pathname.startsWith("/uploads")) normalizedPath = parsed.pathname
+      } catch {
+        const idx = url.indexOf("/uploads")
+        if (idx >= 0) normalizedPath = url.slice(idx)
+      }
+      await updateProduct(productId, { images: [normalizedPath] })
+      toast.success("Imagen actualizada.")
+      reloadProducts()
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo actualizar la imagen.")
+    }
+  }, [reloadProducts, queryClient, selection.orgId, selection.companyId])
+
+  const handleDialogDelete = useCallback(async () => {
+    if (!deleteTarget) return
+    setDeletingId(deleteTarget.id)
+    try {
+      await deleteProduct(deleteTarget.id)
+      toast.success("Producto eliminado.")
+      reloadProducts()
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) })
+    } catch (error: any) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el producto.")
+    } finally {
+      setDeletingId(null)
+      setDeleteTarget(null)
+    }
+  }, [deleteTarget, reloadProducts, queryClient, selection.orgId, selection.companyId])
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "table"
@@ -463,7 +533,7 @@ export function ProductsClient() {
                 </div>
 
                 {/* Gallery */}
-                <ProductsGallery data={paginatedProducts} onProductUpdated={reloadProducts} />
+                <ProductsGallery data={paginatedProducts} onProductUpdated={reloadProducts} onViewProduct={setDetailProduct} />
 
                 {/* Pagination controls */}
                 {totalPages > 0 && (
@@ -480,7 +550,7 @@ export function ProductsClient() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <ProductsTable data={rawProducts} />
+                <ProductsTable data={rawProducts} onViewProduct={setDetailProduct} />
               </div>
             )}
           </>
@@ -488,6 +558,38 @@ export function ProductsClient() {
       </div>
     </section>
 
+    <ProductDetailDialog
+      product={detailProduct}
+      open={!!detailProduct}
+      onOpenChange={(open) => { if (!open) setDetailProduct(null) }}
+      onRequestImageUpload={handleDialogImageUpload}
+      onRequestDelete={(product) => {
+        setDetailProduct(null)
+        setDeleteTarget(product)
+      }}
+    />
+
+    <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción no se puede deshacer. Se eliminará <strong>{deleteTarget?.name}</strong> y sus variantes.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="cursor-pointer">Cancelar</AlertDialogCancel>
+          <DeleteActionsGuard>
+            <AlertDialogAction
+              className="bg-red-500 text-white hover:bg-red-600 cursor-pointer"
+              onClick={handleDialogDelete}
+            >
+              {deletingId ? <Loader2 className="h-4 w-4 animate-spin" /> : "Eliminar"}
+            </AlertDialogAction>
+          </DeleteActionsGuard>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   )
 }

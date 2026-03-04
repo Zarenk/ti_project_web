@@ -51,7 +51,7 @@ export function SalesChart({ dateRange }: Props) {
         return {
           date: dateKey,
           displayDate,
-          sales: Number(salesMap.get(dateKey) ?? 0),
+          sales: Math.round(Number(salesMap.get(dateKey) ?? 0) * 100) / 100,
         }
       })
     },
@@ -96,7 +96,7 @@ export function SalesChart({ dateRange }: Props) {
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[0.70rem] uppercase text-muted-foreground">Ventas</span>
-                        <span className="font-bold">S/. {sales}</span>
+                        <span className="font-bold">S/. {Number(sales).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>

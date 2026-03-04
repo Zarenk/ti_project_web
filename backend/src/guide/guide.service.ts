@@ -487,7 +487,9 @@ export class GuideService {
     const clientId = process.env.SUNAT_CLIENT_ID!;
     const clientSecret = process.env.SUNAT_CLIENT_SECRET!;
     const authBaseUrl = 'https://api-seguridad.sunat.gob.pe/v1';
-    const oauthUsername = `${creds.ruc}${creds.solUser}`;
+    const oauthUsername = creds.solUser.startsWith(creds.ruc)
+      ? creds.solUser
+      : `${creds.ruc}${creds.solUser}`;
 
     // Get OAuth token
     let token: string;
@@ -980,7 +982,10 @@ export class GuideService {
     }
 
     // OAuth username = RUC + SOL_USER (e.g., 20519857538MODDATOS)
-    const oauthUsername = `${creds.ruc}${creds.solUser}`;
+    // Guard: solUser may already include the RUC prefix
+    const oauthUsername = creds.solUser.startsWith(creds.ruc)
+      ? creds.solUser
+      : `${creds.ruc}${creds.solUser}`;
     const oauthPassword = creds.solPassword;
 
     // Determine environment URLs
