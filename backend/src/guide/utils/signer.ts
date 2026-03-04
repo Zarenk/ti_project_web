@@ -84,11 +84,19 @@ export async function firmarGuiaUBL(
   const signedInfoXml = buildSignedInfoXmlForGuia(digestValue);
   const signatureValue = signWithPrivateKey(signedInfoXml, privateKeyPath);
 
-  const cert = fs
-    .readFileSync(certificatePath, 'utf8')
-    .replace('-----BEGIN CERTIFICATE-----', '')
-    .replace('-----END CERTIFICATE-----', '')
-    .replace(/\r?\n|\r/g, '');
+  // Extract ONLY the base64 content between PEM markers.
+  // This handles files exported from .pfx that include "Bag Attributes" metadata
+  // before the actual certificate block.
+  const rawCert = fs.readFileSync(certificatePath, 'utf8');
+  const certMatch = rawCert.match(
+    /-----BEGIN CERTIFICATE-----\s*([\s\S]*?)\s*-----END CERTIFICATE-----/,
+  );
+  if (!certMatch) {
+    throw new Error(
+      `El archivo de certificado no contiene un bloque PEM válido. Archivo: ${certificatePath}`,
+    );
+  }
+  const cert = certMatch[1].replace(/\r?\n|\r|\s/g, '');
 
   const signedInfoNode = create(signedInfoXml).root();
 
