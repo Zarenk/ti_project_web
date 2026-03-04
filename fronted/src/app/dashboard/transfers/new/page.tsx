@@ -83,7 +83,8 @@ import { UbigeoCombobox } from "@/components/ubigeo-combobox";
 import { CatalogStepper, type StepDef } from "../../catalog/catalog-stepper";
 
 import { getCompanyDetail } from "../../tenancy/tenancy.api";
-import { getRegisteredClients } from "../../clients/clients.api";
+import { getRegisteredClients, createClient, checkClientExists } from "../../clients/clients.api";
+import { createProvider, checkProviderExists } from "../../providers/providers.api";
 import {
   lookupSunatDocument,
   type LookupResponse,
@@ -415,6 +416,7 @@ export default function NewGuidePage() {
     useState<LookupResponse | null>(null);
   const [sunatSearchError, setSunatSearchError] = useState<string | null>(null);
   const [sunatSearchLoading, setSunatSearchLoading] = useState(false);
+  const [sunatSaving, setSunatSaving] = useState(false);
 
   const {
     register,
@@ -857,15 +859,62 @@ export default function NewGuidePage() {
     }
   }
 
-  function handleSelectSunatResult(result: LookupResponse) {
+  async function handleSelectSunatResult(result: LookupResponse, saveAs?: "provider" | "client") {
+    // Fill the form fields
     setValue("destinatarioTipoDoc", "6", { shouldValidate: true });
     setValue("destinatarioNumeroDoc", result.identifier || "");
     setValue("destinatarioRazonSocial", result.name || "");
+
+    // Save to system if requested
+    if (saveAs) {
+      setSunatSaving(true);
+      try {
+        if (saveAs === "provider") {
+          const exists = await checkProviderExists(result.identifier);
+          if (!exists) {
+            await createProvider({
+              name: result.name,
+              description: result.name,
+              document: "RUC",
+              documentNumber: result.identifier,
+              adress: result.address || "",
+            });
+            toast.success(`Proveedor "${result.name}" guardado en el sistema.`);
+          } else {
+            toast.info(`El proveedor con RUC ${result.identifier} ya existe.`);
+          }
+        } else {
+          const exists = await checkClientExists(result.identifier);
+          if (!exists) {
+            await createClient({
+              name: result.name,
+              type: "RUC",
+              typeNumber: result.identifier,
+            });
+            // Refresh clients list for the combobox
+            try {
+              const all = await getRegisteredClients();
+              setClients(all.filter((c: any) => c.type?.toUpperCase() === "RUC"));
+            } catch {}
+            toast.success(`Cliente "${result.name}" guardado en el sistema.`);
+          } else {
+            toast.info(`El cliente con RUC ${result.identifier} ya existe.`);
+          }
+        }
+      } catch (error: any) {
+        const msg = error?.message || error?.response?.data?.message || "Error al guardar.";
+        toast.error(msg);
+      } finally {
+        setSunatSaving(false);
+      }
+    } else {
+      toast.success(`Destinatario: ${result.name}`);
+    }
+
     setSunatDialogOpen(false);
     setSunatRucValue("");
     setSunatSearchResult(null);
     setSunatSearchError(null);
-    toast.success(`Destinatario: ${result.name}`);
   }
 
   // ── Select transportista → fill fields ────────────────────
@@ -2795,37 +2844,76 @@ export default function NewGuidePage() {
             )}
 
             {sunatSearchResult && (
-              <div
-                className="p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:bg-primary/5 hover:border-primary/30 hover:shadow-sm active:scale-[0.98] animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
-                onClick={() => handleSelectSunatResult(sunatSearchResult)}
-              >
-                <div className="flex flex-col gap-1 min-w-0">
-                  <p className="font-semibold text-sm break-words">
-                    {sunatSearchResult.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    RUC: {sunatSearchResult.identifier}
-                  </p>
-                  {sunatSearchResult.address && (
-                    <p className="text-xs text-muted-foreground break-words">
-                      {sunatSearchResult.address}
+              <div className="rounded-lg border animate-in fade-in-0 slide-in-from-bottom-2 duration-300 overflow-hidden">
+                {/* Company info */}
+                <div className="p-3">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <p className="font-semibold text-sm break-words">
+                      {sunatSearchResult.name}
                     </p>
-                  )}
-                  {sunatSearchResult.status && (
-                    <Badge
-                      variant="outline"
-                      className="w-fit text-[10px] mt-1"
-                    >
-                      {sunatSearchResult.status}{" "}
-                      {sunatSearchResult.condition
-                        ? `· ${sunatSearchResult.condition}`
-                        : ""}
-                    </Badge>
-                  )}
+                    <p className="text-xs text-muted-foreground font-mono">
+                      RUC: {sunatSearchResult.identifier}
+                    </p>
+                    {sunatSearchResult.address && (
+                      <p className="text-xs text-muted-foreground break-words">
+                        {sunatSearchResult.address}
+                      </p>
+                    )}
+                    {sunatSearchResult.status && (
+                      <Badge
+                        variant="outline"
+                        className="w-fit text-[10px] mt-1"
+                      >
+                        {sunatSearchResult.status}{" "}
+                        {sunatSearchResult.condition
+                          ? `· ${sunatSearchResult.condition}`
+                          : ""}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <p className="text-[10px] text-primary mt-2 font-medium">
-                  Haz clic para seleccionar como destinatario
-                </p>
+
+                {/* Action buttons */}
+                <div className="border-t bg-muted/30 px-3 py-2 space-y-1.5">
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                    Seleccionar y guardar como:
+                  </p>
+                  <div className="flex gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 cursor-pointer gap-1.5 h-8 text-xs"
+                      disabled={sunatSaving}
+                      onClick={() => handleSelectSunatResult(sunatSearchResult)}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                      Solo usar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 cursor-pointer gap-1.5 h-8 text-xs"
+                      disabled={sunatSaving}
+                      onClick={() => handleSelectSunatResult(sunatSearchResult, "provider")}
+                    >
+                      {sunatSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" /> : <Building2 className="h-3.5 w-3.5 flex-shrink-0" />}
+                      Proveedor
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 cursor-pointer gap-1.5 h-8 text-xs"
+                      disabled={sunatSaving}
+                      onClick={() => handleSelectSunatResult(sunatSearchResult, "client")}
+                    >
+                      {sunatSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" /> : <User className="h-3.5 w-3.5 flex-shrink-0" />}
+                      Cliente
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
 

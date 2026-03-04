@@ -75,6 +75,7 @@ export type Products = {
 export type ProductTableOptions = {
   verticalName?: string
   productSchema?: VerticalProductSchema | null
+  onViewProduct?: (product: Products) => void
 }
 
 export function useProductColumns(options: ProductTableOptions = {}) {
@@ -306,10 +307,11 @@ export function useProductColumns(options: ProductTableOptions = {}) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  <DropdownMenuItem asChild>
-                    <Link href={`/dashboard/products/${product.id}`}>
-                      Ver detalle
-                    </Link>
+                  <DropdownMenuItem
+                    onClick={() => options.onViewProduct?.(product)}
+                    className="cursor-pointer"
+                  >
+                    Ver detalle
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href={`/dashboard/products/${product.id}/edit`}>
@@ -426,7 +428,7 @@ export function useProductColumns(options: ProductTableOptions = {}) {
     }
 
     return [...baseColumns, ...dynamicColumns]
-  }, [hasSizeField, hasColorField, hasLotField, router, loadingId])
+  }, [hasSizeField, hasColorField, hasLotField, router, loadingId, options.onViewProduct])
 
   return columns
 }

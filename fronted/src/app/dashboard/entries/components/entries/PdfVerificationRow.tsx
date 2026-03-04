@@ -1,11 +1,13 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn } from "@/lib/utils"
-import { Check, Plus, Link2 } from "lucide-react"
+import { Check, Plus, Link2, Hash, X, Pencil, ArrowRightLeft } from "lucide-react"
+import { useRef, useState } from "react"
 import type { MatchCandidate } from "../../utils/fuzzy-match"
 import type { ExtractedProduct } from "../../utils/series-batch-validator"
 
@@ -69,6 +71,11 @@ export function PdfVerificationRow({
     ? scoreColor(topCandidate.score)
     : "border-muted"
 
+  const [newSerial, setNewSerial] = useState("")
+  const serialInputRef = useRef<HTMLInputElement>(null)
+  const [viewInUsd, setViewInUsd] = useState(false)
+  const canConvert = isUsd && !!exchangeRate && exchangeRate > 0
+
   const handleRadioChange = (value: string) => {
     if (value === "new") {
       onDecisionChange({
@@ -93,10 +100,35 @@ export function PdfVerificationRow({
     }
   }
 
+  const handleAddSerial = () => {
+    const trimmed = newSerial.trim().toUpperCase()
+    if (!trimmed) return
+    const currentSeries = decision.series || []
+    if (currentSeries.includes(trimmed)) {
+      setNewSerial("")
+      return
+    }
+    onDecisionChange({
+      ...decision,
+      series: [...currentSeries, trimmed],
+    })
+    setNewSerial("")
+    serialInputRef.current?.focus()
+  }
+
+  const handleRemoveSerial = (serial: string) => {
+    onDecisionChange({
+      ...decision,
+      series: (decision.series || []).filter((s) => s !== serial),
+    })
+  }
+
   const selectedRadioValue =
     decision.action === "new"
       ? "new"
       : String(decision.linkedProductId ?? "new")
+
+  const seriesCount = (decision.series || []).length
 
   return (
     <div
@@ -105,35 +137,68 @@ export function PdfVerificationRow({
         borderClass
       )}
     >
-      {/* Header: extracted name + quantity + price */}
-      <div className="flex flex-col gap-1 w-full min-w-0">
-        <div className="flex items-start gap-2 w-full min-w-0">
-          <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
-            PDF:
-          </span>
-          <p className="text-sm font-semibold break-words min-w-0">
-            {extracted.name}
-          </p>
+      {/* ── Editable Name ── */}
+      <div className="space-y-1.5 w-full min-w-0">
+        <div className="flex items-center gap-1.5">
+          <Pencil className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+          <Label className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nombre del producto</Label>
         </div>
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pl-7">
-          <span>Cant: <strong className="text-foreground">{extracted.quantity}</strong></span>
-          <span>
-            P.Compra PDF: <strong className="text-foreground">{currencySymbol} {extracted.price.toFixed(2)}</strong>
-            {isUsd && exchangeRate && exchangeRate > 0 && (
-              <span className="ml-1 text-[10px] text-muted-foreground/70">
-                ≈ S/. {(extracted.price * exchangeRate).toFixed(2)}
-              </span>
-            )}
-          </span>
-          {extracted.series && extracted.series.length > 0 && (
-            <span>Series: <strong className="text-foreground">{extracted.series.length}</strong></span>
+        <Input
+          type="text"
+          className="h-9 text-sm font-semibold"
+          value={decision.name}
+          onChange={(e) =>
+            onDecisionChange({ ...decision, name: e.target.value })
+          }
+        />
+      </div>
+
+      {/* ── Quantity + Purchase Price (editable) ── */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full min-w-0">
+        <div className="space-y-1.5">
+          <Label className="text-[10px] sm:text-xs text-muted-foreground">Cantidad</Label>
+          <Input
+            type="number"
+            min="1"
+            step="1"
+            className="h-9 text-sm font-semibold"
+            value={decision.quantity || ""}
+            onChange={(e) =>
+              onDecisionChange({
+                ...decision,
+                quantity: parseInt(e.target.value) || 0,
+              })
+            }
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] sm:text-xs text-muted-foreground">
+            P.Compra ({currencySymbol})
+          </Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            className="h-9 text-sm font-semibold"
+            value={decision.price || ""}
+            onChange={(e) =>
+              onDecisionChange({
+                ...decision,
+                price: parseFloat(e.target.value) || 0,
+              })
+            }
+          />
+          {isUsd && exchangeRate && exchangeRate > 0 && (
+            <p className="text-[10px] text-muted-foreground/70">
+              ≈ S/. {(decision.price * exchangeRate).toFixed(2)}
+            </p>
           )}
         </div>
       </div>
 
-      {/* Candidates radio group */}
+      {/* ── Candidates radio group ── */}
       <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">Vincular con:</p>
+        <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Vincular con:</p>
         <RadioGroup
           value={selectedRadioValue}
           onValueChange={handleRadioChange}
@@ -179,40 +244,165 @@ export function PdfVerificationRow({
         </RadioGroup>
       </div>
 
-      {/* Price info section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t w-full min-w-0">
-        {decision.action === "link" && decision.linkedProductId && (() => {
-          const linked = candidates.find((c) => c.product.id === decision.linkedProductId)
-          return linked ? (
-            <>
-              <div className="text-xs space-y-1">
-                <span className="text-muted-foreground">P.Compra registrado:</span>
-                <p className="font-medium">S/. {linked.product.price.toFixed(2)}</p>
-              </div>
-              <div className="text-xs space-y-1">
-                <span className="text-muted-foreground">P.Venta actual:</span>
-                <p className="font-medium">S/. {(linked.product.priceSell ?? 0).toFixed(2)}</p>
-              </div>
-            </>
-          ) : null
-        })()}
-        <div className="sm:col-span-2">
-          <Label className="text-xs text-muted-foreground">P.Venta a usar:</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            className="mt-1 h-8 text-sm"
-            value={decision.priceSell || ""}
-            onChange={(e) =>
-              onDecisionChange({
-                ...decision,
-                priceSell: parseFloat(e.target.value) || 0,
-              })
-            }
-            placeholder="0.00"
-          />
+      {/* ── Price info + sell price ── */}
+      <div className="pt-2 border-t space-y-2 w-full min-w-0">
+        {/* Currency toggle header — only when USD + linked */}
+        {canConvert && decision.action === "link" && decision.linkedProductId && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Precios de referencia
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[10px] gap-1 cursor-pointer transition-colors"
+              onClick={() => setViewInUsd((v) => !v)}
+            >
+              <ArrowRightLeft className="h-3 w-3" />
+              {viewInUsd ? "Ver en S/." : "Ver en US$"}
+            </Button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 w-full min-w-0">
+          {decision.action === "link" && decision.linkedProductId && (() => {
+            const linked = candidates.find((c) => c.product.id === decision.linkedProductId)
+            if (!linked) return null
+            const regPen = linked.product.price
+            const sellPen = linked.product.priceSell ?? 0
+            return (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-[10px] sm:text-xs text-muted-foreground">P.Compra registrado</Label>
+                  <p className="text-sm font-medium px-3 py-1.5 bg-muted/50 rounded-md">
+                    {viewInUsd && canConvert
+                      ? `US$ ${(regPen / exchangeRate!).toFixed(2)}`
+                      : `S/. ${regPen.toFixed(2)}`}
+                  </p>
+                  {canConvert && (
+                    <p className="text-[10px] text-muted-foreground/70">
+                      ≈ {viewInUsd
+                        ? `S/. ${regPen.toFixed(2)}`
+                        : `US$ ${(regPen / exchangeRate!).toFixed(2)}`}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] sm:text-xs text-muted-foreground">P.Venta actual</Label>
+                  <p className="text-sm font-medium px-3 py-1.5 bg-muted/50 rounded-md">
+                    {viewInUsd && canConvert
+                      ? `US$ ${(sellPen / exchangeRate!).toFixed(2)}`
+                      : `S/. ${sellPen.toFixed(2)}`}
+                  </p>
+                  {canConvert && (
+                    <p className="text-[10px] text-muted-foreground/70">
+                      ≈ {viewInUsd
+                        ? `S/. ${sellPen.toFixed(2)}`
+                        : `US$ ${(sellPen / exchangeRate!).toFixed(2)}`}
+                    </p>
+                  )}
+                </div>
+              </>
+            )
+          })()}
+          <div className={cn("space-y-1", decision.action === "link" && decision.linkedProductId ? "" : "sm:col-span-3")}>
+            <Label className="text-[10px] sm:text-xs text-muted-foreground">
+              P.Venta a usar (S/.)
+            </Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              className="h-9 text-sm"
+              value={decision.priceSell || ""}
+              onChange={(e) =>
+                onDecisionChange({
+                  ...decision,
+                  priceSell: parseFloat(e.target.value) || 0,
+                })
+              }
+              placeholder="0.00"
+            />
+            {canConvert && decision.priceSell > 0 && (
+              <p className="text-[10px] text-muted-foreground/70">
+                ≈ US$ {(decision.priceSell / exchangeRate!).toFixed(2)}
+              </p>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* ── Series Section ── */}
+      <div className="pt-2 border-t space-y-2 w-full min-w-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Hash className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Series / N° de Serie</span>
+          </div>
+          {seriesCount > 0 && (
+            <Badge variant="secondary" className="text-[10px] h-5">
+              {seriesCount} / {decision.quantity}
+            </Badge>
+          )}
+        </div>
+
+        {/* Add serial input */}
+        <div className="flex gap-2 w-full min-w-0">
+          <Input
+            ref={serialInputRef}
+            type="text"
+            className="h-8 text-xs font-mono flex-1 min-w-0 uppercase"
+            placeholder="Ingresa N° de serie y presiona Enter"
+            value={newSerial}
+            onChange={(e) => setNewSerial(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                handleAddSerial()
+              }
+            }}
+            disabled={seriesCount >= decision.quantity}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2.5 flex-shrink-0 cursor-pointer"
+            onClick={handleAddSerial}
+            disabled={!newSerial.trim() || seriesCount >= decision.quantity}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {/* Series list */}
+        {seriesCount > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {(decision.series || []).map((s, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 pl-2 pr-1 py-0.5 rounded text-xs font-mono group"
+              >
+                {s}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSerial(s)}
+                  className="hover:bg-red-100 dark:hover:bg-red-900/30 rounded p-0.5 transition-colors cursor-pointer"
+                  aria-label={`Quitar serie ${s}`}
+                >
+                  <X className="h-3 w-3 text-muted-foreground hover:text-red-500 transition-colors" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {seriesCount >= decision.quantity && decision.quantity > 0 && (
+          <p className="text-[10px] text-green-600 dark:text-green-400">
+            Todas las series ingresadas ({seriesCount}/{decision.quantity})
+          </p>
+        )}
       </div>
     </div>
   )
