@@ -222,6 +222,9 @@ export class GuideService {
     let cdrInfo: { accepted: boolean; code: string; description: string };
     let cdrName: string | null = null;
 
+    // Save numTicket for later refresh queries
+    const sunatNumTicket = envioResult.numTicket || null;
+
     if (envioResult.numTicket) {
       // REST async flow: poll for CDR using ticket
       this.logger.log(`[GRE] Ticket recibido: ${envioResult.numTicket} — Consultando estado...`);
@@ -297,7 +300,7 @@ export class GuideService {
         cdrDescription: cdrInfo.description,
         organizationId,
         companyId,
-        guideData: dto as any,
+        guideData: { ...dto as any, sunatNumTicket: sunatNumTicket },
         puntoPartidaDireccion: dto.puntoPartidaDireccion || null,
         puntoPartidaUbigeo: dto.puntoPartidaUbigeo || null,
         puntoLlegadaDireccion: dto.puntoLlegadaDireccion || null,
@@ -466,158 +469,90 @@ export class GuideService {
       return { message: 'La guía ya fue aceptada por SUNAT', guide };
     }
 
+    // Extract numTicket from guideData if available
+    const guideData = guide.guideData as Record<string, any> | null;
+    const numTicket = guideData?.sunatNumTicket as string | undefined;
+
+    if (!numTicket) {
+      throw new BadRequestException(
+        'No se encontró el ticket de SUNAT para esta guía. Solo guías enviadas recientemente pueden consultar estado.',
+      );
+    }
+
     // We need the company credentials to query SUNAT
     const creds = await this.resolveCompanyCredentials(companyId || guide.companyId);
 
-    // Re-read the ZIP from disk to get the original signed XML
-    // We need the numTicket or a way to re-query. Since SUNAT REST GEM API
-    // uses ticket-based polling, we can re-submit to get a new ticket and poll again.
-    // However, if the guide was already accepted, re-sending would create a duplicate.
-    //
-    // Better approach: query SUNAT's status endpoint by RUC + serie + correlativo.
-    // The GEM API provides: GET /comprobantes/{ruc}-09-{serie}-{correlativo}
-    // This returns the CDR directly if available.
+    // Use pollTicketStatus which queries GET /comprobantes/envios/{numTicket}
+    this.logger.log(`[GRE refresh] Consultando ticket ${numTicket} para guía ${guide.serie}-${guide.correlativo}`);
 
-    const isProd = creds.isProd ?? false;
-    const gemBaseUrl = isProd
-      ? (process.env.SUNAT_GEM_ENDPOINT ?? 'https://api-cpe.sunat.gob.pe/v1/contribuyente/gem')
-      : (process.env.SUNAT_GEM_ENDPOINT_BETA ?? 'https://api-cpe.sunat.gob.pe/v1/contribuyente/gem');
-    const normalizedBase = gemBaseUrl.replace(/\/+$/, '');
+    const statusResult = await this.pollTicketStatus(numTicket, creds, 3, 2000);
 
-    const clientId = process.env.SUNAT_CLIENT_ID!;
-    const clientSecret = process.env.SUNAT_CLIENT_SECRET!;
-    const authBaseUrl = 'https://api-seguridad.sunat.gob.pe/v1';
-    const oauthUsername = creds.solUser.startsWith(creds.ruc)
-      ? creds.solUser
-      : `${creds.ruc}${creds.solUser}`;
+    if (statusResult.codRespuesta === '0' && statusResult.arcCdr) {
+      // CDR available — extract and update
+      const cdrBuffer = Buffer.from(statusResult.arcCdr, 'base64');
+      const cdrInfo = await extractCdrStatus(cdrBuffer);
+      this.logger.log(`[GRE refresh] CDR extraído: accepted=${cdrInfo.accepted}, code=${cdrInfo.code}, desc=${cdrInfo.description}`);
 
-    // Get OAuth token
-    let token: string;
-    try {
-      const authResponse = await firstValueFrom(
-        this.httpService.post(
-          `${authBaseUrl}/clientessol/${clientId}/oauth2/token/`,
-          new URLSearchParams({
-            grant_type: 'password',
-            scope: 'https://api-cpe.sunat.gob.pe',
-            client_id: clientId,
-            client_secret: clientSecret,
-            username: oauthUsername,
-            password: creds.solPassword,
-          }),
-          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-        ),
-      );
-      token = authResponse.data.access_token;
-    } catch (err: any) {
-      this.logger.error('[GRE refresh] Error obteniendo token:', err.response?.data || err.message);
-      throw new BadRequestException('Error al obtener token SUNAT para consultar estado');
-    }
+      if (guide.zipName) {
+        this.persistCdrFile(cdrBuffer, guide.zipName);
+      }
 
-    // Query status by document identifier: GET /comprobantes/{ruc}-09-{serie}-{correlativo}
-    const docId = `${creds.ruc}-09-${guide.serie}-${guide.correlativo}`;
-    const statusUrl = normalizedBase.endsWith('/comprobantes')
-      ? `${normalizedBase}/${docId}`
-      : `${normalizedBase}/comprobantes/${docId}`;
-
-    this.logger.log(`[GRE refresh] Consultando estado: GET ${statusUrl}`);
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(statusUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      );
-      const data = response.data;
-      this.logger.log(`[GRE refresh] Respuesta: codRespuesta=${data.codRespuesta}, indCdrGenerado=${data.indCdrGenerado}`);
-
-      if (data.codRespuesta === '0' && data.arcCdr) {
-        // CDR available — extract and update
-        const cdrBuffer = Buffer.from(data.arcCdr, 'base64');
-        const cdrInfo = await extractCdrStatus(cdrBuffer);
-        this.logger.log(`[GRE refresh] CDR extraído: accepted=${cdrInfo.accepted}, code=${cdrInfo.code}, desc=${cdrInfo.description}`);
-
-        // Persist CDR file
-        if (guide.zipName) {
-          this.persistCdrFile(cdrBuffer, guide.zipName);
-        }
-
-        // Update DB
-        const updated = await this.prismaService.shippingGuide.update({
-          where: { id: guide.id },
-          data: {
-            cdrAceptado: cdrInfo.accepted,
-            cdrCode: cdrInfo.code,
-            cdrDescription: cdrInfo.description,
-          },
-        });
-
-        return {
-          message: cdrInfo.accepted ? 'Guía aceptada por SUNAT' : 'Estado actualizado',
-          estadoSunat: cdrInfo.accepted ? 'ACEPTADO' : 'RECHAZADO',
+      const updated = await this.prismaService.shippingGuide.update({
+        where: { id: guide.id },
+        data: {
+          cdrAceptado: cdrInfo.accepted,
           cdrCode: cdrInfo.code,
           cdrDescription: cdrInfo.description,
-          guide: updated,
-        };
-      } else if (data.codRespuesta === '0') {
-        // Accepted but CDR not yet generated
-        const updated = await this.prismaService.shippingGuide.update({
-          where: { id: guide.id },
-          data: {
-            cdrAceptado: true,
-            cdrCode: '0',
-            cdrDescription: 'Aceptado por SUNAT — CDR pendiente de generación',
-          },
-        });
-        return {
-          message: 'Guía aceptada por SUNAT (CDR pendiente)',
-          estadoSunat: 'ACEPTADO',
+        },
+      });
+
+      return {
+        message: cdrInfo.accepted ? 'Guía aceptada por SUNAT' : 'Estado actualizado',
+        estadoSunat: cdrInfo.accepted ? 'ACEPTADO' : 'RECHAZADO',
+        cdrCode: cdrInfo.code,
+        cdrDescription: cdrInfo.description,
+        guide: updated,
+      };
+    } else if (statusResult.codRespuesta === '0') {
+      const updated = await this.prismaService.shippingGuide.update({
+        where: { id: guide.id },
+        data: {
+          cdrAceptado: true,
           cdrCode: '0',
           cdrDescription: 'Aceptado por SUNAT — CDR pendiente de generación',
-          guide: updated,
-        };
-      } else if (data.codRespuesta === '98') {
-        return {
-          message: 'SUNAT aún está procesando la guía',
-          estadoSunat: 'EN PROCESO',
-          cdrCode: '98',
-          cdrDescription: 'En proceso — SUNAT aún está procesando la guía',
-        };
-      } else {
-        // Error or rejection — update DB
-        const errMsg = data.error?.desError || data.error?.numError || `Código: ${data.codRespuesta}`;
-        const updated = await this.prismaService.shippingGuide.update({
-          where: { id: guide.id },
-          data: {
-            cdrAceptado: false,
-            cdrCode: data.codRespuesta || '99',
-            cdrDescription: errMsg,
-          },
-        });
-        return {
-          message: 'Guía rechazada por SUNAT',
-          estadoSunat: 'RECHAZADO',
-          cdrCode: data.codRespuesta,
+        },
+      });
+      return {
+        message: 'Guía aceptada por SUNAT (CDR pendiente)',
+        estadoSunat: 'ACEPTADO',
+        cdrCode: '0',
+        cdrDescription: 'Aceptado por SUNAT — CDR pendiente de generación',
+        guide: updated,
+      };
+    } else if (statusResult.codRespuesta === '98') {
+      return {
+        message: 'SUNAT aún está procesando la guía',
+        estadoSunat: 'EN PROCESO',
+        cdrCode: '98',
+        cdrDescription: 'En proceso — SUNAT aún está procesando la guía',
+      };
+    } else {
+      const errMsg = statusResult.error?.desError || statusResult.error?.numError || `Código: ${statusResult.codRespuesta}`;
+      const updated = await this.prismaService.shippingGuide.update({
+        where: { id: guide.id },
+        data: {
+          cdrAceptado: false,
+          cdrCode: statusResult.codRespuesta || '99',
           cdrDescription: errMsg,
-          guide: updated,
-        };
-      }
-    } catch (err: any) {
-      const statusCode = err.response?.status;
-      const errData = err.response?.data;
-      this.logger.error(`[GRE refresh] Error consultando estado (HTTP ${statusCode}):`, errData || err.message);
-
-      // If 404, the document may not exist yet in SUNAT
-      if (statusCode === 404) {
-        return {
-          message: 'SUNAT no tiene registro de esta guía. Puede que aún no haya sido procesada.',
-          estadoSunat: 'NO ENCONTRADA',
-        };
-      }
-
-      throw new BadRequestException(
-        'Error al consultar estado SUNAT: ' + JSON.stringify(errData || err.message),
-      );
+        },
+      });
+      return {
+        message: 'Guía rechazada por SUNAT',
+        estadoSunat: 'RECHAZADO',
+        cdrCode: statusResult.codRespuesta,
+        cdrDescription: errMsg,
+        guide: updated,
+      };
     }
   }
 
