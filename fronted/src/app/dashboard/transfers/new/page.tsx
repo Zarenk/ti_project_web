@@ -1124,7 +1124,7 @@ export default function NewGuidePage() {
         </div>
         <Badge variant="outline" className="hidden sm:flex gap-1.5 text-xs">
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          SUNAT Beta
+          SUNAT
         </Badge>
       </div>
 
