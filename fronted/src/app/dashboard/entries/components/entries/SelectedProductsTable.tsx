@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronsUpDown, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, ArrowRightLeft, Check, ChevronsUpDown, X } from "lucide-react"
 import { EditSeriesModal } from "../EditSeriesModal"
 import { useState, type MouseEvent, useCallback, useEffect, useMemo, useRef } from "react"
 import { MobileProductModal } from "../MobileProductModal"
@@ -32,6 +32,11 @@ interface Props {
   getAllSeriesFromDataTable: () => string[]
   removeProduct: (id: number) => void
   categories: { id: number; name: string }[]
+  usdPendingConversion?: boolean
+  onConvertToSoles?: () => void
+  onRevertToUsd?: () => void
+  canRevertToUsd?: boolean
+  exchangeRate?: number | null
 }
 
 type SortKey =
@@ -56,6 +61,11 @@ export const SelectedProductsTable = ({
   getAllSeriesFromDataTable,
   removeProduct,
   categories,
+  usdPendingConversion,
+  onConvertToSoles,
+  onRevertToUsd,
+  canRevertToUsd,
+  exchangeRate,
 }: Props) => {
 
   const NAME_COLUMN_MIN_WIDTH = 120
@@ -210,6 +220,50 @@ export const SelectedProductsTable = ({
 
   return (
     <div className="w-full overflow-x-auto border rounded-md">
+      {usdPendingConversion && (
+        <div className="flex items-center justify-between gap-3 rounded-t-md border-b border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Precios en US$ (dólares)
+            </p>
+            <p className="text-xs text-amber-600/80 dark:text-amber-300/70">
+              {exchangeRate ? `Tipo de cambio: ${exchangeRate}` : "Sin tipo de cambio registrado"}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onConvertToSoles}
+            disabled={!exchangeRate}
+            className="gap-1.5 cursor-pointer flex-shrink-0"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Convertir a S/.
+          </Button>
+        </div>
+      )}
+      {!usdPendingConversion && canRevertToUsd && (
+        <div className="flex items-center justify-between gap-3 rounded-t-md border-b border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/40 dark:bg-green-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <p className="text-sm font-medium text-green-800 dark:text-green-200">
+              Precios convertidos a S/. (soles)
+            </p>
+            <p className="text-xs text-green-600/80 dark:text-green-300/70">
+              {exchangeRate ? `TC aplicado: ${exchangeRate}` : ""}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRevertToUsd}
+            className="gap-1.5 cursor-pointer flex-shrink-0"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Volver a US$
+          </Button>
+        </div>
+      )}
       <div ref={tableContainerRef} className='px-1 sm:px-2'>
         <Table className={cn("w-full text-[11px] sm:text-xs")}>
           <TableHeader>
@@ -263,7 +317,7 @@ export const SelectedProductsTable = ({
                 onClick={() => sortProducts("price")}
                 className="flex items-center gap-1"
               >
-                P. Compra
+                {usdPendingConversion ? "P. Compra (US$)" : "P. Compra"}
                 {renderSortIcon("price")}
               </button>
             </TableHead>
@@ -425,7 +479,7 @@ export const SelectedProductsTable = ({
                   title="Cantidad de unidades para este producto"
                 />
               </TableCell>
-              <TableCell className={cn("w-[70px] sm:w-[85px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2")}>
+              <TableCell className={cn("w-[70px] sm:w-[85px] overflow-hidden text-[11px] sm:text-xs py-1.5 sm:py-2")}>
                 <Input
                   type="number"
                   value={product.price}
@@ -444,6 +498,11 @@ export const SelectedProductsTable = ({
                   className="w-full h-7 sm:h-9 text-[10px] sm:text-xs px-1 sm:px-3"
                   title="Precio de compra unitario editable"
                 />
+                {usdPendingConversion && exchangeRate && exchangeRate > 0 && (
+                  <span className="text-[9px] text-muted-foreground leading-tight block mt-0.5">
+                    ≈ S/. {(product.price * exchangeRate).toFixed(2)}
+                  </span>
+                )}
               </TableCell>
               <TableCell className={cn("w-[90px] truncate overflow-hidden whitespace-nowrap text-[11px] sm:text-xs py-1.5 sm:py-2 hidden md:table-cell")}>
                 {(Number(product.quantity) * Number(product.price || 0)).toFixed(2)}

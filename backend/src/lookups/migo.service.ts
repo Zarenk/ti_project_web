@@ -5,7 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-  UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
@@ -108,7 +108,7 @@ export class MigoService {
 
   private async executeRequest(url: string): Promise<any> {
     if (!this.token) {
-      throw new UnauthorizedException(
+      throw new ServiceUnavailableException(
         'Configura MIGO_TOKEN para habilitar consultas via Migo API.',
       );
     }
@@ -142,7 +142,7 @@ export class MigoService {
         throw new NotFoundException(msg);
       }
       if (status === 401 || status === 403) {
-        throw new UnauthorizedException(
+        throw new ServiceUnavailableException(
           'El token de Migo API es invalido o ha expirado.',
         );
       }

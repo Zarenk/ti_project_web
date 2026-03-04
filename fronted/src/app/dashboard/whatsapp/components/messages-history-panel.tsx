@@ -1,172 +1,108 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { Loader2, MessageCircle, RefreshCw, Search, Image, FileText, Mic, Video, MapPin, Smile, Contact } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { useState, useCallback, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { type WASocketMessage } from '@/hooks/use-whatsapp-socket';
+import ConversationList from './conversation-list';
+import ChatView from './chat-view';
 
-// Protocol/internal messages that should never be shown
-const HIDDEN_CONTENT_PREFIXES = [
-  '[protocolMessage]',
-  '[senderKeyDistributionMessage]',
-  '[messageContextInfo]',
-  '[reactionMessage]',
-  '[ephemeralMessage]',
-  '[keepInChatMessage]',
-  '[peerDataOperationRequestResponseMessage]',
-];
-
-interface Message {
-  id: number;
-  remoteJid: string;
-  content: string;
-  messageType: string;
-  isFromMe: boolean;
-  status: string;
-  sentAt: string;
-  createdAt: string;
+interface MessagesHistoryPanelProps {
+  isConnected: boolean;
 }
 
-export default function MessagesHistoryPanel() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [limit, setLimit] = useState('50');
+export default function MessagesHistoryPanel({ isConnected }: MessagesHistoryPanelProps) {
+  const [selectedJid, setSelectedJid] = useState<string | null>(null);
 
-  const loadMessages = async () => {
-    setIsLoading(true);
-    try {
-      const queryParams = new URLSearchParams();
-      if (limit) queryParams.set('limit', limit);
-
-      const response = await fetch(`/api/whatsapp/messages?${queryParams}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setMessages(data.messages || []);
-      } else {
-        toast.error('Error al cargar mensajes');
-      }
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      toast.error('Error al cargar mensajes');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadMessages();
-  }, []);
-
-  // Filter out protocol messages (already saved in DB from before the backend fix)
-  const filteredMessages = messages
-    .filter((msg) => !HIDDEN_CONTENT_PREFIXES.includes(msg.content))
-    .filter((msg) =>
-      msg.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      msg.remoteJid.includes(searchQuery)
+  // Handle socket messages — route to conversation list and chat view
+  const handleIncomingMessage = useCallback((msg: WASocketMessage) => {
+    // Update conversation list
+    (window as any).__waConvList?.updateConversation(
+      msg.remoteJid,
+      msg.content,
+      msg.messageType,
+      msg.isFromMe
     );
 
+    // Update chat view if it's the active conversation
+    (window as any).__waChatView?.addIncomingMessage(msg);
+  }, []);
+
+  const handleSentMessage = useCallback((msg: WASocketMessage) => {
+    (window as any).__waConvList?.updateConversation(
+      msg.remoteJid,
+      msg.content,
+      msg.messageType,
+      true
+    );
+    (window as any).__waChatView?.addIncomingMessage({ ...msg, isFromMe: true });
+  }, []);
+
+  // Register socket event handlers
+  useEffect(() => {
+    (window as any).__waMessageHandlers = {
+      onMessage: handleIncomingMessage,
+      onMessageSent: handleSentMessage,
+    };
+    return () => { delete (window as any).__waMessageHandlers; };
+  }, [handleIncomingMessage, handleSentMessage]);
+
+  const handleSelectConversation = (jid: string) => {
+    setSelectedJid(jid);
+  };
+
+  const handleBack = () => {
+    setSelectedJid(null);
+  };
+
   return (
-    <Card className="w-full min-w-0 overflow-hidden">
-      <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
-              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-              Historial de Mensajes
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Últimos {messages.length} mensajes
-            </CardDescription>
-          </div>
-          <Button onClick={loadMessages} disabled={isLoading} variant="outline" size="sm" className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0">
-            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
-        {/* Search */}
-        <div className="flex gap-2">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-2.5 sm:left-3 top-2.5 sm:top-3 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 sm:pl-9 h-8 sm:h-9 text-sm"
-            />
-          </div>
-          <div className="w-16 sm:w-24 flex-shrink-0">
-            <Input
-              type="number"
-              placeholder="Límite"
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              min="10"
-              max="500"
-              className="h-8 sm:h-9 text-sm"
-            />
-          </div>
+    <Card className="w-full min-w-0 overflow-hidden border shadow-sm">
+      {/* Desktop: side-by-side | Mobile: show one at a time */}
+      <div className="flex h-[500px] sm:h-[600px] lg:h-[650px] w-full min-w-0 overflow-hidden">
+        {/* Conversation List — always visible on desktop, hidden on mobile when chat is open */}
+        <div className={`${
+          selectedJid ? 'hidden sm:flex' : 'flex'
+        } flex-col w-full sm:w-72 lg:w-80 border-r flex-shrink-0 min-w-0 overflow-hidden`}>
+          <ConversationList
+            selectedJid={selectedJid}
+            onSelect={handleSelectConversation}
+          />
         </div>
 
-        {/* Messages List */}
-        {isLoading ? (
-          <div className="text-center py-8 sm:py-12">
-            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="text-xs sm:text-sm text-muted-foreground mt-2">Cargando mensajes...</p>
-          </div>
-        ) : filteredMessages.length === 0 ? (
-          <div className="text-center py-8 sm:py-12 text-muted-foreground">
-            <MessageCircle className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-20" />
-            <p className="text-sm">No hay mensajes para mostrar</p>
-            {searchQuery && <p className="text-xs sm:text-sm">Intenta con otra búsqueda</p>}
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-[500px] sm:max-h-[600px] overflow-y-auto">
-            {filteredMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`p-2.5 sm:p-4 rounded-lg border w-full min-w-0 overflow-hidden ${
-                  msg.isFromMe
-                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800 ml-4 sm:ml-8'
-                    : 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700 mr-4 sm:mr-8'
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-2 mb-1.5 sm:mb-2">
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                    <span className="font-medium text-xs sm:text-sm">
-                      {msg.isFromMe ? 'Tú' : msg.remoteJid.split('@')[0]}
-                    </span>
-                    <Badge variant={msg.status === 'SENT' ? 'default' : 'secondary'} className="text-[10px] sm:text-xs">
-                      {msg.status}
-                    </Badge>
-                    {msg.messageType !== 'TEXT' && (
-                      <Badge variant="outline" className="text-[10px] sm:text-xs gap-1">
-                        {msg.messageType === 'IMAGE' && <Image className="h-3 w-3" />}
-                        {msg.messageType === 'VIDEO' && <Video className="h-3 w-3" />}
-                        {msg.messageType === 'AUDIO' && <Mic className="h-3 w-3" />}
-                        {msg.messageType === 'DOCUMENT' && <FileText className="h-3 w-3" />}
-                        {msg.messageType}
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
-                    {format(new Date(msg.sentAt || msg.createdAt), 'PPp', { locale: es })}
-                  </span>
+        {/* Chat View — hidden on mobile when no conversation selected */}
+        <div className={`${
+          selectedJid ? 'flex' : 'hidden sm:flex'
+        } flex-col flex-1 min-w-0 overflow-hidden`}>
+          {selectedJid ? (
+            <ChatView
+              remoteJid={selectedJid}
+              isConnected={isConnected}
+              onBack={handleBack}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center px-4">
+                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                  <svg
+                    className="h-8 w-8 text-muted-foreground/50"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"
+                    />
+                  </svg>
                 </div>
-                <p className="text-xs sm:text-sm whitespace-pre-wrap text-foreground break-words">{msg.content}</p>
+                <p className="text-sm font-medium">Selecciona una conversación</p>
+                <p className="text-xs mt-1">Elige un contacto de la lista para ver los mensajes</p>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+            </div>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }

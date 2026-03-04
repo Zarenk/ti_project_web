@@ -155,8 +155,10 @@ export class WhatsAppGateway implements OnGatewayConnection, OnGatewayDisconnect
       remoteJid: string;
       content: string;
       messageType: string;
+      isFromMe: boolean;
+      createdAt: Date;
       mediaUrl?: string;
-      sentAt: Date;
+      clientId?: number;
     };
   }) {
     const { organizationId, companyId, message } = payload;

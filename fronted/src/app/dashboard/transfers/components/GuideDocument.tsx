@@ -9,6 +9,7 @@ import {
 } from "@react-pdf/renderer";
 
 import { BACKEND_URL } from "@/lib/utils";
+import { resolveLogoSrc, CompanyLogo } from "@/app/dashboard/sales/components/pdf/pdf-logo-helper";
 
 // ── Types ────────────────────────────────────────────────────────
 export interface GuideDocumentData {
@@ -114,16 +115,7 @@ const UM_MAP: Record<string, string> = {
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
-function resolveLogoSrc(raw?: string | null): string {
-  const fallback = "/logo_ti.png";
-  if (!raw) return fallback;
-  const trimmed = raw.trim();
-  if (!trimmed) return fallback;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  const normalized = trimmed.replace(/^\/+/, "");
-  if (BACKEND_URL) return `${BACKEND_URL}/${normalized}`;
-  return `/${normalized}`;
-}
+// resolveLogoSrc imported from pdf-logo-helper
 
 function formatDate(dateStr?: string): string {
   if (!dateStr) return "—";
@@ -507,7 +499,7 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
         {/* ── Header ─────────────────────────────────── */}
         <View style={[s.header, { borderBottomColor: primary }]}>
           <View style={s.headerLeft}>
-            <Image src={logoSrc} style={s.logo} />
+            <CompanyLogo src={logoSrc} size={68} />
             <Text style={s.companyName}>{data.remitenteRazonSocial}</Text>
             {data.remitenteAddress && (
               <Text style={s.companyInfo}>{data.remitenteAddress}</Text>

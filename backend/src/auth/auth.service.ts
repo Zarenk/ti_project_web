@@ -67,7 +67,7 @@ export class AuthService {
         organizations: organizationIds,
         isPublicSignup: Boolean(user.isPublicSignup),
       },
-      { expiresIn: '2h' },
+      { expiresIn: '3h' },
     );
     const refreshToken = this.jwtService.sign(
       { sub: user.id, tokenVersion: user.tokenVersion },

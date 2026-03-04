@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTenantSelection } from '@/context/tenant-selection-context';
-import { useWhatsAppSocket } from '@/hooks/use-whatsapp-socket';
+import { useWhatsAppSocket, type WASocketMessage } from '@/hooks/use-whatsapp-socket';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,19 @@ export default function WhatsAppClient() {
   const organizationId = selection?.orgId ?? null;
   const companyId = selection?.companyId ?? null;
 
-  const socketData = useWhatsAppSocket(organizationId, companyId, true);
+  // Socket message handlers — delegate to the messages panel via window
+  const handleSocketMessage = useCallback((msg: WASocketMessage) => {
+    (window as any).__waMessageHandlers?.onMessage?.(msg);
+  }, []);
+
+  const handleSocketMessageSent = useCallback((msg: WASocketMessage) => {
+    (window as any).__waMessageHandlers?.onMessageSent?.(msg);
+  }, []);
+
+  const socketData = useWhatsAppSocket(organizationId, companyId, true, {
+    onMessage: handleSocketMessage,
+    onMessageSent: handleSocketMessageSent,
+  });
 
   const [activeTab, setActiveTab] = useState('connection');
   const [isConnecting, setIsConnecting] = useState(false);
@@ -293,7 +305,7 @@ export default function WhatsAppClient() {
               <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Masivo</span>
             </TabsTrigger>
-            <TabsTrigger value="messages" disabled={!isConnected} className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
+            <TabsTrigger value="messages" className="gap-1 sm:gap-1.5 cursor-pointer text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0">
               <MessageCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Mensajes</span>
             </TabsTrigger>
@@ -340,7 +352,7 @@ export default function WhatsAppClient() {
         </TabsContent>
 
         <TabsContent value="messages" className="space-y-4">
-          <MessagesHistoryPanel />
+          <MessagesHistoryPanel isConnected={isConnected} />
         </TabsContent>
 
         <TabsContent value="templates" className="space-y-4">

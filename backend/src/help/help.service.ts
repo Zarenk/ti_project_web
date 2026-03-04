@@ -130,6 +130,69 @@ export class HelpService {
     return CASUAL_PATTERNS.some((pattern) => pattern.test(normalized));
   }
 
+  /** Get suggested questions for a section (used in fallback responses) */
+  private getSuggestionsForSection(section: string): string[] {
+    const suggestions: Record<string, string[]> = {
+      products: [
+        'Como creo un producto nuevo?',
+        'Como subo imagenes a un producto?',
+        'Como edito el precio de un producto?',
+      ],
+      sales: [
+        'Como registro una venta?',
+        'Como aplico un descuento?',
+        'Como genero una boleta o factura?',
+      ],
+      inventory: [
+        'Como veo el stock actual?',
+        'Como transfiero productos entre tiendas?',
+        'Como configuro alertas de stock bajo?',
+      ],
+      entries: [
+        'Como registro una compra?',
+        'Como importo una factura de proveedor?',
+        'Como agrego stock a un producto existente?',
+      ],
+      accounting: [
+        'Como veo el balance de comprobacion?',
+        'Como creo un asiento contable?',
+        'Como exporto el libro diario?',
+      ],
+      cashregister: [
+        'Como abro la caja?',
+        'Como hago un cierre de caja?',
+        'Como registro un movimiento de caja?',
+      ],
+      categories: [
+        'Como creo una categoria?',
+        'Como asigno productos a una categoria?',
+      ],
+      providers: [
+        'Como agrego un proveedor?',
+        'Como veo el historial de compras?',
+      ],
+      users: [
+        'Como creo un usuario?',
+        'Como asigno permisos?',
+        'Como cambio la contrasena de un usuario?',
+      ],
+      stores: [
+        'Como creo una tienda?',
+        'Como asigno la tienda principal?',
+      ],
+      quotes: [
+        'Como creo una cotizacion?',
+        'Como genero el PDF de una cotizacion?',
+      ],
+      general: [
+        'Como registro una venta?',
+        'Como agrego un producto?',
+        'Como veo el inventario?',
+      ],
+    };
+    return suggestions[section] ?? suggestions.general ?? [];
+  }
+
   /** Normalize a question for deduplication */
   private normalizeQuestion(q: string): string {
     return q
@@ -266,9 +329,9 @@ export class HelpService {
           );
 
           // Adaptive threshold: casual messages use lower threshold
-          const baseThreshold = Number(this.config.get<string>('HELP_EMBEDDING_THRESHOLD')) || 0.65;
+          const baseThreshold = Number(this.config.get<string>('HELP_EMBEDDING_THRESHOLD')) || 0.55;
           const isCasual = this.isCasualMessage(params.question);
-          const threshold = isCasual ? Math.min(baseThreshold, 0.50) : baseThreshold;
+          const threshold = isCasual ? Math.min(baseThreshold, 0.45) : baseThreshold;
 
           if (best.similarity >= threshold) {
             const source: HelpMessageSource = best.sourceType === 'promoted' ? 'PROMOTED' : 'STATIC';
@@ -293,7 +356,7 @@ export class HelpService {
           }
 
           // Save for potential best-effort fallback (no AI key)
-          if (best.similarity >= 0.40) {
+          if (best.similarity >= 0.35) {
             bestEmbeddingResult = { answer: best.answer, sourceType: best.sourceType, sourceId: best.sourceId, similarity: best.similarity };
           }
 
@@ -352,11 +415,16 @@ export class HelpService {
         };
       }
 
-      // 3b. Section-aware fallback: use section description as context
+      // 3b. Section-aware fallback with helpful suggestions
       const sectionDesc = SECTION_DESCRIPTIONS[params.section];
+      const suggestedQuestions = this.getSuggestionsForSection(params.section);
+      const suggestionsBlock = suggestedQuestions.length > 0
+        ? `\n\nPrueba preguntandome algo como:\n${suggestedQuestions.map(q => `- "${q}"`).join('\n')}`
+        : '\n\nPrueba preguntarme sobre una funcionalidad especifica, por ejemplo: "como registro una venta" o "como agrego un producto".';
+
       const fallbackAnswer = sectionDesc
-        ? `Estoy en proceso de aprendizaje y aun no tengo una respuesta exacta para eso. Pero puedo ayudarte con lo que se de esta seccion:\n\n${sectionDesc}\n\nIntenta preguntar algo mas especifico sobre estas funcionalidades, o reformula tu pregunta.`
-        : 'No tengo una respuesta para eso todavia. Intenta preguntar sobre una funcionalidad especifica del sistema, por ejemplo: "como registro una venta" o "como agrego un producto".';
+        ? `No encontre una respuesta exacta para eso, pero puedo ayudarte con temas de esta seccion:\n\n${sectionDesc}${suggestionsBlock}`
+        : `No encontre una respuesta para eso todavia.${suggestionsBlock}`;
 
       const assistantMsg = await this.prisma.helpMessage.create({
         data: {
@@ -399,9 +467,17 @@ export class HelpService {
       SECTION_DESCRIPTIONS[params.section] ?? SECTION_DESCRIPTIONS.general;
     const isCasual = this.isCasualMessage(params.question);
 
-    const personalityBlock = `Eres el asistente virtual de ADSLab, un sistema ERP integral de gestion empresarial para el mercado peruano. La plataforma incluye: inventario, ventas, compras, contabilidad PCGE, facturacion SUNAT (facturas/boletas), gestion de proveedores, cotizaciones, caja registradora, reportes, y modulos especializados segun el tipo de empresa.
+    const personalityBlock = `Eres el asistente virtual de ADSLab, un sistema ERP integral de gestion empresarial para el mercado peruano. La plataforma incluye: inventario, ventas, compras, contabilidad PCGE, facturacion SUNAT (facturas/boletas), gestion de proveedores, cotizaciones, caja registradora, reportes, WhatsApp, e-commerce, y modulos especializados segun el tipo de empresa (retail, restaurantes, servicios, manufactura, estudio de abogados, gimnasio).
 
-Tu personalidad: eres amigable, cercano y profesional. Usas un tono calido pero conciso. Puedes responder saludos, agradecimientos y charla casual de forma breve y natural antes de ofrecer tu ayuda con el sistema.`;
+Tu nombre: Asistente ADSLab
+Tu personalidad: eres amigable, cercano y profesional. Usas un tono calido pero conciso, como un colega experto que ayuda con gusto. Puedes responder saludos, agradecimientos y charla casual de forma breve y natural antes de ofrecer tu ayuda con el sistema.
+
+Capacidades que puedes mencionar cuando te pregunten:
+- Guiar paso a paso en cualquier funcionalidad del sistema
+- Buscar productos, ver stock, registrar ventas
+- Explicar facturacion SUNAT, contabilidad, caja
+- Ayudar con configuracion de empresa, usuarios, permisos
+- Orientar sobre WhatsApp, catalogo, pedidos web`;
 
     if (isCasual) {
       return `${personalityBlock}
@@ -429,22 +505,26 @@ Reglas:
 
 Tu funcion principal es ayudar con las funcionalidades del sistema. Si la pregunta no es sobre la plataforma y no es un saludo o cortesia, indica amablemente que tu especialidad es el sistema ADSLab y ofrece ayudar con eso.
 
-El usuario esta actualmente en la seccion: ${params.section}
-Ruta: ${params.route}
-Rol del usuario: ${params.userRole ?? 'no especificado'}
-${roleContext ? `\n${roleContext}` : ''}
+CONTEXTO DEL USUARIO:
+- Seccion actual: ${params.section}
+- Ruta: ${params.route}
+- Rol: ${params.userRole ?? 'no especificado'}
+${roleContext ? `- ${roleContext}` : ''}
 
 Funcionalidades disponibles en esta seccion:
 ${sectionDesc}${kbBlock}${ragBlock}
 
-Reglas:
-- Si hay informacion relevante de la base de conocimiento, usala como base para tu respuesta. Adapta el lenguaje y complementa con detalles utiles.
-- Si la informacion encontrada responde directamente la pregunta, basate en ella sin inventar pasos adicionales.
-- Si la informacion es parcialmente relevante, usala como contexto y complementa con lo que sepas de la seccion.
-- Responde de forma concisa (maximo 200 palabras), en espanol, usa lenguaje simple.
-- Si mencionas un boton o accion, indica donde encontrarlo en la interfaz.
-- Usa **negritas** para resaltar acciones o botones importantes.
-- Puedes usar listas con - para enumerar pasos cuando sea claro.`;
+REGLAS ESTRICTAS:
+1. Si hay informacion relevante de la base de conocimiento, usala como base principal. Adapta el lenguaje y complementa con detalles utiles.
+2. Si la informacion encontrada responde directamente, basate en ella sin inventar pasos adicionales.
+3. Si la informacion es parcialmente relevante, usala como contexto y complementa.
+4. Responde de forma concisa (maximo 250 palabras), en espanol, usa lenguaje simple y directo.
+5. Si mencionas un boton o accion, indica donde encontrarlo en la interfaz (ej: "en la esquina superior derecha", "en el menu lateral").
+6. Usa **negritas** para resaltar acciones o botones importantes.
+7. Puedes usar listas con - para enumerar pasos cuando sea claro.
+8. NUNCA inventes funcionalidades que no existan. Si no sabes algo, di "No tengo informacion sobre eso en este momento".
+9. Para preguntas sobre como hacer algo, da pasos numerados y concretos.
+10. Si el usuario parece frustrado o repite una pregunta, ofrece alternativas o reformula tu respuesta de manera diferente.`;
   }
 
   /** Load conversation context for AI request */
@@ -558,9 +638,9 @@ Reglas:
         const best = results[0];
 
         if (best) {
-          const baseThreshold = Number(this.config.get<string>('HELP_EMBEDDING_THRESHOLD')) || 0.65;
+          const baseThreshold = Number(this.config.get<string>('HELP_EMBEDDING_THRESHOLD')) || 0.55;
           const isCasual = this.isCasualMessage(params.question);
-          const threshold = isCasual ? Math.min(baseThreshold, 0.50) : baseThreshold;
+          const threshold = isCasual ? Math.min(baseThreshold, 0.45) : baseThreshold;
 
           if (best.similarity >= threshold) {
             const source: HelpMessageSource = best.sourceType === 'promoted' ? 'PROMOTED' : 'STATIC';
@@ -586,7 +666,7 @@ Reglas:
             return;
           }
 
-          if (best.similarity >= 0.40) {
+          if (best.similarity >= 0.35) {
             bestEmbeddingResult = { answer: best.answer, sourceType: best.sourceType, sourceId: best.sourceId, similarity: best.similarity };
           }
 

@@ -237,5 +237,112 @@ export const courtesySection: HelpSection = {
       answer:
         "Entiendo que necesites ayuda personalizada. Puedes contactar al equipo de soporte de estas formas:\n\n**1. Mensajes Internos:**\nVe a la sección 'Mensajes' en el menú lateral y abre un ticket. El equipo te responderá pronto.\n\n**2. Soporte Directo:**\nSi necesitas ayuda urgente, el equipo de soporte puede ayudarte con casos más complejos.\n\n¿Mientras tanto, puedo ayudarte con algo específico del sistema?",
     },
+    // ========== FASE 2 - QUEJAS AL CHATBOT Y FRASES CORTAS ==========
+    {
+      id: "courtesy-not-responding",
+      question: "No estas respondiendo",
+      aliases: [
+        "no estas respondiendo",
+        "no respondes",
+        "porque no respondes",
+        "no me contestas",
+        "no contestas",
+        "responde",
+        "contestame",
+        "responde bien",
+        "di algo util",
+        "responde algo",
+        "contesta",
+      ],
+      answer:
+        "Disculpa si mis respuestas anteriores no fueron lo que esperabas. Estoy mejorando constantemente. Para ayudarte mejor, intenta preguntarme algo especifico como:\n\n- \"¿Como registro una venta?\"\n- \"¿Como agrego un producto?\"\n- \"¿Como veo el inventario?\"\n\nEntre mas especifica sea tu pregunta, mejor podre ayudarte.",
+    },
+    {
+      id: "courtesy-not-learning",
+      question: "Necesitamos que aprendas mas",
+      aliases: [
+        "necesitamos que aprendas mas",
+        "aprende mas",
+        "tienes que mejorar",
+        "necesitas mejorar",
+        "deberias aprender",
+        "aprende",
+        "mejora",
+        "eres basico",
+        "muy basico",
+        "no sabes nada",
+        "sabes poco",
+        "se mas inteligente",
+      ],
+      answer:
+        "Tienes razon, estoy en constante aprendizaje. Cada pregunta que me hacen me ayuda a mejorar. Si una respuesta no fue util, dale 👎 para que el equipo la revise y mejore.\n\nMientras tanto, puedo ayudarte con:\n- Inventario y stock\n- Ventas y facturacion\n- Productos y categorias\n- Contabilidad y caja\n- Y mas funcionalidades del sistema\n\n¿Que necesitas saber?",
+    },
+    {
+      id: "courtesy-hey-attention",
+      question: "Oye",
+      aliases: [
+        "oye",
+        "ey",
+        "eyyy",
+        "hey tu",
+        "oye tu",
+        "psst",
+        "escucha",
+        "atencion",
+        "presta atencion",
+        "estas ahi",
+        "sigues ahi",
+        "me escuchas",
+      ],
+      answer:
+        "Aqui estoy! Dime, ¿en que puedo ayudarte? Puedes preguntarme sobre cualquier funcionalidad del sistema.",
+    },
+    {
+      id: "courtesy-whats-up",
+      question: "En que andas",
+      aliases: [
+        "en que andas",
+        "que haces",
+        "que estas haciendo",
+        "que onda",
+        "que pasa",
+        "que hay",
+        "como va todo",
+        "que cuentas",
+        "que me cuentas",
+      ],
+      answer:
+        "Aqui estoy, listo para ayudarte con el sistema. ¿Necesitas orientacion con alguna funcionalidad? Puedo guiarte con ventas, inventario, productos, contabilidad y mucho mas.",
+    },
+    {
+      id: "courtesy-repeat",
+      question: "Repite",
+      aliases: [
+        "repite",
+        "dilo otra vez",
+        "otra vez",
+        "repitelo",
+        "no escuche",
+        "que dijiste",
+        "como",
+        "perdon que",
+        "mande",
+      ],
+      answer:
+        "Claro, puedo explicarte de nuevo. ¿Sobre que tema necesitas que te aclare? Dime tu pregunta especifica y te ayudo con gusto.",
+    },
+    {
+      id: "courtesy-bored",
+      question: "Estoy aburrido",
+      aliases: [
+        "estoy aburrido",
+        "aburrido",
+        "que hago",
+        "no se que hacer",
+        "algo interesante",
+      ],
+      answer:
+        "¿Que tal si aprovechas para explorar el sistema? Algunas ideas:\n\n- Revisa tus **productos mas vendidos** en el dashboard\n- Configura **alertas de stock bajo** en inventario\n- Explora las **cotizaciones** para enviar presupuestos profesionales\n- Revisa la **contabilidad** del mes\n\n¿Te interesa alguna de estas?",
+    },
   ],
 }

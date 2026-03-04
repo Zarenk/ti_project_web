@@ -9,6 +9,7 @@ import {
 } from '@react-pdf/renderer';
 
 import { BACKEND_URL } from '@/lib/utils';
+import { resolveLogoSrc, CompanyLogo } from './pdf-logo-helper';
 
 const BACKEND_BASE_URL = BACKEND_URL;
 
@@ -207,24 +208,7 @@ function wrapText(text: string, maxLength: number) {
   return lines.join('\n');
 }
 
-function resolveLogoSrc(raw?: string | null): string {
-  const fallback = '/logo_ti.png';
-  if (!raw) {
-    return fallback;
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-  const normalized = trimmed.replace(/^\/+/, '');
-  if (BACKEND_BASE_URL) {
-    return `${BACKEND_BASE_URL}/${normalized}`;
-  }
-  return `/${normalized}`;
-}
+// resolveLogoSrc imported from pdf-logo-helper
 
 export function InvoiceDocument({
   data,
@@ -286,7 +270,7 @@ export function InvoiceDocument({
         {/* Encabezado */}
         <View style={styles.header}>
           <View style={styles.leftColumn}>
-            <Image src={logoSrc} style={styles.logo} />
+            <CompanyLogo src={logoSrc} size={80} />
             <Text style={styles.companyName}>{emitterName}</Text>
             <Text>{emitterAddress}</Text>
             {emitterPhone ? <Text>TELEFONO: {emitterPhone}</Text> : null}

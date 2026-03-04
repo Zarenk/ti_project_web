@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { normalizeSearch } from "@/lib/utils";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useAuth } from "@/context/auth-context";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -442,6 +443,24 @@ export default function NewGuidePage() {
 
   const motivoCode = watch("motivoTrasladoCodigo");
 
+  // ── Reset form state when organization changes ──────────────
+  useEffect(() => {
+    if (!selection?.orgId) return;
+    // Clear guide items added from previous org
+    while (fields.length > 0) remove(0);
+    // Clear inter-store transfer state
+    setSourceStoreId(null);
+    setDestinationStoreId(null);
+    setTransferItems([]);
+    setStoreProducts([]);
+    setStores([]);
+    // Clear SUNAT lookup state
+    setSunatSearchResult(null);
+    setSunatSearchError(null);
+    setSunatRucValue("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection?.orgId]);
+
   // ── Load company data (auto-fill remitente + destinatario) ─
   useEffect(() => {
     async function loadCompany() {
@@ -531,8 +550,12 @@ export default function NewGuidePage() {
         setLoadingStores(false);
       }
     }
+    setSourceStoreId(null);
+    setDestinationStoreId(null);
+    setTransferItems([]);
+    setStoreProducts([]);
     loadStores();
-  }, [motivoCode]);
+  }, [motivoCode, selection?.orgId]);
 
   // ── Load products when source store changes ────────────────
   useEffect(() => {
@@ -552,7 +575,7 @@ export default function NewGuidePage() {
       }
     }
     loadProducts();
-  }, [sourceStoreId, interStoreEnabled]);
+  }, [sourceStoreId, interStoreEnabled, selection?.orgId]);
 
   // ── Auto-fill addresses when stores selected (motivo "04") ──
   useEffect(() => {
@@ -585,13 +608,13 @@ export default function NewGuidePage() {
   // ── Filtered products for search ──────────────────────────
   const filteredProducts = useMemo(() => {
     if (!productSearch.trim()) return products.slice(0, 30);
-    const q = productSearch.toLowerCase();
+    const q = normalizeSearch(productSearch);
     return products
       .filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.barcode?.toLowerCase().includes(q) ||
-          p.description?.toLowerCase().includes(q),
+          normalizeSearch(p.name).includes(q) ||
+          (p.barcode && normalizeSearch(p.barcode).includes(q)) ||
+          (p.description && normalizeSearch(p.description).includes(q)),
       )
       .slice(0, 30);
   }, [products, productSearch]);

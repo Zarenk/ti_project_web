@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { AlertTriangle, Check } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, Eraser, PlusCircle, Save } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -430,18 +430,20 @@ export function CategoryForm({ product }: any) {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-col-reverse gap-2 lg:flex-row lg:items-center lg:justify-end">
+        {/* Desktop: normal button row */}
+        <div className="mt-4 hidden gap-2 sm:flex sm:flex-row sm:items-center sm:justify-end">
           <Button
             variant="outline"
-            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            className="cursor-pointer gap-2 border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
             type="button"
             onClick={() => router.back()}
           >
+            <ArrowLeft className="size-4" />
             Volver
           </Button>
           <Button
             variant="outline"
-            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            className="cursor-pointer gap-2 border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
             type="button"
             onClick={() =>
               form.reset({
@@ -452,12 +454,54 @@ export function CategoryForm({ product }: any) {
               })
             }
           >
+            <Eraser className="size-4" />
             Limpiar
           </Button>
-          <Button className="w-full cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]">
-            {params.id ? 'Actualizar Categoria' : 'Crear Categoria'}
+          <Button className="cursor-pointer gap-2 bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 sm:min-w-[160px]">
+            {params.id ? <Save className="size-4" /> : <PlusCircle className="size-4" />}
+            {params.id ? 'Actualizar' : 'Crear'}
           </Button>
         </div>
+
+        {/* Mobile: sticky bottom bar */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-border/60 bg-background/95 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:hidden dark:shadow-[0_-2px_12px_rgba(0,0,0,0.3)]">
+          <Button
+            size="sm"
+            className="flex-[1.3] cursor-pointer gap-1.5 bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+          >
+            {params.id ? <Save className="size-3.5" /> : <PlusCircle className="size-3.5" />}
+            {params.id ? 'Actualizar' : 'Crear'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 cursor-pointer gap-1.5 text-xs"
+            type="button"
+            onClick={() =>
+              form.reset({
+                name: '',
+                description: '',
+                image: '',
+                status: 'Activo',
+              })
+            }
+          >
+            <Eraser className="size-3.5" />
+            Limpiar
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 cursor-pointer gap-1.5 text-xs"
+            type="button"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="size-3.5" />
+            Volver
+          </Button>
+        </div>
+        {/* Spacer so content doesn't hide behind the fixed bar on mobile */}
+        <div className="h-16 sm:hidden" />
       </form>
     </div>
   )

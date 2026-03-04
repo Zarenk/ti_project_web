@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle, FileText, Loader2, Plus, Link2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -41,6 +40,8 @@ interface Props {
   extractedProducts: ExtractedProduct[]
   existingProducts: ExistingProduct[]
   onConfirm: (products: ExtractedProduct[]) => void
+  currency?: "USD" | "PEN"
+  exchangeRate?: number | null
 }
 
 export function PdfVerificationDialog({
@@ -49,6 +50,8 @@ export function PdfVerificationDialog({
   extractedProducts,
   existingProducts,
   onConfirm,
+  currency,
+  exchangeRate,
 }: Props) {
   const [decisions, setDecisions] = useState<VerificationDecision[]>([])
   const [matchResults, setMatchResults] = useState<MatchCandidate[][]>([])
@@ -171,8 +174,8 @@ export function PdfVerificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3">
+      <DialogContent className="!grid-rows-[auto_1fr] max-w-[calc(100%-1rem)] sm:max-w-2xl max-h-[90dvh] !flex !flex-col !p-0 !gap-0 overflow-hidden">
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
             <FileText className="h-5 w-5 flex-shrink-0" />
             Verificación de Productos Extraídos
@@ -184,9 +187,9 @@ export function PdfVerificationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Separator />
+        <Separator className="flex-shrink-0" />
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="px-4 sm:px-6 py-4 space-y-4">
             {/* Series conflicts section */}
             {isValidating ? (
@@ -224,15 +227,17 @@ export function PdfVerificationDialog({
                   }
                 }
                 onDecisionChange={handleDecisionChange}
+                currency={currency}
+                exchangeRate={exchangeRate}
               />
             ))}
           </div>
-        </ScrollArea>
+        </div>
 
-        <Separator />
+        <Separator className="flex-shrink-0" />
 
-        <DialogFooter className="px-4 sm:px-6 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full">
+        <DialogFooter className="px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full min-w-0">
             {/* Summary badges */}
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge variant="outline" className="gap-1">

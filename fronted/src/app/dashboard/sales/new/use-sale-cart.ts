@@ -268,6 +268,36 @@ export function useSaleCart(storeId: number | null, serialsEnabled: boolean) {
   }, [serialsMap, serialDialogProductId])
 
   // ──────────────────────────────────────────────
+  // Hydrate (for draft restoration)
+  // ──────────────────────────────────────────────
+  const hydrateCart = useCallback(
+    (
+      items: { productId: number; quantity: number; unitPrice: number; product: SaleProductCardItem }[],
+      serials: { productId: number; serialNumbers: string[] }[],
+    ) => {
+      const nextCart = new Map<number, SaleCartItem>()
+      for (const item of items) {
+        nextCart.set(item.productId, {
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })
+      }
+      setCartMap(nextCart)
+
+      const nextSerials = new Map<number, string[]>()
+      for (const s of serials) {
+        if (s.serialNumbers.length > 0) {
+          nextSerials.set(s.productId, s.serialNumbers)
+        }
+      }
+      setSerialsMap(nextSerials)
+      setAvailableSeriesMap(new Map())
+    },
+    [],
+  )
+
+  // ──────────────────────────────────────────────
   // Reset (for store change)
   // ──────────────────────────────────────────────
   const resetCart = useCallback(() => {
@@ -300,7 +330,8 @@ export function useSaleCart(storeId: number | null, serialsEnabled: boolean) {
     serialDialogAssigned,
     serialDialogAvailable,
     serialDialogOtherSerials,
-    // Reset
+    // Hydrate & Reset
+    hydrateCart,
     resetCart,
   }
 }

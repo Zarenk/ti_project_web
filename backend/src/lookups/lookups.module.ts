@@ -7,6 +7,7 @@ import { ApisPeruService } from './apisperu.service';
 import { DecolectaService } from './decolecta.service';
 import { LookupsController } from './lookups.controller';
 import { MigoService } from './migo.service';
+import { PeruApiService } from './peruapi.service';
 
 @Module({
   imports: [
@@ -17,7 +18,19 @@ import { MigoService } from './migo.service';
     TenancyModule,
   ],
   controllers: [LookupsController],
-  providers: [ApisNetService, ApisPeruService, DecolectaService, MigoService],
-  exports: [ApisNetService, ApisPeruService, DecolectaService, MigoService],
+  providers: [
+    ApisNetService,
+    ApisPeruService,
+    DecolectaService,
+    MigoService,
+    PeruApiService,
+  ],
+  exports: [
+    ApisNetService,
+    ApisPeruService,
+    DecolectaService,
+    MigoService,
+    PeruApiService,
+  ],
 })
 export class LookupsModule {}

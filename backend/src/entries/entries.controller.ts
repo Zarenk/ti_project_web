@@ -29,6 +29,7 @@ import { createHash } from 'crypto';
 import { resolveStoragePath } from 'src/utils/path-utils';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { extractTextWithOCR } from '../utils/pdf-ocr';
 import type { Request } from 'express';
 
 @ModulePermission('inventory')
@@ -71,16 +72,26 @@ export class EntriesController {
   }
 
   // ENDPOINT PARA CREAR PDFS
+  // Extracts text from PDF; falls back to OCR for scanned/image PDFs
   @Post('process-pdf')
-  @UseInterceptors(FileInterceptor('file', multerConfig)) // Interceptor para manejar la carga del archivo
+  @UseInterceptors(FileInterceptor('file', multerConfig))
   async processPDF(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No se proporcionó un archivo PDF.');
     }
 
     try {
-      const pdfData = await pdfParse(file.buffer); // Procesa el archivo PDF
-      return { text: pdfData.text }; // Devuelve el texto extraído
+      // Step 1: Try standard text extraction (fast, works for digital PDFs)
+      const pdfData = await pdfParse(file.buffer);
+      const extractedText = (pdfData.text ?? '').trim();
+
+      // Step 2: If text is too short, the PDF is likely a scanned image → OCR
+      if (extractedText.length < 10) {
+        const ocrText = await extractTextWithOCR(file.buffer);
+        return { text: ocrText, ocr: true };
+      }
+
+      return { text: pdfData.text };
     } catch (error) {
       console.error('Error al procesar el archivo PDF:', error);
       throw new BadRequestException('Error al procesar el archivo PDF.');

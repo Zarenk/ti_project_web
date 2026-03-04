@@ -8,6 +8,7 @@ void prisma.onModuleInit();
 export interface CatalogItem {
   name: string;
   price: number;
+  priceSell?: number;
   description?: string;
   imageUrl?: string;
   brand?: string;
@@ -17,6 +18,11 @@ export interface CatalogItem {
   gpuLogo?: string;
   cpuLogo?: string;
   categoryName?: string;
+}
+
+export interface CatalogMeta {
+  companyName: string;
+  companyLogo?: string;
 }
 
 export async function getCatalogItems(
@@ -47,6 +53,7 @@ export async function getCatalogItems(
     select: {
       name: true,
       price: true,
+      priceSell: true,
       description: true,
       images: true,
       brand: { select: { name: true, logoSvg: true } },
@@ -59,6 +66,7 @@ export async function getCatalogItems(
   return products.map((p) => ({
     name: p.name,
     price: p.price,
+    priceSell: p.priceSell ?? undefined,
     description: p.description ?? undefined,
     imageUrl: p.images[0] ?? undefined,
     brand: p.brand?.name ?? undefined,
@@ -67,4 +75,22 @@ export async function getCatalogItems(
     gpu: p.specification?.graphics ?? undefined,
     categoryName: p.category?.name,
   }));
+}
+
+export async function getCatalogMeta(
+  options: { organizationId?: number | null; companyId?: number | null } = {},
+): Promise<CatalogMeta> {
+  const defaultMeta: CatalogMeta = { companyName: 'Mi Empresa' };
+
+  if (options.companyId == null) return defaultMeta;
+
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: options.companyId },
+      select: { name: true },
+    });
+    return { companyName: company?.name ?? defaultMeta.companyName };
+  } catch {
+    return defaultMeta;
+  }
 }

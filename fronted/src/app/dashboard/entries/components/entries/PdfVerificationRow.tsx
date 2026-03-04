@@ -36,6 +36,8 @@ interface Props {
   candidates: MatchCandidate[]
   decision: VerificationDecision
   onDecisionChange: (decision: VerificationDecision) => void
+  currency?: "USD" | "PEN"
+  exchangeRate?: number | null
 }
 
 function scoreColor(score: number) {
@@ -57,7 +59,11 @@ export function PdfVerificationRow({
   candidates,
   decision,
   onDecisionChange,
+  currency,
+  exchangeRate,
 }: Props) {
+  const isUsd = currency === "USD"
+  const currencySymbol = isUsd ? "US$" : "S/."
   const topCandidate = candidates[0]
   const borderClass = topCandidate
     ? scoreColor(topCandidate.score)
@@ -111,7 +117,14 @@ export function PdfVerificationRow({
         </div>
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pl-7">
           <span>Cant: <strong className="text-foreground">{extracted.quantity}</strong></span>
-          <span>P.Compra PDF: <strong className="text-foreground">S/ {extracted.price.toFixed(2)}</strong></span>
+          <span>
+            P.Compra PDF: <strong className="text-foreground">{currencySymbol} {extracted.price.toFixed(2)}</strong>
+            {isUsd && exchangeRate && exchangeRate > 0 && (
+              <span className="ml-1 text-[10px] text-muted-foreground/70">
+                ≈ S/. {(extracted.price * exchangeRate).toFixed(2)}
+              </span>
+            )}
+          </span>
           {extracted.series && extracted.series.length > 0 && (
             <span>Series: <strong className="text-foreground">{extracted.series.length}</strong></span>
           )}
@@ -174,11 +187,11 @@ export function PdfVerificationRow({
             <>
               <div className="text-xs space-y-1">
                 <span className="text-muted-foreground">P.Compra registrado:</span>
-                <p className="font-medium">S/ {linked.product.price.toFixed(2)}</p>
+                <p className="font-medium">S/. {linked.product.price.toFixed(2)}</p>
               </div>
               <div className="text-xs space-y-1">
                 <span className="text-muted-foreground">P.Venta actual:</span>
-                <p className="font-medium">S/ {(linked.product.priceSell ?? 0).toFixed(2)}</p>
+                <p className="font-medium">S/. {(linked.product.priceSell ?? 0).toFixed(2)}</p>
               </div>
             </>
           ) : null

@@ -598,7 +598,7 @@ export class EntriesService {
         take: 500,
         orderBy: { createdAt: 'desc' },
         include: {
-          details: { include: { product: true, series: true } },
+          details: { include: { product: { include: { category: true } }, series: true } },
           provider: true,
           user: true,
           store: true,

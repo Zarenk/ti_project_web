@@ -33,6 +33,7 @@ import {
   GYM_HIDDEN_PROJECTS,
   resolveCustomMenuIcon,
 } from "@/components/sidebar-navigation-data"
+import { ModeToggle } from "@/components/mode-toggle"
 
 const TeamSwitcherLazy = dynamic(
   () =>
@@ -277,7 +278,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcherLazy />
+        <div className="flex items-center gap-1">
+          <div className="flex-1 min-w-0">
+            <TeamSwitcherLazy />
+          </div>
+          <div className="group-data-[collapsible=icon]:hidden flex-shrink-0">
+            <ModeToggle />
+          </div>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />

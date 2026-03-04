@@ -37,7 +37,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ModeToggle } from "./mode-toggle"
 import {
   createCompany,
   listOrganizations,
@@ -87,7 +86,7 @@ function readCookieNumber(name: string): number | null {
 }
 
 export function TeamSwitcher(): React.ReactElement | null {
-  const { isMobile } = useSidebar()
+  const { isMobile, setOpenMobile } = useSidebar()
   const { role, isPublicSignup, userId } = useAuth()
   const { selection } = useTenantSelection()
   const router = useRouter()
@@ -569,8 +568,7 @@ export function TeamSwitcher(): React.ReactElement | null {
               <SidebarMenuButton size="lg" className="flex-1 justify-between">
                 <span className="text-sm font-medium">Cargando organizacion...</span>
               </SidebarMenuButton>
-              <ModeToggle />
-            </div>
+              </div>
           </SidebarMenuItem>
         </SidebarMenu>
       )
@@ -586,8 +584,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                   No se pudo cargar la organizacion activa
                 </span>
               </SidebarMenuButton>
-              <ModeToggle />
-            </div>
+              </div>
           </SidebarMenuItem>
         </SidebarMenu>
       )
@@ -741,6 +738,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                     onClick={(e) => {
                       e.stopPropagation()
                       e.preventDefault()
+                      if (isMobile) setOpenMobile(false)
                       router.push(`/dashboard/tenancy/${selection.orgId}`)
                     }}
                     aria-label={`Editar organización ${organizationLabel}`}
@@ -767,6 +765,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                         className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer active:scale-95"
                         onClick={(e) => {
                           e.stopPropagation()
+                          if (isMobile) setOpenMobile(false)
                           router.push(`/dashboard/tenancy/companies/${company.id}/edit`)
                         }}
                         aria-label={`Configurar ${company.name}`}
@@ -782,7 +781,6 @@ export function TeamSwitcher(): React.ReactElement | null {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            <ModeToggle />
           </div>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -797,7 +795,6 @@ export function TeamSwitcher(): React.ReactElement | null {
             <SidebarMenuButton size="lg" className="flex-1 justify-between">
               <span className="text-sm font-medium">Cargando empresas...</span>
             </SidebarMenuButton>
-            <ModeToggle />
           </div>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -812,7 +809,6 @@ export function TeamSwitcher(): React.ReactElement | null {
             <SidebarMenuButton size="lg" className="flex-1 justify-between">
               <span className="text-sm font-medium">Sin organizaciones</span>
             </SidebarMenuButton>
-            <ModeToggle />
           </div>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -933,6 +929,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                         onClick={(e) => {
                           e.stopPropagation()
                           e.preventDefault()
+                          if (isMobile) setOpenMobile(false)
                           router.push(`/dashboard/tenancy/${organization.id}`)
                         }}
                         aria-label={`Editar organización ${organization.name}`}
@@ -956,6 +953,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                             className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer active:scale-95"
                             onClick={(e) => {
                               e.stopPropagation()
+                              if (isMobile) setOpenMobile(false)
                               router.push(`/dashboard/tenancy/companies/${company.id}/edit`)
                             }}
                             aria-label={`Configurar ${company.name}`}
@@ -990,7 +988,6 @@ export function TeamSwitcher(): React.ReactElement | null {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <ModeToggle />
           </div>
         </SidebarMenuItem>
       </SidebarMenu>

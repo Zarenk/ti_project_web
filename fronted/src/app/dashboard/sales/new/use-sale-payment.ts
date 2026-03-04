@@ -63,6 +63,18 @@ export function useSalePayment(cartTotal: number) {
     [],
   )
 
+  // Hydrate (for draft restoration)
+  const hydratePayment = useCallback(
+    (
+      selected: { paymentMethodId: number; amount: number; currency: string } | null,
+      splits: { paymentMethodId: number; amount: number; currency: string }[],
+    ) => {
+      setSelectedPayment(selected)
+      setSplitPayments(splits)
+    },
+    [],
+  )
+
   // Reset (for store change)
   const resetPayment = useCallback(() => {
     setSelectedPayment(null)
@@ -77,6 +89,7 @@ export function useSalePayment(cartTotal: number) {
     handleQuickPay,
     handleSplitPayClick,
     handleSplitPayConfirm,
+    hydratePayment,
     resetPayment,
   }
 }

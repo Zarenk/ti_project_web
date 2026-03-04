@@ -7108,5 +7108,1072 @@
       "permisos",
       "necesitas"
     ]
+  },
+  {
+    "sourceId": "products-create-new",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Como creo un producto nuevo paso a paso?",
+    "answer": "Para crear un producto nuevo:\n1. Ve a **Productos** en el menu lateral\n2. Haz clic en **Nuevo Producto** (boton verde arriba)\n3. Escribe el nombre del producto\n4. Selecciona una categoria y marca\n5. Ingresa el precio de compra y precio de venta\n6. Opcionalmente sube imagenes\n7. Ingresa el stock inicial si tienes unidades\n8. Haz clic en **Crear Producto**\n\nSi el producto ya existe, el sistema te ofrecera agregar stock al existente.",
+    "aliases": [
+      "crear producto",
+      "nuevo producto",
+      "agregar producto",
+      "registrar producto",
+      "como agrego un producto"
+    ],
+    "keywords": [
+      "crear",
+      "producto",
+      "nuevo",
+      "agregar",
+      "registrar",
+      "paso",
+      "nombre",
+      "categoria",
+      "marca",
+      "precio"
+    ]
+  },
+  {
+    "sourceId": "products-edit-price",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Como cambio el precio de un producto?",
+    "answer": "Para cambiar el precio:\n1. Ve a **Productos** y busca el producto\n2. Haz clic en **editar** (icono de lapiz)\n3. Modifica el **Precio de compra** y/o **Precio de venta**\n4. Haz clic en **Actualizar Producto**\n\nEl cambio aplica para proximas ventas. Las ventas anteriores mantienen el precio original.",
+    "aliases": [
+      "cambiar precio",
+      "editar precio",
+      "modificar precio",
+      "actualizar precio"
+    ],
+    "keywords": [
+      "cambiar",
+      "precio",
+      "editar",
+      "modificar",
+      "compra",
+      "venta"
+    ]
+  },
+  {
+    "sourceId": "products-upload-images",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Como subo imagenes a un producto?",
+    "answer": "Para subir imagenes:\n1. En el formulario de producto, busca la seccion **Imagenes**\n2. Haz clic en **Subir imagen** o arrastra archivos\n3. Puedes subir multiples imagenes (JPG, PNG, WebP)\n4. La primera imagen sera la principal\n5. Guarda el producto\n\nLas imagenes se optimizan automaticamente.",
+    "aliases": [
+      "subir imagen",
+      "agregar foto",
+      "imagen producto",
+      "foto producto",
+      "galeria"
+    ],
+    "keywords": [
+      "subir",
+      "imagen",
+      "foto",
+      "galeria",
+      "producto",
+      "jpg",
+      "png"
+    ]
+  },
+  {
+    "sourceId": "products-search-filter",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Como busco o filtro productos?",
+    "answer": "Para buscar productos:\n1. Ve a **Productos** en el menu lateral\n2. Usa la **barra de busqueda** para buscar por nombre\n3. Usa **filtros** para refinar por categoria, marca, estado, precio\n4. La busqueda es en tiempo real.",
+    "aliases": [
+      "buscar producto",
+      "filtrar productos",
+      "encontrar producto"
+    ],
+    "keywords": [
+      "buscar",
+      "filtrar",
+      "encontrar",
+      "producto",
+      "categoria",
+      "marca"
+    ]
+  },
+  {
+    "sourceId": "products-batch-create",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Como creo varios productos a la vez?",
+    "answer": "Para crear productos en lote:\n1. Ve a **Productos > Nuevo Producto**\n2. Llena datos del primer producto\n3. Haz clic en **Agregar otro producto** (boton verde)\n4. Repite para cada producto\n5. Haz clic en **Crear Productos (N)**\n\nTodos se crean simultaneamente.",
+    "aliases": [
+      "crear varios productos",
+      "productos en lote",
+      "batch",
+      "creacion masiva"
+    ],
+    "keywords": [
+      "varios",
+      "lote",
+      "batch",
+      "masiva",
+      "multiples",
+      "productos"
+    ]
+  },
+  {
+    "sourceId": "products-stock-initial",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Como ingreso stock inicial a un producto?",
+    "answer": "Al crear un producto:\n1. Busca el campo **Cantidad / Stock inicial**\n2. Ingresa la cantidad disponible\n3. Al guardar, selecciona **tienda** y **proveedor**\n4. Se crea automaticamente una entrada de inventario\n\nSi el producto ya existe, ve a **Ingresos > Nueva Entrada**.",
+    "aliases": [
+      "stock inicial",
+      "cantidad inicial",
+      "ingresar stock",
+      "agregar stock"
+    ],
+    "keywords": [
+      "stock",
+      "inicial",
+      "cantidad",
+      "ingresar",
+      "agregar",
+      "inventario"
+    ]
+  },
+  {
+    "sourceId": "products-duplicate-name",
+    "sourceType": "static",
+    "section": "products",
+    "question": "Que pasa si creo un producto con nombre duplicado?",
+    "answer": "Si escribes un nombre que ya existe:\n1. El sistema detecta el duplicado\n2. Muestra indicador rojo 'Ya existe'\n3. Te ofrece **Agregar stock** al existente\n4. Puedes modificar precio y cantidad sin crear uno nuevo.",
+    "aliases": [
+      "producto duplicado",
+      "nombre repetido",
+      "ya existe",
+      "producto existente"
+    ],
+    "keywords": [
+      "duplicado",
+      "repetido",
+      "existe",
+      "nombre",
+      "stock",
+      "agregar"
+    ]
+  },
+  {
+    "sourceId": "sales-create-step-by-step",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como registro una venta paso a paso?",
+    "answer": "Para registrar una venta:\n1. Ve a **Ventas** > **Nueva Venta**\n2. Selecciona **cliente** (opcional para boletas)\n3. Agrega productos buscandolos por nombre\n4. Ajusta cantidades y precios\n5. Selecciona **metodo de pago**\n6. Elige comprobante: **Factura** o **Boleta**\n7. Haz clic en **Realizar Venta**\n\nActualiza automaticamente inventario y caja.",
+    "aliases": [
+      "registrar venta",
+      "hacer venta",
+      "crear venta",
+      "nueva venta",
+      "como vendo"
+    ],
+    "keywords": [
+      "registrar",
+      "venta",
+      "crear",
+      "nueva",
+      "vender",
+      "cliente",
+      "producto",
+      "pago"
+    ]
+  },
+  {
+    "sourceId": "sales-apply-discount",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como aplico un descuento en una venta?",
+    "answer": "Para aplicar descuento:\n1. Agrega productos a la venta\n2. Modifica el precio directamente en cada linea\n3. O usa el campo de **descuento**\n4. El total se recalcula automaticamente.",
+    "aliases": [
+      "descuento venta",
+      "aplicar descuento",
+      "rebajar precio",
+      "dar descuento"
+    ],
+    "keywords": [
+      "descuento",
+      "rebajar",
+      "precio",
+      "venta",
+      "total"
+    ]
+  },
+  {
+    "sourceId": "sales-print-invoice",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como imprimo una factura o boleta?",
+    "answer": "Para imprimir comprobante:\n1. Despues de la venta, se genera automaticamente\n2. Haz clic en **PDF** o **Imprimir**\n3. Se abre vista previa del PDF\n4. Usa **Ctrl+P** para imprimir\n\nTambien reimprimir desde **Ventas** > icono PDF.",
+    "aliases": [
+      "imprimir factura",
+      "imprimir boleta",
+      "generar factura",
+      "pdf venta",
+      "comprobante"
+    ],
+    "keywords": [
+      "imprimir",
+      "factura",
+      "boleta",
+      "pdf",
+      "comprobante",
+      "venta"
+    ]
+  },
+  {
+    "sourceId": "sales-view-history",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como veo el historial de ventas?",
+    "answer": "Para ver historial:\n1. Ve a **Ventas** en el menu lateral\n2. Veras todas las ventas realizadas\n3. Filtra por fecha, cliente, metodo de pago, estado\n4. Haz clic en una venta para ver detalle\n\nPuedes exportar a Excel o PDF.",
+    "aliases": [
+      "historial ventas",
+      "ver ventas",
+      "lista ventas",
+      "ventas anteriores"
+    ],
+    "keywords": [
+      "historial",
+      "ventas",
+      "lista",
+      "ver",
+      "buscar",
+      "fecha"
+    ]
+  },
+  {
+    "sourceId": "sales-delete",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como elimino o anulo una venta?",
+    "answer": "Para eliminar una venta:\n1. Ve a **Ventas** > busca la venta\n2. Haz clic en **eliminar** (papelera)\n3. Confirma\n\n**Importante:** Ventas transmitidas a SUNAT (ACEPTADAS) requieren **Nota de Credito** para anularse.",
+    "aliases": [
+      "eliminar venta",
+      "anular venta",
+      "borrar venta",
+      "cancelar venta"
+    ],
+    "keywords": [
+      "eliminar",
+      "anular",
+      "borrar",
+      "cancelar",
+      "venta",
+      "sunat"
+    ]
+  },
+  {
+    "sourceId": "sales-payment-methods",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Que metodos de pago puedo usar?",
+    "answer": "Metodos disponibles:\n- **Efectivo**\n- **Tarjeta** (debito/credito)\n- **Transferencia** bancaria\n- **Yape/Plin** (pago movil)\n- **Mixto** (varios metodos)\n\nEl cambio se calcula automaticamente para efectivo.",
+    "aliases": [
+      "metodos de pago",
+      "formas de pago",
+      "pagar tarjeta",
+      "efectivo",
+      "yape"
+    ],
+    "keywords": [
+      "metodo",
+      "pago",
+      "efectivo",
+      "tarjeta",
+      "transferencia",
+      "yape",
+      "plin"
+    ]
+  },
+  {
+    "sourceId": "sales-factura-vs-boleta",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Diferencia entre factura y boleta?",
+    "answer": "**Factura:** Para empresas (RUC), da credito fiscal, serie F001.\n**Boleta:** Para personas (DNI), sin credito fiscal, serie B001.\nAmbos validos ante SUNAT.",
+    "aliases": [
+      "factura boleta",
+      "diferencia factura",
+      "cuando factura",
+      "tipo comprobante"
+    ],
+    "keywords": [
+      "factura",
+      "boleta",
+      "diferencia",
+      "ruc",
+      "dni",
+      "sunat"
+    ]
+  },
+  {
+    "sourceId": "sales-credit-note",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como creo una nota de credito?",
+    "answer": "Para nota de credito:\n1. Busca la venta ACEPTADA por SUNAT\n2. Haz clic en **Nota de Credito**\n3. Selecciona motivo\n4. Confirma\n\nSe transmite a SUNAT. Si acepta, la venta se anula y el stock se devuelve.",
+    "aliases": [
+      "nota de credito",
+      "anular factura",
+      "devolucion"
+    ],
+    "keywords": [
+      "nota",
+      "credito",
+      "anular",
+      "factura",
+      "sunat",
+      "devolucion"
+    ]
+  },
+  {
+    "sourceId": "sales-sunat-transmission",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como transmito ventas a SUNAT?",
+    "answer": "La transmision es automatica:\n1. Al crear venta con factura/boleta, se transmite sola\n2. Estado: PENDING > SENT > ACCEPTED/REJECTED\n3. Si falla, reintenta cada 30 min\n4. Ve estado en columna SUNAT.",
+    "aliases": [
+      "transmitir sunat",
+      "enviar sunat",
+      "estado sunat",
+      "facturacion electronica"
+    ],
+    "keywords": [
+      "sunat",
+      "transmitir",
+      "enviar",
+      "estado",
+      "facturacion"
+    ]
+  },
+  {
+    "sourceId": "inventory-low-stock-alerts",
+    "sourceType": "static",
+    "section": "inventory",
+    "question": "Como configuro alertas de stock bajo?",
+    "answer": "Para alertas:\n1. Ve a **Inventario** > **Alertas** o **Stock minimo**\n2. Define stock minimo por producto\n3. Cuando baje, veras alerta visual\n\nProductos con stock bajo en rojo/naranja.",
+    "aliases": [
+      "alerta stock bajo",
+      "stock minimo",
+      "aviso stock",
+      "agotados"
+    ],
+    "keywords": [
+      "alerta",
+      "stock",
+      "bajo",
+      "minimo",
+      "aviso",
+      "agotado"
+    ]
+  },
+  {
+    "sourceId": "inventory-history",
+    "sourceType": "static",
+    "section": "inventory",
+    "question": "Como veo historial de movimientos?",
+    "answer": "Para ver historial:\n1. Ve a **Inventario** > busca producto\n2. Haz clic para ver detalle\n3. En **Historial** veras entradas, salidas, transferencias con fecha y usuario.",
+    "aliases": [
+      "historial inventario",
+      "movimientos producto",
+      "kardex",
+      "trazabilidad"
+    ],
+    "keywords": [
+      "historial",
+      "movimientos",
+      "kardex",
+      "trazabilidad"
+    ]
+  },
+  {
+    "sourceId": "inventory-import-excel",
+    "sourceType": "static",
+    "section": "inventory",
+    "question": "Como importo productos desde Excel?",
+    "answer": "Para importar:\n1. Ve a **Inventario** > **Importar**\n2. Descarga la plantilla Excel\n3. Llena con productos\n4. Sube el archivo\n5. Los productos se crean automaticamente.",
+    "aliases": [
+      "importar excel",
+      "cargar productos",
+      "subir excel",
+      "carga masiva"
+    ],
+    "keywords": [
+      "importar",
+      "excel",
+      "cargar",
+      "subir",
+      "masiva"
+    ]
+  },
+  {
+    "sourceId": "entries-create-purchase",
+    "sourceType": "static",
+    "section": "entries",
+    "question": "Como registro una compra?",
+    "answer": "Para registrar compra:\n1. Ve a **Ingresos** > **Nueva Entrada**\n2. Selecciona **proveedor** y **tienda**\n3. Agrega productos y cantidades\n4. Ingresa precios de compra\n5. Haz clic en **Registrar Entrada**\n\nEl stock se actualiza automaticamente.",
+    "aliases": [
+      "registrar compra",
+      "nueva entrada",
+      "ingresar mercaderia",
+      "compra proveedor"
+    ],
+    "keywords": [
+      "registrar",
+      "compra",
+      "entrada",
+      "mercaderia",
+      "proveedor",
+      "stock"
+    ]
+  },
+  {
+    "sourceId": "entries-import-pdf",
+    "sourceType": "static",
+    "section": "entries",
+    "question": "Como importo datos desde factura PDF?",
+    "answer": "Para importar:\n1. En **Nueva Entrada** > **Importar PDF**\n2. Sube la factura del proveedor\n3. La IA extrae: proveedor, productos, precios, cantidades\n4. Revisa y confirma.",
+    "aliases": [
+      "importar pdf",
+      "factura pdf",
+      "subir factura",
+      "escanear factura"
+    ],
+    "keywords": [
+      "importar",
+      "pdf",
+      "factura",
+      "extraer",
+      "datos",
+      "proveedor"
+    ]
+  },
+  {
+    "sourceId": "entries-series",
+    "sourceType": "static",
+    "section": "entries",
+    "question": "Como registro numeros de serie?",
+    "answer": "Para registrar series:\n1. Al agregar producto, busca campo **Series**\n2. Ingresa cada numero\n3. El sistema valida duplicados\n4. Al vender, seleccionaras la serie.\n\nOpcional, para productos con trazabilidad.",
+    "aliases": [
+      "numeros de serie",
+      "series producto",
+      "serial number"
+    ],
+    "keywords": [
+      "serie",
+      "numero",
+      "serial",
+      "trazabilidad"
+    ]
+  },
+  {
+    "sourceId": "entries-guide-remision",
+    "sourceType": "static",
+    "section": "entries",
+    "question": "Como genero una guia de remision?",
+    "answer": "Para guia de remision:\n1. Ve a **Guias de Remision** > **Nueva Guia**\n2. Llena datos de transporte\n3. Agrega productos\n4. Se genera y transmite a SUNAT.\n\nObligatoria para transporte de mercaderia.",
+    "aliases": [
+      "guia remision",
+      "generar guia",
+      "guia transporte"
+    ],
+    "keywords": [
+      "guia",
+      "remision",
+      "transporte",
+      "sunat"
+    ]
+  },
+  {
+    "sourceId": "cashregister-movement",
+    "sourceType": "static",
+    "section": "cashregister",
+    "question": "Como registro movimiento manual de caja?",
+    "answer": "Para movimiento manual:\n1. En **Caja** (abierta) > **Nuevo Movimiento**\n2. Selecciona: **Ingreso** o **Egreso**\n3. Ingresa monto y descripcion\n4. Confirma.",
+    "aliases": [
+      "movimiento caja",
+      "ingreso caja",
+      "egreso caja",
+      "gasto caja"
+    ],
+    "keywords": [
+      "movimiento",
+      "caja",
+      "ingreso",
+      "egreso",
+      "gasto"
+    ]
+  },
+  {
+    "sourceId": "whatsapp-connect",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como conecto WhatsApp al sistema?",
+    "answer": "Para conectar WhatsApp:\n1. Ve a **WhatsApp** > **Conectar**\n2. Escanea el **codigo QR** con tu celular\n3. En WhatsApp: Configuracion > Dispositivos vinculados\n4. Escanea el QR.\n\nPodras enviar mensajes y ver historial.",
+    "aliases": [
+      "conectar whatsapp",
+      "vincular whatsapp",
+      "codigo qr"
+    ],
+    "keywords": [
+      "whatsapp",
+      "conectar",
+      "vincular",
+      "qr",
+      "codigo"
+    ]
+  },
+  {
+    "sourceId": "whatsapp-send",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como envio mensajes por WhatsApp?",
+    "answer": "Para enviar:\n1. Ve a **WhatsApp** (conectado)\n2. En **Enviar Mensaje**\n3. Ingresa numero (51999999999)\n4. Escribe mensaje > **Enviar**\n\nHay **Envio Masivo** para multiples numeros.",
+    "aliases": [
+      "enviar whatsapp",
+      "mensaje whatsapp",
+      "mandar whatsapp"
+    ],
+    "keywords": [
+      "enviar",
+      "mensaje",
+      "whatsapp",
+      "numero",
+      "masivo"
+    ]
+  },
+  {
+    "sourceId": "general-change-company",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como cambio de empresa?",
+    "answer": "Para cambiar empresa:\n1. En barra lateral, selector de **empresa** arriba\n2. Selecciona la empresa\n3. Los datos se actualizan.\n\nCada empresa es independiente.",
+    "aliases": [
+      "cambiar empresa",
+      "otra empresa",
+      "cambiar organizacion"
+    ],
+    "keywords": [
+      "cambiar",
+      "empresa",
+      "organizacion",
+      "seleccionar"
+    ]
+  },
+  {
+    "sourceId": "general-change-password",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como cambio mi contrasena?",
+    "answer": "Para cambiar:\n1. Ve a **perfil** (icono usuario arriba)\n2. Busca **Cambiar contrasena**\n3. Ingresa actual y nueva\n4. Confirma y guarda.",
+    "aliases": [
+      "cambiar contrasena",
+      "password",
+      "cambiar clave"
+    ],
+    "keywords": [
+      "cambiar",
+      "contrasena",
+      "password",
+      "clave"
+    ]
+  },
+  {
+    "sourceId": "general-users-permissions",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como creo usuario y asigno permisos?",
+    "answer": "Para crear usuario:\n1. **Usuarios** > **Nuevo Usuario**\n2. Ingresa nombre, email, contrasena\n3. Asigna **rol**: Admin, Empleado, Visor\n4. Configura **permisos por modulo**\n5. Guarda.",
+    "aliases": [
+      "crear usuario",
+      "asignar permisos",
+      "roles usuario",
+      "agregar empleado"
+    ],
+    "keywords": [
+      "crear",
+      "usuario",
+      "permisos",
+      "rol",
+      "empleado"
+    ]
+  },
+  {
+    "sourceId": "accounting-balance-check",
+    "sourceType": "static",
+    "section": "accounting",
+    "question": "Como veo el balance de comprobacion?",
+    "answer": "Para ver balance:\n1. **Contabilidad** > **Balance de Comprobacion**\n2. Elige periodo\n3. Muestra cuentas con saldo deudor y acreedor.\n\nPuedes exportar a Excel.",
+    "aliases": [
+      "balance comprobacion",
+      "balance general",
+      "ver balance"
+    ],
+    "keywords": [
+      "balance",
+      "comprobacion",
+      "deudor",
+      "acreedor"
+    ]
+  },
+  {
+    "sourceId": "accounting-ple-export",
+    "sourceType": "static",
+    "section": "accounting",
+    "question": "Como exporto libros PLE para SUNAT?",
+    "answer": "Para PLE:\n1. **Contabilidad** > **Exportar PLE**\n2. Selecciona periodo\n3. Selecciona libros: Diario, Mayor, Ventas, Compras\n4. **Generar** > descarga TXT.\n\nSubir al portal SUNAT.",
+    "aliases": [
+      "exportar ple",
+      "libros sunat",
+      "formato ple"
+    ],
+    "keywords": [
+      "exportar",
+      "ple",
+      "sunat",
+      "libro",
+      "diario"
+    ]
+  },
+  {
+    "sourceId": "accounting-auto-entries",
+    "sourceType": "static",
+    "section": "accounting",
+    "question": "Los asientos se crean automaticamente?",
+    "answer": "Si, para:\n- **Ventas:** asiento de ingreso\n- **Compras:** asiento de compra\n- **Notas de credito:** al anular\n\nUsan cuentas PCGE. Puedes crear manuales tambien.",
+    "aliases": [
+      "asientos automaticos",
+      "contabilidad automatica"
+    ],
+    "keywords": [
+      "asientos",
+      "automaticos",
+      "contabilidad",
+      "venta",
+      "compra"
+    ]
+  },
+  {
+    "sourceId": "quotes-convert-sale",
+    "sourceType": "static",
+    "section": "quotes",
+    "question": "Como convierto cotizacion en venta?",
+    "answer": "Para convertir:\n1. Abre la cotizacion aprobada\n2. **Convertir a Venta**\n3. Productos y precios se copian\n4. Completa la venta.\n\nLa cotizacion se marca 'Convertida'.",
+    "aliases": [
+      "cotizacion a venta",
+      "convertir cotizacion",
+      "aprobar cotizacion"
+    ],
+    "keywords": [
+      "convertir",
+      "cotizacion",
+      "venta",
+      "aprobar"
+    ]
+  },
+  {
+    "sourceId": "providers-create",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como creo un proveedor?",
+    "answer": "Para crear proveedor:\n1. Ve a **Proveedores** > **Nuevo Proveedor**\n2. Ingresa nombre o razon social\n3. Ingresa RUC o DNI\n4. Agrega datos de contacto (telefono, email)\n5. Guarda.\n\nAl registrar compras, seleccionaras este proveedor.",
+    "aliases": [
+      "crear proveedor",
+      "nuevo proveedor",
+      "agregar proveedor",
+      "registrar proveedor"
+    ],
+    "keywords": [
+      "crear",
+      "proveedor",
+      "nuevo",
+      "ruc",
+      "contacto"
+    ]
+  },
+  {
+    "sourceId": "clients-create",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como registro un cliente?",
+    "answer": "Para crear cliente:\n1. Ve a **Clientes** > **Nuevo Cliente**\n2. Ingresa nombre o razon social\n3. Tipo documento: **DNI** (boleta) o **RUC** (factura)\n4. Agrega email y telefono\n5. Guarda.\n\nPara boletas puedes usar 'Publico General' sin cliente.",
+    "aliases": [
+      "crear cliente",
+      "nuevo cliente",
+      "agregar cliente",
+      "registrar cliente"
+    ],
+    "keywords": [
+      "crear",
+      "cliente",
+      "nuevo",
+      "dni",
+      "ruc",
+      "registrar"
+    ]
+  },
+  {
+    "sourceId": "clients-search",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como busco un cliente por RUC o DNI?",
+    "answer": "Para buscar:\n1. Ve a **Clientes**\n2. En la barra de busqueda, escribe el **RUC** o **DNI**\n3. El sistema busca automaticamente.\n\nEn ventas, puedes buscar cliente directamente al crear la venta.",
+    "aliases": [
+      "buscar cliente",
+      "buscar ruc",
+      "buscar dni",
+      "encontrar cliente"
+    ],
+    "keywords": [
+      "buscar",
+      "cliente",
+      "ruc",
+      "dni",
+      "encontrar"
+    ]
+  },
+  {
+    "sourceId": "categories-use",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Para que sirven las categorias?",
+    "answer": "Las categorias sirven para:\n- **Organizar** productos por tipo\n- **Filtrar** en busquedas y reportes\n- **Agrupar** en el catalogo de ventas\n\nEjemplos: Bebidas, Limpieza, Alimentos, Electronicos.",
+    "aliases": [
+      "que son categorias",
+      "utilidad categorias",
+      "categorias productos"
+    ],
+    "keywords": [
+      "categorias",
+      "organizar",
+      "filtrar",
+      "agrupar"
+    ]
+  },
+  {
+    "sourceId": "brands-create",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como creo una marca?",
+    "answer": "Para crear marca:\n1. Ve a **Marcas** > **Nueva Marca** o escribe en el formulario de producto\n2. Ingresa nombre\n3. Opcionalmente sube un logo\n4. Guarda.\n\nAl crear productos, selecciona la marca del desplegable.",
+    "aliases": [
+      "crear marca",
+      "nueva marca",
+      "agregar marca"
+    ],
+    "keywords": [
+      "crear",
+      "marca",
+      "nueva",
+      "logo"
+    ]
+  },
+  {
+    "sourceId": "stores-multiple",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Puedo tener varias tiendas?",
+    "answer": "Si, puedes tener multiples tiendas/sucursales:\n- Cada tienda tiene su **stock independiente**\n- Puedes **transferir** productos entre tiendas\n- Ventas se asocian a una tienda\n- Inventario se filtra por tienda.",
+    "aliases": [
+      "varias tiendas",
+      "multiples sucursales",
+      "multi tienda"
+    ],
+    "keywords": [
+      "varias",
+      "tiendas",
+      "sucursales",
+      "multiples",
+      "transferir"
+    ]
+  },
+  {
+    "sourceId": "dashboard-overview",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Que muestra el dashboard?",
+    "answer": "El dashboard muestra:\n- **Ventas del dia/semana/mes** con grafico\n- **Productos mas vendidos** (top 10)\n- **Stock bajo** (alertas)\n- **Ingresos vs gastos**\n- **Caja actual**\n\nEs tu vista general del negocio.",
+    "aliases": [
+      "que hay en dashboard",
+      "panel principal",
+      "resumen",
+      "inicio"
+    ],
+    "keywords": [
+      "dashboard",
+      "resumen",
+      "ventas",
+      "stock",
+      "grafico"
+    ]
+  },
+  {
+    "sourceId": "dashboard-period",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Como cambio el periodo del dashboard?",
+    "answer": "Para cambiar periodo:\n1. En el dashboard, busca el **selector de fechas** arriba\n2. Elige: Hoy, Semana, Mes, Año\n3. O selecciona rango personalizado\n4. Los graficos se actualizan.",
+    "aliases": [
+      "cambiar periodo",
+      "filtrar dashboard",
+      "rango fechas"
+    ],
+    "keywords": [
+      "periodo",
+      "dashboard",
+      "fechas",
+      "filtrar",
+      "rango"
+    ]
+  },
+  {
+    "sourceId": "sales-multiple-payments",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como registro una venta con pago mixto?",
+    "answer": "Para pago mixto:\n1. Al crear la venta, en **Metodo de Pago**\n2. Selecciona **Mixto** o agrega multiples pagos\n3. Ingresa monto por cada metodo (ej: S/50 efectivo + S/30 Yape)\n4. El total debe coincidir con el monto de la venta.",
+    "aliases": [
+      "pago mixto",
+      "varios metodos",
+      "pago combinado",
+      "dividir pago"
+    ],
+    "keywords": [
+      "pago",
+      "mixto",
+      "varios",
+      "metodos",
+      "dividir",
+      "combinar"
+    ]
+  },
+  {
+    "sourceId": "sales-quick-sale",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Como hago una venta rapida?",
+    "answer": "Para venta rapida:\n1. Ve a **Ventas** > **Venta Rapida**\n2. Escanea codigo de barras o busca producto\n3. Los productos se agregan al carrito\n4. Selecciona pago\n5. **Vender**.\n\nIdeal para punto de venta.",
+    "aliases": [
+      "venta rapida",
+      "punto de venta",
+      "pos",
+      "venta directa"
+    ],
+    "keywords": [
+      "venta",
+      "rapida",
+      "pos",
+      "punto",
+      "venta",
+      "barras"
+    ]
+  },
+  {
+    "sourceId": "entries-view-list",
+    "sourceType": "static",
+    "section": "entries",
+    "question": "Como veo las entradas registradas?",
+    "answer": "Para ver entradas:\n1. Ve a **Ingresos** en el menu lateral\n2. Veras lista de todas las compras/entradas\n3. Filtra por fecha, proveedor, tienda\n4. Haz clic en una para ver detalle.",
+    "aliases": [
+      "ver entradas",
+      "lista entradas",
+      "historial compras",
+      "compras registradas"
+    ],
+    "keywords": [
+      "ver",
+      "entradas",
+      "lista",
+      "historial",
+      "compras"
+    ]
+  },
+  {
+    "sourceId": "entries-delete",
+    "sourceType": "static",
+    "section": "entries",
+    "question": "Puedo eliminar una entrada?",
+    "answer": "Si, para eliminar:\n1. Ve a **Ingresos** > busca la entrada\n2. Haz clic en **eliminar** (papelera)\n3. Confirma.\n\n**El stock se revierte automaticamente.** Series asociadas tambien se eliminan.",
+    "aliases": [
+      "eliminar entrada",
+      "borrar entrada",
+      "anular compra"
+    ],
+    "keywords": [
+      "eliminar",
+      "entrada",
+      "borrar",
+      "anular",
+      "compra",
+      "revertir"
+    ]
+  },
+  {
+    "sourceId": "inventory-serial-tracking",
+    "sourceType": "static",
+    "section": "inventory",
+    "question": "Como funciona el seguimiento por numeros de serie?",
+    "answer": "El seguimiento por series:\n1. Al crear entrada, ingresa series por producto\n2. Cada serie es unica en tu organizacion\n3. Al vender, selecciona que serie vendes\n4. En inventario, ves que series estan disponibles.\n\nIdeal para electronicos, equipos con garantia.",
+    "aliases": [
+      "seguimiento series",
+      "rastrear serie",
+      "numero serie inventario"
+    ],
+    "keywords": [
+      "serie",
+      "seguimiento",
+      "rastrear",
+      "numero",
+      "unica"
+    ]
+  },
+  {
+    "sourceId": "inventory-multiple-stores",
+    "sourceType": "static",
+    "section": "inventory",
+    "question": "Como veo stock por tienda?",
+    "answer": "Para ver stock por tienda:\n1. Ve a **Inventario**\n2. Aplica filtro de **Tienda** arriba\n3. Muestra solo productos de esa tienda\n4. O ve el detalle del producto para stock por tienda.",
+    "aliases": [
+      "stock por tienda",
+      "inventario tienda",
+      "stock sucursal"
+    ],
+    "keywords": [
+      "stock",
+      "tienda",
+      "sucursal",
+      "filtrar"
+    ]
+  },
+  {
+    "sourceId": "quotes-pdf",
+    "sourceType": "static",
+    "section": "quotes",
+    "question": "Como genero PDF de cotizacion?",
+    "answer": "Para generar PDF:\n1. Abre la cotizacion\n2. Haz clic en **PDF** o **Descargar**\n3. Se genera PDF profesional con tu logo\n4. Envia por email o imprime.\n\nIncluye productos, precios, condiciones.",
+    "aliases": [
+      "pdf cotizacion",
+      "imprimir cotizacion",
+      "descargar cotizacion"
+    ],
+    "keywords": [
+      "pdf",
+      "cotizacion",
+      "descargar",
+      "imprimir",
+      "generar"
+    ]
+  },
+  {
+    "sourceId": "quotes-status",
+    "sourceType": "static",
+    "section": "quotes",
+    "question": "Que estados tiene una cotizacion?",
+    "answer": "Estados de cotizacion:\n- **Borrador:** en edicion\n- **Enviada:** compartida al cliente\n- **Aprobada:** cliente acepto\n- **Rechazada:** cliente rechazo\n- **Convertida:** se convirtio en venta\n- **Vencida:** paso la fecha limite.",
+    "aliases": [
+      "estados cotizacion",
+      "flujo cotizacion",
+      "aprobar cotizacion"
+    ],
+    "keywords": [
+      "estados",
+      "cotizacion",
+      "borrador",
+      "aprobada",
+      "rechazada",
+      "vencida"
+    ]
+  },
+  {
+    "sourceId": "error-no-stock",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "Me dice que no hay stock suficiente",
+    "answer": "Este error aparece cuando intentas vender mas unidades de las disponibles.\n\n**Soluciones:**\n1. Verifica stock actual en **Inventario**\n2. Crea una nueva **Entrada** para reponer\n3. Si el stock esta en otra tienda, **transfiere** primero.",
+    "aliases": [
+      "sin stock",
+      "no hay stock",
+      "stock insuficiente",
+      "agotado",
+      "no alcanza"
+    ],
+    "keywords": [
+      "stock",
+      "insuficiente",
+      "agotado",
+      "error",
+      "reponer"
+    ]
+  },
+  {
+    "sourceId": "error-sunat-rejected",
+    "sourceType": "static",
+    "section": "sales",
+    "question": "SUNAT rechazo mi comprobante",
+    "answer": "Si SUNAT rechazo:\n1. Revisa el **motivo de rechazo** en la columna SUNAT\n2. Errores comunes: RUC invalido, datos incompletos\n3. Corrige los datos del cliente\n4. El sistema reintenta automaticamente cada 30 min.\n\nSi persiste, contacta soporte.",
+    "aliases": [
+      "sunat rechazo",
+      "factura rechazada",
+      "error sunat",
+      "comprobante rechazado"
+    ],
+    "keywords": [
+      "sunat",
+      "rechazo",
+      "error",
+      "comprobante",
+      "factura"
+    ]
+  },
+  {
+    "sourceId": "error-session-expired",
+    "sourceType": "static",
+    "section": "general",
+    "question": "Mi sesion se cerro",
+    "answer": "Si tu sesion expiro:\n1. Simplemente vuelve a **iniciar sesion**\n2. Las sesiones tienen duracion limitada por seguridad\n3. Tu trabajo guardado no se pierde.\n\nSi pasa muy seguido, verifica que no haya otro dispositivo cerrando tu sesion.",
+    "aliases": [
+      "sesion cerrada",
+      "sesion expiro",
+      "me saco",
+      "se cerro sesion",
+      "logout automatico"
+    ],
+    "keywords": [
+      "sesion",
+      "cerro",
+      "expiro",
+      "logout",
+      "iniciar"
+    ]
+  },
+  {
+    "sourceId": "error-page-not-loading",
+    "sourceType": "static",
+    "section": "general",
+    "question": "La pagina no carga",
+    "answer": "Si la pagina no carga:\n1. **Refresca** con F5 o Ctrl+R\n2. Verifica tu **conexion a internet**\n3. Limpia **cache** del navegador (Ctrl+Shift+Del)\n4. Prueba en **otro navegador**\n\nSi persiste, el servidor puede estar en mantenimiento.",
+    "aliases": [
+      "no carga",
+      "pagina blanca",
+      "error pagina",
+      "se traba",
+      "loading infinito"
+    ],
+    "keywords": [
+      "carga",
+      "pagina",
+      "error",
+      "blanca",
+      "navegador",
+      "internet"
+    ]
   }
 ]

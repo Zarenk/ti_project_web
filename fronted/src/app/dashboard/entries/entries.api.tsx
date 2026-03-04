@@ -40,7 +40,11 @@ export async function createEntry(data: {
     
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al crear la entrada');
+        console.error("[createEntry] Validation errors:", JSON.stringify(errorData, null, 2));
+        const msg = Array.isArray(errorData.message)
+          ? errorData.message.join(', ')
+          : errorData.message || 'Error al crear la entrada';
+        throw new Error(msg);
       }
     
       return await response.json();
@@ -129,7 +133,9 @@ export async function deleteEntries(ids: number[]) {
 }
 
 // PDF EXTRAER TEXTO
-export async function processPDF(file: File): Promise<string> {
+export type ProcessPDFResult = { text: string; ocr?: boolean }
+
+export async function processPDF(file: File): Promise<ProcessPDFResult> {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -145,8 +151,8 @@ export async function processPDF(file: File): Promise<string> {
 
     const data = await response.json();
     console.log('Texto extraído del PDF:', data.text);
-    return data.text; // Devuelve el texto extraído
-    
+    return { text: data.text, ocr: data.ocr ?? false };
+
   } catch (error) {
     console.error('Error al procesar el archivo PDF:', error);
     throw error;

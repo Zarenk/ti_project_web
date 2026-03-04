@@ -1,6 +1,6 @@
 export type LookupType = 'RUC' | 'DNI';
 
-export type LookupSource = 'apis.net.pe' | 'apisperu.com';
+export type LookupSource = 'apis.net.pe' | 'apisperu.com' | 'peruapi.com';
 
 export interface LookupResultDto {
   type: LookupType;

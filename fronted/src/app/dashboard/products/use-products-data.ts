@@ -7,6 +7,7 @@ import { getProducts } from "./products.api"
 import { fetchCompanyVerticalInfo } from "@/app/dashboard/tenancy/tenancy.api"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { useDebounce } from "@/app/hooks/useDebounce"
+import { normalizeSearch } from "@/lib/utils"
 import type { Products } from "./columns"
 
 type MigrationFilter = "all" | "legacy" | "migrated"
@@ -70,14 +71,14 @@ export function useProductsData() {
   }, [rawProducts])
 
   const filteredProducts = useMemo(() => {
-    const query = debouncedSearchTerm.trim().toLowerCase()
+    const query = normalizeSearch(debouncedSearchTerm.trim())
     return rawProducts.filter((product) => {
       const matchCategory = categoryFilter === "all" || product.category_name === categoryFilter
       if (!matchCategory) return false
       if (!query) return true
       return (
-        product.name?.toLowerCase().includes(query) ||
-        product.description?.toLowerCase().includes(query)
+        normalizeSearch(product.name ?? "").includes(query) ||
+        normalizeSearch(product.description ?? "").includes(query)
       )
     })
   }, [rawProducts, debouncedSearchTerm, categoryFilter])

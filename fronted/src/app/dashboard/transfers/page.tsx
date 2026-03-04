@@ -1322,6 +1322,7 @@ export default function TransfersPage() {
 
   useEffect(() => {
     if (selection?.orgId) {
+      setTransfersPage(1);
       loadGuides();
       loadTransfers();
     }
