@@ -8,6 +8,7 @@ import {
   Image,
 } from '@react-pdf/renderer';
 import { BACKEND_URL } from '@/lib/utils';
+import { resolveLogoSrc, CompanyLogo } from './pdf-logo-helper';
 
 const BACKEND_BASE_URL = BACKEND_URL;
 
@@ -138,16 +139,7 @@ const s = StyleSheet.create({
   },
 });
 
-function resolveLogoSrc(raw?: string | null): string {
-  const fallback = '/logo_ti.png';
-  if (!raw) return fallback;
-  const trimmed = raw.trim();
-  if (!trimmed) return fallback;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  const normalized = trimmed.replace(/^\/+/, '');
-  if (BACKEND_BASE_URL) return `${BACKEND_BASE_URL}/${normalized}`;
-  return `/${normalized}`;
-}
+// resolveLogoSrc imported from pdf-logo-helper
 
 export function TicketInvoiceDocument({
   data,
@@ -181,7 +173,7 @@ export function TicketInvoiceDocument({
       <Page size={[TICKET_WIDTH, TICKET_HEIGHT]} style={s.page}>
         {/* ── Header: Logo + Empresa ── */}
         <View style={s.header}>
-          <Image src={logoSrc} style={s.logo} />
+          <CompanyLogo src={logoSrc} size={40} />
           <Text style={s.companyName}>{emitterName}</Text>
           <Text style={s.companyInfo}>RUC: {emitterRuc}</Text>
           {emitterAddress ? <Text style={s.companyInfo}>{emitterAddress}</Text> : null}

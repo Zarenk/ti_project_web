@@ -3,7 +3,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
@@ -77,7 +77,7 @@ export class DecolectaService {
     params: Record<string, string | number>,
   ): Promise<T> {
     if (!this.token) {
-      throw new UnauthorizedException(
+      throw new ServiceUnavailableException(
         'Configura DECOLECTA_TOKEN para habilitar las consultas.',
       );
     }
@@ -105,7 +105,7 @@ export class DecolectaService {
       }
 
       if (status === 401) {
-        throw new UnauthorizedException(
+        throw new ServiceUnavailableException(
           'El token de Decolecta es inválido o ha expirado.',
         );
       }

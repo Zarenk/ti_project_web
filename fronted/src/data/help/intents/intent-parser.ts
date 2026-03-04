@@ -7,7 +7,7 @@
 import type { ParsedIntent, ParsedEntity, OperationalIntentPattern } from "./intent-types"
 import { extractEntities } from "./entity-extractor"
 
-const CONFIDENCE_THRESHOLD = 0.85
+const CONFIDENCE_THRESHOLD = 0.80
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CATÁLOGO DE INTENTS OPERACIONALES

@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { AlertTriangle, Clock, Info } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock, Info, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
+import { bulkMarkProductsMigrated } from "@/app/dashboard/products/products.api"
 import type { SubscriptionSummary } from "@/types/subscription"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -182,6 +184,10 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
 
   const migration = tenantFeatures?.migration
   const pendingMigrations = migration?.legacy ?? 0
+  const currentVertical = tenantFeatures?.verticalInfo?.businessVertical ?? "GENERAL"
+  const isComplexVertical = currentVertical === "RETAIL" || currentVertical === "RESTAURANTS"
+  const [bulkMigrating, setBulkMigrating] = useState(false)
+
   const toggleMigrationBanner = (nextState: boolean) => {
     setMigrationCollapsed(nextState)
     if (!migrationBannerKey || typeof window === "undefined") {
@@ -197,52 +203,102 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
       /* ignore */
     }
   }
+
+  const handleBulkMigrate = async () => {
+    setBulkMigrating(true)
+    try {
+      const result = await bulkMarkProductsMigrated()
+      toast.success(`${result.migrated} productos actualizados correctamente.`)
+      tenantFeatures?.refresh?.()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al migrar productos")
+    } finally {
+      setBulkMigrating(false)
+    }
+  }
+
   const migrationBanner = pendingMigrations > 0 ? (
-    migrationCollapsed ? (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50 dark:hover:bg-amber-900/40"
-            onClick={() => toggleMigrationBanner(false)}
-            type="button"
-          >
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-50">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-            <span className="text-xs font-semibold">Migración pendiente</span>
-            <span className="text-xs font-medium">
-              {pendingMigrations} pendiente{pendingMigrations === 1 ? "" : "s"}
-            </span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Haz clic para expandir</TooltipContent>
-      </Tooltip>
-    ) : (
-      <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="rounded-full bg-amber-100 p-2 text-amber-700 dark:bg-amber-900/40 dark:text-amber-50">
-              <AlertTriangle className="h-5 w-5" />
+    isComplexVertical ? (
+      // RETAIL / RESTAURANTS: show full warning — migration requires real work
+      migrationCollapsed ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="mt-2 flex w-fit cursor-pointer items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 shadow-sm transition hover:bg-amber-100 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50 dark:hover:bg-amber-900/40"
+              onClick={() => toggleMigrationBanner(false)}
+              type="button"
+            >
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-50">
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <span className="text-xs font-semibold">Migración pendiente</span>
+              <span className="text-xs font-medium">
+                {pendingMigrations} pendiente{pendingMigrations === 1 ? "" : "s"}
+              </span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Haz clic para expandir</TooltipContent>
+        </Tooltip>
+      ) : (
+        <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-amber-100 p-2 text-amber-700 dark:bg-amber-900/40 dark:text-amber-50">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold">
+                  Hay {pendingMigrations} producto{pendingMigrations === 1 ? "" : "s"} sin migrar
+                </p>
+                <p className="text-sm opacity-80">
+                  Completa el asistente para aplicar la validacion estricta del vertical.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="font-semibold">
-                Hay {pendingMigrations} producto{pendingMigrations === 1 ? "" : "s"} sin migrar
-              </p>
-              <p className="text-sm opacity-80">
-                Completa el asistente para aplicar la validacion estricta del vertical.
-              </p>
+            <div className="flex flex-wrap gap-3">
+              <Button size="sm" asChild>
+                <Link href={MIGRATION_ASSISTANT_PATH}>Ir al asistente</Link>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => toggleMigrationBanner(true)}>
+                Ocultar
+              </Button>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button size="sm" asChild>
-              <Link href={MIGRATION_ASSISTANT_PATH}>Ir al asistente</Link>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => toggleMigrationBanner(true)}>
-              Ocultar
-            </Button>
           </div>
         </div>
-      </div>
+      )
+    ) : (
+      // Simple verticals: subtle info banner with one-click resolve
+      migrationCollapsed ? null : (
+        <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <Info className="h-4 w-4 flex-shrink-0 text-slate-400" />
+              <span>
+                {pendingMigrations} producto{pendingMigrations === 1 ? "" : "s"} por sincronizar
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="cursor-pointer"
+                disabled={bulkMigrating}
+                onClick={handleBulkMigrate}
+              >
+                {bulkMigrating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                {bulkMigrating ? "Sincronizando..." : "Resolver"}
+              </Button>
+              <Button variant="ghost" size="sm" className="cursor-pointer" onClick={() => toggleMigrationBanner(true)}>
+                Ocultar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
     )
   ) : null
 

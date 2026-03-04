@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
-import { AlertTriangle, Check } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, Eraser, Save } from 'lucide-react'
 import { resolveImageUrl } from '@/lib/images'
 import {
   Tooltip,
@@ -688,10 +688,11 @@ export function ProviderForm({provider}: {provider: any}) {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-col-reverse gap-2 lg:flex-row lg:items-center lg:justify-end">
+        {/* ── Desktop buttons (hidden on mobile) ── */}
+        <div className="mt-4 hidden gap-2 lg:flex lg:items-center lg:justify-end">
           <Button
             variant="outline"
-            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
             type="button"
             onClick={() => router.back()}
           >
@@ -699,7 +700,7 @@ export function ProviderForm({provider}: {provider: any}) {
           </Button>
           <Button
             variant="outline"
-            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
             type="button"
             onClick={() => {
               form.reset({
@@ -723,17 +724,72 @@ export function ProviderForm({provider}: {provider: any}) {
           </Button>
           <Button
             asChild
-            className="w-full bg-emerald-600 text-white hover:bg-emerald-700 lg:w-auto"
+            className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto"
           >
             <Link href="/dashboard/providers/excel-upload">
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               Subir proveedores desde Excel
             </Link>
           </Button>
-          <Button className='w-full cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]'>
+          <Button className='cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]'>
             {params.id ? 'Actualizar Proveedor' : 'Crear Proveedor'}
           </Button>
         </div>
+
+        {/* ── Mobile sticky bottom bar ── */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1.5 border-t bg-white/90 px-3 py-2.5 shadow-[0_-2px_8px_rgba(0,0,0,0.08)] backdrop-blur dark:bg-background/90 dark:shadow-[0_-2px_8px_rgba(0,0,0,0.3)] lg:hidden">
+          <Button
+            className="flex-1 cursor-pointer gap-1 text-xs bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+          >
+            <Save className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{params.id ? 'Actualizar' : 'Crear'}</span>
+          </Button>
+          <Button
+            asChild
+            className="flex-1 cursor-pointer gap-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+          >
+            <Link href="/dashboard/providers/excel-upload">
+              <FileSpreadsheet className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">Excel</span>
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 cursor-pointer gap-1 text-xs border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+            type="button"
+            onClick={() => {
+              form.reset({
+                name: "",
+                document: "Otro Documento",
+                documentNumber: "",
+                description: "",
+                phone: "",
+                adress: "",
+                email: "@",
+                website: "",
+                image: "",
+                status: "Activo",
+              })
+              setNameError(null)
+              setNameValidation({})
+              setDocumentValidation({})
+            }}
+          >
+            <Eraser className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">Limpiar</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 cursor-pointer gap-1 text-xs border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+            type="button"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">Volver</span>
+          </Button>
+        </div>
+        {/* Spacer to prevent content from hiding behind fixed mobile bar */}
+        <div className="h-16 lg:hidden" />
       </form>
     </div>
   )

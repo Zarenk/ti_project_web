@@ -175,6 +175,19 @@ export async function handleFormSubmission({
       0,
     );
 
+    // Parse fecha_emision_comprobante (can be DD/MM/YYYY, YYYY-MM-DD, or ISO)
+    const parseFechaEmision = (raw: string): Date => {
+      if (!raw) return new Date();
+      // Try DD/MM/YYYY or DD-MM-YYYY
+      const ddmmyyyy = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (ddmmyyyy) {
+        return new Date(Number(ddmmyyyy[3]), Number(ddmmyyyy[2]) - 1, Number(ddmmyyyy[1]));
+      }
+      // Fallback: let Date parse it (works for YYYY-MM-DD and ISO)
+      const parsed = new Date(raw);
+      return isNaN(parsed.getTime()) ? new Date() : parsed;
+    };
+
     const payload = {
       referenceId,
       storeId,
@@ -194,7 +207,7 @@ export async function handleFormSubmission({
             tipoComprobante: data.comprobante,
             tipoMoneda: data.tipo_moneda,
             total: totalFromInput ?? fallbackDetailsTotal,
-            fechaEmision: new Date(data.fecha_emision_comprobante),
+            fechaEmision: parseFechaEmision(data.fecha_emision_comprobante),
           }
         : undefined,
 
@@ -219,6 +232,7 @@ export async function handleFormSubmission({
       })(),
     };
 
+    console.log("[handleFormSubmission] payload to send:", JSON.stringify(payload, null, 2));
     const createdEntry = await createEntry(payload);
     if (!createdEntry?.id) throw new Error("No se pudo obtener el ID de la entrada creada.");
 

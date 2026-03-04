@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
-import { ChevronDown, Eye, FileSpreadsheet, FileText } from 'lucide-react'
+import { ChevronDown, Eye, FileSpreadsheet, FileText, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,7 @@ interface UploadSectionProps {
   onCurrencyChange: (value: 'USD' | 'PEN') => void
   showInvoiceFields: boolean
   showGuideFields: boolean
+  isPdfProcessing?: boolean
 }
 
 export function UploadSection({
@@ -37,6 +38,7 @@ export function UploadSection({
   onCurrencyChange,
   showInvoiceFields,
   showGuideFields,
+  isPdfProcessing = false,
 }: UploadSectionProps) {
   const router = useRouter()
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -105,12 +107,22 @@ export function UploadSection({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    className="sm:w-auto ml-0 cursor-pointer bg-blue-700 text-white text-xs transition-colors hover:bg-blue-800"
+                    className="sm:w-auto ml-0 cursor-pointer bg-blue-700 text-white text-xs transition-colors hover:bg-blue-800 disabled:opacity-50"
                     type="button"
                     onClick={() => document.getElementById('pdf-upload')?.click()}
+                    disabled={isPdfProcessing}
                   >
-                    <span className="hidden sm:block">Subir Factura PDF</span>
-                    <FileText className="w-2 h-2" />
+                    {isPdfProcessing ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span className="hidden sm:block">Procesando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="hidden sm:block">Subir Factura PDF</span>
+                        <FileText className="w-2 h-2" />
+                      </>
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Completa datos automáticamente desde la factura.</TooltipContent>
@@ -187,6 +199,20 @@ export function UploadSection({
               onChange={handlePDFGuiaUpload}
             />
           </div>
+
+          {isPdfProcessing && (
+            <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400 flex-shrink-0" />
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  Procesando PDF con OCR...
+                </p>
+                <p className="text-xs text-blue-600/80 dark:text-blue-300/70">
+                  Reconocimiento óptico en progreso, esto puede tomar unos segundos.
+                </p>
+              </div>
+            </div>
+          )}
 
           {showInvoiceFields && (
             <>

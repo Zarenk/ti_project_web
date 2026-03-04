@@ -31,7 +31,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import { cn } from "@/lib/utils"
+import { cn, normalizeSearch } from "@/lib/utils"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
@@ -178,12 +178,12 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
       )
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
+      const q = normalizeSearch(searchQuery.trim())
       result = result.filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.category_name || "").toLowerCase().includes(q) ||
-          (typeof p.brand === "string" && p.brand.toLowerCase().includes(q)),
+          normalizeSearch(p.name).includes(q) ||
+          normalizeSearch(p.category_name || "").includes(q) ||
+          (typeof p.brand === "string" && normalizeSearch(p.brand).includes(q)),
       )
     }
     return result

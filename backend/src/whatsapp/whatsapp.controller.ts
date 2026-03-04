@@ -9,7 +9,11 @@ import {
   UseGuards,
   Request,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { WhatsAppService } from './whatsapp.service';
 import { AutomationService } from './automation/automation.service';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
@@ -102,6 +106,15 @@ export class WhatsAppController {
     };
   }
 
+  @Get('health')
+  getHealth() {
+    return {
+      success: true,
+      health: this.whatsappService.getConnectionHealth(),
+      rateLimit: this.whatsappService.getRateLimitStats(),
+    };
+  }
+
   @Get('qr')
   async getQRCode(@Request() req: any) {
     const { organizationId, companyId } = req.tenantContext;
@@ -113,6 +126,126 @@ export class WhatsAppController {
       success: true,
       qrCode: session?.qrCode || null,
       status: session?.status || 'DISCONNECTED',
+    };
+  }
+
+  // ============================================================================
+  // CONVERSATIONS
+  // ============================================================================
+
+  @Get('conversations')
+  async getConversations(
+    @Request() req: any,
+    @Query('search') search?: string,
+  ) {
+    const { organizationId, companyId } = req.tenantContext;
+    const conversations = await this.whatsappService.getConversations(
+      organizationId,
+      companyId,
+      search,
+    );
+
+    return {
+      success: true,
+      conversations,
+      count: conversations.length,
+    };
+  }
+
+  @Get('conversations/:remoteJid/messages')
+  async getConversationMessages(
+    @Request() req: any,
+    @Param('remoteJid') remoteJid: string,
+    @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    const { organizationId, companyId } = req.tenantContext;
+    const result = await this.whatsappService.getConversationMessages(
+      organizationId,
+      companyId,
+      remoteJid,
+      cursor,
+      limit || 50,
+    );
+
+    return {
+      success: true,
+      ...result,
+    };
+  }
+
+  @Post('conversations/:remoteJid/read')
+  async markConversationRead(
+    @Request() req: any,
+    @Param('remoteJid') remoteJid: string,
+  ) {
+    const { organizationId, companyId } = req.tenantContext;
+    const result = await this.whatsappService.markConversationRead(
+      organizationId,
+      companyId,
+      remoteJid,
+    );
+
+    return {
+      success: true,
+      ...result,
+    };
+  }
+
+  @Get('conversations/:remoteJid/info')
+  async getContactInfo(
+    @Request() req: any,
+    @Param('remoteJid') remoteJid: string,
+  ) {
+    const { organizationId, companyId } = req.tenantContext;
+    const info = await this.whatsappService.getContactInfo(
+      organizationId,
+      companyId,
+      remoteJid,
+    );
+
+    return {
+      success: true,
+      ...info,
+    };
+  }
+
+  @Post('send-image')
+  @UseInterceptors(FileInterceptor('image', {
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (_req, file, cb) => {
+      if (!file.mimetype.startsWith('image/')) {
+        cb(new BadRequestException('Solo se permiten imágenes'), false);
+        return;
+      }
+      cb(null, true);
+    },
+  }))
+  async sendImage(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { to: string; caption?: string; clientId?: string },
+  ) {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó imagen');
+    }
+
+    const { organizationId, companyId } = req.tenantContext;
+    const result = await this.whatsappService.sendImage(
+      organizationId,
+      companyId,
+      {
+        to: body.to,
+        image: file.buffer,
+        caption: body.caption,
+        mimetype: file.mimetype,
+        clientId: body.clientId ? parseInt(body.clientId, 10) : undefined,
+      },
+    );
+
+    return {
+      success: true,
+      ...result,
     };
   }
 

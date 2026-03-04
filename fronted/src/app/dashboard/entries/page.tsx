@@ -32,10 +32,11 @@ export default function Page() {
         description: entry.description || "Sin descripcion",
         tipoMoneda: entry.tipoMoneda || "Sin moneda",
         details: entry.details.map((detail: any) => ({
-          product_name: detail.product?.name || "Sin nombre",
+          product_name: detail.product_name || detail.product?.name || "Sin nombre",
+          category_name: detail.product?.category?.name || null,
           quantity: detail.quantity || 0,
           price: detail.price || 0,
-          series: detail.series || "Sin serie",
+          series: Array.isArray(detail.series) ? detail.series : [],
         })),
       })),
     [entryes],

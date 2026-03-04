@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, FormEvent, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Info } from 'lucide-react';
+import { CheckCircle2, Info, Save, XCircle, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,7 +15,7 @@ import {
   deleteBrand,
   convertBrandPngToSvg,
 } from './brands.api';
-import { BACKEND_URL } from '@/lib/utils';
+import { BACKEND_URL, normalizeSearch } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
@@ -84,6 +85,7 @@ interface Brand {
 }
 
 export default function BrandsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortByNewest, setSortByNewest] = useState(false);
@@ -152,12 +154,12 @@ export default function BrandsPage() {
 
   // ── Client-side filtering & pagination (derived) ──────────
   const { brands, total } = useMemo(() => {
-    const normalizedSearch = debouncedSearch.toLowerCase();
+    const normalizedQuery = normalizeSearch(debouncedSearch);
     let filtered = [...allBrands];
 
-    if (normalizedSearch) {
+    if (normalizedQuery) {
       filtered = filtered.filter((brand) =>
-        brand.name.toLowerCase().includes(normalizedSearch),
+        normalizeSearch(brand.name).includes(normalizedQuery),
       );
     }
 
@@ -402,12 +404,12 @@ export default function BrandsPage() {
           </Card>
         </div>
 
-        <Card className="mb-8 border-muted/60 bg-card/70 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">{editing ? 'Editar marca' : 'Agregar nueva marca'}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate>
+          <Card className="mb-2 sm:mb-8 border-muted/60 bg-card/70 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-semibold">{editing ? 'Editar marca' : 'Agregar nueva marca'}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="name">
                   Nombre
@@ -493,19 +495,34 @@ export default function BrandsPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                {editing && (
-                  <Button type="button" variant="secondary" onClick={() => setEditing(null)} className="cursor-pointer">
-                    Cancelar
-                  </Button>
-                  )}
-                <Button type="submit" className="sm:min-w-[8rem] cursor-pointer">
-                  {editing ? 'Actualizar' : 'Guardar'}
+            </CardContent>
+          </Card>
+
+          {/* ── Sticky footer: botones de acción ── */}
+          <div className="sticky bottom-0 z-10 rounded-t-lg border-t bg-white/90 px-2 py-2 backdrop-blur sm:relative sm:border-t-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none sm:mb-8 dark:bg-background/90 sm:dark:bg-transparent">
+            <div className="flex flex-row gap-1.5 sm:gap-2 sm:justify-end">
+              <Button type="submit" className="flex-1 sm:flex-none gap-1 sm:gap-1.5 text-xs sm:text-sm cursor-pointer">
+                <Save className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden min-[480px]:inline">{editing ? 'Actualizar' : 'Guardar'}</span>
+              </Button>
+              {editing && (
+                <Button type="button" variant="secondary" onClick={() => setEditing(null)} className="flex-1 sm:flex-none gap-1 sm:gap-1.5 text-xs sm:text-sm cursor-pointer">
+                  <XCircle className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden min-[480px]:inline">Cancelar</span>
                 </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 sm:flex-none gap-1 sm:gap-1.5 text-xs sm:text-sm cursor-pointer"
+                onClick={() => router.back()}
+              >
+                <ArrowLeft className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden min-[480px]:inline">Volver</span>
+              </Button>
+            </div>
+          </div>
+        </form>
 
         <div className="space-y-4">
           <div className="space-y-3 md:hidden">

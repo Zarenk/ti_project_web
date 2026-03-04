@@ -34,6 +34,16 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -46,7 +56,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import { cn } from "@/lib/utils"
+import { cn, normalizeSearch } from "@/lib/utils"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
@@ -79,6 +89,7 @@ import { uploadPdfToServer } from "@/lib/utils"
 import { getCompanyDetail, type CompanyDetail } from "../../tenancy/tenancy.api"
 import { pdf } from "@react-pdf/renderer"
 import QRCode from "qrcode"
+import { isDraftExpired } from "@/lib/draft-utils"
 import { useSaleCart } from "./use-sale-cart"
 import { useSalePayment } from "./use-sale-payment"
 
@@ -103,6 +114,26 @@ const DEFAULT_PAYMENT_METHODS: PaymentMethodOption[] = [
   { id: -5, name: "PLIN" },
   { id: -6, name: "OTRO MEDIO DE PAGO" },
 ]
+
+type QuickSaleDraftCartItem = {
+  productId: number
+  quantity: number
+  unitPrice: number
+  product: SaleProductCardItem
+}
+
+type QuickSaleDraft = {
+  version: 1
+  savedAt: number
+  storeId: number | null
+  clientId: number | null | undefined
+  saleDateISO: string
+  tipoComprobante: string
+  cartItems: QuickSaleDraftCartItem[]
+  serials: { productId: number; serialNumbers: string[] }[]
+  selectedPayment: { paymentMethodId: number; amount: number; currency: string } | null
+  splitPayments: { paymentMethodId: number; amount: number; currency: string }[]
+}
 
 type QuickSaleViewProps = {
   categories: { id: number; name: string }[]
@@ -200,7 +231,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
     handleSerialClick, handleSerialSave,
     serialDialogProduct, serialDialogAssigned,
     serialDialogAvailable, serialDialogOtherSerials,
-    resetCart,
+    hydrateCart, resetCart,
   } = useSaleCart(storeId, serialsEnabled)
 
   // --- Payment (hook) ---
@@ -208,10 +239,29 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
     selectedPayment, splitPayments,
     splitDialogOpen, setSplitDialogOpen,
     handleQuickPay, handleSplitPayClick, handleSplitPayConfirm,
-    resetPayment,
+    hydratePayment, resetPayment,
   } = useSalePayment(cartTotal)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // ──────────────────────────────────────────────
+  // Draft persistence
+  // ──────────────────────────────────────────────
+  const [userId, setUserId] = useState<number | null>(null)
+  useEffect(() => {
+    getUserIdFromToken().then((id) => setUserId(id))
+  }, [])
+
+  const quickDraftKey = useMemo(() => {
+    if (!userId || !selection.orgId) return null
+    const companyKey = selection.companyId ?? 0
+    return `sales-quick-draft:v1:${userId}:${selection.orgId}:${companyKey}`
+  }, [userId, selection.orgId, selection.companyId])
+
+  const [draftPromptOpen, setDraftPromptOpen] = useState(false)
+  const [pendingDraft, setPendingDraft] = useState<QuickSaleDraft | null>(null)
+  const draftSaveTimerRef = useRef<number | null>(null)
+  const draftAppliedRef = useRef(false)
 
   // --- Comprobante ---
   const [tipoComprobante, setTipoComprobante] = useState("SIN COMPROBANTE")
@@ -236,6 +286,160 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
       setTipoComprobante("BOLETA")
     }
   }, [clientId, clientDocType])
+
+  // ──────────────────────────────────────────────
+  // Draft: build snapshot
+  // ──────────────────────────────────────────────
+  const buildDraftSnapshot = useCallback((): QuickSaleDraft | null => {
+    if (!quickDraftKey || typeof window === "undefined") return null
+    const items: QuickSaleDraftCartItem[] = []
+    cartMap.forEach((item, productId) => {
+      items.push({
+        productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        product: item.product,
+      })
+    })
+    const serials: { productId: number; serialNumbers: string[] }[] = []
+    serialsMap.forEach((nums, productId) => {
+      if (nums.length > 0) serials.push({ productId, serialNumbers: nums })
+    })
+    const draft: QuickSaleDraft = {
+      version: 1,
+      savedAt: Date.now(),
+      storeId,
+      clientId,
+      saleDateISO: saleDate.toISOString(),
+      tipoComprobante,
+      cartItems: items,
+      serials,
+      selectedPayment,
+      splitPayments,
+    }
+    // Only save meaningful drafts (has cart items OR payment OR client)
+    if (items.length === 0 && !selectedPayment && splitPayments.length === 0 && clientId === undefined) {
+      return null
+    }
+    return draft
+  }, [quickDraftKey, cartMap, serialsMap, storeId, clientId, saleDate, tipoComprobante, selectedPayment, splitPayments])
+
+  const persistDraft = useCallback(
+    (draft: QuickSaleDraft | null) => {
+      if (!quickDraftKey || typeof window === "undefined") return
+      try {
+        if (!draft) {
+          window.localStorage.removeItem(quickDraftKey)
+          return
+        }
+        window.localStorage.setItem(quickDraftKey, JSON.stringify(draft))
+      } catch {
+        // silently ignore — localStorage may be full or blocked
+      }
+    },
+    [quickDraftKey],
+  )
+
+  const scheduleDraftSave = useCallback(() => {
+    if (!quickDraftKey || typeof window === "undefined") return
+    if (draftSaveTimerRef.current) {
+      window.clearTimeout(draftSaveTimerRef.current)
+    }
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      persistDraft(buildDraftSnapshot())
+    }, 400)
+  }, [quickDraftKey, buildDraftSnapshot, persistDraft])
+
+  // ── Draft: auto-save on state changes ─────────────
+  useEffect(() => {
+    if (!quickDraftKey) return
+    scheduleDraftSave()
+  }, [
+    quickDraftKey,
+    cartMap, serialsMap,
+    storeId, clientId, saleDate,
+    tipoComprobante,
+    selectedPayment, splitPayments,
+    scheduleDraftSave,
+  ])
+
+  // ── Draft: save on page unload ────────────────────
+  useEffect(() => {
+    if (!quickDraftKey || typeof window === "undefined") return
+    const handleBeforeUnload = () => {
+      persistDraft(buildDraftSnapshot())
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [quickDraftKey, buildDraftSnapshot, persistDraft])
+
+  // ── Draft: restore on mount ───────────────────────
+  useEffect(() => {
+    if (!quickDraftKey || typeof window === "undefined") return
+    if (draftAppliedRef.current) return
+    try {
+      const raw = window.localStorage.getItem(quickDraftKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as QuickSaleDraft
+      if (!parsed || parsed.version !== 1 || isDraftExpired(parsed.savedAt)) {
+        window.localStorage.removeItem(quickDraftKey)
+        return
+      }
+      // Check if draft has meaningful data
+      if (parsed.cartItems.length === 0 && !parsed.selectedPayment && parsed.splitPayments.length === 0 && parsed.clientId === undefined) {
+        window.localStorage.removeItem(quickDraftKey)
+        return
+      }
+      setPendingDraft(parsed)
+      setDraftPromptOpen(true)
+    } catch {
+      // silently ignore corrupt data
+    }
+  }, [quickDraftKey])
+
+  // ── Draft: apply function ─────────────────────────
+  const applyDraft = useCallback(
+    (draft: QuickSaleDraft) => {
+      draftAppliedRef.current = true
+      // Restore context
+      if (draft.storeId !== null) setStoreId(draft.storeId)
+      if (draft.clientId !== undefined) setClientId(draft.clientId)
+      try {
+        setSaleDate(new Date(draft.saleDateISO))
+      } catch {
+        setSaleDate(new Date())
+      }
+      // Restore cart + serials
+      hydrateCart(draft.cartItems, draft.serials)
+      // Restore payment
+      hydratePayment(draft.selectedPayment, draft.splitPayments)
+      // Restore comprobante AFTER a micro-tick so the auto-set useEffect
+      // (triggered by clientId change) fires first, then we override it
+      setTimeout(() => {
+        setTipoComprobante(draft.tipoComprobante)
+      }, 0)
+      setDraftPromptOpen(false)
+      setPendingDraft(null)
+    },
+    [hydrateCart, hydratePayment],
+  )
+
+  const discardDraft = useCallback(() => {
+    if (draftSaveTimerRef.current) {
+      window.clearTimeout(draftSaveTimerRef.current)
+      draftSaveTimerRef.current = null
+    }
+    if (quickDraftKey && typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(quickDraftKey)
+      } catch {
+        // ignore
+      }
+    }
+    draftAppliedRef.current = true
+    setPendingDraft(null)
+    setDraftPromptOpen(false)
+  }, [quickDraftKey])
 
   // --- Store change ---
   const [pendingStoreId, setPendingStoreId] = useState<number | null>(null)
@@ -339,12 +543,12 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
       )
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
+      const q = normalizeSearch(searchQuery)
       result = result.filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.category_name && p.category_name.toLowerCase().includes(q)) ||
-          (p.description && p.description.toLowerCase().includes(q)),
+          normalizeSearch(p.name).includes(q) ||
+          (p.category_name && normalizeSearch(p.category_name).includes(q)) ||
+          (p.description && normalizeSearch(p.description).includes(q)),
       )
     }
     return result
@@ -504,6 +708,16 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
 
       toast.success("Venta registrada exitosamente")
       saleReferenceIdRef.current = null
+
+      // Clear draft on successful sale
+      if (draftSaveTimerRef.current) {
+        window.clearTimeout(draftSaveTimerRef.current)
+        draftSaveTimerRef.current = null
+      }
+      if (quickDraftKey && typeof window !== "undefined") {
+        try { window.localStorage.removeItem(quickDraftKey) } catch { /* ignore */ }
+      }
+      draftAppliedRef.current = true
 
       // Generate comprobante PDF if applicable
       if (tipoComprobante !== "SIN COMPROBANTE" && createdSale?.id) {
@@ -1049,6 +1263,41 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
         }}
         onConfirm={confirmStoreChange}
       />
+
+      {/* Draft restoration dialog */}
+      <AlertDialog open={draftPromptOpen} onOpenChange={setDraftPromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Venta en progreso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se encontro un borrador de venta guardado automaticamente.
+              {pendingDraft && pendingDraft.cartItems.length > 0 && (
+                <span className="mt-2 block text-sm text-muted-foreground">
+                  {pendingDraft.cartItems.length} producto{pendingDraft.cartItems.length !== 1 ? "s" : ""} en el carrito
+                  {" — "}
+                  S/. {pendingDraft.cartItems.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0).toFixed(2)}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="cursor-pointer"
+              onClick={discardDraft}
+            >
+              Descartar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="cursor-pointer"
+              onClick={() => {
+                if (pendingDraft) applyDraft(pendingDraft)
+              }}
+            >
+              Restaurar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

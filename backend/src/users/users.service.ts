@@ -251,7 +251,7 @@ export class UsersService {
       organizations: organizationIds,
       isPublicSignup: Boolean(user.isPublicSignup),
     };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '2h' });
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '3h' });
     const refreshToken = this.jwtService.sign(
       { sub: user.id, tokenVersion: user.tokenVersion },
       { expiresIn: '7d' },

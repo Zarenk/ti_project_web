@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { format, isSameDay } from "date-fns"
-import { BACKEND_URL } from "@/lib/utils"
+import { BACKEND_URL, normalizeSearch } from "@/lib/utils"
 import { Transaction } from "../types/cash-register"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -590,16 +590,17 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
     };
 
     const filteredTransactions = transactions.filter((transaction) => {
+      const ns = normalizeSearch(searchTerm);
       const matchesSearch =
-        (transaction.employee ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (transaction.description ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(transaction.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        normalizeSearch(transaction.employee ?? "").includes(ns) ||
+        normalizeSearch(transaction.description ?? "").includes(ns) ||
+        String(transaction.id).includes(searchTerm) ||
         String(transaction.amount).includes(searchTerm) ||
-        (transaction.voucher ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (transaction.clientName ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (transaction.clientDocument ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        normalizeSearch(transaction.voucher ?? "").includes(ns) ||
+        normalizeSearch(transaction.clientName ?? "").includes(ns) ||
+        normalizeSearch(transaction.clientDocument ?? "").includes(ns) ||
         (transaction.paymentMethods ?? []).some((method) =>
-          method.toLowerCase().includes(searchTerm.toLowerCase())
+          normalizeSearch(method).includes(ns)
         );
 
       const matchesType = typeFilter ? transaction.type === typeFilter : true

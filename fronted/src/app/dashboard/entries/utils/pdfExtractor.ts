@@ -7,6 +7,12 @@ import type { ExtractedProduct } from "./series-batch-validator";
 const DELTRON_PATTERNS: (string | RegExp)[] = ["20212331377"];
 const INGRAM_PATTERNS: (string | RegExp)[] = ["20267163228", /ingram\s+micro/i];
 const NEXSYS_PATTERNS: (string | RegExp)[] = ["20470145901", /nexsys\s+del\s+peru/i];
+const SUPERTEC_PATTERNS: (string | RegExp)[] = [
+  "20434327611", // RUC de Supertec
+  /supertec/i,
+  /tecnolog[ií]a\s+superior/i,
+];
+
 const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   /gozu gaming/i,
   /2060\d{7}/, // RUC de GOZU y similares que comparten el mismo diseño
@@ -14,7 +20,7 @@ const TEMPLATE_PROVIDER_PATTERNS: (string | RegExp)[] = [
   "20519078520", // RUC del nuevo proveedor
 ];
 
-type InvoiceProvider = "deltron" | "template" | "ingram" | "nexsys" | "unknown";
+type InvoiceProvider = "deltron" | "template" | "ingram" | "nexsys" | "supertec" | "unknown";
 
 type GuideItem = { name: string; quantity: number; series?: string[] };
 
@@ -39,6 +45,10 @@ export function detectInvoiceProvider(text: string): InvoiceProvider {
 
   if (matches(NEXSYS_PATTERNS)) {
     return "nexsys";
+  }
+
+  if (matches(SUPERTEC_PATTERNS)) {
+    return "supertec";
   }
 
   if (matches(TEMPLATE_PROVIDER_PATTERNS)) {
@@ -1498,14 +1508,16 @@ export function processNexsysInvoiceText(
   if (nameIdx >= 0) {
     setValue("provider_name", lines[nameIdx]);
     const addrParts: string[] = [];
-    for (let j = nameIdx + 1; j < Math.min(nameIdx + 5, lines.length); j++) {
+    for (let j = nameIdx + 1; j < Math.min(nameIdx + 8, lines.length); j++) {
       if (/Telef|www\.|http/i.test(lines[j])) break;
+      // Skip document type lines
+      if (/^(FACTURA|BOLETA)\s+ELECTR/i.test(lines[j])) continue;
       if (lines[j].length > 0) addrParts.push(lines[j]);
     }
     if (addrParts.length > 0) {
       setValue(
         "provider_adress",
-        addrParts.join(" ").replace(/\s+/g, " ").trim()
+        addrParts.join(", ").replace(/\s+/g, " ").trim()
       );
     }
   }
@@ -1526,12 +1538,15 @@ export function processNexsysInvoiceText(
   }
 
   // --- FECHA DE EMISIÓN ---
-  // In NEXSYS the date appears on the line right after the "FECHA" label
+  // In NEXSYS the date may be several lines after "FECHA" (separated by colons, client name, etc.)
   const fechaIdx = lines.findIndex((l) => /^FECHA$/i.test(l));
-  if (fechaIdx >= 0 && fechaIdx + 1 < lines.length) {
-    const dateStr = lines[fechaIdx + 1].trim();
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
-      setValue("fecha_emision_comprobante", dateStr);
+  if (fechaIdx >= 0) {
+    for (let j = fechaIdx + 1; j < Math.min(fechaIdx + 8, lines.length); j++) {
+      const dateStr = lines[j].trim();
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) {
+        setValue("fecha_emision_comprobante", dateStr);
+        break;
+      }
     }
   }
 
@@ -1603,21 +1618,56 @@ export function processNexsysInvoiceText(
     setValue("entry_description", obsParts.join(" | ").slice(0, 200));
   }
 
+  // --- TOTAL (from SON line or footer amounts) ---
+  // Parse total from the Spanish text-in-words line (most reliable)
+  const sonMatch = fullText.match(/\*{3}\s+(.+?)(?:\s+(?:DOLARES|SOLES|NUEVOS))/i);
+  let invoiceTotal = 0;
+  if (sonMatch) {
+    invoiceTotal = parseSpanishAmount(sonMatch[1]);
+  }
+  // Fallback: find "IMPORTE TOTAL" and nearby amount, or largest amount in footer
+  if (invoiceTotal <= 0) {
+    const footerIdx = lines.findIndex((l) => /^\*{3}\s/.test(l));
+    if (footerIdx >= 0) {
+      const footerAmounts: number[] = [];
+      for (let j = footerIdx + 1; j < Math.min(footerIdx + 15, lines.length); j++) {
+        const amt = lines[j].match(/^([\d,]+\.\d{2})$/);
+        if (amt) footerAmounts.push(parseFloat(amt[1].replace(/,/g, "")));
+      }
+      if (footerAmounts.length > 0) {
+        invoiceTotal = Math.max(...footerAmounts);
+      }
+    }
+  }
+  if (invoiceTotal > 0) {
+    setValue("total_comprobante", invoiceTotal.toFixed(2));
+  }
+
   // --- ITEMS ---
-  // NEXSYS has TWO item formats depending on the invoice:
+  // NEXSYS has multiple item formats depending on the invoice:
   //
-  // Format A (multi-line): values on one line, description on next lines
+  // Format A (multi-line, spaced): values on one line with spaces
   //   Line 1: "{base_price} {igv_price} {quantity}"
   //   Line 2+: "{DESCRIPTION}"
   //   Line N: "{CODE} {item_sequence}"
   //
-  // Format B (single-line): everything merged on one line
+  // Format B (single-line, spaced): everything on one line with spaces
   //   "{base_price} {igv_price} {qty}{DESCRIPTION}{CODE} {item_sequence}"
-  //   e.g. "385.00 454.30 1NoteBook IPS3...FreeDosS83K100C3LM 1.00"
+  //
+  // Format C (multi-line, merged): values merged without spaces
+  //   Line 1: "{CODE}" (product code on its own line)
+  //   Line 2+: "{DESCRIPTION}" (description on separate lines)
+  //   Line N: "{baseTotal.XX}{qty}{igvUnit.XX}{seq.XX}" (all values concatenated)
+  //
+  // Format D (single-line, merged): code + description + values all on one line
+  //   "{CODE}{DESCRIPTION}{baseTotal.XX}{qty}{igvUnit.XX}{seq.XX}"
   //
   // Section: between "ITEM" header and "***" total-in-words footer
 
-  const itemStartIdx = lines.findIndex((l) => /^ITEM$/i.test(l));
+  // Detect both standalone "ITEM" and merged header "ITEMCODIGODESCRIPCION..."
+  const itemStartIdx = lines.findIndex(
+    (l) => /^ITEM$/i.test(l) || /^ITEMCODIGO/i.test(l)
+  );
   const itemEndIdx = lines.findIndex(
     (l, i) =>
       i > (itemStartIdx >= 0 ? itemStartIdx : 0) && /^\*{3}\s/.test(l)
@@ -1627,16 +1677,74 @@ export function processNexsysInvoiceText(
   const itemLines = lines.slice(startIdx, endIdx);
 
   const items: { name: string; quantity: number; price: number }[] = [];
-  // Format A: values only (3 numbers, qty is integer at end)
+
+  // Format A: values only with spaces (3 numbers, qty is integer at end)
   const valuesRegex = /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d+)$/;
-  // Format B: values + qty + description + code + seq all on one line
+  // Format B: values + qty + description + code + seq all on one line (spaced)
   const singleLineRegex =
     /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\d{1,3})([A-Za-z].+?)\s+(\d+\.\d{2})$/;
   const codeLineRegex = /^[A-Z0-9][\w-]+\s+\d+\.\d{2}$/i;
 
+  // Format C/D: merged values without spaces — parser with IGV cross-validation
+  // Structure: {baseTotal.XX}{qty}{igvUnit.XX}{seq.XX}
+  // Validation: baseTotal ≈ (igvUnit / 1.18) × qty
+  function parseMergedNexsysValues(
+    str: string
+  ): { qty: number; igvUnit: number } | null {
+    // Need at least 3 decimal points for base.XX + igvUnit.XX + seq.XX
+    const dots: number[] = [];
+    for (let k = 0; k < str.length; k++) {
+      if (
+        str[k] === "." &&
+        k + 2 < str.length &&
+        /^\d{2}/.test(str.substring(k + 1))
+      ) {
+        dots.push(k);
+      }
+    }
+    if (dots.length < 3) return null;
+
+    // First decimal number: base total price
+    const baseEnd = dots[0] + 3;
+    const baseTotal = parseFloat(str.substring(0, baseEnd).replace(/,/g, ""));
+    if (isNaN(baseTotal) || baseTotal <= 0) return null;
+
+    // After base, remainder contains: {qty}{igvUnit.XX}{seq.XX}
+    const afterBase = str.substring(baseEnd);
+
+    // Try qty = 1 digit, 2 digits, 3 digits — validate with IGV relationship
+    for (let qtyLen = 1; qtyLen <= 3; qtyLen++) {
+      if (qtyLen > afterBase.length) break;
+      const qtyStr = afterBase.substring(0, qtyLen);
+      if (!/^\d+$/.test(qtyStr)) break;
+      const qty = parseInt(qtyStr, 10);
+      if (qty <= 0) continue;
+
+      // After qty, extract igvUnit (first decimal number)
+      const afterQty = afterBase.substring(qtyLen);
+      const igvMatch = afterQty.match(/^([\d,]+\.\d{2})/);
+      if (!igvMatch) continue;
+      const igvUnit = parseFloat(igvMatch[1].replace(/,/g, ""));
+      if (isNaN(igvUnit) || igvUnit <= 0) continue;
+
+      // Cross-validate: baseTotal ≈ (igvUnit / 1.18) × qty
+      const expectedBase = (igvUnit / 1.18) * qty;
+      if (Math.abs(expectedBase - baseTotal) < 1.0) {
+        return { qty, igvUnit };
+      }
+    }
+    return null;
+  }
+
+  // Known IT product description prefixes (for splitting code from description)
+  const descPrefixPattern =
+    /(?:PORTATIL|NOTEBOOK|LAPTOP|NB |PC |MONITOR|IMPRESORA|TECLADO|TABLET|DISCO|MEMORIA|SWITCH|ROUTER|UPS |SERVIDOR|ALL.IN.ONE|DESKTOP|WORKSTATION|SCANNER|PROYECTOR|PANTALLA|CELULAR|SMARTPHONE|AURICULAR|AUDIFONOS|CAMARA|WEBCAM|CABLE|ADAPTADOR|CARGADOR|BATERIA|FUENTE|CASE|GABINETE|PLACA|PROCESADOR|TARJETA|COOLER|VENTILADOR|KIT |PACK |COMBO |LICENCIA|SOFTWARE|MOUSE |MOCHILA)/i;
+
   for (let i = 0; i < itemLines.length; i++) {
-    // Try Format A first (multi-line: values only on this line)
-    const multiMatch = itemLines[i].match(valuesRegex);
+    const line = itemLines[i];
+
+    // Try Format A first (multi-line: values only on this line, with spaces)
+    const multiMatch = line.match(valuesRegex);
     if (multiMatch) {
       const igvPrice = parseFloat(multiMatch[2].replace(/,/g, ""));
       const quantity = parseInt(multiMatch[3], 10);
@@ -1661,16 +1769,13 @@ export function processNexsysInvoiceText(
       continue;
     }
 
-    // Try Format B (single-line: everything merged)
-    const singleMatch = itemLines[i].match(singleLineRegex);
+    // Try Format B (single-line with spaces)
+    const singleMatch = line.match(singleLineRegex);
     if (singleMatch) {
       const igvPrice = parseFloat(singleMatch[2].replace(/,/g, ""));
       const quantity = parseInt(singleMatch[3], 10);
-      let rawDesc = singleMatch[4];
+      const rawDesc = singleMatch[4];
 
-      // Strip trailing product code merged with description
-      // Detect case transition: lowercase → UPPERCASE+digits (8+ chars)
-      // e.g. "FreeDosS83K100C3LM" → strip "S83K100C3LM", keep "FreeDos"
       const codeStrip = rawDesc.match(/^(.*[a-z])([A-Z][A-Z0-9-]{7,})$/);
       const name =
         codeStrip && codeStrip[1].trim().length >= 10
@@ -1681,6 +1786,66 @@ export function processNexsysInvoiceText(
         items.push({ name, quantity, price: igvPrice });
       }
       continue;
+    }
+
+    // Try Format C: merged values on own line (all digits/dots/commas, no letters)
+    if (/^[\d,.]+$/.test(line) && line.length >= 10) {
+      const parsed = parseMergedNexsysValues(line);
+      if (parsed) {
+        // Look backward for description lines (stop at code or previous values)
+        const descParts: string[] = [];
+        for (let j = i - 1; j >= 0; j--) {
+          const prevLine = itemLines[j];
+          // Stop at another merged values line
+          if (/^[\d,.]+$/.test(prevLine) && prevLine.length >= 10) break;
+          // Stop at a standalone product code (short alphanumeric, no spaces)
+          if (
+            /^[A-Z0-9][\w-]+$/i.test(prevLine) &&
+            prevLine.length <= 25 &&
+            !/\s/.test(prevLine)
+          ) {
+            break;
+          }
+          // Skip metadata labels
+          if (/^(R\.U\.C|USUARIO|REFERENCIA|TERMINOS|VENCIMIENTO|ASESOR|PEDIDO|CONTADO|FECHA|DIRECCI|SEÑORES|:$)/i.test(prevLine)) break;
+          // Add description line
+          if (prevLine.length > 3 && /[A-Za-z]/.test(prevLine)) {
+            descParts.unshift(prevLine);
+          }
+        }
+
+        const name = descParts.join(" ").replace(/\s+/g, " ").trim();
+        if (name && parsed.qty > 0) {
+          items.push({ name, quantity: parsed.qty, price: parsed.igvUnit });
+        }
+        continue;
+      }
+    }
+
+    // Try Format D: single-line merged (code + description + values concatenated)
+    // Detect trailing merged values (10+ digits/dots/commas at end of line with text)
+    const trailingMatch = line.match(/^(.+?)(\d[\d,.]{9,})$/);
+    if (trailingMatch && /[A-Za-z]/.test(trailingMatch[1])) {
+      const valuesStr = trailingMatch[2];
+      const parsed = parseMergedNexsysValues(valuesStr);
+      if (parsed) {
+        let textPart = trailingMatch[1].trim();
+
+        // Strip leading product code using known description prefixes
+        const prefixIdx = textPart.search(descPrefixPattern);
+        if (prefixIdx > 0) {
+          textPart = textPart.substring(prefixIdx);
+        }
+
+        if (textPart.length > 3 && parsed.qty > 0) {
+          items.push({
+            name: textPart,
+            quantity: parsed.qty,
+            price: parsed.igvUnit,
+          });
+        }
+        continue;
+      }
     }
   }
 
@@ -1699,14 +1864,482 @@ export function processNexsysInvoiceText(
     toast.warning("No se encontraron productos en la factura de Nexsys.");
   }
 
-  // --- TOTAL ---
-  // Computed from extracted items (avoids pdf-parse column alignment issues)
-  const total = items.reduce(
-    (acc, item) => acc + item.price * item.quantity,
-    0
+  // If no total from SON/footer, compute from extracted items
+  if (invoiceTotal <= 0 && items.length > 0) {
+    const computedTotal = items.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    if (computedTotal > 0) {
+      setValue("total_comprobante", computedTotal.toFixed(2));
+    }
+  }
+
+  return result;
+}
+
+// =====================================================================
+// SUPERTEC INVOICE PROCESSOR
+// Handles "Factura Electrónica" from SUPERTEC / TECNOLOGÍA SUPERIOR (RUC 20434327611)
+//
+// IMPORTANT: This PDF is typically a SCANNED IMAGE, so text comes from OCR (tesseract.js).
+// OCR text is noisy — columns merge, numbers get misread, table structure is lost.
+// Strategy: Extract header fields via tolerant regex, extract products via description-based
+// matching with nearby price extraction.
+//
+// OCR sample output:
+//   "F001 N*00050800" (N° → N*)
+//   "FECHA EMISION : 03/03/2026"
+//   "MONEDA : DÓLARES AMERICANOS"
+//   "1 a ' UND |7730U//166B/SSD512GB/FREE/5.6 / BOTR3LA mi mi o"
+//   "2 018146 , uno |NB.HP 255 610 RYZEN 3-7320U/66B/SSD256GB/FREE/15.6/ 290.00 245.76 290.00"
+// =====================================================================
+
+/**
+ * Parse a Spanish number-in-words string to a numeric value.
+ * Handles: "UN MIL DOSCIENTOS SESENTA Y CINCO CON 00/100" → 1265.00
+ */
+function parseSpanishAmount(text: string): number {
+  // Extract the part after "SON:" and before "DOLARES|SOLES|NUEVOS"
+  const match = text.match(/SON:\s*(.+?)(?:D[ÓO]LARES|SOLES|NUEVOS|$)/i);
+  if (!match) return 0;
+
+  let words = match[1]
+    .toUpperCase()
+    .replace(/CON\s+(\d{1,2})\/100/i, ".$1") // "CON 00/100" → ".00"
+    .replace(/[^A-ZÁÉÍÓÚÑ\s.0-9]/g, " ")
+    .trim();
+
+  // Extract decimal part if present
+  let decimals = 0;
+  const decMatch = words.match(/\.(\d{1,2})/);
+  if (decMatch) {
+    decimals = parseInt(decMatch[1].padEnd(2, "0"), 10);
+    words = words.replace(/\.\d{1,2}/, "").trim();
+  }
+
+  const ones: Record<string, number> = {
+    CERO: 0, UN: 1, UNO: 1, UNA: 1, DOS: 2, TRES: 3, CUATRO: 4, CINCO: 5,
+    SEIS: 6, SIETE: 7, OCHO: 8, NUEVE: 9, DIEZ: 10, ONCE: 11, DOCE: 12,
+    TRECE: 13, CATORCE: 14, QUINCE: 15, DIECISEIS: 16, DIECISIETE: 17,
+    DIECIOCHO: 18, DIECINUEVE: 19, VEINTE: 20, VEINTIUNO: 21, VEINTIDOS: 22,
+    VEINTITRES: 23, VEINTICUATRO: 24, VEINTICINCO: 25, VEINTISEIS: 26,
+    VEINTISIETE: 27, VEINTIOCHO: 28, VEINTINUEVE: 29,
+  };
+
+  const tens: Record<string, number> = {
+    TREINTA: 30, CUARENTA: 40, CINCUENTA: 50, SESENTA: 60,
+    SETENTA: 70, OCHENTA: 80, NOVENTA: 90,
+  };
+
+  const hundreds: Record<string, number> = {
+    CIEN: 100, CIENTO: 100, DOSCIENTOS: 200, DOSCIENTAS: 200,
+    TRESCIENTOS: 300, TRESCIENTAS: 300, CUATROCIENTOS: 400, CUATROCIENTAS: 400,
+    QUINIENTOS: 500, QUINIENTAS: 500, SEISCIENTOS: 600, SEISCIENTAS: 600,
+    SETECIENTOS: 700, SETECIENTAS: 700, OCHOCIENTOS: 800, OCHOCIENTAS: 800,
+    NOVECIENTOS: 900, NOVECIENTAS: 900,
+  };
+
+  const tokens = words.split(/\s+/).filter((t) => t !== "Y");
+  let total = 0;
+  let current = 0;
+
+  for (const token of tokens) {
+    if (token === "MIL") {
+      current = current === 0 ? 1000 : current * 1000;
+      total += current;
+      current = 0;
+    } else if (token === "MILLON" || token === "MILLONES") {
+      current = current === 0 ? 1000000 : current * 1000000;
+      total += current;
+      current = 0;
+    } else if (hundreds[token] !== undefined) {
+      current += hundreds[token];
+    } else if (tens[token] !== undefined) {
+      current += tens[token];
+    } else if (ones[token] !== undefined) {
+      current += ones[token];
+    }
+  }
+  total += current;
+
+  return total + decimals / 100;
+}
+
+export function processSupertecInvoiceText(
+  text: string,
+  setValue: Function,
+  setCurrency: Function
+): ExtractedProduct[] {
+  // Multi-pass OCR: backend sends two passes separated by a marker.
+  // 300 DPI (primary): best for headers and structured text.
+  // 250 DPI (secondary): better for price columns in invoice tables.
+  const OCR_PASS_MARKER = "===OCR_PASS_250===";
+  let primaryText = text;
+  let secondaryText = "";
+  if (text.includes(OCR_PASS_MARKER)) {
+    const [p, s] = text.split(OCR_PASS_MARKER);
+    primaryText = p.trim();
+    secondaryText = s.trim();
+  }
+
+  const lines = primaryText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const fullText = lines.join("\n");
+
+  // Secondary pass lines (250 DPI) — used for price recovery
+  const lines250 = secondaryText
+    ? secondaryText.split("\n").map((l) => l.trim()).filter(Boolean)
+    : [];
+
+  // --- PROVIDER INFO ---
+  // OCR may produce "R.U.C. 20434327611" or "R U C 20434327611"
+  const rucMatch = fullText.match(
+    /R\.?\s*U\.?\s*C\.?\s*(?:N[°º*]?)?\s*\.?\s*(\d{11})/i
   );
-  if (total > 0) {
-    setValue("total_comprobante", total.toFixed(2));
+  if (rucMatch) {
+    setValue("ruc", rucMatch[1]);
+    setValue("provider_documentNumber", rucMatch[1]);
+  }
+
+  // Provider name — set fixed since OCR may garble it
+  const hasSupertec =
+    /supertec/i.test(fullText) || /tecnolog[ií]a\s+superior/i.test(fullText);
+  if (hasSupertec) {
+    setValue("provider_name", "SUPERTEC S.A.C.");
+  }
+
+  // Address: look for "AV.JOSE GALVEZ" or "AV. JOSE GALVEZ" pattern
+  const addrMatch = fullText.match(
+    /(AV\.?\s*JOSE\s+GALVEZ[^\n]*(?:LIMA|LINCE)[^\n]*)/i
+  );
+  if (addrMatch) {
+    setValue(
+      "provider_adress",
+      addrMatch[1].replace(/\s+/g, " ").trim()
+    );
+  }
+
+  // --- SERIE / CORRELATIVO ---
+  // OCR renders N° as N*, Nº, N°, N#, etc.
+  const serieMatch = fullText.match(
+    /([FB]\d{3})\s*N[°º*#]?\s*0*(\d{5,})/i
+  );
+  if (serieMatch) {
+    const serie = `${serieMatch[1]}-${serieMatch[2].padStart(8, "0")}`;
+    setValue("serie", serie);
+    setValue("nroCorrelativo", serie);
+  }
+
+  // --- COMPROBANTE TYPE ---
+  const comprobanteMatch = fullText.match(
+    /(FACTURA|BOLETA)\s+ELECTR[ÓO]NICA/i
+  );
+  if (comprobanteMatch) {
+    setValue("comprobante", comprobanteMatch[0].trim());
+  }
+
+  // --- FECHA DE EMISIÓN ---
+  // OCR may produce "FECHA EMISION : 03/03/2026" or "FECHA EMISION: 03/03/2026"
+  const fechaMatch = fullText.match(
+    /FECHA\s+EMISI[OÓ]N\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i
+  );
+  if (fechaMatch) {
+    setValue("fecha_emision_comprobante", fechaMatch[1].trim());
+  }
+
+  // --- CURRENCY ---
+  if (/D[ÓO]LARES\s+AMERICANOS|US\$|DOLARES/i.test(fullText)) {
+    setCurrency("USD");
+    setValue("tipo_moneda", "USD");
+  } else {
+    setCurrency("PEN");
+    setValue("tipo_moneda", "PEN");
+  }
+
+  // --- DATOS ADICIONALES → OBSERVACIÓN ---
+  const obsParts: string[] = [];
+
+  const vendedorMatch = fullText.match(/VENDEDOR\s*:?\s*(.+)/i);
+  if (vendedorMatch) {
+    obsParts.push(`Vendedor: ${vendedorMatch[1].trim()}`);
+  }
+
+  const formaPagoMatch = fullText.match(/FORMA\s+PAGO\s*:?\s*(.+)/i);
+  if (formaPagoMatch) {
+    obsParts.push(`Pago: ${formaPagoMatch[1].trim()}`);
+  }
+
+  const clienteMatch = fullText.match(/CLIENTE\s*:?\s*(\d+)/i);
+  if (clienteMatch) {
+    obsParts.push(`Cliente: ${clienteMatch[1]}`);
+  }
+
+  const obsMatch = fullText.match(/\bOBS\b\s*:?\s*(.+)/i);
+  if (obsMatch) {
+    obsParts.push(`Obs: ${obsMatch[1].trim()}`);
+  }
+
+  if (obsParts.length > 0) {
+    setValue("entry_description", obsParts.join(" | ").slice(0, 200));
+  }
+
+  // --- PARSE TOTAL FROM "SON:" TEXT ---
+  // OCR usually garbles the numeric total but the text amount ("SON: UN MIL ...") is readable.
+  // Parse Spanish number words to get the total before extracting items (needed for price inference).
+  let parsedTotal = 0;
+
+  const sonLine = lines.find((l) => /^SON:/i.test(l));
+  if (sonLine) {
+    parsedTotal = parseSpanishAmount(sonLine);
+  }
+
+  // Also try numeric PRECIO TOTAL
+  const precioTotalMatch = fullText.match(
+    /(?:PRECIO\s+TOTAL)\s*[:\s]*([\d,]+\.\d{2})/i
+  );
+  if (precioTotalMatch) {
+    parsedTotal = parseFloat(precioTotalMatch[1].replace(/,/g, ""));
+  }
+
+  // --- ITEMS ---
+  // Supertec OCR produces lines like:
+  //   Line 17: "NB HP 15-FC0275LA RYZEN7"
+  //   Line 18: "1 a ' UND |7730U//166B/SSD512GB/FREE/5.6 / BOTR3LA mi mi o"
+  //   Line 19: "2 018146 , uno |NB.HP 255 610 RYZEN 3-7320U/66B/SSD256GB/FREE/15.6/ 290.00 245.76 290.00"
+  //   Line 20: "NB HP 15-FC0256LA RYZEN 5-"
+  //   Line 21: "s uo 1 UND | 7520U/166B/SSD512GB/15.6/-REE/ B9TP9LA ET ADE E"
+  //
+  // Strategy: collect ALL product lines first (with or without prices), then infer missing prices.
+
+  const items: { name: string; quantity: number; price: number }[] = [];
+
+  // Pattern A: Structured line — "{IT} {CODE} {CANT} {UND} {DESC} {P.UNIT} {V.UNIT} {P.TOTAL}"
+  // Works when pdf-parse extracts clean text (non-scanned PDFs)
+  const structuredRegex =
+    /^(\d{1,3})\s+(\d{4,8})\s+(\d+)\s+(UND|PZA|KIT|SET|NIU|UN)\s+(.+?)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})$/i;
+
+  for (const line of lines) {
+    const m = line.match(structuredRegex);
+    if (m) {
+      items.push({
+        name: m[5].trim(),
+        quantity: parseInt(m[3], 10),
+        price: parseFloat(m[6].replace(/,/g, "")),
+      });
+    }
+  }
+
+  // Pattern B: Multi-line — "{IT} {CODE} {CANT} {UND}" then description then prices
+  if (items.length === 0) {
+    const headerRegex = /^(\d{1,3})\s+(\d{4,8})\s+(\d+)\s+(UND|PZA|KIT|SET|NIU|UN)$/i;
+
+    for (let i = 0; i < lines.length; i++) {
+      const hMatch = lines[i].match(headerRegex);
+      if (!hMatch) continue;
+
+      const qty = parseInt(hMatch[3], 10);
+      const descParts: string[] = [];
+      let price = 0;
+
+      for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+        const pricesMatch = lines[j].match(
+          /^([\d,]+\.\d{2})\s+([\d,]+\.\d{2})(?:\s+([\d,]+\.\d{2}))?$/
+        );
+        if (pricesMatch) {
+          price = parseFloat(pricesMatch[1].replace(/,/g, ""));
+          break;
+        }
+        if (headerRegex.test(lines[j])) break;
+        if (/^SON:|^OP\.\s|^IGV|^PRECIO\s+TOTAL/i.test(lines[j])) break;
+        if (lines[j].length > 3 && /[A-Za-z]/.test(lines[j])) {
+          descParts.push(lines[j]);
+        }
+      }
+
+      const name = descParts.join(" ").replace(/\s+/g, " ").trim();
+      if (name && qty > 0 && price > 0) {
+        items.push({ name, quantity: qty, price });
+      }
+    }
+  }
+
+  // Pattern C: OCR-tolerant — collect product blocks from lines containing product keywords.
+  // Some items have readable prices, others don't (OCR garbles them).
+  // We collect ALL items (price=0 if unreadable) and infer missing prices from the total.
+  if (items.length === 0) {
+    const productKeyword = /NB[\s.]?HP|LAPTOP|MONITOR|IMPRESORA|RYZEN|CORE\s*I/i;
+    const stopLine = /^SON:|^OP\.\s|^GRABADA|^PRECIO\s+TOTAL|^SE\s+ACCESORIOS|^NO\s+SE\s+ACEPTAN/i;
+
+    // Pass 1: find all product block start indices
+    const productBlocks: { startIdx: number; lines: string[] }[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (stopLine.test(lines[i])) break;
+      if (!productKeyword.test(lines[i])) continue;
+
+      // This line starts a product. Collect continuation lines (next line may contain
+      // the rest of the description + prices, or just garbled text).
+      const block = [lines[i]];
+      // Check if next line is a continuation (contains model specs or prices)
+      const nextLine = lines[i + 1] || "";
+      if (
+        nextLine &&
+        !productKeyword.test(nextLine) &&
+        !stopLine.test(nextLine) &&
+        !/^SON:/i.test(nextLine)
+      ) {
+        block.push(nextLine);
+      }
+      productBlocks.push({ startIdx: i, lines: block });
+    }
+
+    for (const block of productBlocks) {
+      const merged = block.lines.join(" ");
+
+      // Extract prices from the merged block
+      const decimals = merged.match(/\d{2,4}\.\d{2}/g);
+      let price = 0;
+      if (decimals && decimals.length > 0) {
+        // First decimal >= 50 is the unit price
+        for (const d of decimals) {
+          const val = parseFloat(d);
+          if (val >= 50) { price = val; break; }
+        }
+      }
+
+      // Extract product name — clean OCR artifacts
+      let rawName = merged;
+
+      // Remove prices from name
+      if (decimals) {
+        for (const d of decimals) rawName = rawName.replace(d, " ");
+      }
+
+      // Clean OCR artifacts from the product name
+      rawName = rawName
+        // Remove leading item number ("2 ")
+        .replace(/^\d{1,3}\s+/, "")
+        // Remove standalone 6+ digit product codes (not part of model names like FC0275LA)
+        .replace(/(?<![A-Za-z-])\d{6,8}(?![A-Za-z])/g, "")
+        // Remove qty+unit block: "1 a ' UND", "s uo 1 UND", etc.
+        .replace(/\d+\s*[a-z'.,\s]*\b(UND|PZA|KIT|SET|NIU|UN)\b/gi, "")
+        .replace(/[,.]?\s*\buno\b/gi, "")
+        .replace(/[|]/g, " ")
+        // Remove isolated OCR noise words
+        .replace(/\b(mi|o|s|uo|a|ET|ADE|E|ESP|EE|ao)\b/g, " ")
+        .replace(/\s['"]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // Fix common OCR errors in Supertec product names
+      rawName = rawName
+        .replace(/NB\.?HP/i, "NB HP")
+        .replace(/166B/g, "16GB")
+        .replace(/66B(?=\/)/g, "8GB")
+        .replace(/\/5\.6/g, "/15.6")
+        .replace(/-REE\//g, "/FREE/")
+        .replace(/BOTR3LA/g, "B9TR3LA")
+        .replace(/610\s+RYZEN/i, "G10 RYZEN")
+        .replace(/\/\//g, "/")
+        .replace(/\/\s+/g, "/")
+        .replace(/\s*\/\s*/g, "/")
+        // Close "RYZEN 5- 7520U" gap → "RYZEN 5-7520U"
+        .replace(/-\s+(\d)/g, "-$1")
+        .replace(/\s+/g, " ")
+        .replace(/^[\s-]+|[\s-]+$/g, "")
+        .trim();
+
+      if (rawName.length > 10) {
+        items.push({ name: rawName, quantity: 1, price });
+      }
+    }
+
+    // Pass 2: Recover missing prices from 250 DPI OCR pass
+    // At 250 DPI, price columns are often more readable than at 300 DPI.
+    // Strategy: find the product's model code in 250 DPI lines, then check
+    // the next line (continuation) for price patterns.
+    if (lines250.length > 0) {
+      for (const item of items) {
+        if (item.price > 0) continue; // already has price
+
+        // Find the model identifier (e.g., "FC0275LA", "FC0256LA", "G10")
+        const modelMatch = item.name.match(
+          /(?:FC\d{3,4}LA|G10|255\s+G\d{1,2})\b/i
+        );
+        if (!modelMatch) continue;
+
+        const modelKey = modelMatch[0];
+        for (let k = 0; k < lines250.length; k++) {
+          if (!lines250[k].toUpperCase().includes(modelKey.toUpperCase())) continue;
+
+          // Search this line AND the next line for prices
+          // (the product name is on one line, prices on the continuation)
+          for (let j = k; j <= Math.min(k + 1, lines250.length - 1); j++) {
+            // Match XXX.XX or XXX:XX (OCR sometimes renders "." as ":")
+            const priceMatches = lines250[j].match(/\d{2,4}[.:]\d{2}/g);
+            if (!priceMatches) continue;
+
+            const prices = priceMatches
+              .map((p) => parseFloat(p.replace(":", ".")))
+              .filter((v) => v >= 50 && v <= 50000);
+
+            if (prices.length > 0) {
+              // Last price in the line is P.TOTAL (= P.UNIT when qty=1)
+              item.price = prices[prices.length - 1];
+              break;
+            }
+          }
+          if (item.price > 0) break;
+        }
+      }
+    }
+
+    // Pass 3: Infer any still-missing prices from the total
+    if (items.length > 0 && parsedTotal > 0) {
+      const knownSum = items.reduce((s, it) => s + it.price * it.quantity, 0);
+      const unknownItems = items.filter((it) => it.price === 0);
+      if (unknownItems.length > 0 && knownSum < parsedTotal) {
+        const remaining = parsedTotal - knownSum;
+        if (unknownItems.length === 1) {
+          unknownItems[0].price = Math.round(remaining * 100) / 100;
+        } else {
+          const each = Math.round((remaining / unknownItems.length) * 100) / 100;
+          unknownItems.forEach((it) => { it.price = each; });
+        }
+      }
+    }
+  }
+
+  // --- SET PRODUCTS ---
+  let result: ExtractedProduct[] = [];
+  if (items.length > 0) {
+    result = items.map((item, index) => ({
+      id: index + 1,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      priceSell: 0,
+      category_name: "Sin categoria",
+    }));
+  } else {
+    toast.warning("No se encontraron productos en la factura de Supertec.");
+  }
+
+  // --- TOTAL ---
+  // parsedTotal was computed earlier (from "SON:" text or "PRECIO TOTAL" numeric).
+  if (parsedTotal > 0) {
+    setValue("total_comprobante", parsedTotal.toFixed(2));
+  } else {
+    // Fallback: compute from extracted items
+    const computed = items.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    if (computed > 0) {
+      setValue("total_comprobante", computed.toFixed(2));
+    }
   }
 
   return result;

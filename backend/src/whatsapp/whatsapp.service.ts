@@ -27,11 +27,28 @@ export class WhatsAppService implements OnModuleInit {
   private companyId: number | null = null;
   private readonly authPath = './whatsapp_auth';
   private retryCount = 0;
-  private readonly maxRetries = 5;
+  private readonly maxRetries = 8;
   private isInitializing = false;
   private connectionTimeout: ReturnType<typeof setTimeout> | null = null;
   private static readonly CONNECTION_TIMEOUT_MS = 60_000; // 60s to connect
   private static readonly FALLBACK_WA_VERSION: [number, number, number] = [2, 3000, 1015901424];
+
+  // ── Keepalive & Health ──────────────────────────────────────────────────
+  private keepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  private static readonly KEEPALIVE_INTERVAL_MS = 25_000; // 25s presence ping
+  private static readonly KEEPALIVE_DEAD_THRESHOLD = 3;   // missed heartbeats before reconnect
+  private lastHeartbeat = 0;
+  private connectionStartedAt = 0;
+
+  // ── Bad Session Recovery ────────────────────────────────────────────────
+  private badSessionRetries = 0;
+  private static readonly MAX_BAD_SESSION_RETRIES = 3;
+
+  // ── User-Initiated Disconnect Guard ───────────────────────────────────
+  // When the user clicks "Desconectar", this flag prevents ALL auto-reconnect
+  // paths from kicking in (including restartRequired, badSession, keepalive, etc.)
+  // It is only cleared when the user explicitly calls connect/initialize.
+  private userRequestedDisconnect = false;
 
   // ── Rate Limiting (WhatsApp anti-ban protection) ──────────────────────
   // WhatsApp bans accounts that send messages too fast or to too many contacts.
@@ -98,10 +115,11 @@ export class WhatsAppService implements OnModuleInit {
   private async checkAndInitialize() {
     try {
       // Find sessions that should be reconnected after restart.
-      // Include CONNECTING/FAILED from a previous crash — they might still have valid auth.
+      // Only auto-reconnect sessions that were CONNECTED or CONNECTING before the crash.
+      // DISCONNECTED sessions were intentionally stopped by the user — respect that.
       const activeSession = await this.prisma.whatsAppSession.findFirst({
         where: {
-          status: { in: ['CONNECTED', 'DISCONNECTED', 'CONNECTING', 'FAILED'] },
+          status: { in: ['CONNECTED', 'CONNECTING'] },
         },
         orderBy: { lastConnected: 'desc' },
       });
@@ -140,6 +158,8 @@ export class WhatsAppService implements OnModuleInit {
     }
 
     this.isInitializing = true;
+    // User is explicitly connecting — allow auto-reconnect again
+    this.userRequestedDisconnect = false;
 
     try {
       this.organizationId = organizationId;
@@ -152,6 +172,7 @@ export class WhatsAppService implements OnModuleInit {
       }
 
       // Close existing socket if any
+      this.stopKeepalive();
       if (this.sock) {
         try { this.sock.end(undefined); } catch {} // eslint-disable-line no-empty
         this.sock = null;
@@ -245,10 +266,10 @@ export class WhatsAppService implements OnModuleInit {
 
         if (connection === 'close') {
           const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
           const reason = (lastDisconnect?.error as any)?.output?.payload?.message || 'Unknown';
 
           this.logger.warn(`Connection closed. Reason: ${reason} (status: ${statusCode})`);
+          this.stopKeepalive();
 
           // Clear connection timeout on close
           if (this.connectionTimeout) {
@@ -256,42 +277,129 @@ export class WhatsAppService implements OnModuleInit {
             this.connectionTimeout = null;
           }
 
-          if (statusCode === DisconnectReason.loggedOut) {
-            // User unlinked the device from their phone — clear auth
+          const authDir = path.join(this.authPath, `session_${organizationId}_${companyId}`);
+
+          // If user explicitly disconnected, do NOT attempt any reconnection
+          if (this.userRequestedDisconnect) {
             this.isConnected = false;
             this.isInitializing = false;
-            this.logger.warn('Device was logged out from WhatsApp. Clearing auth.');
-            const authDir = path.join(this.authPath, `session_${organizationId}_${companyId}`);
-            await fs.rm(authDir, { recursive: true, force: true }).catch(() => {});
-            await this.prisma.whatsAppSession.update({
-              where: { id: this.sessionId! },
-              data: { status: 'DISCONNECTED', phoneNumber: null, qrCode: null, isActive: false },
-            });
-            this.eventEmitter.emit('whatsapp.disconnected', {
-              organizationId, companyId, reason: 'logged_out',
-            });
-          } else if (shouldReconnect && this.retryCount < this.maxRetries) {
-            this.retryCount++;
-            this.isInitializing = false; // Allow retry to call initialize
-            const delay = Math.min(3000 * Math.pow(2, this.retryCount - 1), 30000);
-            this.logger.log(`Reconnecting (attempt ${this.retryCount}/${this.maxRetries}) in ${delay / 1000}s...`);
-            setTimeout(() => {
-              void this.initialize(organizationId, companyId);
-            }, delay);
-          } else {
-            // Max retries reached — keep auth files so user can retry manually
-            this.isConnected = false;
-            this.isInitializing = false;
-            this.logger.error(`Max retries (${this.maxRetries}) reached. Session marked FAILED (auth preserved).`);
-            await this.prisma.whatsAppSession.update({
-              where: { id: this.sessionId! },
-              data: { status: 'FAILED' },
-            });
+            this.logger.log('User-requested disconnect — skipping all reconnection logic.');
+            return;
+          }
+
+          // ── Granular DisconnectReason Handling ───────────────────────
+          switch (statusCode) {
+            case DisconnectReason.loggedOut: // 401
+              // User unlinked the device from their phone — clear auth
+              this.isConnected = false;
+              this.isInitializing = false;
+              this.logger.warn('Device was logged out from WhatsApp. Clearing auth.');
+              await fs.rm(authDir, { recursive: true, force: true }).catch(() => {});
+              await this.prisma.whatsAppSession.update({
+                where: { id: this.sessionId! },
+                data: { status: 'DISCONNECTED', phoneNumber: null, qrCode: null, isActive: false },
+              });
+              this.eventEmitter.emit('whatsapp.disconnected', {
+                organizationId, companyId, reason: 'logged_out',
+              });
+              break;
+
+            case 403: // Forbidden — possible ban or account restriction
+              this.isConnected = false;
+              this.isInitializing = false;
+              this.logger.error('WhatsApp 403 Forbidden — account may be restricted. Not retrying.');
+              await this.prisma.whatsAppSession.update({
+                where: { id: this.sessionId! },
+                data: { status: 'FAILED' },
+              });
+              this.eventEmitter.emit('whatsapp.disconnected', {
+                organizationId, companyId, reason: 'forbidden',
+              });
+              break;
+
+            case DisconnectReason.connectionReplaced: // 440
+              // Another session took over — don't fight it
+              this.isConnected = false;
+              this.isInitializing = false;
+              this.logger.warn('Connection replaced by another session. Not reconnecting.');
+              await this.prisma.whatsAppSession.update({
+                where: { id: this.sessionId! },
+                data: { status: 'DISCONNECTED' },
+              });
+              this.eventEmitter.emit('whatsapp.disconnected', {
+                organizationId, companyId, reason: 'replaced',
+              });
+              break;
+
+            case DisconnectReason.badSession: // 500
+              this.badSessionRetries++;
+              if (this.badSessionRetries >= WhatsAppService.MAX_BAD_SESSION_RETRIES) {
+                this.logger.error('Bad session persists after retries — clearing auth for fresh QR.');
+                this.isConnected = false;
+                this.isInitializing = false;
+                this.badSessionRetries = 0;
+                await fs.rm(authDir, { recursive: true, force: true }).catch(() => {});
+                await this.prisma.whatsAppSession.update({
+                  where: { id: this.sessionId! },
+                  data: { status: 'DISCONNECTED', phoneNumber: null, qrCode: null, isActive: false },
+                });
+                this.eventEmitter.emit('whatsapp.disconnected', {
+                  organizationId, companyId, reason: 'bad_session_cleared',
+                });
+              } else {
+                this.isInitializing = false;
+                const delay = 2000 * this.badSessionRetries;
+                this.logger.warn(
+                  `Bad session (attempt ${this.badSessionRetries}/${WhatsAppService.MAX_BAD_SESSION_RETRIES}). ` +
+                  `Retrying in ${delay / 1000}s...`,
+                );
+                setTimeout(() => void this.initialize(organizationId, companyId), delay);
+              }
+              break;
+
+            case DisconnectReason.restartRequired: // 515
+              // WhatsApp explicitly requested a restart — comply immediately
+              this.isInitializing = false;
+              this.retryCount = 0; // Don't count as a failure
+              this.logger.log('WhatsApp requested restart — reconnecting in 1s...');
+              setTimeout(() => void this.initialize(organizationId, companyId), 1_000);
+              break;
+
+            default: {
+              // connectionLost (408), connectionClosed (428), timedOut, etc.
+              if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+                this.isInitializing = false;
+                // Exponential backoff with random jitter to avoid thundering herd
+                const baseDelay = Math.min(3000 * Math.pow(2, this.retryCount - 1), 30_000);
+                const jitter = Math.floor(Math.random() * 2000);
+                const delay = baseDelay + jitter;
+                this.logger.log(
+                  `Reconnecting (attempt ${this.retryCount}/${this.maxRetries}) in ${(delay / 1000).toFixed(1)}s...`,
+                );
+                setTimeout(() => void this.initialize(organizationId, companyId), delay);
+              } else {
+                // Max retries reached — keep auth files so user can retry manually
+                this.isConnected = false;
+                this.isInitializing = false;
+                this.logger.error(`Max retries (${this.maxRetries}) reached. Session marked FAILED (auth preserved).`);
+                await this.prisma.whatsAppSession.update({
+                  where: { id: this.sessionId! },
+                  data: { status: 'FAILED' },
+                });
+                this.eventEmitter.emit('whatsapp.disconnected', {
+                  organizationId, companyId, reason: 'max_retries',
+                });
+              }
+              break;
+            }
           }
         } else if (connection === 'open') {
           this.isConnected = true;
           this.currentQrCode = null;
           this.retryCount = 0;
+          this.badSessionRetries = 0;
+          this.connectionStartedAt = Date.now();
           // Clear connection timeout — we made it
           if (this.connectionTimeout) {
             clearTimeout(this.connectionTimeout);
@@ -311,6 +419,9 @@ export class WhatsAppService implements OnModuleInit {
               qrCode: null,
             },
           });
+
+          // Start keepalive to maintain connection alive
+          this.startKeepalive();
 
           this.eventEmitter.emit('whatsapp.connected', {
             organizationId,
@@ -371,13 +482,17 @@ export class WhatsAppService implements OnModuleInit {
    * The session can be reconnected later without scanning QR again.
    */
   async disconnect(organizationId: number, companyId: number): Promise<void> {
+    // Mark as user-initiated so the connection.close handler won't auto-reconnect
+    this.userRequestedDisconnect = true;
+
     if (this.sock && this.organizationId === organizationId && this.companyId === companyId) {
+      this.stopKeepalive();
       try { this.sock.end(undefined); } catch {} // eslint-disable-line no-empty
       this.sock = null;
       this.isConnected = false;
       this.currentQrCode = null;
       this.isInitializing = false;
-      this.retryCount = this.maxRetries; // Prevent auto-reconnect
+      this.retryCount = this.maxRetries; // Extra safety
       if (this.connectionTimeout) {
         clearTimeout(this.connectionTimeout);
         this.connectionTimeout = null;
@@ -409,6 +524,7 @@ export class WhatsAppService implements OnModuleInit {
    */
   async logout(organizationId: number, companyId: number): Promise<void> {
     if (this.sock && this.organizationId === organizationId && this.companyId === companyId) {
+      this.stopKeepalive();
       try { await this.sock.logout(); } catch {} // eslint-disable-line no-empty
       this.sock = null;
       this.isConnected = false;
@@ -455,6 +571,89 @@ export class WhatsAppService implements OnModuleInit {
   async hasAuthFiles(organizationId: number, companyId: number): Promise<boolean> {
     const authDir = path.join(this.authPath, `session_${organizationId}_${companyId}`);
     return fs.access(authDir).then(() => true).catch(() => false);
+  }
+
+  // ── Keepalive / Health ─────────────────────────────────────────────────
+
+  /**
+   * Start periodic presence pings to keep the connection alive.
+   * WhatsApp may close idle connections after ~5 min without activity.
+   */
+  private startKeepalive(): void {
+    this.stopKeepalive();
+    this.lastHeartbeat = Date.now();
+
+    this.keepaliveInterval = setInterval(async () => {
+      if (!this.sock || !this.isConnected) {
+        this.stopKeepalive();
+        return;
+      }
+      try {
+        await this.sock.sendPresenceUpdate('available');
+        this.lastHeartbeat = Date.now();
+      } catch (err) {
+        this.logger.warn(`Keepalive failed: ${(err as Error).message}`);
+        const missedMs = Date.now() - this.lastHeartbeat;
+        const deadThreshold =
+          WhatsAppService.KEEPALIVE_INTERVAL_MS * WhatsAppService.KEEPALIVE_DEAD_THRESHOLD;
+        if (missedMs > deadThreshold) {
+          this.logger.error(
+            `Connection appears dead (${Math.round(missedMs / 1000)}s since last heartbeat). Triggering reconnect.`,
+          );
+          this.stopKeepalive();
+          this.handleDeadConnection();
+        }
+      }
+    }, WhatsAppService.KEEPALIVE_INTERVAL_MS);
+  }
+
+  private stopKeepalive(): void {
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval);
+      this.keepaliveInterval = null;
+    }
+  }
+
+  /**
+   * Handle a detected dead connection — close the zombie socket and
+   * attempt a fresh reconnection cycle.
+   */
+  private handleDeadConnection(): void {
+    if (!this.organizationId || !this.companyId) return;
+    if (this.userRequestedDisconnect) return; // Respect user disconnect
+    const orgId = this.organizationId;
+    const cmpId = this.companyId;
+
+    if (this.sock) {
+      try { this.sock.end(undefined); } catch {} // eslint-disable-line no-empty
+      this.sock = null;
+    }
+    this.isConnected = false;
+    this.isInitializing = false;
+    this.retryCount = 0;
+
+    this.logger.log('Attempting reconnection after dead connection detected');
+    void this.initialize(orgId, cmpId);
+  }
+
+  /**
+   * Connection health snapshot — exposed via REST for monitoring.
+   */
+  getConnectionHealth(): {
+    isConnected: boolean;
+    uptimeMs: number;
+    lastHeartbeatAgoMs: number;
+    retryCount: number;
+    badSessionRetries: number;
+  } {
+    const now = Date.now();
+    return {
+      isConnected: this.isConnected,
+      uptimeMs: this.isConnected && this.connectionStartedAt ? now - this.connectionStartedAt : 0,
+      lastHeartbeatAgoMs: this.lastHeartbeat ? now - this.lastHeartbeat : 0,
+      retryCount: this.retryCount,
+      badSessionRetries: this.badSessionRetries,
+    };
   }
 
   // ── Rate Limiting Helpers ───────────────────────────────────────────────
@@ -640,6 +839,30 @@ export class WhatsAppService implements OnModuleInit {
       this.recordSendSuccess(dto.to);
       this.logger.log(`Message sent to ${dto.to}`);
 
+      // Emit event so gateway broadcasts to frontend in real time
+      if (session) {
+        const savedMsg = await this.prisma.whatsAppMessage.findFirst({
+          where: { sessionId: session.id, remoteJid: jid, isFromMe: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (savedMsg) {
+          this.eventEmitter.emit('whatsapp.message.sent', {
+            organizationId,
+            companyId,
+            message: {
+              id: savedMsg.id,
+              to: jid,
+              content: savedMsg.content,
+              status: savedMsg.status,
+              messageType: savedMsg.messageType,
+              remoteJid: jid,
+              isFromMe: true,
+              createdAt: savedMsg.createdAt,
+            },
+          });
+        }
+      }
+
       return {
         success: true,
         messageId: sent?.key?.id,
@@ -655,7 +878,7 @@ export class WhatsAppService implements OnModuleInit {
       });
 
       if (session) {
-        await this.prisma.whatsAppMessage.create({
+        const failedMsg = await this.prisma.whatsAppMessage.create({
           data: {
             sessionId: session.id,
             organizationId,
@@ -667,6 +890,14 @@ export class WhatsAppService implements OnModuleInit {
             status: 'FAILED',
             errorMessage: (error as Error).message,
           },
+        });
+
+        this.eventEmitter.emit('whatsapp.message.failed', {
+          organizationId,
+          companyId,
+          error: (error as Error).message,
+          to: dto.to,
+          messageId: failedMsg.id,
         });
       }
 
@@ -727,7 +958,7 @@ export class WhatsAppService implements OnModuleInit {
       });
 
       if (session) {
-        await this.prisma.whatsAppMessage.create({
+        const savedMsg = await this.prisma.whatsAppMessage.create({
           data: {
             sessionId: session.id,
             organizationId,
@@ -741,6 +972,21 @@ export class WhatsAppService implements OnModuleInit {
             clientId: params.clientId,
             salesId: params.salesId,
             invoiceId: params.invoiceId,
+          },
+        });
+
+        this.eventEmitter.emit('whatsapp.message.sent', {
+          organizationId,
+          companyId,
+          message: {
+            id: savedMsg.id,
+            to: jid,
+            content: savedMsg.content,
+            status: savedMsg.status,
+            messageType: 'DOCUMENT',
+            remoteJid: jid,
+            isFromMe: true,
+            createdAt: savedMsg.createdAt,
           },
         });
       }
@@ -872,7 +1118,17 @@ export class WhatsAppService implements OnModuleInit {
         });
 
         if (session) {
-          await this.prisma.whatsAppMessage.create({
+          // Try to match with a client by phone number
+          const phoneDigits = remoteJid.split('@')[0];
+          const matchedClient = await this.prisma.client.findFirst({
+            where: {
+              organizationId: this.organizationId!,
+              phone: { contains: phoneDigits.slice(-9) },
+            },
+            select: { id: true },
+          });
+
+          const savedMsg = await this.prisma.whatsAppMessage.create({
             data: {
               sessionId: session.id,
               organizationId: this.organizationId!,
@@ -881,16 +1137,23 @@ export class WhatsAppService implements OnModuleInit {
               messageType: dbMessageType,
               content,
               isFromMe: false,
-              status: 'READ',
+              status: 'DELIVERED',
+              clientId: matchedClient?.id,
             },
           });
 
           this.eventEmitter.emit('whatsapp.message.received', {
             organizationId: this.organizationId,
             companyId: this.companyId,
-            from: remoteJid,
-            content,
-            messageType: dbMessageType,
+            message: {
+              id: savedMsg.id,
+              remoteJid,
+              content,
+              messageType: dbMessageType,
+              isFromMe: false,
+              createdAt: savedMsg.createdAt,
+              clientId: matchedClient?.id,
+            },
           });
         }
       }
@@ -946,5 +1209,316 @@ export class WhatsAppService implements OnModuleInit {
         sale: true,
       },
     });
+  }
+
+  // ── Conversation Methods ──────────────────────────────────────────────
+
+  /**
+   * Get list of conversations grouped by remoteJid, with last message and unread count.
+   */
+  async getConversations(
+    organizationId: number,
+    companyId: number,
+    search?: string,
+  ) {
+    // Get distinct remoteJids with their latest message
+    const conversations = await this.prisma.$queryRaw<
+      Array<{
+        remoteJid: string;
+        lastContent: string;
+        lastMessageType: string;
+        lastIsFromMe: boolean;
+        lastCreatedAt: Date;
+        totalMessages: bigint;
+        unreadCount: bigint;
+      }>
+    >`
+      SELECT
+        m."remoteJid",
+        latest.content AS "lastContent",
+        latest."messageType" AS "lastMessageType",
+        latest."isFromMe" AS "lastIsFromMe",
+        latest."createdAt" AS "lastCreatedAt",
+        COUNT(m.id) AS "totalMessages",
+        COUNT(CASE WHEN m."isFromMe" = false AND m."readAt" IS NULL THEN 1 END) AS "unreadCount"
+      FROM "WhatsAppMessage" m
+      INNER JOIN (
+        SELECT DISTINCT ON ("remoteJid")
+          id, "remoteJid", content, "messageType", "isFromMe", "createdAt"
+        FROM "WhatsAppMessage"
+        WHERE "organizationId" = ${organizationId}
+          AND "companyId" = ${companyId}
+        ORDER BY "remoteJid", "createdAt" DESC
+      ) latest ON latest.id = m.id OR (latest."remoteJid" = m."remoteJid" AND m."organizationId" = ${organizationId} AND m."companyId" = ${companyId})
+      WHERE m."organizationId" = ${organizationId}
+        AND m."companyId" = ${companyId}
+      GROUP BY m."remoteJid", latest.content, latest."messageType", latest."isFromMe", latest."createdAt"
+      ORDER BY latest."createdAt" DESC
+      LIMIT 50
+    `;
+
+    // Match clients by phone
+    const results = await Promise.all(
+      conversations.map(async (conv) => {
+        const phoneDigits = conv.remoteJid.split('@')[0];
+
+        let client: { id: number; name: string; phone: string | null; image: string | null } | null = null;
+        if (phoneDigits.length >= 9) {
+          client = await this.prisma.client.findFirst({
+            where: {
+              organizationId,
+              phone: { contains: phoneDigits.slice(-9) },
+            },
+            select: { id: true, name: true, phone: true, image: true },
+          });
+        }
+
+        // Apply search filter
+        if (search) {
+          const s = search.toLowerCase();
+          const matchesPhone = phoneDigits.includes(s);
+          const matchesName = client?.name?.toLowerCase().includes(s);
+          const matchesContent = conv.lastContent?.toLowerCase().includes(s);
+          if (!matchesPhone && !matchesName && !matchesContent) return null;
+        }
+
+        return {
+          remoteJid: conv.remoteJid,
+          phoneNumber: phoneDigits,
+          lastMessage: conv.lastContent,
+          lastMessageType: conv.lastMessageType,
+          lastIsFromMe: conv.lastIsFromMe,
+          lastMessageAt: conv.lastCreatedAt,
+          totalMessages: Number(conv.totalMessages),
+          unreadCount: Number(conv.unreadCount),
+          client,
+        };
+      }),
+    );
+
+    return results.filter(Boolean);
+  }
+
+  /**
+   * Get messages for a specific conversation (by remoteJid) with cursor pagination.
+   */
+  async getConversationMessages(
+    organizationId: number,
+    companyId: number,
+    remoteJid: string,
+    cursor?: number,
+    limit: number = 50,
+  ) {
+    const where: any = {
+      organizationId,
+      companyId,
+      remoteJid,
+    };
+
+    if (cursor) {
+      where.id = { lt: cursor };
+    }
+
+    const messages = await this.prisma.whatsAppMessage.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1, // Fetch one extra to check if there are more
+      include: {
+        client: { select: { id: true, name: true } },
+      },
+    });
+
+    const hasMore = messages.length > limit;
+    const result = hasMore ? messages.slice(0, limit) : messages;
+
+    return {
+      messages: result.reverse(), // Return in chronological order (oldest first)
+      hasMore,
+      nextCursor: hasMore ? result[0]?.id : null,
+    };
+  }
+
+  /**
+   * Mark all unread messages in a conversation as read.
+   */
+  async markConversationRead(
+    organizationId: number,
+    companyId: number,
+    remoteJid: string,
+  ) {
+    const updated = await this.prisma.whatsAppMessage.updateMany({
+      where: {
+        organizationId,
+        companyId,
+        remoteJid,
+        isFromMe: false,
+        readAt: null,
+      },
+      data: {
+        readAt: new Date(),
+        status: 'READ',
+      },
+    });
+
+    return { markedRead: updated.count };
+  }
+
+  /**
+   * Send an image via WhatsApp.
+   */
+  async sendImage(
+    organizationId: number,
+    companyId: number,
+    params: {
+      to: string;
+      image: Buffer;
+      caption?: string;
+      mimetype?: string;
+      clientId?: number;
+    },
+  ): Promise<any> {
+    if (!this.isConnected || !this.sock) {
+      throw new BadRequestException('WhatsApp is not connected.');
+    }
+
+    if (this.organizationId !== organizationId || this.companyId !== companyId) {
+      throw new BadRequestException('Session mismatch.');
+    }
+
+    const MAX_IMG_SIZE = 5 * 1024 * 1024; // 5MB
+    if (params.image.length > MAX_IMG_SIZE) {
+      throw new BadRequestException(
+        `La imagen excede el limite de ${MAX_IMG_SIZE / 1024 / 1024}MB`,
+      );
+    }
+
+    await this.enforceRateLimit(params.to);
+
+    const jid = params.to.includes('@') ? params.to : `${params.to}@s.whatsapp.net`;
+
+    try {
+      const sent = await this.sock.sendMessage(jid, {
+        image: params.image,
+        caption: params.caption,
+        mimetype: params.mimetype || 'image/jpeg',
+      });
+
+      const session = await this.prisma.whatsAppSession.findFirst({
+        where: { organizationId, companyId },
+      });
+
+      if (session) {
+        const savedMsg = await this.prisma.whatsAppMessage.create({
+          data: {
+            sessionId: session.id,
+            organizationId,
+            companyId,
+            remoteJid: jid,
+            messageType: 'IMAGE',
+            content: params.caption || '[Imagen]',
+            isFromMe: true,
+            status: 'SENT',
+            sentAt: new Date(),
+            clientId: params.clientId,
+          },
+        });
+
+        this.eventEmitter.emit('whatsapp.message.sent', {
+          organizationId,
+          companyId,
+          message: {
+            id: savedMsg.id,
+            to: jid,
+            content: savedMsg.content,
+            status: 'SENT',
+            messageType: 'IMAGE',
+            remoteJid: jid,
+            isFromMe: true,
+            createdAt: savedMsg.createdAt,
+          },
+        });
+      }
+
+      this.recordSendSuccess(params.to);
+      this.logger.log(`Image sent to ${params.to}`);
+      return { success: true, messageId: sent?.key?.id, timestamp: new Date() };
+    } catch (error) {
+      this.recordSendFailure();
+      this.logger.error(`Error sending image to ${params.to}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get contact info for a conversation — client data + recent sales.
+   */
+  async getContactInfo(
+    organizationId: number,
+    companyId: number,
+    remoteJid: string,
+  ) {
+    const phoneDigits = remoteJid.split('@')[0];
+
+    // Find matching client
+    const client = phoneDigits.length >= 9
+      ? await this.prisma.client.findFirst({
+          where: {
+            organizationId,
+            phone: { contains: phoneDigits.slice(-9) },
+          },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            adress: true,
+            type: true,
+            typeNumber: true,
+            image: true,
+          },
+        })
+      : null;
+
+    // Recent sales for this client
+    let recentSales: any[] = [];
+    if (client) {
+      recentSales = await this.prisma.sales.findMany({
+        where: {
+          organizationId,
+          companyId,
+          clientId: client.id,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          total: true,
+          status: true,
+          createdAt: true,
+          invoices: { select: { serie: true, nroCorrelativo: true } },
+        },
+      });
+    }
+
+    // Message stats
+    const messageStats = await this.prisma.whatsAppMessage.aggregate({
+      where: { organizationId, companyId, remoteJid },
+      _count: { id: true },
+    });
+
+    const sentCount = await this.prisma.whatsAppMessage.count({
+      where: { organizationId, companyId, remoteJid, isFromMe: true },
+    });
+
+    return {
+      phoneNumber: phoneDigits,
+      client,
+      recentSales,
+      messageStats: {
+        total: messageStats._count.id,
+        sent: sentCount,
+        received: messageStats._count.id - sentCount,
+      },
+    };
   }
 }

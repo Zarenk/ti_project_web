@@ -1168,9 +1168,48 @@ Entry                                      Sales
 - Schemas de Prisma en `/backend/prisma/schema.prisma`
 - Tipos compartidos generados desde Prisma
 
+## Skills Obligatorios para Desarrollo
+
+**REGLA:** Al implementar cambios de UI/UX, animaciones, lógica frontend o backend, Claude DEBE aplicar automáticamente los conocimientos de los siguientes skills sin que el usuario tenga que pedirlos explícitamente:
+
+### Frontend & UI/UX
+- **interface / universal-elements** — Principios de diseño de interfaz: jerarquía visual, espaciado, consistencia, feedback visual en todos los componentes
+- **animation / micro-interactions** — Micro-interacciones en botones, estados, transiciones, hover effects. Usar CSS transitions/animations nativas y Tailwind `animate-*` utilities
+- **framer-motion / css-native** — Implementar animaciones con CSS nativo o Framer Motion cuando sea necesario (entrada, salida, estados, feedback)
+- **accessibility-advocate** — Siempre considerar accesibilidad: contraste, focus states, aria labels, reduced motion (`prefers-reduced-motion`)
+- **mobile-touch** — Mobile-first design obligatorio. Touch targets mínimo 44px, gestures, responsive breakpoints
+- **buttons-ctas / forms-inputs** — Animaciones y estados en botones (hover, active, disabled, loading) y formularios (focus, error, success)
+- **feedback-indicators** — Indicadores claros de feedback: loading spinners, success checkmarks, error alerts, progress bars
+- **cards-containers** — Profundidad y movimiento en cards, paneles y contenedores
+- **state-changes** — Transiciones suaves en cambios de estado (toggles, accordions, tabs)
+
+### Calidad de Código
+- **Senior Frontend** — Código React con patrones profesionales: composición de componentes, custom hooks, separación de concerns, TypeScript estricto, performance (memo, useMemo, useCallback donde sea necesario)
+- **Senior Backend** — Código NestJS profesional: DTOs validados, guards, interceptors, manejo de errores consistente, transacciones seguras, queries optimizadas
+- **React Best Practices** — Seguir las mejores prácticas oficiales de React: Server Components por defecto, Client Components solo cuando sea necesario, evitar prop drilling, Context API para estado global, React Query para server state
+
+### Video & Motion Avanzado
+- **remotion** — Para generación de videos programáticos, animaciones complejas renderizadas, motion graphics con React. Aplicar cuando se necesiten animaciones avanzadas más allá de CSS/Framer Motion, contenido visual dinámico, o exportación de video
+
+### Creatividad & Diseño
+- **brainstorm** — Antes de implementar features complejas, considerar múltiples enfoques y elegir el más simple y efectivo
+- **brand-consistency** — Mantener consistencia visual: mismos border-radius, shadows, colores, spacing en todo el proyecto
+- **appeal-mastery** — Diseños que se sientan pulidos y profesionales, no genéricos
+
+### Aplicación Automática
+
+Claude debe aplicar estos skills de forma natural en cada respuesta:
+1. **Al crear/modificar UI**: aplicar interface, animation, mobile-touch, accessibility
+2. **Al escribir React**: aplicar Senior Frontend, React Best Practices
+3. **Al escribir NestJS**: aplicar Senior Backend
+4. **Al diseñar soluciones**: aplicar brainstorm para evaluar opciones
+5. **Al crear interacciones**: aplicar micro-interactions, feedback-indicators, state-changes
+
+**NO es necesario** que el usuario diga "usa skills" — deben aplicarse siempre por defecto.
+
 ---
 
-**Última actualización:** 2026-03-02
-**Versión:** 2.0
+**Última actualización:** 2026-03-03
+**Versión:** 2.1
 
 Este archivo debe actualizarse cuando cambien convenciones, patrones o reglas importantes del proyecto.

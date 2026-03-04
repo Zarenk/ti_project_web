@@ -394,6 +394,18 @@ export async function getLegacyProducts() {
   return getProducts({ migrationStatus: 'legacy', includeInactive: true })
 }
 
+export async function bulkMarkProductsMigrated(): Promise<{ migrated: number }> {
+  const res = await authFetch(
+    `${BACKEND_URL}/api/products/vertical-migration/bulk`,
+    { method: 'POST' },
+  )
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null)
+    throw new Error(errorData?.message || 'No se pudo completar la migración masiva')
+  }
+  return res.json()
+}
+
 export async function markProductAsMigrated(productId: number) {
   const res = await authFetch(
     `${BACKEND_URL}/api/products/${productId}/vertical-migration`,

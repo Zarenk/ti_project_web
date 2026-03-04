@@ -60,35 +60,37 @@ export function CompanyHistoryTab({ history }: CompanyHistoryTabProps) {
               placeholder="Buscar por serie, ticket o documento"
               className="w-full flex-1 min-w-[180px]"
             />
-            <Select
-              value={history.sunatLogStatusFilter}
-              onValueChange={(v) => history.setSunatLogStatusFilter(v as "ALL" | string)}
-            >
-              <SelectTrigger className="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL" className="cursor-pointer">Todos los estados</SelectItem>
-                {history.availableLogStatuses.map((s) => (
-                  <SelectItem key={s} value={s} className="cursor-pointer">{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={history.sunatLogEnvironmentFilter}
-              onValueChange={(v) =>
-                history.setSunatLogEnvironmentFilter(v as "ALL" | SunatEnvironment)
-              }
-            >
-              <SelectTrigger className="w-[160px] cursor-pointer">
-                <SelectValue placeholder="Ambiente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL" className="cursor-pointer">Todos</SelectItem>
-                <SelectItem value="BETA" className="cursor-pointer">Beta</SelectItem>
-                <SelectItem value="PROD" className="cursor-pointer">Producción</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex w-full gap-2 lg:w-auto lg:contents">
+              <Select
+                value={history.sunatLogStatusFilter}
+                onValueChange={(v) => history.setSunatLogStatusFilter(v as "ALL" | string)}
+              >
+                <SelectTrigger className="flex-1 lg:w-[150px] lg:flex-none cursor-pointer">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL" className="cursor-pointer">Todos los estados</SelectItem>
+                  {history.availableLogStatuses.map((s) => (
+                    <SelectItem key={s} value={s} className="cursor-pointer">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={history.sunatLogEnvironmentFilter}
+                onValueChange={(v) =>
+                  history.setSunatLogEnvironmentFilter(v as "ALL" | SunatEnvironment)
+                }
+              >
+                <SelectTrigger className="flex-1 lg:w-[160px] lg:flex-none cursor-pointer">
+                  <SelectValue placeholder="Ambiente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL" className="cursor-pointer">Todos</SelectItem>
+                  <SelectItem value="BETA" className="cursor-pointer">Beta</SelectItem>
+                  <SelectItem value="PROD" className="cursor-pointer">Producción</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <span className="ml-auto text-xs text-muted-foreground">
               {history.filteredSunatLogs.length} registros
             </span>
@@ -187,7 +189,7 @@ export function CompanyHistoryTab({ history }: CompanyHistoryTabProps) {
               className="w-full flex-1 min-w-[180px]"
             />
             <Select value={history.sunatPdfTypeFilter} onValueChange={history.setSunatPdfTypeFilter}>
-              <SelectTrigger className="w-[180px] cursor-pointer">
+              <SelectTrigger className="w-full lg:w-[180px] cursor-pointer">
                 <SelectValue placeholder="Tipo de comprobante" />
               </SelectTrigger>
               <SelectContent>

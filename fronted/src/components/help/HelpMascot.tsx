@@ -135,7 +135,7 @@ export function HelpMascot() {
 
   /* ─── Full mascot button ─── */
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 print:hidden">
+    <div className={`pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 print:hidden ${isOpen ? 'max-md:hidden' : ''}`}>
       {/* Proactive tip tooltip — always mounted, CSS transitions */}
       <div
         className={`mb-1 max-w-[260px] rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg transition-all duration-200 dark:border-slate-700 dark:bg-slate-900 ${

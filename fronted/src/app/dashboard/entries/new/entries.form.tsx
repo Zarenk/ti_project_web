@@ -32,6 +32,7 @@ import {
   processIngramInvoiceText,
   processInvoiceText,
   processNexsysInvoiceText,
+  processSupertecInvoiceText,
 } from '../utils/pdfExtractor'
 import { numeroALetrasCustom } from '../../sales/components/utils/numeros-a-letras'
 import {
@@ -281,6 +282,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [draftInvoice, setDraftInvoice] = useState<{ id: string; url: string } | null>(null);
   const [isNewInvoiceBoolean, setIsNewInvoiceBoolean] = useState(false);
   const [showInvoiceFields, setShowInvoiceFields] = useState(false);
+  const [isPdfProcessing, setIsPdfProcessing] = useState(false);
   const [draftGuide, setDraftGuide] = useState<{ id: string; url: string } | null>(null);
   const invoicePreviewUrl = useMemo(
     () => {
@@ -391,6 +393,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const [isCurrencyDialogOpen, setIsCurrencyDialogOpen] = useState(false);
   const [pendingCurrency, setPendingCurrency] = useState<'USD' | 'PEN' | null>(null);
   const [isConvertingCurrency, setIsConvertingCurrency] = useState(false);
+  const [usdPendingConversion, setUsdPendingConversion] = useState(false);
+  const [usdOriginalPrices, setUsdOriginalPrices] = useState<number[] | null>(null);
 
   const normalizedCurrency = currency === 'USD' ? 'USD' : 'PEN';
   const clearEntryDraft = () => {
@@ -699,7 +703,43 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   const removeProduct = (id: number) => {
     setSelectedProducts((prev) => prev.filter((product) => product.id !== id));
   };
-  //
+
+  // Convertir precios USD → PEN usando el tipo de cambio del sistema
+  const handleConvertUsdToSoles = async () => {
+    let rate = tipoCambioActual
+    if (!rate || rate <= 0) {
+      rate = await getLatestExchangeRateByCurrency('USD')
+      if (!rate || rate <= 0) {
+        toast.error('No se pudo obtener el tipo de cambio. Registra uno primero.')
+        return
+      }
+      setTipoCambioActual(rate)
+    }
+    // Save original USD prices for revert
+    setUsdOriginalPrices(selectedProducts.map(p => p.price))
+    setSelectedProducts(prev => prev.map(p => ({
+      ...p,
+      price: Math.round(p.price * rate! * 100) / 100,
+    })))
+    setCurrency('PEN')
+    setTipoMoneda('PEN')
+    setUsdPendingConversion(false)
+    toast.success(`Precios convertidos a Soles (TC: ${rate})`)
+  }
+
+  // Revertir precios PEN → USD (restaurar originales)
+  const handleRevertToUsd = () => {
+    if (!usdOriginalPrices) return
+    setSelectedProducts(prev => prev.map((p, i) => ({
+      ...p,
+      price: usdOriginalPrices[i] ?? p.price,
+    })))
+    setCurrency('USD')
+    setTipoMoneda('USD')
+    setUsdPendingConversion(true)
+    setUsdOriginalPrices(null)
+    toast.info('Precios restaurados a Dólares (US$)')
+  }
 
   //handlesubmit para manejar los datos y el ingreso de los productos
   const onSubmit = handleSubmit(async (data) => {
@@ -915,7 +955,14 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           setDraftInvoice(null);
         }
         try {
-          const extractedText = await processPDF(file); // Llama a la funciÃ³n de la API
+          setIsPdfProcessing(true);
+          const result = await processPDF(file);
+          const extractedText = result.text;
+
+          if (result.ocr) {
+            toast.info("PDF escaneado detectado — se usó reconocimiento óptico (OCR).", { duration: 4000 });
+          }
+
           const provider = detectInvoiceProvider(extractedText);
 
         let extractedProducts: ExtractedProduct[] = [];
@@ -925,6 +972,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           extractedProducts = processIngramInvoiceText(extractedText, form.setValue, setCurrency);
         } else if (provider === "nexsys") {
           extractedProducts = processNexsysInvoiceText(extractedText, form.setValue, setCurrency);
+        } else if (provider === "supertec") {
+          extractedProducts = processSupertecInvoiceText(extractedText, form.setValue, setCurrency);
         } else {
           extractedProducts = processInvoiceText(extractedText, form.setValue, setCurrency);
           if (provider === "unknown") {
@@ -938,6 +987,28 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
         setIsNewInvoiceBoolean(true);
         setShowInvoiceFields(true);
         setShowGuideFields(false);
+
+        // Sync fecha de emisión → fecha de compra
+        const fechaEmision = form.getValues("fecha_emision_comprobante");
+        if (fechaEmision && typeof fechaEmision === "string") {
+          // Parse DD/MM/YYYY format (common in Peruvian invoices)
+          const parts = fechaEmision.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+          if (parts) {
+            const parsed = new Date(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]));
+            if (!isNaN(parsed.getTime())) {
+              setSelectedDate(parsed);
+            }
+          }
+        }
+
+        // Fetch exchange rate when USD invoice detected (for preview in dialog)
+        const isUsdInvoice = /d[oó]lares|USD|\bUS\$/i.test(extractedText);
+        if (isUsdInvoice && !tipoCambioActual) {
+          getLatestExchangeRateByCurrency('USD').then(rate => {
+            if (rate && rate > 0) setTipoCambioActual(rate);
+          }).catch(() => { /* non-blocking */ });
+        }
+
         toast.success("Factura subida correctamente.");
 
         // Auto-detectar proveedor por RUC
@@ -950,6 +1021,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       } catch (error) {
         console.error('Error al procesar el archivo PDF:', error);
         toast.error('Error al procesar el archivo PDF');
+      } finally {
+        setIsPdfProcessing(false);
       }
     }
   };
@@ -1593,6 +1666,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       onCurrencyChange={handleCurrencySelection}
                       showInvoiceFields={showInvoiceFields}
                       showGuideFields={showGuideFields}
+                      isPdfProcessing={isPdfProcessing}
                     />
                     <AdditionalInfoSection
                       register={register}
@@ -1678,6 +1752,11 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       getAllSeriesFromDataTable={getAllSeriesFromDataTable}
                       removeProduct={removeProduct}
                       categories={categoriesState}
+                      usdPendingConversion={usdPendingConversion}
+                      onConvertToSoles={handleConvertUsdToSoles}
+                      onRevertToUsd={handleRevertToUsd}
+                      canRevertToUsd={!!usdOriginalPrices}
+                      exchangeRate={tipoCambioActual}
                     />
 
                     {selectedProducts.length > 0 && (
@@ -1838,6 +1917,8 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
           onOpenChange={setIsVerificationOpen}
           extractedProducts={pendingExtractedProducts}
           existingProducts={products}
+          currency={currency}
+          exchangeRate={tipoCambioActual}
           onConfirm={(verifiedProducts) => {
             setSelectedProducts(verifiedProducts.map((p, idx) => ({
               id: p.id ?? idx + 1,
@@ -1848,6 +1929,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
               category_name: p.category_name,
               series: p.series,
             })));
+            if (currency === 'USD') {
+              setUsdPendingConversion(true)
+            }
             setPendingExtractedProducts([]);
           }}
         />

@@ -49,6 +49,21 @@ export class SalesService {
     ) as Prisma.SalesWhereInput;
   }
 
+  /**
+   * Helper para queries de estadísticas/dashboard.
+   * Excluye ventas anuladas (status = 'ANULADA') para que las métricas
+   * reflejen solo ingresos reales.
+   */
+  private buildStatsWhere(
+    organizationId?: number | null,
+    companyId?: number | null,
+  ): Prisma.SalesWhereInput {
+    return {
+      ...this.buildSalesWhere(organizationId, companyId),
+      status: { not: 'ANULADA' },
+    };
+  }
+
   constructor(
     private prisma: PrismaService,
     private readonly activityService: ActivityService,
@@ -1209,7 +1224,7 @@ export class SalesService {
       );
       const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1); // 1 día antes del inicio del mes actual
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const [currentMonth, previousMonth] = await Promise.all([
         this.prisma.sales.aggregate({
@@ -1261,7 +1276,7 @@ export class SalesService {
       );
       const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const [currentMonthSales, previousMonthSales] = await Promise.all([
         this.prisma.sales.findMany({
@@ -1348,7 +1363,7 @@ export class SalesService {
         where: {
           sale: {
             ...filters,
-            ...this.buildSalesWhere(organizationId, companyId),
+            ...this.buildStatsWhere(organizationId, companyId),
           },
         },
         select: {
@@ -1399,7 +1414,7 @@ export class SalesService {
 
       const sales = await this.prisma.sales.findMany({
         where: {
-          ...this.buildSalesWhere(organizationId, companyId),
+          ...this.buildStatsWhere(organizationId, companyId),
           createdAt: {
             gte: zonedFrom,
             lte: zonedTo,
@@ -1446,7 +1461,7 @@ export class SalesService {
     try {
       const filters: Prisma.SalesDetailWhereInput = {};
       if (organizationId !== undefined || companyId !== undefined) {
-        filters.sale = this.buildSalesWhere(organizationId, companyId);
+        filters.sale = this.buildStatsWhere(organizationId, companyId);
       }
       const timeZone = 'America/Lima';
 
@@ -1456,7 +1471,7 @@ export class SalesService {
 
         const salesInRange = await this.prisma.sales.findMany({
           where: {
-            ...this.buildSalesWhere(organizationId, companyId),
+            ...this.buildStatsWhere(organizationId, companyId),
             createdAt: {
               gte: zonedFrom,
               lte: zonedTo,
@@ -1531,7 +1546,7 @@ export class SalesService {
     try {
       const timeZone = 'America/Lima';
 
-      const salesWhere: Prisma.SalesWhereInput = this.buildSalesWhere(
+      const salesWhere: Prisma.SalesWhereInput = this.buildStatsWhere(
         organizationId,
         companyId,
       );
@@ -1639,7 +1654,7 @@ export class SalesService {
 
       const sales = await this.prisma.sales.findMany({
         where: {
-          ...this.buildSalesWhere(organizationId, companyId),
+          ...this.buildStatsWhere(organizationId, companyId),
           createdAt: { gte: zonedFrom, lte: zonedTo },
         },
         select: {
@@ -2033,7 +2048,7 @@ export class SalesService {
       );
       const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const [currentCount, previousCount] = await Promise.all([
         this.prisma.sales.count({
@@ -2080,7 +2095,7 @@ export class SalesService {
       );
       const endOfPreviousMonth = new Date(startOfCurrentMonth.getTime() - 1);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const [currentClients, previousClients] = await Promise.all([
         this.prisma.sales.findMany({
@@ -2219,7 +2234,7 @@ export class SalesService {
       await this.ensureSalesFeatureEnabled(companyId ?? null);
 
       const timeZone = 'America/Lima';
-      const where: Prisma.SalesWhereInput = this.buildSalesWhere(
+      const where: Prisma.SalesWhereInput = this.buildStatsWhere(
         organizationId,
         companyId,
       );
@@ -2444,7 +2459,7 @@ export class SalesService {
     try {
       await this.ensureSalesFeatureEnabled(companyId ?? null);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const result = await this.prisma.sales.aggregate({
         _sum: { total: true },
@@ -2469,7 +2484,7 @@ export class SalesService {
     try {
       await this.ensureSalesFeatureEnabled(companyId ?? null);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       return await this.prisma.sales.count({
         where: {
@@ -2491,7 +2506,7 @@ export class SalesService {
     try {
       await this.ensureSalesFeatureEnabled(companyId ?? null);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const result = await this.prisma.sales.aggregate({
         _sum: {
@@ -2528,7 +2543,7 @@ export class SalesService {
     try {
       await this.ensureSalesFeatureEnabled(companyId ?? null);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const clients = await this.prisma.sales.findMany({
         where: {
@@ -2554,7 +2569,7 @@ export class SalesService {
     try {
       await this.ensureSalesFeatureEnabled(companyId ?? null);
 
-      const organizationFilter = this.buildSalesWhere(organizationId, companyId);
+      const organizationFilter = this.buildStatsWhere(organizationId, companyId);
 
       const sales = await this.prisma.sales.findMany({
         where: {

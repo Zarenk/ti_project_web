@@ -8,6 +8,7 @@ export function clearFormDrafts(): void {
   const prefixes = [
     "sales-draft:v1:",
     "sales-context:v1:",
+    "sales-quick-draft:v1:",
     "entry-draft:v1:",
     "entry-context:v1:",
   ]

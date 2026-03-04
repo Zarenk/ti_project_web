@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, FileText, Globe, History } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Globe, History, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 import type { CompanyDetail } from "../../../tenancy.api";
@@ -127,8 +127,8 @@ export function CompanyEditForm({ company }: CompanyEditFormProps): React.ReactE
       {/* ── Content area ──────────────────────────────────── */}
       <div className="min-w-0 flex-1">
         {isEditable ? (
-          <form onSubmit={handleFormSubmit}>
-            <Card className="border-slate-200 shadow-sm dark:border-slate-700">
+          <form onSubmit={handleFormSubmit} className="flex flex-col min-h-[calc(100dvh-10rem)]">
+            <Card className="flex-1 border-slate-200 shadow-sm dark:border-slate-700">
               <CardContent className="pt-6">
                 <div
                   key={activeTab}
@@ -182,21 +182,31 @@ export function CompanyEditForm({ company }: CompanyEditFormProps): React.ReactE
                   )}
                 </div>
               </CardContent>
-              <CardFooter className="flex flex-wrap gap-3 border-t border-slate-100 pt-6 dark:border-slate-800">
+            </Card>
+
+            {/* ── Sticky footer: action buttons ── */}
+            <div className="sticky bottom-0 z-10 mt-2 rounded-t-lg border-t bg-white/90 py-3 backdrop-blur dark:bg-background/90">
+              <div className="flex gap-2 justify-end">
                 <Button
                   type="button"
                   variant="outline"
-                  className="cursor-pointer"
+                  className="cursor-pointer flex-1 sm:flex-none"
                   onClick={() => window.history.back()}
                   disabled={form.isPending}
                 >
+                  <ArrowLeft className="h-4 w-4 flex-shrink-0" />
                   Cancelar
                 </Button>
-                <Button type="submit" className="cursor-pointer" disabled={form.isPending}>
+                <Button
+                  type="submit"
+                  className="cursor-pointer flex-1 sm:flex-none"
+                  disabled={form.isPending}
+                >
+                  <Save className="h-4 w-4 flex-shrink-0" />
                   {form.isPending ? "Guardando..." : "Guardar cambios"}
                 </Button>
-              </CardFooter>
-            </Card>
+              </div>
+            </div>
           </form>
         ) : (
           <Card className="border-slate-200 shadow-sm dark:border-slate-700">

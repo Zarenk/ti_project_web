@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Eye, EyeOff, MessageCircle, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, MessageCircle, ShieldCheck, XCircle } from "lucide-react";
 
 import type { CompanyDetail, SunatEnvironment, UpdateCompanyPayload } from "../../../tenancy.api";
 import { uploadCompanySunatFile } from "../../../tenancy.api";
@@ -61,6 +61,15 @@ export function CompanySunatTab({
   });
   const [uploadingTarget, setUploadingTarget] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
+  // Track which files were just uploaded for animation
+  const [justUploaded, setJustUploaded] = useState<Set<string>>(new Set());
+  const uploadTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      uploadTimers.current.forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   const environmentValue = (formState.sunatEnvironment ?? "BETA") as SunatEnvironment;
 
@@ -88,6 +97,24 @@ export function CompanySunatTab({
           prodCert: updated.sunatCertPathProd ?? null,
           prodKey: updated.sunatKeyPathProd ?? null,
         });
+
+        // Trigger success animation
+        const key = `${env}-${type}`;
+        setJustUploaded((prev) => new Set(prev).add(key));
+        const existing = uploadTimers.current.get(key);
+        if (existing) clearTimeout(existing);
+        uploadTimers.current.set(
+          key,
+          setTimeout(() => {
+            setJustUploaded((prev) => {
+              const next = new Set(prev);
+              next.delete(key);
+              return next;
+            });
+            uploadTimers.current.delete(key);
+          }, 3000),
+        );
+
         toast.success("Archivo SUNAT actualizado correctamente.");
         onCertificateUploaded?.();
       } catch (error: unknown) {
@@ -112,7 +139,7 @@ export function CompanySunatTab({
             onValueChange={(v) => handleEnvironmentChange(v as SunatEnvironment)}
             disabled={isPending}
           >
-            <SelectTrigger className="cursor-pointer">
+            <SelectTrigger className="cursor-pointer w-full">
               <SelectValue placeholder="Selecciona un ambiente" />
             </SelectTrigger>
             <SelectContent>
@@ -241,6 +268,8 @@ export function CompanySunatTab({
           const passField = isBeta ? "sunatSolPasswordBeta" : "sunatSolPasswordProd";
           const certPath = isBeta ? sunatPaths.betaCert : sunatPaths.prodCert;
           const keyPath = isBeta ? sunatPaths.betaKey : sunatPaths.prodKey;
+          const certJustUploaded = justUploaded.has(`${env}-cert`);
+          const keyJustUploaded = justUploaded.has(`${env}-key`);
 
           return (
             <div
@@ -326,42 +355,91 @@ export function CompanySunatTab({
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
+                {/* Certificate */}
+                <div className="space-y-1.5">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Certificado</p>
-                  <div className="flex items-center gap-1.5">
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md px-2 py-1 transition-all duration-500",
+                      certJustUploaded && "bg-emerald-100 dark:bg-emerald-950/30",
+                    )}
+                  >
                     {certPath ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+                      <CheckCircle2
+                        className={cn(
+                          "h-3.5 w-3.5 flex-shrink-0 transition-all duration-300",
+                          certJustUploaded
+                            ? "text-emerald-500 scale-125"
+                            : "text-emerald-600",
+                        )}
+                      />
                     ) : (
                       <XCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     )}
-                    <p className="text-sm font-medium truncate">{fileLabel(certPath)}</p>
+                    <p className={cn(
+                      "text-sm font-medium truncate transition-colors duration-300",
+                      certJustUploaded && "text-emerald-700 dark:text-emerald-300",
+                    )}>
+                      {certJustUploaded ? "Subido correctamente" : fileLabel(certPath)}
+                    </p>
                   </div>
+                  {certPath && certJustUploaded && (
+                    <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                      <ShieldCheck className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">Certificado listo</p>
+                    </div>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="cursor-pointer"
+                    className="cursor-pointer w-full"
                     disabled={isPending || uploadingTarget === `${env}-cert`}
                     onClick={() => handleSunatUpload(env, "cert")}
                   >
                     {uploadingTarget === `${env}-cert` ? "Subiendo..." : "Subir certificado"}
                   </Button>
                 </div>
-                <div className="space-y-1">
+
+                {/* Private key */}
+                <div className="space-y-1.5">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Clave privada</p>
-                  <div className="flex items-center gap-1.5">
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md px-2 py-1 transition-all duration-500",
+                      keyJustUploaded && "bg-emerald-100 dark:bg-emerald-950/30",
+                    )}
+                  >
                     {keyPath ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+                      <CheckCircle2
+                        className={cn(
+                          "h-3.5 w-3.5 flex-shrink-0 transition-all duration-300",
+                          keyJustUploaded
+                            ? "text-emerald-500 scale-125"
+                            : "text-emerald-600",
+                        )}
+                      />
                     ) : (
                       <XCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     )}
-                    <p className="text-sm font-medium truncate">{fileLabel(keyPath)}</p>
+                    <p className={cn(
+                      "text-sm font-medium truncate transition-colors duration-300",
+                      keyJustUploaded && "text-emerald-700 dark:text-emerald-300",
+                    )}>
+                      {keyJustUploaded ? "Subida correctamente" : fileLabel(keyPath)}
+                    </p>
                   </div>
+                  {keyPath && keyJustUploaded && (
+                    <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                      <ShieldCheck className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">Clave lista</p>
+                    </div>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="cursor-pointer"
+                    className="cursor-pointer w-full"
                     disabled={isPending || uploadingTarget === `${env}-key`}
                     onClick={() => handleSunatUpload(env, "key")}
                   >

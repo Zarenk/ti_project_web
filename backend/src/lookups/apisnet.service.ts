@@ -3,7 +3,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
-  UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
@@ -81,7 +81,7 @@ export class ApisNetService {
     params: Record<string, string>,
   ): Promise<any> {
     if (!this.token) {
-      throw new UnauthorizedException(
+      throw new ServiceUnavailableException(
         'No se ha configurado APISNET_TOKEN para realizar consultas.',
       );
     }
@@ -105,7 +105,7 @@ export class ApisNetService {
       }
 
       if (error?.response?.status === 401) {
-        throw new UnauthorizedException(
+        throw new ServiceUnavailableException(
           'Credenciales de apis.net.pe invalidas o caducadas.',
         );
       }

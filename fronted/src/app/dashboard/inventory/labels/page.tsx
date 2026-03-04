@@ -3,6 +3,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import type { ReactElement } from "react";
+import { normalizeSearch } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
@@ -344,7 +345,7 @@ export default function InventoryLabelsPage(): ReactElement {
 
 
   const filteredProducts = useMemo(() => {
-    const query = productSearch.trim().toLowerCase();
+    const query = normalizeSearch(productSearch.trim());
     const categoryFilterActive = selectedCategories.length > 0;
 
     // Filter products based on search and category
@@ -353,9 +354,9 @@ export default function InventoryLabelsPage(): ReactElement {
       const matchesCategory = !categoryFilterActive || selectedCategories.includes(categoryKey);
       const matchesQuery =
         !query ||
-        product.name.toLowerCase().includes(query) ||
-        product.categoryName.toLowerCase().includes(query) ||
-        product.code.toLowerCase().includes(query);
+        normalizeSearch(product.name).includes(query) ||
+        normalizeSearch(product.categoryName).includes(query) ||
+        normalizeSearch(product.code).includes(query);
 
       return matchesCategory && matchesQuery;
     });

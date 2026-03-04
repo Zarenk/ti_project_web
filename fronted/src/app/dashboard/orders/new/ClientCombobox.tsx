@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ChevronsUpDown, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeSearch } from "@/lib/utils";
 
 type Client = {
   id: number;
@@ -44,14 +44,14 @@ export default function ClientCombobox({ clients, selectedId, selectedLabel, onP
 
   const filtered = React.useMemo(() => {
     if (!open) return [] as Client[];
-    const q = deferred.trim().toLowerCase();
+    const q = normalizeSearch(deferred.trim());
     if (q.length === 0) {
       return clients.slice(0, 50);
     }
     const tokens = q.split(/\s+/).filter(Boolean);
     return clients
       .filter((c) => {
-        const key = c.searchKey ?? '';
+        const key = normalizeSearch(c.searchKey ?? '');
         return tokens.every((t) => key.includes(t));
       })
       .slice(0, 50);

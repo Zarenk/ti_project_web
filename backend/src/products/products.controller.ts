@@ -346,6 +346,18 @@ export class ProductsController {
     });
   }
 
+  @Post('vertical-migration/bulk')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  bulkMarkVerticalMigration(
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    if (!companyId) {
+      throw new BadRequestException('Se requiere una empresa seleccionada.');
+    }
+    return this.productsService.bulkMarkVerticalMigrated(companyId);
+  }
+
   @Patch(':id/vertical-migration')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')

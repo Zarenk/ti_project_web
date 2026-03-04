@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  HttpException,
+  NotFoundException,
   Param,
   Query,
   UseGuards,
@@ -13,6 +15,7 @@ import { ApisNetService } from './apisnet.service';
 import { DecolectaService } from './decolecta.service';
 import { ApisPeruService } from './apisperu.service';
 import { MigoService } from './migo.service';
+import { PeruApiService } from './peruapi.service';
 
 @UseGuards(JwtAuthGuard, TenantContextGuard)
 @Controller('lookups')
@@ -24,6 +27,7 @@ export class LookupsController {
     private readonly apisPeru: ApisPeruService,
     private readonly decolecta: DecolectaService,
     private readonly migo: MigoService,
+    private readonly peruApi: PeruApiService,
   ) {}
 
   @Get('ruc/:ruc')
@@ -47,6 +51,11 @@ export class LookupsController {
         name: 'apisnet',
         enabled: this.apisNet.isEnabled(),
         handler: () => this.apisNet.lookupRuc(ruc, { refresh: refreshFlag }),
+      },
+      {
+        name: 'peruapi',
+        enabled: this.peruApi.isEnabled(),
+        handler: () => this.peruApi.lookupRuc(ruc, { refresh: refreshFlag }),
       },
     ]);
   }
@@ -72,6 +81,11 @@ export class LookupsController {
         name: 'apisnet',
         enabled: this.apisNet.isEnabled(),
         handler: () => this.apisNet.lookupDni(dni, { refresh: refreshFlag }),
+      },
+      {
+        name: 'peruapi',
+        enabled: this.peruApi.isEnabled(),
+        handler: () => this.peruApi.lookupDni(dni, { refresh: refreshFlag }),
       },
     ]);
   }
@@ -115,6 +129,7 @@ export class LookupsController {
     }[],
   ): Promise<T> {
     let lastError: unknown = null;
+    let notFoundError: NotFoundException | null = null;
 
     for (const provider of providers) {
       if (!provider.enabled) {
@@ -125,6 +140,13 @@ export class LookupsController {
         return await provider.handler();
       } catch (error) {
         lastError = error;
+
+        // If a provider returns "not found", remember it but still try others
+        // (another provider might have the data).
+        if (error instanceof NotFoundException) {
+          notFoundError = error;
+        }
+
         const message =
           error instanceof Error ? error.message : 'Error desconocido';
         this.logger.warn(
@@ -133,8 +155,24 @@ export class LookupsController {
       }
     }
 
+    // If at least one provider said "not found" (valid response), return that
+    // instead of a generic 503. This way the user sees "No se encontraron resultados"
+    // rather than "servicio no disponible".
+    if (notFoundError) {
+      throw notFoundError;
+    }
+
     if (lastError) {
-      throw lastError;
+      // Wrap in ServiceUnavailableException so upstream provider errors
+      // (e.g. expired API tokens) never leak as 401 to the user.
+      if (lastError instanceof ServiceUnavailableException) {
+        throw lastError;
+      }
+      const message =
+        lastError instanceof Error
+          ? lastError.message
+          : 'Todos los proveedores fallaron.';
+      throw new ServiceUnavailableException(message);
     }
 
     throw new ServiceUnavailableException(

@@ -23,7 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertTriangle, Check, MapPin } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Eraser, MapPin, Save } from "lucide-react";
 import { resolveImageUrl } from "@/lib/images";
 import { useTenantSelection } from "@/context/tenant-selection-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -494,33 +494,71 @@ export default function StoreForm({ store, storeId }: StoreFormProps): React.Rea
           </div>
         </div>
 
-        <div className="mt-4 flex flex-col-reverse gap-2 lg:flex-row lg:items-center lg:justify-end">
+        {/* ── Desktop / Tablet buttons (hidden on mobile) ── */}
+        <div className="mt-4 hidden gap-2 sm:flex sm:flex-col-reverse lg:flex-row lg:items-center lg:justify-end">
           <Button
             variant="outline"
-            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            className="w-full cursor-pointer gap-1.5 border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
             type="button"
             onClick={() => router.back()}
           >
+            <ArrowLeft className="h-4 w-4 flex-shrink-0" />
             Volver
           </Button>
           <Button
             variant="outline"
-            className="w-full cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
+            className="w-full cursor-pointer gap-1.5 border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10 lg:w-auto"
             type="button"
             onClick={() => {
               reset(emptyFormValues);
               setNameError(null);
             }}
           >
+            <Eraser className="h-4 w-4 flex-shrink-0" />
             Limpiar
           </Button>
           <Button
-            className="w-full cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]"
+            className="w-full cursor-pointer gap-1.5 bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600 lg:w-auto lg:min-w-[160px]"
             disabled={submitting}
           >
+            <Save className="h-4 w-4 flex-shrink-0" />
             {submitting ? "Guardando..." : storeId ? "Actualizar Tienda" : "Crear Tienda"}
           </Button>
         </div>
+
+        {/* ── Mobile sticky bottom bar ── */}
+        <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-1.5 border-t bg-white/90 px-3 py-2.5 shadow-[0_-2px_8px_rgba(0,0,0,0.08)] backdrop-blur dark:bg-background/90 dark:shadow-[0_-2px_8px_rgba(0,0,0,0.3)] sm:hidden">
+          <Button
+            className="flex-1 cursor-pointer gap-1 text-xs bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+            disabled={submitting}
+          >
+            <Save className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{submitting ? "Guardando..." : storeId ? "Actualizar" : "Crear"}</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 cursor-pointer gap-1 text-xs border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+            type="button"
+            onClick={() => {
+              reset(emptyFormValues);
+              setNameError(null);
+            }}
+          >
+            <Eraser className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">Limpiar</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 cursor-pointer gap-1 text-xs border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+            type="button"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">Volver</span>
+          </Button>
+        </div>
+        {/* Spacer to prevent content from hiding behind fixed mobile bar */}
+        <div className="h-16 sm:hidden" />
       </form>
     </div>
   );

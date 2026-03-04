@@ -23,10 +23,19 @@ export class TenantExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
+    const exceptionResponse =
+      exception instanceof HttpException ? exception.getResponse() : null;
+
     const message =
       exception instanceof HttpException
         ? exception.message
         : 'Internal server error';
+
+    // Extract validation details from BadRequestException (ValidationPipe)
+    const validationErrors =
+      typeof exceptionResponse === 'object' && exceptionResponse !== null
+        ? (exceptionResponse as any).message
+        : undefined;
 
     const tenant = (request as any).tenantContext as
       | TenantContext
@@ -41,6 +50,9 @@ export class TenantExceptionFilter implements ExceptionFilter {
       companyId: tenant?.companyId ?? null,
       userId: tenant?.userId ?? null,
       timestamp: new Date().toISOString(),
+      ...(Array.isArray(validationErrors)
+        ? { validationErrors }
+        : {}),
       ...(exception instanceof Error && status >= 500
         ? { stack: exception.stack }
         : {}),
@@ -48,7 +60,7 @@ export class TenantExceptionFilter implements ExceptionFilter {
 
     response.status(status).json({
       statusCode: status,
-      message,
+      message: Array.isArray(validationErrors) ? validationErrors : message,
       timestamp: new Date().toISOString(),
       path: request.url,
     });

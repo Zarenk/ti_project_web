@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 interface WhatsAppSocketData {
@@ -8,10 +8,28 @@ interface WhatsAppSocketData {
   status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'QR_PENDING';
 }
 
+export interface WASocketMessage {
+  id: number;
+  remoteJid: string;
+  content: string;
+  messageType: string;
+  isFromMe: boolean;
+  createdAt: string;
+  status?: string;
+  clientId?: number;
+}
+
+interface UseWhatsAppSocketOptions {
+  onMessage?: (msg: WASocketMessage) => void;
+  onMessageSent?: (msg: WASocketMessage) => void;
+  onMessageFailed?: (payload: { error: string; to: string; messageId?: number }) => void;
+}
+
 export function useWhatsAppSocket(
   organizationId: number | null,
   companyId: number | null,
-  enabled: boolean = true
+  enabled: boolean = true,
+  options?: UseWhatsAppSocketOptions
 ) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [data, setData] = useState<WhatsAppSocketData>({
@@ -20,6 +38,15 @@ export function useWhatsAppSocket(
     phoneNumber: null,
     status: 'DISCONNECTED',
   });
+
+  // Store callbacks in refs so they don't trigger reconnections
+  const onMessageRef = useRef(options?.onMessage);
+  const onMessageSentRef = useRef(options?.onMessageSent);
+  const onMessageFailedRef = useRef(options?.onMessageFailed);
+
+  onMessageRef.current = options?.onMessage;
+  onMessageSentRef.current = options?.onMessageSent;
+  onMessageFailedRef.current = options?.onMessageFailed;
 
   useEffect(() => {
     if (!enabled || !organizationId || !companyId) {
@@ -80,6 +107,19 @@ export function useWhatsAppSocket(
         ...prev,
         status: payload.status,
       }));
+    });
+
+    // Message events for chat
+    socketInstance.on('message', (payload) => {
+      onMessageRef.current?.(payload);
+    });
+
+    socketInstance.on('message-sent', (payload) => {
+      onMessageSentRef.current?.(payload.message || payload);
+    });
+
+    socketInstance.on('message-failed', (payload) => {
+      onMessageFailedRef.current?.(payload);
     });
 
     socketInstance.on('disconnect', () => {

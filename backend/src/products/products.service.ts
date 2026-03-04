@@ -1169,6 +1169,25 @@ export class ProductsService {
     return normalized;
   }
 
+  /**
+   * Bulk-mark all legacy products as migrated for simple verticals
+   * (those that don't require data transformation like variants or recipes).
+   */
+  async bulkMarkVerticalMigrated(companyId: number) {
+    const result = await this.prismaService.product.updateMany({
+      where: {
+        ...this.orgFilter(),
+        companyId,
+        isVerticalMigrated: false,
+      },
+      data: {
+        isVerticalMigrated: true,
+        extraAttributes: {},
+      },
+    });
+    return { migrated: result.count };
+  }
+
   async markProductVerticalMigrated(id: number) {
     try {
       const product = await this.prismaService.product.findFirst({

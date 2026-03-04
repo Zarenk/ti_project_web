@@ -815,15 +815,15 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
         console.log("[CHATBOT DEBUG] Reason: isRelevant =", responseValidation?.isRelevant, "| score =", localMatch.score)
         const startTime = Date.now()
 
-        // FASE 2: Intentar búsqueda semántica como fallback
-        const semanticResults = semanticSearch(queryToProcess, 3, 0.4)
+        // FASE 2: Intentar búsqueda semántica como fallback (threshold bajado para capturar más)
+        const semanticResults = semanticSearch(queryToProcess, 3, 0.30)
         console.log("[CHATBOT DEBUG] Semantic search results:", semanticResults.map(r => ({
           id: r.entry.id,
           question: r.entry.question,
           score: r.score
         })))
 
-        if (semanticResults.length > 0) {
+        if (semanticResults.length > 0 && semanticResults[0].score >= 0.40) {
           const best = semanticResults[0]
           console.log(`[Semantic] Found match: ${best.entry.question} (score: ${best.score})`)
 
@@ -874,11 +874,23 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        // Si semantic search tampoco encuentra nada, usar no match response
+        // Si semantic search tiene resultados parciales (0.30-0.40), ofrecer "¿Quisiste decir?"
+        const partialSuggestions = semanticResults
+          .filter(r => r.score >= 0.30)
+          .slice(0, 3)
+          .map(r => r.entry.question)
+
+        let noMatchContent: string
+        if (partialSuggestions.length > 0) {
+          noMatchContent = `No encontré una respuesta exacta, pero quizás te refieres a:\n\n${partialSuggestions.map(q => `• ${q}`).join('\n')}\n\n_Intenta reformular tu pregunta o haz clic en una sugerencia del panel._`
+        } else {
+          noMatchContent = generateNoMatchResponse(text, currentSection)
+        }
+
         const assistantMsg: ChatMessage = {
           id: generateUniqueMessageId(),
           role: "assistant",
-          content: generateNoMatchResponse(text, currentSection),
+          content: noMatchContent,
           source: "static",
           timestamp: Date.now(),
         }

@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2, Package, Info, DollarSign, Settings, ImageIcon, Store, Truck, ChevronDown, ChevronUp } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Plus, X, Trash2, Boxes, LocateFixed, XCircle, CheckCircle2, Package, Info, DollarSign, Settings, ImageIcon, Store, Truck, ChevronDown, ChevronUp, Save, ListPlus, Eraser, ArrowLeft } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -3352,33 +3352,37 @@ const VariantRowItem = memo(function VariantRowItem({
             />
           </div>
           {/* ── Sticky footer: botones de acción ── */}
-          <div className="sticky bottom-0 z-10 mt-2 rounded-t-lg border-t bg-white/90 py-3 backdrop-blur dark:bg-background/90">
-            <div className="flex flex-col gap-2 lg:flex-row lg:justify-end">
+          <div className="sticky bottom-0 z-10 mt-2 rounded-t-lg border-t bg-white/90 px-2 py-2 backdrop-blur sm:px-0 sm:py-3 dark:bg-background/90">
+            <div className="flex flex-row gap-1.5 sm:gap-2 lg:justify-end">
               <Button
-                className="cursor-pointer transition-colors hover:bg-primary/90 hover:shadow-sm"
+                className="cursor-pointer flex-1 gap-1 sm:gap-1.5 text-xs sm:text-sm sm:flex-none transition-colors hover:bg-primary/90 hover:shadow-sm"
                 disabled={isProcessing || Boolean(editingBatchId)}
               >
-                {addStockMode && batchCount === 0
-                  ? 'Agregar Stock'
-                  : currentProductId
-                    ? 'Actualizar Producto'
-                    : batchCount > 0
-                      ? `Crear Productos (${createProductsCount || batchCount})`
-                      : 'Crear Producto'}
+                <Save className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">
+                  {addStockMode && batchCount === 0
+                    ? 'Stock'
+                    : currentProductId
+                      ? 'Actualizar'
+                      : batchCount > 0
+                        ? `Crear (${createProductsCount || batchCount})`
+                        : 'Crear'}
+                </span>
               </Button>
               {!currentProductId && (
                 <Button
                   type="button"
-                  className="cursor-pointer bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
+                  className="cursor-pointer flex-1 gap-1 sm:gap-1.5 text-xs sm:text-sm sm:flex-none bg-emerald-600 text-white transition-colors hover:bg-emerald-700 hover:shadow-sm dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-600"
                   onClick={handleAddAnother}
                   disabled={isProcessing}
                 >
-                  {editingBatchId ? "Actualizar producto" : "Agregar otro producto"}
+                  <ListPlus className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{editingBatchId ? "Actualizar" : "Agregar"}</span>
                 </Button>
               )}
               <Button
                 variant="outline"
-                className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+                className="cursor-pointer flex-1 gap-1 sm:gap-1.5 text-xs sm:text-sm sm:flex-none border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
                 type="button"
                 onClick={() => {
                   setEditingBatchId(null)
@@ -3418,11 +3422,12 @@ const VariantRowItem = memo(function VariantRowItem({
                   flushNumericFieldsToDOM()
                 }}
               >
-                Limpiar
+                <Eraser className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Limpiar</span>
               </Button>
               <Button
                 variant="outline"
-                className="cursor-pointer border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
+                className="cursor-pointer flex-1 gap-1 sm:gap-1.5 text-xs sm:text-sm sm:flex-none border-slate-300/80 bg-transparent text-slate-900 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-white/30 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10"
                 type="button"
                 onClick={() => {
                   if (onCancel) {
@@ -3432,7 +3437,8 @@ const VariantRowItem = memo(function VariantRowItem({
                   }
                 }}
               >
-                Volver
+                <ArrowLeft className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Volver</span>
               </Button>
             </div>
           </div>
@@ -3447,7 +3453,7 @@ const VariantRowItem = memo(function VariantRowItem({
         startBatchEditFromCart={startBatchEditFromCart}
         onOpenAssignDialog={() => setIsBatchOnlyConfirmOpen(true)}
         isProcessing={isProcessing}
-        categories={categories}
+        categories={categoryOptions}
         formatMoney={formatMoney}
         currentProductId={currentProductId}
         batchSerials={batchSerials}

@@ -4,7 +4,7 @@ import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 import { SearchIcon } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn, normalizeSearch } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+/** Accent-insensitive filter: "kion" matches "Kión", "bañado" matches "banado" */
+const accentInsensitiveFilter = (value: string, search: string) => {
+  if (normalizeSearch(value).includes(normalizeSearch(search))) return 1
+  return 0
+}
+
 function Command({
   className,
+  filter,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -24,6 +31,7 @@ function Command({
         "bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md",
         className
       )}
+      filter={filter ?? accentInsensitiveFilter}
       {...props}
     />
   )

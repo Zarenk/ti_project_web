@@ -1,6 +1,7 @@
 "use client"
  
 import * as React from "react"
+import { normalizeSearch } from "@/lib/utils"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -110,9 +111,9 @@ export function DataTable<TData extends {id:string, name:string,
 
     // Filtro por nombre
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+      const query = normalizeSearch(searchQuery.trim());
       result = result.filter((item) =>
-        item.name.toLowerCase().includes(query)
+        normalizeSearch(item.name).includes(query)
       );
     }
 

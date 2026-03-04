@@ -121,6 +121,7 @@ export class ProfitAnalysisService {
       const sales = await this.prisma.sales.findMany({
         where: {
           ...orgFilter,
+          status: { not: 'ANULADA' },
           createdAt: {
             gte: last90Days,
           },
@@ -382,6 +383,7 @@ export class ProfitAnalysisService {
     const sales = await this.prisma.sales.findMany({
       where: {
         ...orgFilter,
+        status: { not: 'ANULADA' },
         createdAt: {
           gte: last12Months,
         },
@@ -685,6 +687,7 @@ export class ProfitAnalysisService {
     const sales = await this.prisma.sales.findMany({
       where: {
         ...orgFilter,
+        status: { not: 'ANULADA' },
         createdAt: {
           gte: from,
           lte: to,

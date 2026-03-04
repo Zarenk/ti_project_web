@@ -5,7 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-  UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
@@ -124,7 +124,7 @@ export class ApisPeruService {
 
   private async executeRequest(url: string): Promise<any> {
     if (!this.token) {
-      throw new UnauthorizedException(
+      throw new ServiceUnavailableException(
         'Configura APISPERU_TOKEN para habilitar las consultas.',
       );
     }
@@ -163,7 +163,7 @@ export class ApisPeruService {
         throw new BadRequestException(message);
       }
       if (status === 401) {
-        throw new UnauthorizedException(
+        throw new ServiceUnavailableException(
           'El token de ApisPeru es invalido o ha expirado.',
         );
       }

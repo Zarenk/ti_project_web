@@ -110,6 +110,17 @@ export async function uploadPdfToServer({
   return response.json();
 }
 
+/**
+ * Strip diacritics (accents) and lowercase for accent-insensitive comparison.
+ * e.g. "Kión" → "kion", "bañado" → "banado"
+ */
+export function normalizeSearch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 export function normalizeOptionValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
