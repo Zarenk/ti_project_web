@@ -897,7 +897,9 @@ export class GuideService {
     const clientId = process.env.SUNAT_CLIENT_ID!;
     const clientSecret = process.env.SUNAT_CLIENT_SECRET!;
     const authBaseUrl = 'https://api-seguridad.sunat.gob.pe/v1';
-    const oauthUsername = `${creds.ruc}${creds.solUser}`;
+    const oauthUsername = creds.solUser.startsWith(creds.ruc)
+      ? creds.solUser
+      : `${creds.ruc}${creds.solUser}`;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
