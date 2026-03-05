@@ -872,12 +872,26 @@ async function rasterImageToDataUrl(src: string): Promise<string | null> {
       return null
     }
     const blob = await response.blob()
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error('Unable to convert image to data URL'))
-      reader.readAsDataURL(blob)
+    const blobUrl = URL.createObjectURL(blob)
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = blobUrl
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('Image load failed'))
     })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      URL.revokeObjectURL(blobUrl)
+      return null
+    }
+    ctx.drawImage(img, 0, 0)
+    URL.revokeObjectURL(blobUrl)
+    // Always export as PNG — react-pdf (pdfkit) only supports PNG/JPEG
+    const dataUrl = canvas.toDataURL('image/png')
     rasterLogoCache.set(src, dataUrl)
     return dataUrl
   } catch {
