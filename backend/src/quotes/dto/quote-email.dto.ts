@@ -2,10 +2,10 @@ import { IsOptional, IsString, IsEmail } from 'class-validator';
 
 export class QuoteEmailDto {
   @IsEmail({}, { message: 'El email del destinatario no es válido.' })
-  to: string;
+  to!: string;
 
   @IsString()
-  subject: string;
+  subject!: string;
 
   @IsOptional()
   @IsString()
