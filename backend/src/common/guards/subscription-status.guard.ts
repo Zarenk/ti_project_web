@@ -60,20 +60,35 @@ export class SubscriptionStatusGuard implements CanActivate {
     const organizationId = request.tenantContext?.organizationId ?? null;
     if (!organizationId) return true;
 
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { organizationId },
-      select: {
-        status: true,
-        paymentEnforced: true,
-        pastDueSince: true,
-        metadata: true,
-      },
-    });
+    let subscription: {
+      status: string;
+      paymentEnforced?: boolean;
+      pastDueSince?: Date | null;
+      metadata?: any;
+    } | null;
+
+    try {
+      subscription = await this.prisma.subscription.findUnique({
+        where: { organizationId },
+        select: {
+          status: true,
+          paymentEnforced: true,
+          pastDueSince: true,
+          metadata: true,
+        },
+      });
+    } catch {
+      // Columns may not exist yet (migration pending) — fall back to safe query
+      subscription = await this.prisma.subscription.findUnique({
+        where: { organizationId },
+        select: { status: true, metadata: true },
+      });
+    }
 
     // No subscription → allow (legacy/admin-created org)
     if (!subscription) return true;
 
-    // paymentEnforced = false → grandfathered org, allow everything
+    // paymentEnforced = false (or column missing) → grandfathered org, allow everything
     if (!subscription.paymentEnforced) return true;
 
     // Check complimentary active
@@ -94,7 +109,11 @@ export class SubscriptionStatusGuard implements CanActivate {
     if (allowed.includes(status)) return true;
 
     // Past due / canceled → check grace tier
-    const graceTier = resolveGraceTier(subscription);
+    const graceTier = resolveGraceTier({
+      paymentEnforced: subscription.paymentEnforced ?? false,
+      status: subscription.status,
+      pastDueSince: subscription.pastDueSince ?? null,
+    });
 
     // If decorator specifies maxGraceTier and we're within it, allow
     if (
