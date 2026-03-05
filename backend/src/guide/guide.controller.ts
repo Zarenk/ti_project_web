@@ -16,15 +16,24 @@ import { createReadStream } from 'fs';
 import { GuideService } from './guide.service';
 import { CreateGuideDto } from './dto/create-guide.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { RolesGuard } from 'src/users/roles.guard';
+import { Roles } from 'src/users/roles.decorator';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { ModulePermission } from 'src/common/decorators/module-permission.decorator';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 @Controller('guide')
-@UseGuards(JwtAuthGuard, TenantRequiredGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)
+@Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+@ModulePermission('inventory')
 export class GuideController {
   constructor(private readonly guideService: GuideService) {}
 
   @Post()
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('guides')
   async generarGuia(
     @Body() dto: CreateGuideDto,
     @CurrentTenant('organizationId') organizationId: number | null,

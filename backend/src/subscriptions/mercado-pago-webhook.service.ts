@@ -29,6 +29,9 @@ export class MercadoPagoWebhookService {
       return null;
     }
     const paymentId = this.extractPaymentId(incoming.data);
+    this.logger.log(
+      `Processing MP webhook: type=${incoming.type}, paymentId=${paymentId ?? 'none'}`,
+    );
     if (!paymentId) {
       this.logger.warn('Webhook de MercadoPago sin payment id');
       return null;

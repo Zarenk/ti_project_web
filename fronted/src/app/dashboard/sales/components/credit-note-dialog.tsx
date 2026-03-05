@@ -33,6 +33,8 @@ import {
 
 import { createCreditNote, generateAndUploadCreditNotePdf } from "../credit-notes.api";
 import type { Sale } from "../columns";
+import { isSubscriptionBlockedError } from "@/lib/subscription-error";
+import { SubscriptionBlockedDialog } from "@/components/subscription-blocked-dialog";
 
 // ── Codigos de motivo SUNAT para Notas de Credito ───────────
 const MOTIVO_CODES = [
@@ -66,6 +68,7 @@ export function CreditNoteDialog({
   const [fechaEmision, setFechaEmision] = useState<Date>(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
 
   const invoice = sale.invoices;
 
@@ -147,6 +150,10 @@ export function CreditNoteDialog({
     } catch (error: unknown) {
       const msg =
         error instanceof Error ? error.message : "Error al emitir la nota de crédito.";
+      if (isSubscriptionBlockedError(msg)) {
+        setSubscriptionBlocked(true);
+        return;
+      }
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
@@ -154,6 +161,7 @@ export function CreditNoteDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg w-full min-w-0">
         <DialogHeader>
@@ -316,5 +324,11 @@ export function CreditNoteDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <SubscriptionBlockedDialog
+      open={subscriptionBlocked}
+      onOpenChange={setSubscriptionBlocked}
+      feature="notas de crédito"
+    />
+    </>
   );
 }

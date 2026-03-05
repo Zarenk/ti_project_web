@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Send } from 'lucide-react';
+import { isSubscriptionBlockedError } from '@/lib/subscription-error';
+import { SubscriptionBlockedDialog } from '@/components/subscription-blocked-dialog';
 
 interface SendMessagePanelProps {
   isConnected: boolean;
@@ -17,6 +19,7 @@ export default function SendMessagePanel({ isConnected }: SendMessagePanelProps)
   const [recipient, setRecipient] = useState('');
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
 
   const handleSend = async () => {
     if (!recipient || !message) {
@@ -53,6 +56,10 @@ export default function SendMessagePanel({ isConnected }: SendMessagePanelProps)
         setMessage('');
         setRecipient('');
       } else {
+        if (isSubscriptionBlockedError(data.message ?? data.error ?? '')) {
+          setSubscriptionBlocked(true);
+          return;
+        }
         toast.error('Error al enviar mensaje', {
           description: data.error || 'No se pudo enviar el mensaje',
         });
@@ -66,6 +73,7 @@ export default function SendMessagePanel({ isConnected }: SendMessagePanelProps)
   };
 
   return (
+    <>
     <Card className="w-full min-w-0 overflow-hidden">
       <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
         <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
@@ -134,5 +142,11 @@ export default function SendMessagePanel({ isConnected }: SendMessagePanelProps)
         )}
       </CardContent>
     </Card>
+    <SubscriptionBlockedDialog
+      open={subscriptionBlocked}
+      onOpenChange={setSubscriptionBlocked}
+      feature="envío de WhatsApp"
+    />
+    </>
   );
 }

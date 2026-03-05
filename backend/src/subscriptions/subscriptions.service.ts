@@ -1831,15 +1831,21 @@ export class SubscriptionsService {
       );
       return;
     }
-    if (invoice.status === SubscriptionInvoiceStatus.PAID) {
-      return;
-    }
-    const now = new Date();
-    const metadata = this.coerceJsonRecord(invoice.metadata);
-    metadata.lastWebhookPayload = payload;
-    metadata.dunning = null;
+    // Idempotencia atomica: check + update dentro de la misma transaccion
+    const processed = await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.subscriptionInvoice.findUnique({
+        where: { id: invoice.id },
+        select: { id: true, status: true },
+      });
+      if (!locked || locked.status === SubscriptionInvoiceStatus.PAID) {
+        return false; // Ya procesado — idempotente
+      }
 
-    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const metadata = this.coerceJsonRecord(invoice.metadata);
+      metadata.lastWebhookPayload = payload;
+      metadata.dunning = null;
+
       await tx.subscriptionInvoice.update({
         where: { id: invoice.id },
         data: {
@@ -1864,7 +1870,11 @@ export class SubscriptionsService {
           canceledAt: null,
         },
       });
+
+      return true;
     });
+
+    if (!processed) return;
 
     await this.clearGraceRestrictions(invoice.subscriptionId);
     await this.autoExportAndCleanupDemoData(
@@ -1877,17 +1887,28 @@ export class SubscriptionsService {
     const invoice = await this.resolveInvoiceFromPayload(payload);
     if (!invoice) {
       this.logger.warn(
-        `No se encontr�� la invoice del evento de fallo: ${JSON.stringify(payload)}`,
+        `No se encontró la invoice del evento de fallo: ${JSON.stringify(payload)}`,
       );
       return;
     }
+
     const now = new Date();
     const metadata = this.coerceJsonRecord(invoice.metadata);
     const nextState = this.buildNextDunningState(metadata.dunning, now);
     metadata.dunning = nextState;
     metadata.lastWebhookPayload = payload;
 
-    await this.prisma.$transaction(async (tx) => {
+    // Idempotencia atomica: check + update dentro de la misma transaccion
+    const processed = await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.subscriptionInvoice.findUnique({
+        where: { id: invoice.id },
+        select: { id: true, status: true },
+      });
+      // Si ya esta PAID (un webhook de pago exitoso llego primero), no revertir
+      if (!locked || locked.status === SubscriptionInvoiceStatus.PAID) {
+        return false;
+      }
+
       await tx.subscriptionInvoice.update({
         where: { id: invoice.id },
         data: {
@@ -1901,7 +1922,11 @@ export class SubscriptionsService {
           status: SubscriptionStatus.PAST_DUE,
         },
       });
+
+      return true;
     });
+
+    if (!processed) return;
 
     await this.notifyInvoiceFailure(invoice, nextState);
     await this.applyGraceRestrictions(invoice.subscriptionId);
@@ -2035,7 +2060,12 @@ export class SubscriptionsService {
       'MERCADOPAGO_WEBHOOK_SECRET',
     );
     if (!secretKey) {
-      return;
+      this.logger.error(
+        'MERCADOPAGO_WEBHOOK_SECRET no configurado — webhook rechazado',
+      );
+      throw new BadRequestException(
+        'Webhook signature verification not configured',
+      );
     }
 
     const signatureHeader =
@@ -2070,6 +2100,18 @@ export class SubscriptionsService {
 
     if (expectedSignature !== signatureValue) {
       throw new BadRequestException('Firma inválida para el webhook recibido');
+    }
+
+    // Anti-replay: validar timestamp dentro de ventana de 5 minutos
+    const tsMatch = signatureHeader.match(/ts=(\d+)/);
+    if (tsMatch) {
+      const webhookTimestamp = parseInt(tsMatch[1], 10) * 1000;
+      const age = Math.abs(Date.now() - webhookTimestamp);
+      if (age > 5 * 60 * 1000) {
+        throw new BadRequestException(
+          'Webhook timestamp fuera de ventana permitida',
+        );
+      }
     }
   }
 

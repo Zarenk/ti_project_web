@@ -28,6 +28,8 @@ import { format } from 'date-fns'
 import { es } from "date-fns/locale";
 import AddClientDialog from '../components/AddClientDialog'
 import { createSale, fetchSeriesByProductAndStore, getPaymentMethods, getProductsByStore, getSeriesByProductAndStore, getStockByProductAndStore, lookupSunatDocument, type LookupResponse, sendInvoiceToSunat } from '../sales.api'
+import { isSubscriptionBlockedError } from '@/lib/subscription-error'
+import { SubscriptionBlockedDialog } from '@/components/subscription-blocked-dialog'
 import { AddSeriesDialog } from '../components/AddSeriesDialog'
 import { SeriesModal } from '../components/SeriesModal'
 import { StoreChangeDialog } from '../components/StoreChangeDialog'
@@ -136,6 +138,7 @@ const salesSchema = z.object({
   client_name: z.string({}),
   client_type: z.string({}),
   client_typeNumber: z.string({}),
+  client_address: z.string({}).optional().default(""),
   store_name: z.string({}),
   store_adress: z.string({}),
   serie: z.string({}),
@@ -161,6 +164,7 @@ function buildDefaultSaleValues(sale?: any): SalesType {
     client_name: sale?.client_name ?? "",
     client_type: sale?.client_type ?? "",
     client_typeNumber: sale?.client_typeNumber ?? "",
+    client_address: sale?.client_address ?? "",
     store_name: sale?.store_name ?? "",
     store_adress: sale?.store_adress ?? "",
     serie: sale?.serie ?? "",
@@ -244,6 +248,9 @@ export function SalesForm({sales, categories}: {sales: any; categories: any}) {
     const blobUrl = URL.createObjectURL(blob);
     window.open(blobUrl);
   };
+
+  // Estado para bloqueo de suscripción
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
 
   // Estado para pagos
   const [payments, setPayments] = useState<SelectedPayment[]>([]); // Define el tipo explícito
@@ -573,8 +580,8 @@ const getSaleReferenceId = () => {
 
   // COMBOBOX DE Clientes
   const [isDialogOpenClient, setIsDialogOpenClient] = useState(false); // Controla la apertura del diálogo
-  const [clients, setClients] = useState<{ id: number; 
-    name: string, type: string, typeNumber: string }[]>([]); // Estado para los proveedores
+  const [clients, setClients] = useState<{ id: number;
+    name: string, type: string, typeNumber: string, adress?: string | null }[]>([]); // Estado para los clientes
   // Cargar los clientes al montar el componente
   const [openClient, setOpenClient] = React.useState(false)
   const [valueClient, setValueClient] = React.useState("")
@@ -777,6 +784,7 @@ const getSaleReferenceId = () => {
       form.setValue("client_name", clientName);
       form.setValue("client_type", clientType);
       form.setValue("client_typeNumber", clientTypeNumber);
+      form.setValue("client_address", result.address || "");
       toast.info("Documento aplicado. Ingresa el nombre del cliente manualmente.");
       return;
     }
@@ -796,6 +804,7 @@ const getSaleReferenceId = () => {
       form.setValue("client_name", existingLocal.name);
       form.setValue("client_type", existingLocal.type);
       form.setValue("client_typeNumber", existingLocal.typeNumber);
+      form.setValue("client_address", existingLocal.adress || result.address || "");
       setValueClient(existingLocal.name);
       toast.success("Cliente encontrado en el sistema.");
       return;
@@ -805,7 +814,7 @@ const getSaleReferenceId = () => {
     setSunatSearchLoading(true);
     setSunatSearchError(null);
 
-    const applyClient = (name: string, type: string, typeNumber: string) => {
+    const applyClient = (name: string, type: string, typeNumber: string, address?: string | null) => {
       // Primero cambiar el tipo de comprobante SIN limpiar campos de cliente
       if (type === "RUC") {
         handleTipoComprobanteChange("FACTURA", { skipClientReset: true });
@@ -816,6 +825,7 @@ const getSaleReferenceId = () => {
       form.setValue("client_name", name);
       form.setValue("client_type", type);
       form.setValue("client_typeNumber", typeNumber);
+      form.setValue("client_address", address || "");
       setValueClient(name);
     };
 
@@ -824,11 +834,12 @@ const getSaleReferenceId = () => {
         name: clientName,
         type: clientType,
         typeNumber: clientTypeNumber,
+        adress: result.address || "",
       });
 
       if (createdClient?.id) {
         setClients((prev) => [...prev, createdClient]);
-        applyClient(createdClient.name, createdClient.type, createdClient.typeNumber);
+        applyClient(createdClient.name, createdClient.type, createdClient.typeNumber, result.address);
         if (typeof createdClient.id === "number") {
           recordRecentClient(createdClient.id);
         }
@@ -848,18 +859,18 @@ const getSaleReferenceId = () => {
               if (prev.some((c) => c.typeNumber === clientTypeNumber)) return prev;
               return [...prev, found];
             });
-            applyClient(found.name, found.type, found.typeNumber);
+            applyClient(found.name, found.type, found.typeNumber, found.adress || result.address);
             toast.success("Cliente encontrado y seleccionado.");
           } else {
-            applyClient(clientName, clientType, clientTypeNumber);
+            applyClient(clientName, clientType, clientTypeNumber, result.address);
             toast.info("Cliente aplicado. Verifica los datos.");
           }
         } catch {
-          applyClient(clientName, clientType, clientTypeNumber);
+          applyClient(clientName, clientType, clientTypeNumber, result.address);
         }
       } else {
         // Otro error: al menos llenar los campos del formulario y combobox
-        applyClient(clientName, clientType, clientTypeNumber);
+        applyClient(clientName, clientType, clientTypeNumber, result.address);
         toast.error("No se pudo registrar el cliente automaticamente. Intenta crearlo manualmente.");
       }
     } finally {
@@ -1371,6 +1382,7 @@ const getSaleReferenceId = () => {
               dni: data.client_typeNumber,
               nombre: data.client_name,
               tipoDocumento: tipoDocumentoFormatted,
+              direccion: data.client_address || "",
             },
             emisor: {
               razonSocial: emitterBusinessName,
@@ -1423,6 +1435,11 @@ const getSaleReferenceId = () => {
             })
             .catch((sunatErr) => {
               console.error("Error al enviar a SUNAT:", sunatErr);
+              const errMsg = sunatErr instanceof Error ? sunatErr.message : String(sunatErr);
+              if (isSubscriptionBlockedError(errMsg)) {
+                setSubscriptionBlocked(true);
+                return;
+              }
               toast.error("No se pudo enviar el comprobante a SUNAT. Puede reintentar desde el detalle de la venta.");
             });
 
@@ -1520,6 +1537,7 @@ const getSaleReferenceId = () => {
       form.setValue("client_name", ""); // Limpia el nombre del cliente
       form.setValue("client_type", ""); // Limpia el tipo de documento
       form.setValue("client_typeNumber", ""); // Limpia el número de documento
+      form.setValue("client_address", ""); // Limpia la dirección del cliente
     }
   };
   //
@@ -2097,6 +2115,7 @@ const getSaleReferenceId = () => {
             setValue("client_name", recentClient.name || "");
             setValue("client_type", recentClient.type || "");
             setValue("client_typeNumber", recentClient.typeNumber || "");
+            setValue("client_address", recentClient.adress || "");
           }
         }
       }
@@ -2497,6 +2516,7 @@ const getSaleReferenceId = () => {
                                                 setValue("client_name", client.name || "");
                                                 setValue("client_type", client.type || "");
                                                 setValue("client_typeNumber", client.typeNumber || "");
+                                                setValue("client_address", client.adress || "");
                                                 if (typeof client.id === "number") {
                                                   recordRecentClient(client.id);
                                                 }
@@ -2694,6 +2714,17 @@ const getSaleReferenceId = () => {
                               <Input {...register("client_typeNumber")} readOnly />
                             </div>
                           </div>
+                          <Label className="text-sm font-medium py-2">
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                              <span>Dirección del Cliente</span>
+                            </div>
+                          </Label>
+                          <Input
+                            {...register("client_address")}
+                            placeholder="Se completa automáticamente al buscar cliente"
+                            className="text-sm"
+                          />
                         </div>
                                  
                         <div className="min-w-0 flex flex-col border border-gray-600 rounded-md p-2">
@@ -3631,6 +3662,11 @@ const getSaleReferenceId = () => {
           </fieldset>
         </TooltipProvider>
       </form>
+      <SubscriptionBlockedDialog
+        open={subscriptionBlocked}
+        onOpenChange={setSubscriptionBlocked}
+        feature="transmisión SUNAT"
+      />
     </div>
   )
 }

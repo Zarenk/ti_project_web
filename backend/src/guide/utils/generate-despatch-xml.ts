@@ -354,7 +354,7 @@ export function generateDespatchXML(
     })
     .txt(dto.motivoTrasladoCodigo ?? dto.motivoTraslado)
     .up();
-  shipment.ele('cbc:Information').txt(dto.motivoTraslado || dto.motivoTrasladoCodigo || 'Traslado').up();
+  shipment.ele('cbc:HandlingInstructions').txt(dto.motivoTraslado || dto.motivoTrasladoCodigo || 'Traslado').up();
   shipment
     .ele('cbc:GrossWeightMeasure', {
       unitCode: dto.pesoBrutoUnidad ?? 'KGM',

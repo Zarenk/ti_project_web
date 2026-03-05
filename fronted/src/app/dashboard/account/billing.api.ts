@@ -35,6 +35,7 @@ export interface SubscriptionPlan {
   price: string
   currency: string
   features?: Record<string, any> | null
+  trialDays?: number | null
 }
 
 export type BillingPaymentProvider = "STRIPE" | "MERCADOPAGO" | "CULQI" | "MANUAL"

@@ -54,6 +54,7 @@ export interface LookupResponse {
   identifier: string
   name: string
   address: string | null
+  ubigeo?: string | null
   status?: string | null
   condition?: string | null
   type: "RUC" | "DNI"
@@ -88,6 +89,7 @@ export async function lookupSunatDocument(document: string): Promise<LookupRespo
       identifier: data?.identifier ?? trimmed,
       name: data?.name ?? data?.razon_social ?? "—",
       address: data?.address ?? data?.direccion ?? null,
+      ubigeo: data?.ubigeo ?? null,
       status: data?.status ?? data?.estado ?? null,
       condition: data?.condition ?? data?.condicion ?? null,
       type: "RUC",

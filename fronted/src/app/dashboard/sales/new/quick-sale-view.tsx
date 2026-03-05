@@ -71,6 +71,8 @@ import {
   getPaymentMethods,
   sendInvoiceToSunat,
 } from "../sales.api"
+import { isSubscriptionBlockedError } from "@/lib/subscription-error"
+import { SubscriptionBlockedDialog } from "@/components/subscription-blocked-dialog"
 
 import { SaleContextBar } from "../components/quick-sale/sale-context-bar"
 import {
@@ -150,6 +152,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
   }
   const { settings } = useSiteSettings()
   const receiptFormat = settings.company.receiptFormat ?? "a4"
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false)
 
   // --- Data loading via useQuery ---
   const { data: storesRaw = STABLE_EMPTY, isLoading: storesLoading } = useQuery({
@@ -815,6 +818,11 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
           })
           .catch((sunatErr) => {
             console.error("Error al enviar a SUNAT:", sunatErr)
+            const errMsg = sunatErr instanceof Error ? sunatErr.message : String(sunatErr)
+            if (isSubscriptionBlockedError(errMsg)) {
+              setSubscriptionBlocked(true)
+              return
+            }
             toast.error("No se pudo enviar el comprobante a SUNAT")
           })
 
@@ -1298,6 +1306,11 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <SubscriptionBlockedDialog
+        open={subscriptionBlocked}
+        onOpenChange={setSubscriptionBlocked}
+        feature="transmisión SUNAT"
+      />
     </div>
   )
 }

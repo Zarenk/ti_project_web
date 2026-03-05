@@ -33,6 +33,7 @@ import {
   User,
   Weight,
   X,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -84,7 +85,8 @@ import { CatalogStepper, type StepDef } from "../../catalog/catalog-stepper";
 
 import { getCompanyDetail } from "../../tenancy/tenancy.api";
 import { getRegisteredClients, createClient, checkClientExists } from "../../clients/clients.api";
-import { createProvider, checkProviderExists } from "../../providers/providers.api";
+import { createProvider, checkProviderExists, getProviders } from "../../providers/providers.api";
+import { createProduct } from "../../products/products.api";
 import {
   lookupSunatDocument,
   type LookupResponse,
@@ -99,6 +101,8 @@ import {
   getProductsByStore,
   getSeriesByProductAndStore,
 } from "../../inventory/inventory.api";
+import { isSubscriptionBlockedError } from "@/lib/subscription-error";
+import { SubscriptionBlockedDialog } from "@/components/subscription-blocked-dialog";
 
 // ── Zod schema ────────────────────────────────────────────────
 const itemSchema = z.object({
@@ -106,6 +110,8 @@ const itemSchema = z.object({
   descripcion: z.string().min(1, "Requerido"),
   cantidad: z.coerce.number().min(0.01, "Mayor a 0"),
   unidadMedida: z.string().min(1, "Requerido"),
+  isManual: z.boolean().optional().default(false),
+  saveAsProduct: z.boolean().optional().default(false),
 });
 
 const guideFormSchema = z
@@ -131,10 +137,6 @@ const guideFormSchema = z
     pesoBrutoTotal: z.coerce.number().min(0).optional(),
     pesoBrutoUnidad: z.string().default("KGM"),
     items: z.array(itemSchema).min(1, "Agregue al menos un item"),
-  })
-  .refine((data) => data.destinatarioTipoDoc === "6", {
-    message: "SUNAT requiere que el destinatario tenga RUC para guias de remision",
-    path: ["destinatarioTipoDoc"],
   })
   .refine(
     (data) =>
@@ -231,8 +233,18 @@ const UNIDADES_MEDIDA = [
   { code: "TNE", label: "Tonelada" },
 ];
 
-// Only RUC for destinatario (SUNAT GRE requirement)
-const TIPOS_DOCUMENTO_DESTINATARIO = [{ code: "6", label: "RUC" }];
+// Destinatario accepts all document types (SUNAT GRE supports RUC + DNI)
+const TIPOS_DOCUMENTO_DESTINATARIO = TIPOS_DOCUMENTO;
+
+type DestinatarioOption = {
+  id: string;
+  name: string;
+  docType: string;
+  docTypeLabel: string;
+  docNumber: string;
+  address?: string;
+  source: "client" | "provider";
+};
 
 const DOC_TYPE_MAP: Record<string, string> = {
   RUC: "6",
@@ -375,6 +387,7 @@ export default function NewGuidePage() {
 
   // ── Data state ────────────────────────────────────────────
   const [clients, setClients] = useState<ClientItem[]>([]);
+  const [destinatarioOptions, setDestinatarioOptions] = useState<DestinatarioOption[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [savedTransportistas, setSavedTransportistas] = useState<
     SavedTransportista[]
@@ -390,6 +403,7 @@ export default function NewGuidePage() {
   const [transportistaOpen, setTransportistaOpen] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
 
   // ── Inter-store transfer state ─────────────────────────────
   const [interStoreEnabled, setInterStoreEnabled] = useState(
@@ -468,21 +482,30 @@ export default function NewGuidePage() {
     async function loadCompany() {
       if (!selection?.companyId) return;
       try {
-        const company = await getCompanyDetail(selection.companyId);
+        const [company, storesData] = await Promise.all([
+          getCompanyDetail(selection.companyId),
+          getAllStores().catch(() => []),
+        ]);
         if (company) {
           const ruc = company.sunatRuc || company.taxId || "";
           const name =
             company.sunatBusinessName || company.legalName || company.name || "";
           if (ruc) setValue("numeroDocumentoRemitente", ruc);
           if (name) setValue("razonSocialRemitente", name);
-          // Auto-fill punto de partida with company address
-          if (company.sunatAddress) {
-            setValue("puntoPartida", company.sunatAddress);
-          }
           // Auto-fill destinatario with same company data (most guides are self-transfers)
           setValue("destinatarioTipoDoc", "6");
           if (ruc) setValue("destinatarioNumeroDoc", ruc);
           if (name) setValue("destinatarioRazonSocial", name);
+
+          // Auto-fill punto de partida: prefer first store (has ubigeo), fallback to company address
+          const mainStore = Array.isArray(storesData) ? storesData[0] : null;
+          if (mainStore?.adress) {
+            setValue("puntoPartida", mainStore.adress);
+            if (mainStore.ubigeo)
+              setValue("puntoPartidaUbigeo", mainStore.ubigeo);
+          } else if (company.sunatAddress) {
+            setValue("puntoPartida", company.sunatAddress);
+          }
         }
       } catch {
         // silent
@@ -491,20 +514,60 @@ export default function NewGuidePage() {
     loadCompany();
   }, [selection?.companyId, setValue]);
 
-  // ── Load clients (RUC only — SUNAT GRE requirement) ──────
+  // ── Load clients + providers for destinatario combobox ────
   useEffect(() => {
-    async function loadClients() {
+    async function loadDestinatarios() {
       if (!selection?.orgId) return;
       try {
-        const data = await getRegisteredClients();
-        const all = Array.isArray(data) ? data : [];
-        // Filter to RUC clients only since SUNAT GRE requires RUC for destinatario
-        setClients(all.filter((c) => c.type?.toUpperCase() === "RUC"));
+        const [clientsData, providersData] = await Promise.all([
+          getRegisteredClients().catch(() => []),
+          getProviders().catch(() => []),
+        ]);
+        const allClients = Array.isArray(clientsData) ? clientsData : [];
+        const allProviders = Array.isArray(providersData) ? providersData : [];
+        setClients(allClients);
+
+        const docTypeLabelMap: Record<string, string> = { "6": "RUC", "1": "DNI", "4": "CE", "7": "PAS" };
+        const options: DestinatarioOption[] = [];
+
+        // Map clients
+        for (const c of allClients) {
+          if (!c.typeNumber) continue;
+          const code = DOC_TYPE_MAP[c.type?.toUpperCase?.()] || "1";
+          options.push({
+            id: `client-${c.id}`,
+            name: c.name,
+            docType: code,
+            docTypeLabel: docTypeLabelMap[code] || c.type || "DOC",
+            docNumber: c.typeNumber,
+            address: c.adress || undefined,
+            source: "client",
+          });
+        }
+
+        // Map providers
+        for (const p of allProviders) {
+          if (!p.documentNumber) continue;
+          const code = DOC_TYPE_MAP[p.document?.toUpperCase?.()] || "6";
+          // Skip if already added from clients (same docNumber)
+          if (options.some((o) => o.docNumber === p.documentNumber)) continue;
+          options.push({
+            id: `provider-${p.id}`,
+            name: p.name,
+            docType: code,
+            docTypeLabel: docTypeLabelMap[code] || p.document || "DOC",
+            docNumber: p.documentNumber,
+            address: p.adress || undefined,
+            source: "provider",
+          });
+        }
+
+        setDestinatarioOptions(options);
       } catch {
         // silent
       }
     }
-    loadClients();
+    loadDestinatarios();
   }, [selection?.orgId]);
 
   // ── Load products ─────────────────────────────────────────
@@ -807,6 +870,26 @@ export default function NewGuidePage() {
           });
         }
       }
+      // Post-operation: save manual items as products (non-blocking)
+      const itemsToSave = data.items.filter(
+        (it) => it.isManual && it.saveAsProduct,
+      );
+      if (itemsToSave.length > 0) {
+        for (const item of itemsToSave) {
+          try {
+            await createProduct({
+              name: item.descripcion,
+              price: 0,
+              barcode: item.codigo || undefined,
+            });
+            toast.success(`Producto "${item.descripcion}" guardado en el sistema`);
+          } catch (err: any) {
+            const msg = err?.message || "Error desconocido";
+            toast.warning(`No se pudo guardar "${item.descripcion}": ${msg}`);
+          }
+        }
+      }
+
       if (result.estadoSunat === "ACEPTADO") {
         toast.success("Guía aceptada por SUNAT");
         router.push("/dashboard/transfers");
@@ -822,17 +905,25 @@ export default function NewGuidePage() {
         );
       }
     } catch (err: any) {
+      if (isSubscriptionBlockedError(err.message ?? '')) {
+        setSubscriptionBlocked(true);
+        return;
+      }
       toast.error(err.message || "Error al enviar guia");
     } finally {
       setSubmitting(false);
     }
   });
 
-  // ── Select client → fill destinatario ─────────────────────
-  function selectClient(client: ClientItem) {
-    setValue("destinatarioTipoDoc", "6", { shouldValidate: true });
-    setValue("destinatarioNumeroDoc", client.typeNumber || "");
-    setValue("destinatarioRazonSocial", client.name || "");
+  // ── Select destinatario → fill fields ─────────────────────
+  function selectDestinatario(option: DestinatarioOption) {
+    setValue("destinatarioTipoDoc", option.docType, { shouldValidate: true });
+    setValue("destinatarioNumeroDoc", option.docNumber || "");
+    setValue("destinatarioRazonSocial", option.name || "");
+    // Auto-fill destination address if available
+    if (option.address) {
+      setValue("puntoLlegada", option.address, { shouldValidate: true });
+    }
     setClientOpen(false);
   }
 
@@ -864,6 +955,13 @@ export default function NewGuidePage() {
     setValue("destinatarioTipoDoc", "6", { shouldValidate: true });
     setValue("destinatarioNumeroDoc", result.identifier || "");
     setValue("destinatarioRazonSocial", result.name || "");
+    // Auto-fill destination address + ubigeo from SUNAT lookup
+    if (result.address) {
+      setValue("puntoLlegada", result.address, { shouldValidate: true });
+    }
+    if (result.ubigeo) {
+      setValue("puntoLlegadaUbigeo", result.ubigeo, { shouldValidate: true });
+    }
 
     // Save to system if requested
     if (saveAs) {
@@ -890,11 +988,27 @@ export default function NewGuidePage() {
               name: result.name,
               type: "RUC",
               typeNumber: result.identifier,
+              adress: result.address || "",
             });
-            // Refresh clients list for the combobox
+            // Refresh destinatario options
             try {
-              const all = await getRegisteredClients();
-              setClients(all.filter((c: any) => c.type?.toUpperCase() === "RUC"));
+              const [cData, pData] = await Promise.all([
+                getRegisteredClients().catch(() => []),
+                getProviders().catch(() => []),
+              ]);
+              const docTypeLabelMap: Record<string, string> = { "6": "RUC", "1": "DNI", "4": "CE", "7": "PAS" };
+              const opts: DestinatarioOption[] = [];
+              for (const c of (Array.isArray(cData) ? cData : [])) {
+                if (!c.typeNumber) continue;
+                const code = DOC_TYPE_MAP[c.type?.toUpperCase?.()] || "1";
+                opts.push({ id: `client-${c.id}`, name: c.name, docType: code, docTypeLabel: docTypeLabelMap[code] || c.type || "DOC", docNumber: c.typeNumber, address: c.adress || undefined, source: "client" });
+              }
+              for (const p of (Array.isArray(pData) ? pData : [])) {
+                if (!p.documentNumber || opts.some((o) => o.docNumber === p.documentNumber)) continue;
+                const code = DOC_TYPE_MAP[p.document?.toUpperCase?.()] || "6";
+                opts.push({ id: `provider-${p.id}`, name: p.name, docType: code, docTypeLabel: docTypeLabelMap[code] || p.document || "DOC", docNumber: p.documentNumber, address: p.adress || undefined, source: "provider" });
+              }
+              setDestinatarioOptions(opts);
             } catch {}
             toast.success(`Cliente "${result.name}" guardado en el sistema.`);
           } else {
@@ -993,6 +1107,8 @@ export default function NewGuidePage() {
       descripcion: product.name,
       cantidad: 1,
       unidadMedida: "NIU",
+      isManual: false,
+      saveAsProduct: false,
     });
     setProductSearchOpen(false);
     setProductSearch("");
@@ -1032,6 +1148,8 @@ export default function NewGuidePage() {
       descripcion: name,
       cantidad: 1,
       unidadMedida: "NIU",
+      isManual: false,
+      saveAsProduct: false,
     });
 
     setStoreProductSearchOpen(false);
@@ -1203,13 +1321,12 @@ export default function NewGuidePage() {
         <FormSection
           icon={User}
           title="Destinatario"
-          badge="Solo RUC"
           step={2}
         >
           <p className="text-xs text-muted-foreground mb-3">
             Pre-llenado con datos de tu empresa. Puedes cambiar el
-            destinatario buscando un cliente registrado o consultando un RUC
-            en SUNAT.
+            destinatario buscando un cliente/proveedor registrado o
+            consultando un RUC en SUNAT.
           </p>
           {/* Client search + SUNAT lookup */}
           <div className="mb-4 flex flex-col sm:flex-row gap-2">
@@ -1223,7 +1340,7 @@ export default function NewGuidePage() {
                 >
                   <span className="flex items-center gap-2 truncate">
                     <Search className="h-3.5 w-3.5 flex-shrink-0" />
-                    Buscar cliente RUC registrado...
+                    Buscar cliente o proveedor...
                   </span>
                   <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
                 </Button>
@@ -1233,26 +1350,38 @@ export default function NewGuidePage() {
                 align="start"
               >
                 <Command>
-                  <CommandInput placeholder="Buscar por nombre o RUC..." />
+                  <CommandInput placeholder="Buscar por nombre, RUC o DNI..." />
                   <CommandList>
                     <CommandEmpty>
-                      No se encontraron clientes con RUC.
+                      No se encontraron resultados.
                     </CommandEmpty>
                     <CommandGroup>
-                      {clients.map((c) => (
+                      {destinatarioOptions.map((opt) => (
                         <CommandItem
-                          key={c.id}
-                          value={`${c.name} ${c.typeNumber}`}
-                          onSelect={() => selectClient(c)}
+                          key={opt.id}
+                          value={`${opt.name} ${opt.docNumber}`}
+                          onSelect={() => selectDestinatario(opt)}
                           className="cursor-pointer"
                         >
-                          <div className="flex flex-col gap-0.5 min-w-0">
-                            <span className="font-medium text-sm truncate">
-                              {c.name}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              RUC: {c.typeNumber}
-                            </span>
+                          <div className="flex items-center gap-2 min-w-0 w-full">
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                              <span className="font-medium text-sm truncate">
+                                {opt.name}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {opt.docTypeLabel}: {opt.docNumber}
+                              </span>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] flex-shrink-0 ${
+                                opt.source === "provider"
+                                  ? "border-blue-500/30 text-blue-600 dark:text-blue-400"
+                                  : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {opt.source === "provider" ? "Prov" : "Cliente"}
+                            </Badge>
                           </div>
                         </CommandItem>
                       ))}
@@ -1297,10 +1426,10 @@ export default function NewGuidePage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
-                RUC *
+                N° Documento *
               </Label>
               <Input
-                placeholder="20000000001"
+                placeholder={watch("destinatarioTipoDoc") === "1" ? "12345678" : "20000000001"}
                 {...register("destinatarioNumeroDoc")}
               />
               <FieldError message={errors.destinatarioNumeroDoc?.message} />
@@ -2494,6 +2623,8 @@ export default function NewGuidePage() {
                   descripcion: "",
                   cantidad: 1,
                   unidadMedida: "NIU",
+                  isManual: true,
+                  saveAsProduct: false,
                 })
               }
             >
@@ -2526,7 +2657,7 @@ export default function NewGuidePage() {
                   <TableHead className="min-w-[130px] text-xs font-semibold">
                     Unidad
                   </TableHead>
-                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2589,15 +2720,36 @@ export default function NewGuidePage() {
                       </Select>
                     </TableCell>
                     <TableCell className="p-1.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 cursor-pointer text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
-                        onClick={() => remove(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-0.5">
+                        {(field as any).isManual && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title={watch(`items.${index}.saveAsProduct`) ? "Se guardará como producto" : "Guardar como producto"}
+                            className={`h-9 w-9 cursor-pointer rounded-full transition-colors ${
+                              watch(`items.${index}.saveAsProduct`)
+                                ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                            onClick={() => {
+                              const current = watch(`items.${index}.saveAsProduct`);
+                              setValue(`items.${index}.saveAsProduct`, !current);
+                            }}
+                          >
+                            <Save className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 cursor-pointer text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
+                          onClick={() => remove(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2928,6 +3080,11 @@ export default function NewGuidePage() {
           </div>
         </DialogContent>
       </Dialog>
+      <SubscriptionBlockedDialog
+        open={subscriptionBlocked}
+        onOpenChange={setSubscriptionBlocked}
+        feature="guías de remisión"
+      />
     </div>
   );
 }
