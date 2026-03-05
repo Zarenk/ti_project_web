@@ -24,6 +24,8 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantContextGuard } from 'src/tenancy/tenant-context.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 const SUPPORTED_DOCUMENT_TYPES = ['invoice', 'boleta', 'creditNote'] as const;
 type SunatDocumentType = (typeof SUPPORTED_DOCUMENT_TYPES)[number];
@@ -43,6 +45,8 @@ export class SunatController {
   constructor(private readonly sunatService: SunatService) {}
 
   @Post('send-document')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('sunat_transmission')
   async sendDocument(
     @Body() body: SendDocumentBody,
     @CurrentTenant() tenant: TenantContext | null,
@@ -295,6 +299,8 @@ export class SunatController {
   }
 
   @Post('transmissions/:id/retry')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('sunat_transmission')
   async retryTransmission(
     @Param('id', ParseIntPipe) id: number,
     @CurrentTenant() tenant: TenantContext | null,

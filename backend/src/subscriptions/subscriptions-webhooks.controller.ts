@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   HttpCode,
   Post,
   Logger,
@@ -36,6 +37,9 @@ export class SubscriptionsWebhooksController {
   @Post('mock')
   @HttpCode(200)
   async handleMockEvent(@Body() payload: MockWebhookPayload) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Mock endpoint disabled in production');
+    }
     this.logger.debug(`Received mock webhook ${payload.type}`);
     if (payload.type === 'checkout.session.completed') {
       return this.subscriptionsService.finalizeCheckoutSession(

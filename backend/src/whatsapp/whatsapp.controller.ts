@@ -21,6 +21,8 @@ import { RolesGuard } from '../users/roles.guard';
 import { TenantRequiredGuard } from '../common/guards/tenant-required.guard';
 import { Roles } from '../users/roles.decorator';
 import { ModulePermission } from '../common/decorators/module-permission.decorator';
+import { SubscriptionStatusGuard } from '../common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from '../common/decorators/requires-subscription.decorator';
 import { SendMessageDto, SendTemplateDto, BulkMessageDto } from './dto/send-message.dto';
 import {
   CreateAutomationDto,
@@ -45,6 +47,8 @@ export class WhatsAppController {
   // ============================================================================
 
   @Post('connect')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('whatsapp')
   async connect(
     @Request() req: any,
     @Query('fresh') fresh?: string,
@@ -254,6 +258,8 @@ export class WhatsAppController {
   // ============================================================================
 
   @Post('send')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('whatsapp')
   async sendMessage(@Request() req: any, @Body() dto: SendMessageDto) {
     const { organizationId, companyId } = req.tenantContext;
     const result = await this.whatsappService.sendMessage(organizationId, companyId, dto);
@@ -265,6 +271,8 @@ export class WhatsAppController {
   }
 
   @Post('send-template')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('whatsapp')
   async sendTemplate(@Request() req: any, @Body() dto: SendTemplateDto) {
     const { organizationId, companyId } = req.tenantContext;
     const result = await this.whatsappService.sendTemplateMessage(
@@ -280,6 +288,8 @@ export class WhatsAppController {
   }
 
   @Post('send-bulk')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('whatsapp')
   async sendBulk(@Request() req: any, @Body() dto: BulkMessageDto) {
     const { organizationId, companyId } = req.tenantContext;
 

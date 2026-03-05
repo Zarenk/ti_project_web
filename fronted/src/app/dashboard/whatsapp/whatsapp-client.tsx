@@ -20,6 +20,9 @@ import {
   Bot,
 } from 'lucide-react';
 
+import { isSubscriptionBlockedError } from '@/lib/subscription-error';
+import { SubscriptionBlockedDialog } from '@/components/subscription-blocked-dialog';
+
 // Import tab components
 import ConnectionPanel from './components/connection-panel';
 import SendMessagePanel from './components/send-message-panel';
@@ -50,6 +53,7 @@ export default function WhatsAppClient() {
   });
 
   const [activeTab, setActiveTab] = useState('connection');
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
@@ -133,6 +137,10 @@ export default function WhatsAppClient() {
         });
         setIsPolling(true);
       } else {
+        if (isSubscriptionBlockedError(data.error ?? data.message ?? '')) {
+          setSubscriptionBlocked(true);
+          return;
+        }
         toast.error('Error al conectar', {
           description: data.error || 'No se pudo iniciar la conexión',
         });
@@ -372,6 +380,11 @@ export default function WhatsAppClient() {
         </TabsContent>
       </Tabs>
       </div>
+      <SubscriptionBlockedDialog
+        open={subscriptionBlocked}
+        onOpenChange={setSubscriptionBlocked}
+        feature="WhatsApp"
+      />
     </section>
   );
 }

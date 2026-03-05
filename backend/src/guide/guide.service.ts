@@ -163,7 +163,15 @@ export class GuideService {
     if (!dto.tipoDocumentoRemitente) dto.tipoDocumentoRemitente = '6'; // RUC
 
     // 1. Generate unsigned XML
+    this.logger.log(
+      `[Guide] DTO motivo: motivoTraslado="${dto.motivoTraslado}", motivoTrasladoCodigo="${dto.motivoTrasladoCodigo}"`,
+    );
     const unsignedXml = generateDespatchXML(dto, serie, correlativo);
+    // Debug: verify cbc:HandlingInstructions is present in generated XML
+    const instrMatch = unsignedXml.match(/<cbc:HandlingInstructions>(.*?)<\/cbc:HandlingInstructions>/);
+    this.logger.log(
+      `[Guide] XML cbc:HandlingInstructions: ${instrMatch ? `"${instrMatch[1]}"` : 'NOT FOUND'}`,
+    );
 
     // 2. Sign XML with Node signer using per-company certificate
     const signedXml = this.sanitizeSignedXml(

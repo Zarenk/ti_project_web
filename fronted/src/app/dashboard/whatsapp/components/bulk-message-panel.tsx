@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Users, Send } from 'lucide-react';
+import { isSubscriptionBlockedError } from '@/lib/subscription-error';
+import { SubscriptionBlockedDialog } from '@/components/subscription-blocked-dialog';
 
 interface SendMessagePanelProps {
   isConnected: boolean;
@@ -21,6 +23,7 @@ export default function BulkMessagePanel({ isConnected }: SendMessagePanelProps)
     failed: number;
     details: Array<{ recipient: string; success: boolean; error?: string }>;
   } | null>(null);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
 
   const handleSend = async () => {
     if (!recipients || !message) {
@@ -72,6 +75,10 @@ export default function BulkMessagePanel({ isConnected }: SendMessagePanelProps)
           setRecipients('');
         }
       } else {
+        if (isSubscriptionBlockedError(data.message ?? data.error ?? '')) {
+          setSubscriptionBlocked(true);
+          return;
+        }
         toast.error('Error al enviar mensajes', {
           description: data.error || 'No se pudo completar el envío',
         });
@@ -90,6 +97,7 @@ export default function BulkMessagePanel({ isConnected }: SendMessagePanelProps)
     .filter((r) => r.length >= 10).length;
 
   return (
+    <>
     <div className="space-y-3 sm:space-y-4 w-full min-w-0">
       <Card className="w-full min-w-0 overflow-hidden">
         <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4">
@@ -192,5 +200,11 @@ export default function BulkMessagePanel({ isConnected }: SendMessagePanelProps)
         </Card>
       )}
     </div>
+    <SubscriptionBlockedDialog
+      open={subscriptionBlocked}
+      onOpenChange={setSubscriptionBlocked}
+      feature="envío masivo de WhatsApp"
+    />
+    </>
   );
 }

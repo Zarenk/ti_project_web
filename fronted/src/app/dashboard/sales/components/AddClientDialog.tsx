@@ -16,7 +16,7 @@ import { checkClientExists, createClient } from "../../clients/clients.api";
 interface AddClientDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  setClients: React.Dispatch<React.SetStateAction<{ id: number; name: string; type:string; typeNumber:string; }[]>>;
+  setClients: React.Dispatch<React.SetStateAction<{ id: number; name: string; type:string; typeNumber:string; adress?: string | null; }[]>>;
   setValue: UseFormSetValue<SalesType>; // Para actualizar valores en el formulario principal
   updateTipoComprobante: (tipoComprobante: string) => void;
 }
