@@ -772,7 +772,7 @@ export default function NewGuidePage() {
           numeroDocumento: data.destinatarioNumeroDoc,
           razonSocial: data.destinatarioRazonSocial,
         },
-        items: data.items,
+        items: data.items.map(({ isManual, saveAsProduct, ...rest }) => rest),
       };
 
       // Append inter-store transfer data when enabled
