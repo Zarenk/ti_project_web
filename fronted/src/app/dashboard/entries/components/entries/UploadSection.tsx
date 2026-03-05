@@ -128,24 +128,23 @@ export function UploadSection({
                 <TooltipContent>Completa datos automáticamente desde la factura.</TooltipContent>
               </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 cursor-pointer border-blue-700/60 text-blue-700 transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/30"
-                    onClick={onPreviewInvoice}
-                    disabled={!invoicePreviewUrl}
-                    aria-label="Ver factura PDF"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {invoicePreviewUrl ? 'Ver factura y mostrar sus campos.' : 'Sube una factura para previsualizarla.'}
-                </TooltipContent>
-              </Tooltip>
+              {invoicePreviewUrl && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 cursor-pointer border-blue-700/60 text-blue-700 transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                      onClick={onPreviewInvoice}
+                      aria-label="Ver factura PDF"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Ver factura y mostrar sus campos.</TooltipContent>
+                </Tooltip>
+              )}
             </div>
 
             <input
@@ -171,24 +170,23 @@ export function UploadSection({
                 <TooltipContent>Procesa la guía de remisión y sus campos.</TooltipContent>
               </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 cursor-pointer border-yellow-700/60 text-yellow-700 transition-colors hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
-                    onClick={onPreviewGuide}
-                    disabled={!guidePreviewUrl}
-                    aria-label="Ver guia PDF"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {guidePreviewUrl ? 'Ver guía y mostrar sus campos.' : 'Sube una guía para previsualizarla.'}
-                </TooltipContent>
-              </Tooltip>
+              {guidePreviewUrl && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 cursor-pointer border-yellow-700/60 text-yellow-700 transition-colors hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                      onClick={onPreviewGuide}
+                      aria-label="Ver guia PDF"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Ver guía y mostrar sus campos.</TooltipContent>
+                </Tooltip>
+              )}
             </div>
 
             <input

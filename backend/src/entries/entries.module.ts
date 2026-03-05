@@ -10,6 +10,7 @@ import { JournalEntryService } from 'src/accounting/services/journal-entry.servi
 import { AccountBootstrapService } from 'src/accounting/services/account-bootstrap.service';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { InvoiceExtractionModule } from 'src/invoice-extraction/invoice-extraction.module';
+import { SubscriptionGuardService } from 'src/subscriptions/subscription-guard.service';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { InvoiceExtractionModule } from 'src/invoice-extraction/invoice-extracti
     AccountingService,
     JournalEntryService,
     AccountBootstrapService,
+    SubscriptionGuardService,
   ],
   exports: [EntriesService],
 })

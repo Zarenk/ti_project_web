@@ -32,3 +32,12 @@ CHECKLIST_PRE_DEPLOY.md
 
 # Cypress screenshots (generated on test runs)
 fronted/cypress/screenshots/
+
+# Database backup dumps
+backups/
+
+# OCR traineddata (large binary)
+backend/spa.traineddata
+
+# Temporary test scripts
+backend/test-jurisprudence*.sh

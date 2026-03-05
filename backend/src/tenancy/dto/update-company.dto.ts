@@ -63,6 +63,11 @@ export class UpdateCompanyDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  sunatContactEmail?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   logoUrl?: string | null;
 
   @IsOptional()

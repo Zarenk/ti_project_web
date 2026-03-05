@@ -71,6 +71,7 @@ export interface CompanyResponse {
   sunatBusinessName: string | null
   sunatAddress: string | null
   sunatPhone: string | null
+  sunatContactEmail: string | null
   logoUrl: string | null
   primaryColor: string | null
   secondaryColor: string | null
@@ -143,6 +144,7 @@ export interface UpdateCompanyPayload {
   sunatBusinessName?: string | null
   sunatAddress?: string | null
   sunatPhone?: string | null
+  sunatContactEmail?: string | null
   logoUrl?: string | null
   primaryColor?: string | null
   secondaryColor?: string | null

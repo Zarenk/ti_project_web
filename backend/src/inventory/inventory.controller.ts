@@ -31,6 +31,8 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { InventorySnapshotService } from './inventory-snapshot.service';
 import { HistoricalSnapshotService } from './historical-snapshot.service';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
@@ -303,6 +305,8 @@ export class InventoryController {
    * POST /inventory/snapshots/current
    */
   @Post('/snapshots/current')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('inventory_write', { maxGraceTier: 'RESTRICTED' })
   async createCurrentSnapshot(
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
@@ -319,6 +323,8 @@ export class InventoryController {
    * Body: { month: number, year: number }
    */
   @Post('/snapshots')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('inventory_write', { maxGraceTier: 'RESTRICTED' })
   async createSnapshot(
     @Body() body: { month: number; year: number },
     @CurrentTenant('organizationId') organizationId: number | null,

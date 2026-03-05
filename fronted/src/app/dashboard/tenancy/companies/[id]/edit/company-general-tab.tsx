@@ -165,6 +165,21 @@ export function CompanyGeneralTab({
             disabled={isPending}
           />
         </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="company-email">Email de la empresa</Label>
+          <Input
+            id="company-email"
+            type="email"
+            value={formState.sunatContactEmail ?? ""}
+            onChange={handleBasicChange("sunatContactEmail")}
+            placeholder="empresa@ejemplo.com"
+            disabled={isPending}
+          />
+          <p className="text-xs text-muted-foreground">
+            Se usa como remitente para el envío de cotizaciones y otros correos.
+          </p>
+        </div>
       </div>
 
       {/* ── Logo ──────────────────────────────────────────── */}

@@ -26,6 +26,7 @@ import { AccountingModeProvider } from "@/context/accounting-mode-context";
 import { VerticalCSSProvider } from "@/components/vertical-css-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { QueryProvider } from "@/providers/query-provider";
+import { SubscriptionLockedOverlay } from "@/components/subscription-locked-overlay";
 
 export const revalidate = 0;
 
@@ -58,6 +59,7 @@ export default async function Page({ children }: { children: ReactNode }) {
               <AppSidebar />
             <SidebarInset>
               <LogoutOverlay />
+              <SubscriptionLockedOverlay />
               <ContextStatusBanner />
               <TrialStatusBanner
                 className="px-4 pt-4"

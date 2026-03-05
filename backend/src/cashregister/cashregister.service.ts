@@ -381,6 +381,8 @@ export class CashregisterService {
         voucher: tx.salePayments[0]?.sale?.invoices?.[0]
           ? `${tx.salePayments[0].sale.invoices[0].serie}-${tx.salePayments[0].sale.invoices[0].nroCorrelativo}`
           : null,
+        voucherType:
+          tx.salePayments[0]?.sale?.invoices?.[0]?.tipoComprobante ?? null,
         clientName: linkedClient?.name ?? tx.clientName ?? null,
         clientDocument: linkedClient?.typeNumber ?? tx.clientDocument ?? null,
         clientDocumentType: linkedClient?.type ?? tx.clientDocumentType ?? null,

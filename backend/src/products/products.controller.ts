@@ -34,6 +34,8 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 @ModulePermission(['inventory', 'catalog'])
 @Controller('products')
@@ -45,8 +47,9 @@ export class ProductsController {
   ) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionStatusGuard)
   @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @RequiresActiveSubscription('products_write', { maxGraceTier: 'RESTRICTED' })
   @ApiOperation({ summary: 'Create a product' }) // Swagger
   async create(
     @Body() createProductDto: CreateProductDto,
@@ -69,8 +72,9 @@ export class ProductsController {
   }
 
   @Post('create-with-stock')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionStatusGuard)
   @Roles('ADMIN', 'EMPLOYEE', 'SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG')
+  @RequiresActiveSubscription('products_write', { maxGraceTier: 'RESTRICTED' })
   @ApiOperation({ summary: 'Create a product with initial stock atomically' })
   async createWithStock(
     @Body()
@@ -197,8 +201,9 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionStatusGuard)
   @Roles('ADMIN')
+  @RequiresActiveSubscription('products_write', { maxGraceTier: 'RESTRICTED' })
   async update(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
@@ -248,8 +253,9 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard, EntityOwnershipGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionStatusGuard, EntityOwnershipGuard)
   @Roles('ADMIN')
+  @RequiresActiveSubscription('products_write', { maxGraceTier: 'RESTRICTED' })
   @EntityModel('product')
   @EntityIdParam('id')
   async remove(@Param('id') id: string, @Req() req: Request) {

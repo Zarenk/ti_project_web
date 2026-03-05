@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { AlertTriangle, CheckCircle2, Clock, Info, Loader2 } from "lucide-react"
+import { AlertTriangle, Building2, CheckCircle2, Clock, Info, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 import { bulkMarkProductsMigrated } from "@/app/dashboard/products/products.api"
@@ -54,11 +54,7 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
   }, [selection.companyId])
 
   useEffect(() => {
-    if (isPublicSignup !== true) {
-      setSummary(null)
-      setDismissed(false)
-      return
-    }
+    // Always fetch summary — paymentEnforced status is only known after fetch
     let mounted = true
     fetchSubscriptionSummary()
       .then((data) => {
@@ -72,7 +68,7 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
     return () => {
       mounted = false
     }
-  }, [isPublicSignup])
+  }, [isPublicSignup, selection.orgId])
 
   useEffect(() => {
     if (!summary || !dismissalKey || typeof window === "undefined") {
@@ -157,8 +153,15 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
     return summary.trial.isTrial || summary.plan.status === "PAST_DUE"
   }, [summary])
 
+  // Show banner for public signup users OR payment-enforced orgs
+  const isPaymentEnforced = summary?.paymentEnforced === true
   const showTrialBanner =
-    isPublicSignup === true && summary && needsAttention && dismissed === false
+    (isPublicSignup === true || isPaymentEnforced) &&
+    summary &&
+    needsAttention &&
+    dismissed === false
+
+  const hasPaymentMethod = summary?.hasPaymentMethod === true
 
   const handleNoticeDismiss = () => {
     if (!verticalNoticeKey || typeof window === "undefined") {
@@ -180,7 +183,11 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
 
   const isTrial = summary?.trial.isTrial === true
   const days = summary ? Math.max(summary.trial.daysLeft ?? 0, 0) : 0
-  const urgent = !!summary && isTrial && (days <= 3 || summary.plan.status === "PAST_DUE")
+  const urgent =
+    !!summary &&
+    (summary.plan.status === "PAST_DUE" ||
+      (isTrial && days <= 3) ||
+      (isTrial && isPaymentEnforced && !hasPaymentMethod))
 
   const migration = tenantFeatures?.migration
   const pendingMigrations = migration?.legacy ?? 0
@@ -336,7 +343,11 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
     if (days <= 0) {
       return "Tu periodo de prueba termina hoy. Actualiza tu plan para continuar usando la plataforma."
     }
-    return `Tu periodo de prueba termina en ${days} día${days === 1 ? "" : "s"}.`
+    const paymentWarning =
+      isPaymentEnforced && !hasPaymentMethod && days <= 7
+        ? " Agrega un método de pago para evitar la suspensión automática."
+        : ""
+    return `Tu periodo de prueba termina en ${days} día${days === 1 ? "" : "s"}.${paymentWarning}`
   })()
 
   const deadlineText =
@@ -390,8 +401,13 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button asChild variant={urgent ? "destructive" : "default"}>
-              <Link href="/dashboard/plan">Actualizar plan</Link>
+            {isPaymentEnforced && !hasPaymentMethod ? (
+              <Button asChild variant={urgent ? "destructive" : "default"}>
+                <Link href="/dashboard/account/billing">Agregar método de pago</Link>
+              </Button>
+            ) : null}
+            <Button asChild variant={isPaymentEnforced && !hasPaymentMethod ? "outline" : urgent ? "destructive" : "default"}>
+              <Link href="/dashboard/account/plan">Ver planes</Link>
             </Button>
             {isTrial ? (
               <Button variant="ghost" size="sm" onClick={handleDismiss}>
@@ -409,22 +425,21 @@ export function TrialStatusBanner({ className, leading }: TrialStatusBannerProps
 
   return (
     <div className={containerClass}>
-      {migrationBanner ? (
-        <div className="flex flex-wrap items-center gap-3">
-          {leading ? <div className="flex items-center gap-2">{leading}</div> : null}
-          <div className="min-w-[220px] max-w-full text-sm font-semibold text-foreground">
+      <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
+        {leading ? <div className="flex items-center gap-2 flex-shrink-0">{leading}</div> : null}
+        <div className="group flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 rounded-lg border border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-white/60 px-2.5 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:border-slate-300/70 hover:shadow-[0_1px_4px_rgba(0,0,0,0.06)] dark:border-slate-700/50 dark:from-slate-800/60 dark:to-slate-900/40 dark:hover:border-slate-600/60 sm:flex-none sm:max-w-[60%]">
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary flex-shrink-0 transition-colors duration-200 group-hover:bg-primary/15 sm:h-7 sm:w-7">
+            <Building2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          </div>
+          <div className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground/90 sm:text-sm">
             <DashboardCompanyName />
           </div>
-          <div className="flex-1">{migrationBanner}</div>
+          <div className="hidden h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0 animate-pulse sm:block" />
         </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-3">
-          {leading ? <div className="flex items-center gap-2">{leading}</div> : null}
-          <div className="text-sm font-semibold text-foreground">
-            <DashboardCompanyName />
-          </div>
-        </div>
-      )}
+        {migrationBanner ? (
+          <div className="hidden sm:flex flex-1">{migrationBanner}</div>
+        ) : null}
+      </div>
       {verticalNoticeBanner}
       {trialBanner}
     </div>

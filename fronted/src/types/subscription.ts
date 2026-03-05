@@ -2,6 +2,8 @@ export type SubscriptionStatus = "TRIAL" | "ACTIVE" | "PAST_DUE" | "CANCELED"
 
 export type SubscriptionInterval = "MONTHLY" | "YEARLY"
 
+export type GraceTier = "SOFT" | "RESTRICTED" | "READ_MOSTLY" | "LOCKED"
+
 export interface SubscriptionPlanOption {
   id: number
   code: string
@@ -79,6 +81,10 @@ export interface SubscriptionSummary {
     storageMB: number | null
     [key: string]: number | null | undefined
   }
+  paymentEnforced?: boolean
+  hasPaymentMethod?: boolean
+  graceTier?: GraceTier | null
+  pastDueSince?: string | null
   usage: {
     users: number
     invoices: number

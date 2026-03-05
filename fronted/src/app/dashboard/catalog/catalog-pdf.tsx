@@ -949,7 +949,11 @@ export async function generateCatalogPdf(
     const priceValue = p.priceSell ?? p.price
     const raw = p.image || p.images?.[0] || undefined
     const img = resolveImageUrl(raw)
-    const proxied = img ? `/api/image?url=${encodeURIComponent(img)}` : undefined
+    let proxied: string | undefined
+    if (img) {
+      const proxyUrl = `/api/image?url=${encodeURIComponent(img)}`
+      proxied = (await rasterImageToDataUrl(proxyUrl)) ?? undefined
+    }
 
     const logos = (
       await Promise.all(getLogos(p, brandMap).map(normalizeLogo))

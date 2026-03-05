@@ -20,6 +20,7 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { QuotesService } from './quotes.service';
+import { QuotesEmailService } from './quotes-email.service';
 import { Request } from 'express';
 
 const SALES_ALLOWED_ROLES = [
@@ -34,7 +35,10 @@ const SALES_ALLOWED_ROLES = [
 @ModulePermission('sales')
 @Controller('quotes')
 export class QuotesController {
-  constructor(private readonly quotesService: QuotesService) {}
+  constructor(
+    private readonly quotesService: QuotesService,
+    private readonly quotesEmailService: QuotesEmailService,
+  ) {}
 
   @Post()
   async createDraft(
@@ -175,6 +179,44 @@ export class QuotesController {
       throw new BadRequestException('Empresa requerida.');
     }
     return this.quotesService.findOne(Number(id), companyId);
+  }
+
+  @Post('email')
+  @UseInterceptors(FileInterceptor('pdf'))
+  async sendQuoteEmail(
+    @UploadedFile() pdf: Express.Multer.File,
+    @Body() body: { to?: string; subject?: string; message?: string; fromName?: string },
+  ) {
+    const to = typeof body?.to === 'string' ? body.to.trim() : '';
+    if (!to) {
+      throw new BadRequestException('Email del destinatario requerido.');
+    }
+    if (!pdf) {
+      throw new BadRequestException('Archivo PDF requerido.');
+    }
+    if (!pdf.mimetype?.includes('pdf')) {
+      throw new BadRequestException('El archivo debe ser PDF.');
+    }
+    const subject =
+      typeof body?.subject === 'string' && body.subject.trim().length > 0
+        ? body.subject.trim()
+        : 'Cotización';
+    const message =
+      typeof body?.message === 'string' ? body.message : undefined;
+    const fromName =
+      typeof body?.fromName === 'string' && body.fromName.trim().length > 0
+        ? body.fromName.trim()
+        : undefined;
+
+    await this.quotesEmailService.sendQuoteEmail({
+      to,
+      subject,
+      message,
+      pdfBuffer: pdf.buffer,
+      pdfFilename: pdf.originalname || 'cotizacion.pdf',
+      fromName,
+    });
+    return { ok: true };
   }
 
   @Post('whatsapp')

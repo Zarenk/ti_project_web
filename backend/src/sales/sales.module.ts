@@ -7,6 +7,7 @@ import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { SunatModule } from 'src/sunat/sunat.module';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
+import { SubscriptionGuardService } from 'src/subscriptions/subscription-guard.service';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { ProfitAnalysisService } from './services/profit-analysis.service';
 import { PredictiveAlgorithmService } from './services/predictive-algorithm.service';
@@ -20,6 +21,7 @@ import { InvestmentRecommendationService } from './services/investment-recommend
     PrismaService,
     AccountingHook,
     SubscriptionQuotaService,
+    SubscriptionGuardService,
     ProfitAnalysisService,
     PredictiveAlgorithmService,
     InvestmentRecommendationService,

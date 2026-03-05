@@ -12,6 +12,11 @@ import {
   SUBSCRIPTION_REQUIRED_KEY,
   type SubscriptionRequirement,
 } from '../decorators/requires-subscription.decorator';
+import {
+  resolveGraceTier,
+  isGraceTierBeyond,
+  type GraceTier,
+} from 'src/subscriptions/subscription-quota.service';
 
 interface RequestWithTenant {
   user?: { role?: string; userId?: number };
@@ -35,7 +40,7 @@ export class SubscriptionStatusGuard implements CanActivate {
     return new Counter({
       name,
       help: 'Intentos bloqueados por suscripción inactiva',
-      labelNames: ['feature', 'status'],
+      labelNames: ['feature', 'status', 'grace_tier'],
     });
   }
 
@@ -57,33 +62,70 @@ export class SubscriptionStatusGuard implements CanActivate {
 
     const subscription = await this.prisma.subscription.findUnique({
       where: { organizationId },
-      select: { status: true },
+      select: {
+        status: true,
+        paymentEnforced: true,
+        pastDueSince: true,
+        metadata: true,
+      },
     });
 
     // No subscription → allow (legacy/admin-created org)
     if (!subscription) return true;
+
+    // paymentEnforced = false → grandfathered org, allow everything
+    if (!subscription.paymentEnforced) return true;
+
+    // Check complimentary active
+    const metadata =
+      subscription.metadata &&
+      typeof subscription.metadata === 'object' &&
+      !Array.isArray(subscription.metadata)
+        ? (subscription.metadata as Record<string, any>)
+        : {};
+    if (metadata.complimentary?.active) return true;
 
     const { status } = subscription;
     const allowed = config.allowTrial
       ? ['TRIAL', 'ACTIVE']
       : ['ACTIVE'];
 
-    if (!allowed.includes(status)) {
-      this.logger.warn(
-        `[${config.feature}] Blocked org ${organizationId} — status: ${status}`,
-      );
-      try {
-        this.getBlockedCounter().inc({
-          feature: config.feature,
-          status: status.toLowerCase(),
-        });
-      } catch { /* no romper el flujo si prom-client falla */ }
-      throw new ForbiddenException(
-        `Tu suscripción (${status}) no permite esta operación. ` +
-          `Actualiza tu plan para continuar usando esta función.`,
-      );
+    // Active or trial → allow
+    if (allowed.includes(status)) return true;
+
+    // Past due / canceled → check grace tier
+    const graceTier = resolveGraceTier(subscription);
+
+    // If decorator specifies maxGraceTier and we're within it, allow
+    if (
+      config.maxGraceTier !== undefined &&
+      config.maxGraceTier !== null &&
+      graceTier
+    ) {
+      if (!isGraceTierBeyond(graceTier, config.maxGraceTier)) {
+        return true;
+      }
     }
 
-    return true;
+    this.logger.warn(
+      `[${config.feature}] Blocked org ${organizationId} — status: ${status}, tier: ${graceTier ?? 'NONE'}`,
+    );
+    try {
+      this.getBlockedCounter().inc({
+        feature: config.feature,
+        status: status.toLowerCase(),
+        grace_tier: (graceTier ?? 'none').toLowerCase(),
+      });
+    } catch { /* no romper el flujo si prom-client falla */ }
+
+    throw new ForbiddenException({
+      code: 'SUBSCRIPTION_BLOCKED',
+      status,
+      graceTier: graceTier ?? 'NONE',
+      feature: config.feature,
+      message:
+        `Tu suscripción (${status}) no permite esta operación. ` +
+        `Actualiza tu plan para continuar usando esta función.`,
+    });
   }
 }

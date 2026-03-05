@@ -100,8 +100,18 @@ interface SalesGalleryProps {
 
 export function SalesGallery({ data, onViewDetail, onDeleted }: SalesGalleryProps) {
   const [whatsappCounts, setWhatsappCounts] = useState<Record<number, number>>({})
+  const [whatsAppConnected, setWhatsAppConnected] = useState<boolean | null>(null)
   const checkPermission = useModulePermission()
   const whatsappAllowed = checkPermission("whatsapp")
+
+  // Check WhatsApp connection status
+  useEffect(() => {
+    if (!whatsappAllowed) return
+    fetch("/api/whatsapp/status")
+      .then((res) => res.json())
+      .then((d) => setWhatsAppConnected(d?.isConnected === true))
+      .catch(() => setWhatsAppConnected(false))
+  }, [whatsappAllowed])
 
   // Fetch WhatsApp send counts for all visible sales (only if user has whatsapp permission)
   useEffect(() => {
@@ -132,6 +142,7 @@ export function SalesGallery({ data, onViewDetail, onDeleted }: SalesGalleryProp
               whatsappSendCount={whatsappCounts[sale.id] ?? 0}
               onWhatsAppSent={() => incrementCount(sale.id)}
               whatsappAllowed={whatsappAllowed}
+              whatsAppConnected={whatsAppConnected}
             />
           ))}
         </div>
@@ -147,6 +158,7 @@ function SaleCard({
   whatsappSendCount,
   onWhatsAppSent,
   whatsappAllowed,
+  whatsAppConnected,
 }: {
   sale: Sale
   onViewDetail: (sale: Sale) => void
@@ -154,6 +166,7 @@ function SaleCard({
   whatsappSendCount: number
   onWhatsAppSent: () => void
   whatsappAllowed: boolean
+  whatsAppConnected: boolean | null
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -473,6 +486,26 @@ function SaleCard({
             </TooltipContent>
           </Tooltip>
           {!isAnulada && sunatAccepted && whatsappAllowed && (
+            whatsAppConnected === false ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1 text-[11px] opacity-50 cursor-not-allowed text-muted-foreground"
+                      disabled
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      Enviar
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">WhatsApp no conectado. Conecta tu WhatsApp en Ajustes para enviar.</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
             <Popover open={whatsappPopoverOpen} onOpenChange={(popOpen) => {
               setWhatsappPopoverOpen(popOpen)
               if (popOpen) setWhatsappPhone((sale.client as any)?.phone || "")
@@ -535,6 +568,7 @@ function SaleCard({
                 </Button>
               </PopoverContent>
             </Popover>
+            )
           )}
           {(() => {
             const blockDeletion = sale.invoices && sunatAccepted;

@@ -105,12 +105,22 @@ export function SaleDetailDialog({
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [whatsappPopoverOpen, setWhatsappPopoverOpen] = useState(false);
   const [whatsappSendCount, setWhatsappSendCount] = useState(0);
+  const [whatsAppConnected, setWhatsAppConnected] = useState<boolean | null>(null);
   const checkPermission = useModulePermission();
   const whatsappAllowed = checkPermission("whatsapp");
   const canSeeDeleteActions = useDeleteActionVisibility();
   const { role } = useAuth();
   const isEmployee = role?.trim().toUpperCase() === "EMPLOYEE";
   const canEmitCreditNote = canSeeDeleteActions && !isEmployee;
+
+  // Check WhatsApp connection status when dialog opens
+  useEffect(() => {
+    if (!open || !whatsappAllowed) return;
+    fetch("/api/whatsapp/status")
+      .then((res) => res.json())
+      .then((d) => setWhatsAppConnected(d?.isConnected === true))
+      .catch(() => setWhatsAppConnected(false));
+  }, [open, whatsappAllowed]);
 
   // Fetch WhatsApp send count when dialog opens with a sale (only if user has whatsapp permission)
   useEffect(() => {
@@ -907,6 +917,26 @@ export function SaleDetailDialog({
           )}
           {sale?.status !== "ANULADA" && sunatAccepted && whatsappAllowed && (
             <TooltipProvider delayDuration={200}>
+            {whatsAppConnected === false ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 opacity-50 cursor-not-allowed text-muted-foreground"
+                      disabled
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Enviar por WhatsApp
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p className="text-xs">WhatsApp no conectado. Conecta tu WhatsApp en Ajustes para enviar.</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
             <Popover open={whatsappPopoverOpen} onOpenChange={(popOpen) => {
               setWhatsappPopoverOpen(popOpen);
               if (popOpen) {
@@ -973,6 +1003,7 @@ export function SaleDetailDialog({
                 </Button>
               </PopoverContent>
             </Popover>
+            )}
             </TooltipProvider>
           )}
           {sale?.status === "ACTIVE" && hasAcceptedCreditNote && canEmitCreditNote && (

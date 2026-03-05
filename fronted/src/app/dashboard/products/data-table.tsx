@@ -55,7 +55,7 @@ import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
 import { useTenantSelection } from "@/context/tenant-selection-context"
-import { IconName, icons } from "@/lib/icons"
+
 import { useSiteSettings } from "@/context/site-settings-context"
 import { useAuth } from "@/context/auth-context"
 import { DeleteActionsGuard } from "@/components/delete-actions-guard"
@@ -119,12 +119,14 @@ interface DataTableProps<TData extends {id:string, createdAt:Date | string, name
   description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, category?: { name?: string | null } | null, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  onViewProduct?: (product: TData) => void
 }
  
 export function DataTable<TData extends {id:string, createdAt:Date | string, name:string,
   description:string, brand?: { name?: string } | string | null, price: number, priceSell: number, status?: string | null, category_name: string, category?: { name?: string | null } | null, specification?: ProductSpecification, features?: ProductFeature[] | null, images?: string[] | null}, TValue>({
   columns,
   data,
+  onViewProduct,
 }: DataTableProps<TData, TValue>) {
   const { settings } = useSiteSettings()
   const { role } = useAuth()
@@ -546,17 +548,10 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
   const totalSelectedRows = Object.keys(globalRowSelection).length;
   //
 
-  // Estado para manejar el doble click
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedRowData, setSelectedRowData] = useState<TData | null>(null);
-
+  // Double-click opens the polished ProductDetailDialog via onViewProduct
   const handleRowDoubleClick = (rowData: TData) => {
-    // Ejemplo: Abrir un modal con los detalles de la fila
-    console.log("Doble clic en la fila:", rowData);
-    setSelectedRowData(rowData); // Guarda los datos de la fila seleccionada
-    setIsModalOpen(true); // Abre el modal
+    onViewProduct?.(rowData)
   };
-  //
 
   // PARA EL MENSAJE DE ALERTA
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -1237,165 +1232,6 @@ export function DataTable<TData extends {id:string, createdAt:Date | string, nam
             )}
           </TableBody>
         </Table>
-
-        {/* Modal para mostrar detalles */}
-        {isModalOpen && selectedRowData && (
-            <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <AlertDialogContent className="max-h-[90vh] overflow-y-auto">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Detalles del Producto</AlertDialogTitle>
-                </AlertDialogHeader>
-                <AlertDialogDescription>
-                </AlertDialogDescription>
-                <div className="space-y-4">
-                  <div className="space-y-2 text-sm">
-                    <div><strong>Nombre:</strong> {selectedRowData.name}</div>
-                    <div><strong>Descripción:</strong> {selectedRowData.description}</div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <strong>Precio:</strong> S/. {priceFormatter.format(selectedRowData.price)}
-                      {(!Number.isFinite(selectedRowData.price) || selectedRowData.price <= 0) && (
-                        <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Sin precio compra
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <strong>Precio de Venta:</strong> S/. {priceFormatter.format(selectedRowData.priceSell)}
-                      {(!Number.isFinite(selectedRowData.priceSell) || selectedRowData.priceSell <= 0) && (
-                        <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Sin precio venta
-                        </span>
-                      )}
-                    </div>
-                    <div><strong>Estado:</strong> {normalizeProductStatus(selectedRowData.status)}</div>
-                    <div><strong>Fecha de Creación:</strong> {new Date(selectedRowData.createdAt).toLocaleDateString()}</div>
-                    <div>
-                      <strong>Categoría:</strong>{" "}
-                      {selectedRowData.category?.name || selectedRowData.category_name || "Sin categoría"}
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <h3 className="text-base font-semibold mb-3">Especificaciones</h3>
-                    {(() => {
-                      const entries = Object.entries(selectedRowData.specification || {}).filter(([, value]) => {
-                        if (value === null || value === undefined) {
-                          return false
-                        }
-                        const normalized = String(value).trim()
-                        return normalized.length > 0
-                      })
-
-                      if (entries.length === 0) {
-                        return <p className="text-sm text-muted-foreground">Especificaciones no disponibles.</p>
-                      }
-
-                      return (
-                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                          {entries.map(([key, value]) => (
-                            <div key={key} className="flex flex-col">
-                              <dt className="font-medium text-muted-foreground">{formatSpecificationLabel(key)}</dt>
-                              <dd className="text-foreground">{String(value)}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      )
-                    })()}
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <h3 className="text-base font-semibold mb-3">Características adicionales</h3>
-                    {(() => {
-                      const features = Array.isArray(selectedRowData.features)
-                        ? selectedRowData.features.filter(
-                            (feature): feature is NonNullable<ProductFeature> =>
-                              !!feature &&
-                              !!(
-                                (typeof feature.title === "string" && feature.title.trim().length > 0) ||
-                                (typeof feature.description === "string" && feature.description.trim().length > 0)
-                              ),
-                          )
-                        : []
-
-                      if (features.length === 0) {
-                        return (
-                          <p className="text-sm text-muted-foreground">
-                            Características adicionales no disponibles.
-                          </p>
-                        )
-                      }
-
-                      return (
-                        <ul className="space-y-3">
-                          {features.map((feature, index) => {
-                            const iconKey = typeof feature.icon === "string" ? feature.icon : undefined
-                            const IconComponent = iconKey && icons[iconKey as IconName] ? icons[iconKey as IconName] : null
-
-                            return (
-                              <li key={`${feature.title ?? "feature"}-${index}`} className="flex items-start gap-3">
-                                {IconComponent ? (
-                                  <IconComponent className="mt-1 h-5 w-5 text-primary" aria-hidden="true" />
-                                ) : null}
-                                <div>
-                                  <p className="font-medium text-foreground">
-                                    {feature.title?.trim() || `Característica ${index + 1}`}
-                                  </p>
-                                  {feature.description?.trim() ? (
-                                    <p className="text-sm text-muted-foreground">{feature.description.trim()}</p>
-                                  ) : null}
-                                </div>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      )
-                    })()}
-                  </div>
-
-                  <div className="border-t pt-4">
-                    <h3 className="text-base font-semibold mb-3">Imágenes del producto</h3>
-                    {(() => {
-                      const images = Array.isArray(selectedRowData.images)
-                        ? selectedRowData.images.filter((img) => typeof img === "string" && img.trim().length > 0)
-                        : []
-
-                      if (images.length === 0) {
-                        return <p className="text-sm text-muted-foreground">No hay imágenes disponibles.</p>
-                      }
-
-                      return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {images.map((image, index) => (
-                            <div key={`${image}-${index}`} className="rounded-md border overflow-hidden">
-                              <img
-                                src={resolveImageUrl(image)}
-                                alt={`Imagen ${index + 1} de ${selectedRowData.name}`}
-                                className="h-48 w-full object-cover"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    })()}
-                  </div>
-                </div>
-                <AlertDialogFooter>
-                   <AlertDialogAction
-                    onClick={() => {
-                      if (!selectedRowData?.id) {
-                        return
-                      }
-                      setIsModalOpen(false)
-                      router.push(`/dashboard/products/${selectedRowData.id}/edit`)
-                    }}
-                  >
-                    Modificar producto
-                  </AlertDialogAction>
-                  <AlertDialogCancel onClick={() => setIsModalOpen(false)}>Cerrar</AlertDialogCancel>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
 
           {isViewModalOpen && (
             <AlertDialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>

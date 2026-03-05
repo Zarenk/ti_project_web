@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { pdf } from "@react-pdf/renderer"
-import { AlertCircle, CheckCircle2, Clock3, Save } from "lucide-react"
+import { AlertCircle, CheckCircle2, Clock3, Copy, Eye, History, Mail, MessageCircle, Printer, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,12 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { cn } from "@/lib/utils"
 import { PageGuideButton } from "@/components/page-guide-dialog"
@@ -28,9 +34,11 @@ import {
   createQuoteDraft,
   getQuoteById,
   getQuoteMeta,
+  sendQuoteEmail,
   sendQuoteWhatsApp,
   type QuoteDraftPayload,
 } from "../quotes.api"
+import { QuoteEmailDialog } from "./quote-email-dialog"
 import {
   getQuoteEvents,
   getQuotesHistory,
@@ -112,12 +120,35 @@ export default function QuotesHistoryPage() {
   const [whatsAppDialogOpen, setWhatsAppDialogOpen] = useState(false)
   const [pendingWhatsAppQuoteId, setPendingWhatsAppQuoteId] = useState<number | null>(null)
   const [whatsAppPhoneInput, setWhatsAppPhoneInput] = useState("")
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailQuoteId, setEmailQuoteId] = useState<number | null>(null)
+  const [emailQuoteNumber, setEmailQuoteNumber] = useState("")
+  const [emailClientName, setEmailClientName] = useState<string | null>(null)
+  const [emailCompanyEmail, setEmailCompanyEmail] = useState("")
+  const [emailCompanyName, setEmailCompanyName] = useState("")
+  const [emailSending, setEmailSending] = useState(false)
   const [eventsDialogOpen, setEventsDialogOpen] = useState(false)
   const [eventsLoading, setEventsLoading] = useState(false)
   const [eventsRows, setEventsRows] = useState<QuoteHistoryEvent[]>([])
   const [eventsQuoteNumber, setEventsQuoteNumber] = useState<string>("")
   const [eventsCodeFilter, setEventsCodeFilter] = useState<string>("ALL")
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null)
+  const [companyEmail, setCompanyEmail] = useState<string>("")
+  const [companyName, setCompanyName] = useState<string>("")
+  const [whatsAppConnected, setWhatsAppConnected] = useState<boolean | null>(null)
+
+  // Fetch company meta (for email) and WhatsApp status on mount
+  useEffect(() => {
+    if (!tenantSelection.companyId) return
+    getQuoteMeta(tenantSelection.companyId).then((meta) => {
+      setCompanyEmail(meta.company.email || "")
+      setCompanyName(meta.company.name || "")
+    }).catch(() => {})
+    fetch("/api/whatsapp/status")
+      .then((res) => res.json())
+      .then((data) => setWhatsAppConnected(data?.isConnected === true))
+      .catch(() => setWhatsAppConnected(false))
+  }, [tenantSelection.companyId])
 
   const filters = useMemo(
     () => ({
@@ -159,8 +190,11 @@ export default function QuotesHistoryPage() {
       companyAddress: meta.company.address,
       companyPhone: meta.company.phone,
       companyEmail: meta.company.email,
+      companyRuc: meta.company.ruc,
       clientName: detail.clientNameSnapshot || "",
       contactName: detail.contactSnapshot || "",
+      clientDocType: detail.client?.type || undefined,
+      clientDocNumber: detail.client?.typeNumber || undefined,
       validity: detail.validity,
       currency: detail.currency,
       conditions: detail.conditions || "",
@@ -247,11 +281,50 @@ export default function QuotesHistoryPage() {
     }
   }
 
+  const openEmailDialog = (row: QuoteHistoryItem) => {
+    setEmailQuoteId(row.id)
+    setEmailQuoteNumber(row.quoteNumber || `#${row.id}`)
+    setEmailClientName(row.clientNameSnapshot || null)
+    setEmailCompanyEmail(companyEmail)
+    setEmailCompanyName(companyName)
+    setEmailDialogOpen(true)
+  }
+
+  const handleSendEmail = async (params: {
+    to: string
+    subject: string
+    message: string
+    fromName: string
+    quoteId: number
+  }) => {
+    setEmailSending(true)
+    setProcessingId(params.quoteId)
+    try {
+      const blob = await buildPdfFromQuote(params.quoteId)
+      await sendQuoteEmail({
+        to: params.to,
+        subject: params.subject,
+        message: params.message,
+        fromName: params.fromName,
+        file: blob,
+        filename: `cotizacion-${params.quoteId}.pdf`,
+      })
+      toast.success("Cotización enviada por email correctamente.")
+      setEmailDialogOpen(false)
+    } catch (error: unknown) {
+      toast.error(resolveErrorMessage(error, "No se pudo enviar el email."))
+    } finally {
+      setEmailSending(false)
+      setProcessingId(null)
+    }
+  }
+
   const handleDuplicate = async (quoteId: number) => {
     setProcessingId(quoteId)
     try {
       const detail = await getQuoteById(quoteId)
       const payload: QuoteDraftPayload = {
+        clientId: detail.clientId ?? null,
         clientNameSnapshot: detail.clientNameSnapshot ?? null,
         contactSnapshot: detail.contactSnapshot ?? null,
         currency: detail.currency,
@@ -368,7 +441,7 @@ export default function QuotesHistoryPage() {
           </Badge>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-2 text-xs font-semibold uppercase text-slate-400 sm:grid-cols-[1.1fr_0.9fr_0.8fr_0.8fr_0.9fr_0.6fr_1.4fr]">
+          <div className="hidden px-3 text-xs font-semibold uppercase text-slate-400 sm:grid sm:grid-cols-[1.2fr_1fr_0.7fr_0.7fr_1fr_0.7fr_11rem] sm:gap-3">
             <span>Numero</span>
             <span>Cliente</span>
             <span>Fecha</span>
@@ -377,7 +450,7 @@ export default function QuotesHistoryPage() {
             <span className="text-right">Total</span>
             <span className="text-right">Acciones</span>
           </div>
-          <Separator className="my-3" />
+          <Separator className="my-3 hidden sm:block" />
           {loading ? (
             <div className="py-8 text-sm text-muted-foreground">Cargando historial...</div>
           ) : rows.length === 0 ? (
@@ -386,8 +459,7 @@ export default function QuotesHistoryPage() {
             rows.map((row) => (
               <div
                 key={row.id}
-                className="grid items-center gap-2 rounded-xl border border-slate-200/60 bg-white/70 px-3 py-3 text-sm text-slate-700 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50/40 dark:border-slate-800/60 dark:bg-slate-950/40 dark:text-slate-200"
-                style={{ gridTemplateColumns: "1.1fr 0.9fr 0.8fr 0.8fr 0.9fr 0.6fr 1.4fr" }}
+                className="flex flex-col gap-2 rounded-xl border border-slate-200/60 bg-white/70 px-3 py-3 text-sm text-slate-700 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50/40 dark:border-slate-800/60 dark:bg-slate-950/40 dark:text-slate-200 sm:grid sm:items-center sm:gap-3 sm:grid-cols-[1.2fr_1fr_0.7fr_0.7fr_1fr_0.7fr_11rem]"
               >
                 <span className="font-semibold text-slate-900 dark:text-slate-100">
                   {row.quoteNumber || `#${row.id}`}
@@ -419,52 +491,111 @@ export default function QuotesHistoryPage() {
                 <span className="text-right font-semibold">
                   {row.currency} {Number(row.total ?? 0).toFixed(2)}
                 </span>
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => void openEventsDialog(row)}
-                  >
-                    Eventos
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => handleViewPdf(row.id)}
-                    disabled={processingId === row.id}
-                  >
-                    Ver
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => handlePrint(row.id)}
-                    disabled={processingId === row.id}
-                  >
-                    Imprimir
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => openWhatsAppDialog(row.id)}
-                    disabled={processingId === row.id}
-                  >
-                    WhatsApp
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => handleDuplicate(row.id)}
-                    disabled={processingId === row.id}
-                  >
-                    Duplicar
-                  </Button>
-                </div>
+                <TooltipProvider delayDuration={150}>
+                  <div className="flex items-center justify-end gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 cursor-pointer text-slate-500 hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-400"
+                          onClick={() => void openEventsDialog(row)}
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">Historial de eventos</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 cursor-pointer text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400"
+                          onClick={() => handleViewPdf(row.id)}
+                          disabled={processingId === row.id}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">Ver cotización en PDF</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 cursor-pointer text-slate-500 hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400"
+                          onClick={() => handlePrint(row.id)}
+                          disabled={processingId === row.id}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">Imprimir cotización</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={cn(
+                            "h-8 w-8 cursor-pointer",
+                            whatsAppConnected === false
+                              ? "text-slate-300 dark:text-slate-600"
+                              : "text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400",
+                          )}
+                          onClick={() => openWhatsAppDialog(row.id)}
+                          disabled={processingId === row.id || whatsAppConnected === false}
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs max-w-[200px]">
+                        {whatsAppConnected === false
+                          ? "WhatsApp no conectado. Conecta tu WhatsApp en Ajustes para enviar."
+                          : "Enviar por WhatsApp"}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={cn(
+                            "h-8 w-8 cursor-pointer",
+                            !companyEmail
+                              ? "text-slate-300 dark:text-slate-600"
+                              : "text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400",
+                          )}
+                          onClick={() => openEmailDialog(row)}
+                          disabled={processingId === row.id || !companyEmail}
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs max-w-[200px]">
+                        {!companyEmail
+                          ? "Configura el email de la empresa en Ajustes > Empresa > Editar."
+                          : "Enviar por email"}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 cursor-pointer text-slate-500 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400"
+                          onClick={() => handleDuplicate(row.id)}
+                          disabled={processingId === row.id}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">Duplicar cotización</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               </div>
             ))
           )}
@@ -522,6 +653,18 @@ export default function QuotesHistoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <QuoteEmailDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        companyEmail={emailCompanyEmail}
+        companyName={emailCompanyName}
+        quoteNumber={emailQuoteNumber}
+        quoteId={emailQuoteId ?? 0}
+        clientName={emailClientName}
+        onSend={handleSendEmail}
+        isSending={emailSending}
+      />
 
       <Dialog open={eventsDialogOpen} onOpenChange={setEventsDialogOpen}>
         <DialogContent className="border-slate-200/80 bg-white/95 sm:max-w-2xl dark:border-slate-800/80 dark:bg-slate-950/95">

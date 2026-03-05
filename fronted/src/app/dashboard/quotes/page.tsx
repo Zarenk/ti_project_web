@@ -130,6 +130,7 @@ import {
 } from './quotes.api';
 import { getStores } from '@/app/dashboard/stores/stores.api';
 import { createClient } from '@/app/dashboard/clients/clients.api';
+import { lookupSunatDocument } from '@/app/dashboard/sales/sales.api';
 import { QuotePdfDocument } from './QuotePdfDocument';
 import { QuoteActionButtons } from './components/quote-action-buttons';
 import { QuoteConfigurationPanel } from './components/quote-configuration-panel';
@@ -163,6 +164,7 @@ export default function QuotesPage() {
   const [contactName, setContactName] = useState('');
   const [clientDocType, setClientDocType] = useState('');
   const [clientDocNumber, setClientDocNumber] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [whatsAppPhone, setWhatsAppPhone] = useState('');
   const [clients, setClients] = useState<QuoteClient[]>([]);
   const [clientOpen, setClientOpen] = useState(false);
@@ -183,7 +185,7 @@ export default function QuotesPage() {
   const deferredHwFilter = useDeferredValue(hardwareProductFilter);
   const [taxRate, setTaxRate] = useState(0.18);
   const [showAdvancedConfig, setShowAdvancedConfig] = useState(false);
-  const [limitByStock, setLimitByStock] = useState(true);
+  const [limitByStock, setLimitByStock] = useState(false);
   const [showImagesInPdf, setShowImagesInPdf] = useState(false);
   const [hideSpecsInPdf, setHideSpecsInPdf] = useState(true);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
@@ -201,6 +203,7 @@ export default function QuotesPage() {
   const [newClientDocType, setNewClientDocType] = useState('DNI');
   const [newClientDocNumber, setNewClientDocNumber] = useState('');
   const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [sunatLookupLoading, setSunatLookupLoading] = useState(false);
   const defaultsAppliedRef = useRef<Record<string, boolean>>({});
   const loadedQuoteIdRef = useRef<number | null>(null);
   const searchParams = useSearchParams();
@@ -485,7 +488,7 @@ export default function QuotesPage() {
       setConditions(draft.conditions ?? '');
       setStoreId(draft.storeId ?? null);
       setLimitByStock(
-        typeof draft.limitByStock === 'boolean' ? draft.limitByStock : true,
+        typeof draft.limitByStock === 'boolean' ? draft.limitByStock : false,
       );
       setTaxRate(0.18);
     } catch {
@@ -813,12 +816,17 @@ export default function QuotesPage() {
         setClientName(detail.clientNameSnapshot || '');
         setContactName(detail.contactSnapshot || '');
 
-        // Buscar cliente en la lista para obtener datos de documento
-        if (detail.clientNameSnapshot) {
+        // Restaurar datos del cliente
+        setSelectedClientId(detail.clientId ?? null);
+        if (detail.client) {
+          setClientDocType(detail.client.type || '');
+          setClientDocNumber(detail.client.typeNumber || '');
+        } else if (detail.clientNameSnapshot) {
           const foundClient = clients.find(
             (c) => c.name === detail.clientNameSnapshot,
           );
           if (foundClient) {
+            setSelectedClientId(foundClient.id);
             setClientDocType(foundClient.documentType || '');
             setClientDocNumber(foundClient.documentNumber || '');
           }
@@ -932,6 +940,7 @@ export default function QuotesPage() {
     setIsSavingDraft(true);
     try {
       const payload: QuoteDraftPayload = {
+        clientId: selectedClientId ?? null,
         clientNameSnapshot: clientName || null,
         contactSnapshot: contactName || null,
         currency,
@@ -970,6 +979,7 @@ export default function QuotesPage() {
       }
 
       const payload: QuoteDraftPayload = {
+        clientId: selectedClientId ?? null,
         clientNameSnapshot: clientName || null,
         contactSnapshot: contactName || null,
         currency,
@@ -1026,7 +1036,7 @@ export default function QuotesPage() {
           '1',
         );
         window.localStorage.removeItem(draftKey);
-        router.replace('/dashboard/quotes');
+        router.replace('/dashboard/quotes/history');
       }
     } catch (error: any) {
       if (
@@ -1129,8 +1139,49 @@ export default function QuotesPage() {
     }
   };
 
+  const handleSunatLookup = async (document: string) => {
+    setSunatLookupLoading(true);
+    try {
+      const result = await lookupSunatDocument(document);
+      const docType = result.type === 'RUC' ? 'RUC' : 'DNI';
+
+      // Auto-create client in database
+      try {
+        await createClient({
+          name: result.name,
+          type: docType,
+          typeNumber: result.identifier,
+          adress: result.address || '',
+        });
+      } catch {
+        // Client may already exist — ignore creation errors
+      }
+
+      // Fill fields
+      setClientName(result.name);
+      setClientDocType(docType);
+      setClientDocNumber(result.identifier);
+      setClientOpen(false);
+
+      // Refresh client list and set clientId
+      const refreshedClients = await getQuoteClients();
+      setClients(refreshedClients);
+      const matched = refreshedClients.find(
+        (c) => c.documentNumber === result.identifier,
+      );
+      if (matched) setSelectedClientId(matched.id);
+
+      toast.success(`Cliente encontrado: ${result.name}`);
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudo consultar el documento.');
+    } finally {
+      setSunatLookupLoading(false);
+    }
+  };
+
   // Component handlers
   const handleClientSelect = useCallback((client: QuoteClient) => {
+    setSelectedClientId(client.id);
     setClientName(client.name);
     setContactName(client.email || client.phone || '');
     setWhatsAppPhone(client.phone || '');
@@ -1364,12 +1415,17 @@ export default function QuotesPage() {
               onStoreChange={setStoreId}
               onClientSelect={handleClientSelect}
               onClientOpenChange={setClientOpen}
-              onClientNameChange={setClientName}
+              onClientNameChange={(name) => {
+                setClientName(name);
+                if (!name) setSelectedClientId(null);
+              }}
               onContactNameChange={setContactName}
               onWhatsAppPhoneChange={setWhatsAppPhone}
               onClientDocTypeChange={setClientDocType}
               onClientDocNumberChange={setClientDocNumber}
               onNewClientClick={() => setShowNewClientDialog(true)}
+              onSunatLookup={handleSunatLookup}
+              sunatLookupLoading={sunatLookupLoading}
               isReadOnly={isReadOnlyQuote}
             />
 

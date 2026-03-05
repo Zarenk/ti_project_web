@@ -1,17 +1,22 @@
 import {
+  ChargeCardParams,
+  ChargeCardResult,
   CheckoutSessionParams,
   CheckoutSessionResult,
   PaymentProvider,
 } from './payment-provider.interface';
-import MercadoPagoConfig, { Preference } from 'mercadopago';
-import { BadRequestException } from '@nestjs/common';
+import MercadoPagoConfig, { Payment, Preference } from 'mercadopago';
+import { BadRequestException, Logger } from '@nestjs/common';
 
 export class MercadoPagoPaymentProvider implements PaymentProvider {
   private readonly preference: Preference;
+  private readonly payment: Payment;
+  private readonly logger = new Logger(MercadoPagoPaymentProvider.name);
 
   constructor(private readonly accessToken: string) {
     const client = new MercadoPagoConfig({ accessToken });
     this.preference = new Preference(client);
+    this.payment = new Payment(client);
   }
 
   async createCheckoutSession(
@@ -67,8 +72,6 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
       };
     } catch (error) {
       const details = (error as any)?.response?.data;
-      // Log completo para depurar integraciones con MP
-
       console.error('[MercadoPago] preference.create failed', {
         message: (error as Error)?.message,
         details,
@@ -88,6 +91,69 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
           : 'Mercado Pago error';
 
       throw new BadRequestException(`${baseMessage}${extraInfo}`);
+    }
+  }
+
+  /**
+   * Charge a saved card on file using Mercado Pago Payments API.
+   *
+   * Requires a previously saved customer card (via customer cards API).
+   * The `cardTokenOrId` should be a saved card ID from the customer's cards.
+   *
+   * NOTE: This requires validating the card-on-file flow with MP docs before
+   * using in production. The customer must have a saved card via
+   * POST /v1/customers/{id}/cards.
+   */
+  async chargeCard(params: ChargeCardParams): Promise<ChargeCardResult> {
+    try {
+      const response = await this.payment.create({
+        body: {
+          transaction_amount: Number(params.amount),
+          token: params.cardTokenOrId,
+          description: params.description,
+          installments: 1,
+          payer: {
+            type: 'customer',
+            id: params.customerId,
+          },
+          metadata: params.metadata ?? {},
+        },
+        requestOptions: {
+          idempotencyKey: params.idempotencyKey,
+        },
+      });
+
+      const mpStatus = response.status ?? 'unknown';
+      let status: ChargeCardResult['status'];
+      if (mpStatus === 'approved') {
+        status = 'approved';
+      } else if (
+        mpStatus === 'in_process' ||
+        mpStatus === 'pending' ||
+        mpStatus === 'authorized'
+      ) {
+        status = 'pending';
+      } else {
+        status = 'rejected';
+      }
+
+      this.logger.log(
+        `[chargeCard] MP payment ${response.id}: status=${mpStatus}, detail=${response.status_detail}`,
+      );
+
+      return {
+        provider: 'mercadopago',
+        paymentId: String(response.id ?? ''),
+        status,
+        statusDetail: response.status_detail ?? undefined,
+      };
+    } catch (error) {
+      const details = (error as any)?.response?.data;
+      this.logger.error('[MercadoPago] chargeCard failed', {
+        message: (error as Error)?.message,
+        details,
+      });
+      throw error;
     }
   }
 }
