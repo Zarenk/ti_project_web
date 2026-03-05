@@ -41,20 +41,27 @@ export class DunningCronService {
    * Updates the graceLimits in metadata if the tier has escalated.
    */
   private async updateGraceTiers() {
-    const pastDueSubs = await this.prisma.subscription.findMany({
-      where: {
-        paymentEnforced: true,
-        status: SubscriptionStatus.PAST_DUE,
-        pastDueSince: { not: null },
-      },
-      select: {
-        id: true,
-        paymentEnforced: true,
-        status: true,
-        pastDueSince: true,
-        metadata: true,
-      },
-    });
+    let pastDueSubs: any[];
+    try {
+      pastDueSubs = await this.prisma.subscription.findMany({
+        where: {
+          paymentEnforced: true,
+          status: SubscriptionStatus.PAST_DUE,
+          pastDueSince: { not: null },
+        },
+        select: {
+          id: true,
+          paymentEnforced: true,
+          status: true,
+          pastDueSince: true,
+          metadata: true,
+        },
+      });
+    } catch {
+      // Columns may not exist yet (migration pending) — skip gracefully
+      this.logger.debug('paymentEnforced/pastDueSince columns not available, skipping grace tier update');
+      return;
+    }
 
     const tierDistribution: Record<string, number> = {
       SOFT: 0,
@@ -102,18 +109,24 @@ export class DunningCronService {
    */
   private async processAutoRenewals() {
     const now = new Date();
-    const renewableSubs = await this.prisma.subscription.findMany({
-      where: {
-        paymentEnforced: true,
-        status: SubscriptionStatus.ACTIVE,
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: { lte: now },
-      },
-      include: {
-        plan: true,
-        defaultPaymentMethod: true,
-      },
-    });
+    let renewableSubs: any[];
+    try {
+      renewableSubs = await this.prisma.subscription.findMany({
+        where: {
+          paymentEnforced: true,
+          status: SubscriptionStatus.ACTIVE,
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: { lte: now },
+        },
+        include: {
+          plan: true,
+          defaultPaymentMethod: true,
+        },
+      });
+    } catch {
+      this.logger.debug('paymentEnforced column not available, skipping auto-renewals');
+      return;
+    }
 
     for (const sub of renewableSubs) {
       try {

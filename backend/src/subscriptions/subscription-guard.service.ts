@@ -34,20 +34,35 @@ export class SubscriptionGuardService {
     feature: string,
     maxGraceTier: GraceTier | null = null,
   ): Promise<void> {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { organizationId },
-      select: {
-        status: true,
-        paymentEnforced: true,
-        pastDueSince: true,
-        metadata: true,
-      },
-    });
+    let subscription: {
+      status: string;
+      paymentEnforced?: boolean;
+      pastDueSince?: Date | null;
+      metadata?: any;
+    } | null;
+
+    try {
+      subscription = await this.prisma.subscription.findUnique({
+        where: { organizationId },
+        select: {
+          status: true,
+          paymentEnforced: true,
+          pastDueSince: true,
+          metadata: true,
+        },
+      });
+    } catch {
+      // Columns may not exist yet (migration pending) — fall back to safe query
+      subscription = await this.prisma.subscription.findUnique({
+        where: { organizationId },
+        select: { status: true, metadata: true },
+      });
+    }
 
     // No subscription → allow (legacy)
     if (!subscription) return;
 
-    // Not payment enforced → grandfathered
+    // Not payment enforced (or column missing) → grandfathered
     if (!subscription.paymentEnforced) return;
 
     // Check complimentary
@@ -63,7 +78,11 @@ export class SubscriptionGuardService {
     if (['ACTIVE', 'TRIAL'].includes(status)) return;
 
     // Blocked — check grace tier
-    const graceTier = resolveGraceTier(subscription);
+    const graceTier = resolveGraceTier({
+      paymentEnforced: subscription.paymentEnforced ?? false,
+      status: subscription.status,
+      pastDueSince: subscription.pastDueSince ?? null,
+    });
 
     if (maxGraceTier !== null && graceTier) {
       if (!isGraceTierBeyond(graceTier, maxGraceTier)) {

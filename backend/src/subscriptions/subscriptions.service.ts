@@ -116,36 +116,67 @@ export class SubscriptionsService {
       existingSubscription?.metadata ?? {},
     );
 
-    const upsertedSubscription = await this.prisma.subscription.upsert({
-      where: { organizationId: dto.organizationId },
-      create: {
-        organizationId: dto.organizationId,
-        planId: plan.id,
-        status: SubscriptionStatus.TRIAL,
-        trialEndsAt,
-        currentPeriodStart: now,
-        currentPeriodEnd: trialEndsAt,
-        paymentEnforced,
-        metadata: { createdVia: paymentEnforced ? 'public_signup' : 'manual_trial' },
-      },
-      update: {
-        planId: plan.id,
-        status: SubscriptionStatus.TRIAL,
-        trialEndsAt,
-        currentPeriodStart: now,
-        currentPeriodEnd: trialEndsAt,
-        cancelAtPeriodEnd: false,
-        canceledAt: null,
-        paymentEnforced: existingSubscription
-          ? existingSubscription.paymentEnforced
-          : paymentEnforced,
-        metadata: {
-          ...metadataBase,
-          trialRefreshedAt: now.toISOString(),
+    let upsertedSubscription: any;
+    try {
+      upsertedSubscription = await this.prisma.subscription.upsert({
+        where: { organizationId: dto.organizationId },
+        create: {
+          organizationId: dto.organizationId,
+          planId: plan.id,
+          status: SubscriptionStatus.TRIAL,
+          trialEndsAt,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEndsAt,
+          paymentEnforced,
+          metadata: { createdVia: paymentEnforced ? 'public_signup' : 'manual_trial' },
         },
-      },
-      include: { plan: true },
-    });
+        update: {
+          planId: plan.id,
+          status: SubscriptionStatus.TRIAL,
+          trialEndsAt,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEndsAt,
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+          paymentEnforced: existingSubscription
+            ? existingSubscription.paymentEnforced
+            : paymentEnforced,
+          metadata: {
+            ...metadataBase,
+            trialRefreshedAt: now.toISOString(),
+          },
+        },
+        include: { plan: true },
+      });
+    } catch {
+      // paymentEnforced column may not exist yet — retry without it
+      upsertedSubscription = await this.prisma.subscription.upsert({
+        where: { organizationId: dto.organizationId },
+        create: {
+          organizationId: dto.organizationId,
+          planId: plan.id,
+          status: SubscriptionStatus.TRIAL,
+          trialEndsAt,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEndsAt,
+          metadata: { createdVia: 'manual_trial' },
+        },
+        update: {
+          planId: plan.id,
+          status: SubscriptionStatus.TRIAL,
+          trialEndsAt,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEndsAt,
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+          metadata: {
+            ...metadataBase,
+            trialRefreshedAt: now.toISOString(),
+          },
+        },
+        include: { plan: true },
+      });
+    }
 
     await this.logAuditEvent({
       action: existingSubscription ? AuditAction.UPDATED : AuditAction.CREATED,
@@ -1282,7 +1313,19 @@ export class SubscriptionsService {
       this.prisma.subscription.findUnique({
         where: { organizationId },
         include: { plan: true, defaultPaymentMethod: true },
-      }),
+      }).catch(() =>
+        // Fallback if new columns don't exist yet (migration pending)
+        this.prisma.subscription.findUnique({
+          where: { organizationId },
+          select: {
+            id: true, organizationId: true, status: true, planId: true,
+            trialEndsAt: true, currentPeriodStart: true, currentPeriodEnd: true,
+            cancelAtPeriodEnd: true, canceledAt: true, defaultPaymentMethodId: true,
+            metadata: true, createdAt: true, updatedAt: true,
+            plan: true, defaultPaymentMethod: true,
+          },
+        }),
+      ),
       this.prisma.organization.findUnique({
         where: { id: organizationId },
         select: { id: true, name: true, slug: true },
@@ -1407,9 +1450,9 @@ export class SubscriptionsService {
       './subscription-quota.service'
     );
     const graceTier = resolveGrace({
-      paymentEnforced: subscription.paymentEnforced,
+      paymentEnforced: (subscription as any).paymentEnforced ?? false,
       status: subscription.status,
-      pastDueSince: subscription.pastDueSince,
+      pastDueSince: (subscription as any).pastDueSince ?? null,
     });
 
     return {
@@ -1449,10 +1492,10 @@ export class SubscriptionsService {
           lastPaidInvoice?.dueDate?.toISOString() ??
           null,
       },
-      paymentEnforced: subscription.paymentEnforced,
+      paymentEnforced: (subscription as any).paymentEnforced ?? false,
       hasPaymentMethod: !!subscription.defaultPaymentMethodId,
       graceTier,
-      pastDueSince: subscription.pastDueSince?.toISOString() ?? null,
+      pastDueSince: (subscription as any).pastDueSince?.toISOString() ?? null,
       complimentary: complimentaryMeta,
       contacts: {
         primary: primaryContact,

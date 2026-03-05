@@ -28,20 +28,27 @@ export class TrialCronService {
     const soonThreshold = new Date(today);
     soonThreshold.setDate(today.getDate() + Math.max(...TRIAL_WARNING_DAYS));
 
-    const expiringTrials = await this.prisma.subscription.findMany({
-      where: {
-        status: SubscriptionStatus.TRIAL,
-        trialEndsAt: {
-          not: null,
-          lte: soonThreshold,
+    let expiringTrials: any[];
+    try {
+      expiringTrials = await this.prisma.subscription.findMany({
+        where: {
+          status: SubscriptionStatus.TRIAL,
+          trialEndsAt: {
+            not: null,
+            lte: soonThreshold,
+          },
         },
-      },
-      include: {
-        plan: true,
-        organization: true,
-        defaultPaymentMethod: true,
-      },
-    });
+        include: {
+          plan: true,
+          organization: true,
+          defaultPaymentMethod: true,
+        },
+      });
+    } catch {
+      // Schema columns may not exist yet (migration pending) — skip gracefully
+      this.logger.warn('Subscription schema mismatch, skipping trial check');
+      return;
+    }
 
     for (const trial of expiringTrials) {
       if (!trial.trialEndsAt) continue;
@@ -121,14 +128,25 @@ export class TrialCronService {
   }
 
   private async expireTrial(subscriptionId: number, organizationId: number) {
-    await this.prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: {
-        status: SubscriptionStatus.PAST_DUE,
-        currentPeriodEnd: new Date(),
-        pastDueSince: new Date(),
-      },
-    });
+    try {
+      await this.prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: SubscriptionStatus.PAST_DUE,
+          currentPeriodEnd: new Date(),
+          pastDueSince: new Date(),
+        },
+      });
+    } catch {
+      // pastDueSince column may not exist yet — update without it
+      await this.prisma.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: SubscriptionStatus.PAST_DUE,
+          currentPeriodEnd: new Date(),
+        },
+      });
+    }
 
     const billingCompany = await this.prisma.company.findFirst({
       where: { organizationId },
