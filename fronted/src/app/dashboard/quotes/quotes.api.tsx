@@ -104,8 +104,13 @@ export type QuoteDetail = {
   taxAmount: number
   marginAmount: number
   total: number
+  clientId: number | null
   clientNameSnapshot: string | null
   contactSnapshot: string | null
+  client?: {
+    type: string | null
+    typeNumber: string | null
+  } | null
   items: Array<{
     id: number
     productId: number | null
@@ -514,7 +519,7 @@ export async function getQuoteMeta(companyId?: number | null): Promise<QuoteMeta
       logoUrl: normalizeCompanyLogo(detail.logoUrl),
       address: detail.sunatAddress || "Dirección no registrada",
       phone: detail.sunatPhone || "",
-      email: detail.sunatBusinessName || "",
+      email: detail.sunatContactEmail || "",
       ruc: detail.sunatRuc || "",
     },
     currencyOptions: DEFAULT_META.currencyOptions,
@@ -562,6 +567,35 @@ export async function sendQuoteWhatsApp(params: {
     const message =
       (typeof data === "object" && data && "message" in data ? (data as any).message : null) ||
       "No se pudo enviar la cotización por WhatsApp."
+    throw new Error(message)
+  }
+}
+
+export async function sendQuoteEmail(params: {
+  to: string
+  subject: string
+  message?: string
+  fromName?: string
+  file: Blob
+  filename?: string
+}): Promise<void> {
+  const formData = new FormData()
+  formData.append("to", params.to)
+  formData.append("subject", params.subject)
+  if (params.message) formData.append("message", params.message)
+  if (params.fromName) formData.append("fromName", params.fromName)
+  formData.append("pdf", params.file, params.filename || "cotizacion.pdf")
+
+  const res = await fetch(`/api/quotes/email`, {
+    method: "POST",
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    const message =
+      (typeof data === "object" && data && "message" in data ? (data as any).message : null) ||
+      "No se pudo enviar la cotización por email."
     throw new Error(message)
   }
 }

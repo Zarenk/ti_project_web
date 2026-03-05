@@ -13,6 +13,74 @@ import {
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
+/* ── Grace Tier System ────────────────────────────────────────────── */
+
+export type GraceTier = 'SOFT' | 'RESTRICTED' | 'READ_MOSTLY' | 'LOCKED';
+
+/** Day thresholds for each grace tier (days past due) */
+export const GRACE_TIER_DAYS: Record<GraceTier, number> = {
+  SOFT: 0,
+  RESTRICTED: 1,
+  READ_MOSTLY: 8,
+  LOCKED: 22,
+};
+
+/** Quota caps per grace tier */
+export const GRACE_TIER_QUOTAS: Record<
+  GraceTier,
+  { users: number; invoices: number; storageMB: number }
+> = {
+  SOFT: { users: 1, invoices: 50, storageMB: 512 },
+  RESTRICTED: { users: 1, invoices: 50, storageMB: 512 },
+  READ_MOSTLY: { users: 1, invoices: 0, storageMB: 0 },
+  LOCKED: { users: 0, invoices: 0, storageMB: 0 },
+};
+
+/** Ordered from most severe to least, for comparison */
+const GRACE_TIER_ORDER: GraceTier[] = [
+  'LOCKED',
+  'READ_MOSTLY',
+  'RESTRICTED',
+  'SOFT',
+];
+
+/** Returns true if `current` is more severe than or equal to `max` */
+export function isGraceTierBeyond(
+  current: GraceTier,
+  max: GraceTier,
+): boolean {
+  return (
+    GRACE_TIER_ORDER.indexOf(current) <= GRACE_TIER_ORDER.indexOf(max)
+  );
+}
+
+/**
+ * Resolve the current grace tier based on subscription state.
+ * Returns `null` if not in a grace/blocking scenario.
+ */
+export function resolveGraceTier(subscription: {
+  paymentEnforced: boolean;
+  status: string;
+  pastDueSince: Date | null;
+}): GraceTier | null {
+  if (!subscription.paymentEnforced) return null;
+  if (['ACTIVE', 'TRIAL'].includes(subscription.status)) return null;
+
+  const since = subscription.pastDueSince;
+  if (!since) return 'SOFT';
+
+  const daysPastDue = Math.floor(
+    (Date.now() - since.getTime()) / 86_400_000,
+  );
+
+  if (daysPastDue >= GRACE_TIER_DAYS.LOCKED) return 'LOCKED';
+  if (daysPastDue >= GRACE_TIER_DAYS.READ_MOSTLY) return 'READ_MOSTLY';
+  if (daysPastDue >= GRACE_TIER_DAYS.RESTRICTED) return 'RESTRICTED';
+  return 'SOFT';
+}
+
+/* ── Legacy constants ─────────────────────────────────────────────── */
+
 export const DEFAULT_GRACE_LIMITS = {
   users: 1,
   invoices: 50,
@@ -314,7 +382,9 @@ export class SubscriptionQuotaService {
 
   async activateGraceLimits(
     subscriptionId: number,
-    overrides?: Partial<typeof DEFAULT_GRACE_LIMITS>,
+    overridesOrTier?:
+      | Partial<typeof DEFAULT_GRACE_LIMITS>
+      | GraceTier,
   ) {
     const subscription = await this.prisma.subscription.findUnique({
       where: { id: subscriptionId },
@@ -326,19 +396,39 @@ export class SubscriptionQuotaService {
       );
     }
     const metadata = this.coerceJsonRecord(subscription.metadata);
-    if (metadata.graceLimits?.active) {
+
+    const tier: GraceTier | null =
+      typeof overridesOrTier === 'string' ? overridesOrTier : null;
+    const overrides: Partial<typeof DEFAULT_GRACE_LIMITS> =
+      typeof overridesOrTier === 'object' && overridesOrTier
+        ? overridesOrTier
+        : {};
+
+    const quotas = tier
+      ? GRACE_TIER_QUOTAS[tier]
+      : {
+          users: overrides.users ?? DEFAULT_GRACE_LIMITS.users,
+          invoices: overrides.invoices ?? DEFAULT_GRACE_LIMITS.invoices,
+          storageMB:
+            overrides.storageMB ?? DEFAULT_GRACE_LIMITS.storageMB,
+        };
+
+    // Skip if already active at the same tier
+    if (
+      metadata.graceLimits?.active &&
+      metadata.graceLimits?.tier === tier
+    ) {
       return false;
     }
 
     metadata.graceLimits = {
       active: true,
+      tier: tier ?? 'SOFT',
       reason: 'past_due',
-      activatedAt: new Date().toISOString(),
-      quotas: {
-        users: overrides?.users ?? DEFAULT_GRACE_LIMITS.users,
-        invoices: overrides?.invoices ?? DEFAULT_GRACE_LIMITS.invoices,
-        storageMB: overrides?.storageMB ?? DEFAULT_GRACE_LIMITS.storageMB,
-      },
+      activatedAt:
+        metadata.graceLimits?.activatedAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      quotas,
     };
 
     await this.prisma.subscription.update({
@@ -346,7 +436,7 @@ export class SubscriptionQuotaService {
       data: { metadata },
     });
     this.logger.warn(
-      `Restricciones de gracia activadas para la suscripcion ${subscriptionId}`,
+      `Restricciones de gracia activadas para la suscripcion ${subscriptionId} (tier: ${tier ?? 'SOFT'})`,
     );
     return true;
   }

@@ -40,6 +40,7 @@ export type CompanySnapshot = {
   sunatBusinessName: string | null;
   sunatAddress: string | null;
   sunatPhone: string | null;
+  sunatContactEmail: string | null;
   logoUrl: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;

@@ -27,7 +27,7 @@ export class CreditNotesController {
 
   @Post()
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('credit_notes')
+  @RequiresActiveSubscription('credit_notes', { maxGraceTier: null })
   async create(
     @Body() dto: CreateCreditNoteDto,
     @CurrentTenant() tenant: any,

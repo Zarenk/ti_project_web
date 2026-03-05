@@ -31,6 +31,7 @@ import {
   InventoryHistoryCreateInputWithOrganization,
 } from 'src/tenancy/prisma-organization.types';
 import { handlePrismaError } from 'src/common/errors/prisma-error.handler';
+import { SubscriptionGuardService } from 'src/subscriptions/subscription-guard.service';
 
 @Injectable()
 export class EntriesService {
@@ -43,6 +44,7 @@ export class EntriesService {
     private accountingService: AccountingService,
     private readonly tenantContext: TenantContextService,
     private readonly verticalConfig: VerticalConfigService,
+    private readonly subscriptionGuard: SubscriptionGuardService,
   ) {}
 
   private async ensureEntriesFeatureEnabled(
@@ -115,9 +117,19 @@ export class EntriesService {
       // Validate entries feature is enabled
       const storeForValidation = await this.prisma.store.findUnique({
         where: { id: data.storeId },
-        select: { companyId: true },
+        select: { companyId: true, organizationId: true },
       });
       await this.ensureEntriesFeatureEnabled(storeForValidation?.companyId);
+
+      // Service-level subscription guard (double protection beyond HTTP guard)
+      const orgIdForGuard = organizationIdFromContext ?? data.organizationId ?? storeForValidation?.organizationId;
+      if (orgIdForGuard != null) {
+        await this.subscriptionGuard.ensureCanOperate(
+          orgIdForGuard,
+          'entries_write',
+          'RESTRICTED',
+        );
+      }
 
       if (data.referenceId) {
         try {

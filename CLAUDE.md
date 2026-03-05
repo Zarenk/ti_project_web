@@ -403,6 +403,72 @@ const activeFilterCount = (() => {
 - Al limpiar filtros, cerrar el panel automáticamente (`setMobileFiltersOpen(false)`)
 - Desktop layout NO se modifica — solo se oculta con `hidden sm:*`
 
+#### Consulta SUNAT — Patrón de Búsqueda DNI/RUC (ESTÁNDAR)
+
+**REGLA:** Toda sección de cliente que necesite buscar por DNI/RUC en SUNAT DEBE usar este patrón: un **botón icono** junto al selector de cliente que abre un **Dialog** con input de búsqueda. NO usar inputs inline separados.
+
+**Estructura del patrón:**
+
+1. **Botón icono** (`Search`) junto al combobox/popover de cliente, con `Tooltip` "Consulta SUNAT"
+2. **Dialog** con título "Consulta SUNAT" + `Building2` icon, input `font-mono`, botón buscar
+3. **Handler** que: consulta API → auto-crea cliente en BD → llena campos del formulario → cierra dialog
+
+```typescript
+// Botón icono junto al selector de cliente
+<div className="flex items-center gap-1.5">
+  <ClientPopover ... className="flex-1 min-w-0" />
+  <TooltipProvider delayDuration={150}>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button type="button" variant="outline" size="icon"
+          className="h-8 w-8 cursor-pointer flex-shrink-0 text-muted-foreground"
+          disabled={isReadOnly || loading}
+          onClick={() => setSunatDialogOpen(true)}
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">Consulta SUNAT</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+</div>
+
+// Dialog de búsqueda SUNAT
+<Dialog open={sunatDialogOpen} onOpenChange={...}>
+  <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+        Consulta SUNAT
+      </DialogTitle>
+      <DialogDescription>
+        Ingresa un DNI (8 dígitos) o RUC (11 dígitos)...
+      </DialogDescription>
+    </DialogHeader>
+    <div className="flex gap-2">
+      <Input value={...} placeholder="Ej: 20519857538" className="font-mono" autoFocus ... />
+      <Button onClick={handleSearch} disabled={loading} className="cursor-pointer flex-shrink-0">
+        {loading ? <Loader2 ... /> : <Search ... />}
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
+```
+
+**Páginas que ya lo implementan:**
+- `fronted/src/app/dashboard/sales/new/sales-form.tsx` — Ventas (referencia original)
+- `fronted/src/app/dashboard/quotes/components/quote-context-bar.tsx` — Cotizaciones
+
+**API reutilizable:** `lookupSunatDocument()` en `fronted/src/app/dashboard/sales/sales.api.tsx` — soporta DNI (8 dígitos) y RUC (11 dígitos)
+
+**Reglas del patrón:**
+- El botón de consulta SUNAT SIEMPRE va al lado derecho del selector de cliente (mismo row)
+- Usar `Dialog`, NO input inline — mantiene la UI limpia y consistente
+- Auto-crear cliente en BD con `createClient()` después de la consulta
+- Llenar automáticamente: nombre, tipo documento, número documento, dirección (si RUC)
+- Refrescar lista de clientes después de crear
+- Toast de éxito/error para feedback al usuario
+
 ### Backend (NestJS)
 
 #### Módulos (~65+ módulos NestJS)
@@ -425,6 +491,8 @@ const activeFilterCount = (() => {
 - CORS configurado correctamente
 - Rate limiting en endpoints sensibles
 - Validación de permisos por módulo
+- **Subscription enforcement:** Guard `SubscriptionStatusGuard` + decorador `@RequiresActiveSubscription(feature)` bloquea endpoints premium si suscripción PAST_DUE/CANCELED
+- **Webhook security:** Validación de firma HMAC, anti-replay (5min window), idempotencia en pagos
 
 #### Patrones Backend Reutilizables
 
@@ -456,6 +524,14 @@ const activeFilterCount = (() => {
 - Auto-decrypt on read, null-safe
 - Usado en gym members (medicalConditions, injuries, emergencyContactPhone)
 
+**Subscription Enforcement** (`backend/src/common/`):
+- `@RequiresActiveSubscription(feature)` — decorador metadata en controllers
+- `SubscriptionStatusGuard` — verifica `Subscription.status` es TRIAL o ACTIVE
+- SUPER_ADMIN_GLOBAL siempre bypass, sin suscripción = permitido (backward compat)
+- Métricas Prometheus (`subscription_blocked_total` counter)
+- Features protegidas: `sunat_transmission`, `guides`, `whatsapp`, `credit_notes`
+- Frontend: `isSubscriptionBlockedError()` en `subscription-error.ts` + `SubscriptionBlockedDialog` redirige a `/dashboard/account/plan`
+
 ## Reglas de Negocio Específicas
 
 ### Contexto Peruano
@@ -479,6 +555,8 @@ const activeFilterCount = (() => {
 - Generación de PDFs (facturas, boletas)
 - Múltiples métodos de pago
 - Integración con caja registradora
+- **Dirección del cliente auto-llenada** desde SUNAT lookup (DNI/RUC) → incluida en PDF del comprobante (`cliente.direccion`)
+- Al crear cliente desde búsqueda SUNAT, se guarda `adress` automáticamente
 
 #### Entradas/Compras
 - Registro de compras a proveedores
@@ -527,8 +605,10 @@ const activeFilterCount = (() => {
 - **Facturación** (`SubscriptionInvoice`): facturas de plataforma
 - **Dunning automático** (`dunning-cron.service.ts`): cobro automático con reintentos
 - **Trial automático** (`trial-cron.service.ts`): gestión de período de prueba
-- **Webhook Mercado Pago**: integración de pagos
-- Frontend: `/dashboard/account/plan`, `/dashboard/account/billing`
+- **Webhook Mercado Pago**: integración de pagos con validación HMAC, anti-replay (5min), pagos idempotentes (transacciones atómicas), mock endpoint bloqueado en producción
+- **Enforcement backend**: `@RequiresActiveSubscription(feature)` guard en controllers de SUNAT, guías, WhatsApp, notas de crédito
+- **Enforcement frontend**: `SubscriptionBlockedDialog` captura errores 403 de suscripción y redirige a plan
+- Frontend: `/dashboard/account/plan` (descompuesto KISS: `plan-utils.ts`, `use-plan-management.ts`, `use-global-usage.ts`, `plan-overview-card.tsx`, `global-usage-card.tsx`), `/dashboard/account/billing`
 
 #### Caja Registradora
 - **Cajas** (`CashRegister`): apertura/cierre de caja con balance
@@ -638,8 +718,12 @@ Mensaje usuario → Intent Parser → ¿intent confianza ≥ 0.85?
 - **Transferencias**: movimiento de productos entre tiendas (`Transfer` model)
 - **Guías de Remisión** (`backend/src/guide/`): documento SUNAT para transporte de mercadería
 - Creación + validación + envío a SUNAT + descarga XML/ZIP/CDR
+- **XML GRE 2022**: usa `cbc:HandlingInstructions` para descripción del motivo de traslado (NO `cbc:Information` que es para sustento de peso)
 - Verificación pública: `GET /public/verify-guide?ruc=&serie=&correlativo=`
 - **No se pueden eliminar** después de transmisión — solo anular (`voidGuide`)
+- **Destinatario expandido**: combobox unificado con clientes + proveedores, soporta RUC, DNI, CE, Pasaporte (badges "Cliente"/"Prov")
+- **Auto-fill direcciones**: punto de partida desde tienda principal, punto de llegada desde destinatario o SUNAT lookup (incluye ubigeo)
+- **Items manuales guardables**: toggle "Guardar como producto" en items manuales, post-operación no-bloqueante al crear guía
 - Frontend: `/dashboard/transfers/`, API: `transfers.api.ts`
 
 #### Verificación Pública de Comprobantes
@@ -651,6 +735,8 @@ Mensaje usuario → Intent Parser → ¿intent confianza ≥ 0.85?
 - **Servicio** (`backend/src/lookups/migo.service.ts`): consulta RUC y DNI via MiGo.pe API
 - Cache de 12 horas (`MIGO_CACHE_TTL_MS`), auth con bearer token (`MIGO_TOKEN`)
 - Métodos: `lookupRuc()`, `lookupDni()`, `lookupPhone()` con flag `refresh`
+- **Datos retornados**: nombre, dirección, ubigeo (solo RUC), estado, condición
+- **Frontend `LookupResponse`**: incluye `address`, `ubigeo` — usados para auto-fill en ventas y guías
 
 #### OAuth para Redes Sociales
 - **Backend** (`backend/src/ads/oauth/`): flujo OAuth multi-plataforma
@@ -664,7 +750,8 @@ Mensaje usuario → Intent Parser → ¿intent confianza ≥ 0.85?
 - Sistema basado en módulos con permisos JSON en `OrganizationMembership.modulePermissions`
 - Guard `ModulePermissionGuard` en frontend (oculta UI si no tiene permiso)
 - Guard `DeleteActionsGuard` para operaciones destructivas
-- Backend: `@Roles(...)` + `@ModulePermission(...)` decoradores en controllers
+- Backend: `@Roles(...)` + `@ModulePermission(...)` + `@RequiresActiveSubscription(feature)` decoradores en controllers
+- Guard `SubscriptionStatusGuard` bloquea features premium si suscripción no activa
 - Verificar permisos en backend siempre
 
 ## Patrones y Mejores Prácticas
@@ -689,6 +776,7 @@ Mensaje usuario → Intent Parser → ¿intent confianza ≥ 0.85?
 - **Custom hooks** (con React state) → `use-*.ts` en el mismo directorio (ej: `use-sale-cart.ts`, `use-products-data.ts`)
 - **Cart pattern:** `useSaleCart`, `useEntryCart` — patrón reutilizable para cart + serials + stock tracking
 - **Payment pattern:** `useSalePayment` — patrón para gestión de pagos con auto-sync
+- **Plan page pattern:** `use-plan-management.ts` + `use-global-usage.ts` + `plan-utils.ts` + sub-componentes — ejemplo KISS de descomposición de página compleja
 
 #### Al Crear Código Nuevo
 - Preguntarse: "¿Esto es lo más simple que puede ser?"
@@ -958,6 +1046,7 @@ Task("analizar middleware de tenant", "Explore", "medium")
 | `auth.ts` | Helpers de autenticación (token, headers) |
 | `images.ts` | `resolveImageVariant()` para WebP variants (full/card/thumb) |
 | `utils.ts` | Utilidades generales (cn, formatCurrency, etc.) |
+| `subscription-error.ts` | Detección de errores de suscripción bloqueada (regex matching) |
 
 ## Componentes Clave (`fronted/src/components/`)
 
@@ -973,6 +1062,8 @@ Task("analizar middleware de tenant", "Explore", "medium")
 | `help/tool-result-stats.tsx` | Cards de estadísticas de tool execution |
 | `help/tool-confirmation-card.tsx` | Card de confirmación para mutaciones |
 | `help/tool-error-card.tsx` | Card de error de tool execution |
+| `subscription-blocked-dialog.tsx` | Dialog cuando feature bloqueada por suscripción → redirige a plan |
+| `subscription-quota-card.tsx` | Barras de progreso de cuotas con colores (azul <70%, amber 70-90%, rojo >90%) |
 
 ## Comandos Útiles
 
@@ -1006,6 +1097,8 @@ npx cypress open        # Tests E2E
 11. **Sidebar navigation:** Datos en `sidebar-navigation-data.ts` con ocultamiento por vertical (RESTAURANT_HIDDEN_NAV, GYM_HIDDEN_NAV)
 12. **Error Boundary:** `error-boundary.tsx` como class component React, captura errores de render con UI fallback
 13. **Verificación pública:** Endpoints sin auth para que clientes verifiquen facturas y guías de remisión
+14. **Guías XML SUNAT:** Elemento `cbc:HandlingInstructions` (NO `cbc:Information`) para motivo de traslado en GRE 2022
+15. **Subscription enforcement:** Features premium (SUNAT, guías, WhatsApp, credit notes) requieren suscripción activa — error 403 muestra `SubscriptionBlockedDialog`
 
 ## Cuando Hagas Cambios
 
@@ -1046,6 +1139,10 @@ npx cypress open        # Tests E2E
 ### Series y Transferencias
 8. **`EntryDetailSeries.storeId`** es la fuente de verdad para ubicación actual de una serie. Al transferir, `storeId` se actualiza en el registro de la serie. **NUNCA** usar `entryDetail.entry.storeId` para filtrar series por tienda (ese es el store original de la entrada, no el actual). Bug fijado 2026-03-02.
 9. **Currency breakdown por tienda** debe considerar `Transfer` records. Solo mirar `EntryDetail` muestra stock en tienda de origen, no la actual tras transferencias.
+
+### SUNAT XML (Guías de Remisión)
+10. **`cbc:HandlingInstructions`** es el elemento correcto para la descripción del motivo de traslado en GRE 2022. **NUNCA** usar `cbc:Information` para esto (ese es para sustento de peso). Error 3457 de SUNAT. Bug fijado 2026-03-05.
+11. **Webhook `MERCADOPAGO_WEBHOOK_SECRET`** DEBE estar configurado en producción. Sin esta variable, TODOS los webhooks de MercadoPago serán rechazados con 400. Cambio de seguridad 2026-03-05.
 
 ## Flujo Crítico: Entradas y Salidas de Inventario
 
@@ -1209,7 +1306,7 @@ Claude debe aplicar estos skills de forma natural en cada respuesta:
 
 ---
 
-**Última actualización:** 2026-03-03
-**Versión:** 2.1
+**Última actualización:** 2026-03-05
+**Versión:** 2.2
 
 Este archivo debe actualizarse cuando cambien convenciones, patrones o reglas importantes del proyecto.

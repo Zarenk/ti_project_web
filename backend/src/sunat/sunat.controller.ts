@@ -46,7 +46,7 @@ export class SunatController {
 
   @Post('send-document')
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('sunat_transmission')
+  @RequiresActiveSubscription('sunat_transmission', { maxGraceTier: null })
   async sendDocument(
     @Body() body: SendDocumentBody,
     @CurrentTenant() tenant: TenantContext | null,
@@ -300,7 +300,7 @@ export class SunatController {
 
   @Post('transmissions/:id/retry')
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('sunat_transmission')
+  @RequiresActiveSubscription('sunat_transmission', { maxGraceTier: null })
   async retryTransmission(
     @Param('id', ParseIntPipe) id: number,
     @CurrentTenant() tenant: TenantContext | null,

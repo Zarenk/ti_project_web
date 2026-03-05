@@ -31,6 +31,8 @@ import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { extractTextWithOCR } from '../utils/pdf-ocr';
 import type { Request } from 'express';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 @ModulePermission('inventory')
 @Controller('entries')
@@ -43,6 +45,8 @@ export class EntriesController {
 
   // Endpoint para crear una nueva entrada
   @Post()
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
   async createEntry(
     @Body() body: CreateEntryDto,
     @CurrentTenant('organizationId') organizationId: number | null | undefined,
@@ -412,6 +416,8 @@ export class EntriesController {
   }
 
   @Delete(':id')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
   remove(
     @Param('id') id: string,
     @CurrentTenant('organizationId') orgId: number | null,
@@ -420,6 +426,8 @@ export class EntriesController {
   }
 
   @Delete()
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
   async deleteEntries(
     @Body('ids') ids: number[],
     @CurrentTenant('organizationId') orgId: number | null,

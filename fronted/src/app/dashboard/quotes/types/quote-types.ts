@@ -65,6 +65,8 @@ export type QuoteContextBarProps = {
   onClientDocTypeChange: (type: string) => void
   onClientDocNumberChange: (number: string) => void
   onNewClientClick: () => void
+  onSunatLookup: (document: string) => Promise<void>
+  sunatLookupLoading: boolean
   isReadOnly: boolean
 }
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar, X, Banknote, CreditCard, Landmark, Smartphone } from "lucide-react"
+import { ArrowDown, ArrowUp, Calculator, Search, ChevronDown, ChevronUp, Calendar, X, Banknote, CreditCard, Landmark, Smartphone, FileText } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -55,6 +55,7 @@ type ClosureOperationDetail = {
   clientName: string | null
   clientDocument: string | null
   voucher: string | null
+  voucherType: string | null
   saleItems: SaleDetailItem[]
   notes: string | null
   paymentMethods: Array<{
@@ -751,6 +752,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
               clientName: operation.clientName ?? null,
               clientDocument: clientDocumentParts.length > 0 ? clientDocumentParts.join(" ") : null,
               voucher: operation.voucher ?? null,
+              voucherType: operation.voucherType ?? null,
               saleItems: saleDetails.items,
               notes: noteCandidates.length > 0 ? noteCandidates.join("\n") : null,
               paymentMethods: paymentEntries,
@@ -1204,7 +1206,16 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           <TableCell className="text-center font-medium">
                             {signedAmount}
                           </TableCell>
-                        {!isMobile && <TableCell>{transaction.voucher || "-"}</TableCell>}
+                        {!isMobile && (
+                          <TableCell>
+                            {transaction.voucher ? (
+                              <div className="flex flex-col">
+                                <span className="text-[10px] uppercase text-muted-foreground leading-tight">{transaction.voucherType || ""}</span>
+                                <span className="text-xs">{transaction.voucher}</span>
+                              </div>
+                            ) : "-"}
+                          </TableCell>
+                        )}
                           {!isMobile && (
                             <TableCell className="max-w-[200px] truncate">
                               {transaction.clientName
@@ -1365,7 +1376,9 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                   {transaction.voucher && (
                                     <>
                                       <dt className="text-muted-foreground">Comprobante</dt>
-                                      <dd className="font-medium text-foreground">{transaction.voucher}</dd>
+                                      <dd className="font-medium text-foreground">
+                                        {transaction.voucherType ? `${transaction.voucherType}: ` : ""}{transaction.voucher}
+                                      </dd>
                                     </>
                                   )}
                                 </dl>
@@ -1756,7 +1769,7 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                                               )}
                                               {operation.voucher && (
                                                 <p className="text-xs text-muted-foreground">
-                                                  Comprobante: {operation.voucher}
+                                                  {operation.voucherType || "Comprobante"}: {operation.voucher}
                                                 </p>
                                               )}
                                             </div>
@@ -1979,35 +1992,27 @@ export default function TransactionHistory({ transactions, selectedDate, onDateC
                           </p>
                         )}
                         {modalTransaction.voucher && (
-                          <p>
-                            <strong>Comprobante:</strong> {modalTransaction.voucher}
-                          </p>
-                        )}
-                        {modalTransaction.invoiceUrl && (
-                          <p>
-                            <strong>Enlace del comprobante:</strong>{" "}
-                            <a
-                              href={modalTransaction.invoiceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary underline"
-                            >
-                              Ver comprobante
-                            </a>
-                          </p>
-                        )}
-                        {modalInvoiceUrl && (
-                          <p>
-                            <strong>PDF Sunat:</strong>{" "}
-                            <a
-                              href={modalInvoiceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary underline"
-                            >
-                              Descargar comprobante
-                            </a>
-                          </p>
+                          <div className="sm:col-span-2 rounded-md border p-3 space-y-1.5">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Comprobante electrónico
+                            </p>
+                            <div className="flex items-center justify-between gap-4 flex-wrap">
+                              <p className="font-medium text-sm">
+                                {modalTransaction.voucherType || "COMPROBANTE"}: {modalTransaction.voucher}
+                              </p>
+                              {modalInvoiceUrl && (
+                                <a
+                                  href={modalInvoiceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-primary hover:bg-muted transition-colors cursor-pointer flex-shrink-0"
+                                >
+                                  <FileText className="h-3.5 w-3.5" />
+                                  Ver PDF
+                                </a>
+                              )}
+                            </div>
+                          </div>
                         )}
                         {modalEffectiveType === "INCOME" && (
                           <div className="sm:col-span-2 mt-2 space-y-3">

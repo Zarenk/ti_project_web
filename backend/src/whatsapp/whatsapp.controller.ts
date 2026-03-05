@@ -48,7 +48,7 @@ export class WhatsAppController {
 
   @Post('connect')
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('whatsapp')
+  @RequiresActiveSubscription('whatsapp', { maxGraceTier: null })
   async connect(
     @Request() req: any,
     @Query('fresh') fresh?: string,
@@ -259,7 +259,7 @@ export class WhatsAppController {
 
   @Post('send')
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('whatsapp')
+  @RequiresActiveSubscription('whatsapp', { maxGraceTier: null })
   async sendMessage(@Request() req: any, @Body() dto: SendMessageDto) {
     const { organizationId, companyId } = req.tenantContext;
     const result = await this.whatsappService.sendMessage(organizationId, companyId, dto);
@@ -272,7 +272,7 @@ export class WhatsAppController {
 
   @Post('send-template')
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('whatsapp')
+  @RequiresActiveSubscription('whatsapp', { maxGraceTier: null })
   async sendTemplate(@Request() req: any, @Body() dto: SendTemplateDto) {
     const { organizationId, companyId } = req.tenantContext;
     const result = await this.whatsappService.sendTemplateMessage(
@@ -289,7 +289,7 @@ export class WhatsAppController {
 
   @Post('send-bulk')
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('whatsapp')
+  @RequiresActiveSubscription('whatsapp', { maxGraceTier: null })
   async sendBulk(@Request() req: any, @Body() dto: BulkMessageDto) {
     const { organizationId, companyId } = req.tenantContext;
 

@@ -108,6 +108,7 @@ export class SubscriptionsService {
 
     const now = new Date();
     const trialEndsAt = this.resolveTrialEnd(plan, dto.trialEndsAt);
+    const paymentEnforced = dto.paymentEnforced ?? false;
     const existingSubscription = await this.prisma.subscription.findUnique({
       where: { organizationId: dto.organizationId },
     });
@@ -124,7 +125,8 @@ export class SubscriptionsService {
         trialEndsAt,
         currentPeriodStart: now,
         currentPeriodEnd: trialEndsAt,
-        metadata: { createdVia: 'manual_trial' },
+        paymentEnforced,
+        metadata: { createdVia: paymentEnforced ? 'public_signup' : 'manual_trial' },
       },
       update: {
         planId: plan.id,
@@ -134,6 +136,9 @@ export class SubscriptionsService {
         currentPeriodEnd: trialEndsAt,
         cancelAtPeriodEnd: false,
         canceledAt: null,
+        paymentEnforced: existingSubscription
+          ? existingSubscription.paymentEnforced
+          : paymentEnforced,
         metadata: {
           ...metadataBase,
           trialRefreshedAt: now.toISOString(),
@@ -401,6 +406,7 @@ export class SubscriptionsService {
         currentPeriodEnd: endsAt,
         cancelAtPeriodEnd: false,
         canceledAt: null,
+        pastDueSince: null,
         metadata: metadata as Prisma.InputJsonObject,
       },
       update: {
@@ -411,6 +417,7 @@ export class SubscriptionsService {
         currentPeriodEnd: endsAt,
         cancelAtPeriodEnd: false,
         canceledAt: null,
+        pastDueSince: null,
         metadata: metadata as Prisma.InputJsonObject,
       },
     });
@@ -1395,6 +1402,16 @@ export class SubscriptionsService {
       subscriptionMetadata?.complimentary ?? null,
     );
 
+    // Resolve grace tier for payment-enforced subscriptions
+    const { resolveGraceTier: resolveGrace } = await import(
+      './subscription-quota.service'
+    );
+    const graceTier = resolveGrace({
+      paymentEnforced: subscription.paymentEnforced,
+      status: subscription.status,
+      pastDueSince: subscription.pastDueSince,
+    });
+
     return {
       organization: orgInfo,
       company: companyInfo,
@@ -1432,6 +1449,10 @@ export class SubscriptionsService {
           lastPaidInvoice?.dueDate?.toISOString() ??
           null,
       },
+      paymentEnforced: subscription.paymentEnforced,
+      hasPaymentMethod: !!subscription.defaultPaymentMethodId,
+      graceTier,
+      pastDueSince: subscription.pastDueSince?.toISOString() ?? null,
       complimentary: complimentaryMeta,
       contacts: {
         primary: primaryContact,
@@ -1868,6 +1889,7 @@ export class SubscriptionsService {
             ),
           cancelAtPeriodEnd: false,
           canceledAt: null,
+          pastDueSince: null,
         },
       });
 
@@ -1920,6 +1942,8 @@ export class SubscriptionsService {
         where: { id: invoice.subscriptionId },
         data: {
           status: SubscriptionStatus.PAST_DUE,
+          // Set pastDueSince only if not already set (first failure)
+          pastDueSince: invoice.subscription.pastDueSince ?? new Date(),
         },
       });
 
@@ -2821,5 +2845,223 @@ export class SubscriptionsService {
       }
     }
     return 'factura';
+  }
+
+  /* ── Auto-charge (Fase 5) ─────────────────────────────────────── */
+
+  /**
+   * Attempt to automatically charge a subscription via saved card on file.
+   * Falls back to checkout link + email if no card is available.
+   *
+   * Uses idempotency key per subscription + reason + date to prevent
+   * double charges across cron runs, webhook retries, etc.
+   */
+  /**
+   * Creates a SubscriptionInvoice for auto-charge with idempotency key.
+   * Returns null if no billing company is found.
+   */
+  private async createAutoInvoice(
+    subscription: Subscription & { plan: SubscriptionPlan },
+    reason: 'trial_end' | 'renewal',
+    idempotencyKey: string,
+  ): Promise<{
+    invoice: { id: number; metadata: any };
+    amount: string;
+    currency: string;
+  } | null> {
+    const billingCompany = await this.prisma.company.findFirst({
+      where: { organizationId: subscription.organizationId },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    if (!billingCompany) {
+      this.logger.warn(
+        `No billing company for org ${subscription.organizationId}, cannot auto-charge`,
+      );
+      return null;
+    }
+
+    const amount = subscription.plan.price
+      ? this.decimalToString(subscription.plan.price)
+      : '0';
+    const currency = subscription.plan.currency ?? 'PEN';
+
+    const invoice = await this.prisma.subscriptionInvoice.create({
+      data: {
+        subscriptionId: subscription.id,
+        organizationId: subscription.organizationId,
+        companyId: billingCompany.id,
+        status: 'PENDING',
+        amount: Number(amount),
+        subtotal: Number(amount),
+        taxRate: 0,
+        taxAmount: 0,
+        currency,
+        metadata: {
+          reason,
+          idempotencyKey,
+          autoCharge: true,
+          createdAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return { invoice, amount, currency };
+  }
+
+  async attemptAutoCharge(
+    subscription: Subscription & {
+      plan: SubscriptionPlan;
+      defaultPaymentMethod?: { externalId: string } | null;
+    },
+    reason: 'trial_end' | 'renewal',
+  ): Promise<{ success: boolean; invoiceId: number }> {
+    const logger = this.logger;
+
+    // 1. Lock check — if already ACTIVE (another process activated), skip
+    const current = await this.prisma.subscription.findUnique({
+      where: { id: subscription.id },
+      select: { id: true, status: true },
+    });
+    if (
+      current?.status === SubscriptionStatus.ACTIVE &&
+      reason === 'trial_end'
+    ) {
+      return { success: true, invoiceId: 0 };
+    }
+
+    // 2. Build idempotency key
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const idempotencyKey = `auto-${subscription.id}-${reason}-${dateStr}`;
+
+    // 3. Check for existing invoice with this key (idempotency)
+    const existingInvoice =
+      await this.prisma.subscriptionInvoice.findFirst({
+        where: {
+          subscriptionId: subscription.id,
+          metadata: {
+            path: ['idempotencyKey'],
+            equals: idempotencyKey,
+          },
+        },
+      });
+    if (existingInvoice) {
+      return {
+        success: existingInvoice.status === 'PAID',
+        invoiceId: existingInvoice.id,
+      };
+    }
+
+    // 4. Create invoice (encapsulates billing company lookup + invoice creation)
+    const invoiceResult = await this.createAutoInvoice(
+      subscription,
+      reason,
+      idempotencyKey,
+    );
+    if (!invoiceResult) {
+      return { success: false, invoiceId: 0 };
+    }
+    const { invoice, amount, currency } = invoiceResult;
+
+    // 7. If no payment method → generate checkout link
+    if (
+      !subscription.defaultPaymentMethod?.externalId ||
+      !subscription.billingCustomerId
+    ) {
+      logger.log(
+        `No payment method for sub ${subscription.id}, generating checkout link`,
+      );
+      try {
+        const urls = this.resolveBillingRetryUrls(
+          subscription.organizationId,
+          invoice.id,
+        );
+        const session = await this.paymentProvider.createCheckoutSession({
+          organizationId: subscription.organizationId,
+          planCode: subscription.plan.code ?? 'default',
+          amount,
+          currency,
+          successUrl: urls.successUrl,
+          cancelUrl: urls.cancelUrl,
+          metadata: {
+            subscriptionId: subscription.id,
+            invoiceId: invoice.id,
+          },
+        });
+        // Store checkout URL in invoice metadata
+        const meta = this.coerceJsonRecord(invoice.metadata);
+        meta.checkoutUrl = session.checkoutUrl;
+        await this.prisma.subscriptionInvoice.update({
+          where: { id: invoice.id },
+          data: { metadata: meta },
+        });
+      } catch (error) {
+        logger.warn(
+          `Failed to generate checkout for invoice ${invoice.id}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+      this.metrics.recordAutoCharge(reason, 'no_method');
+      return { success: false, invoiceId: invoice.id };
+    }
+
+    // 8. Charge card
+    if (!this.paymentProvider.chargeCard) {
+      logger.warn(
+        `Payment provider does not support chargeCard for sub ${subscription.id}`,
+      );
+      return { success: false, invoiceId: invoice.id };
+    }
+
+    try {
+      const result = await this.paymentProvider.chargeCard({
+        customerId: subscription.billingCustomerId,
+        cardTokenOrId: subscription.defaultPaymentMethod.externalId,
+        amount,
+        currency,
+        description: `Suscripcion ${subscription.plan.name} - ${
+          reason === 'trial_end' ? 'Activacion' : 'Renovacion'
+        }`,
+        idempotencyKey,
+        metadata: {
+          invoiceId: invoice.id,
+          organizationId: subscription.organizationId,
+        },
+      });
+
+      if (result.status === 'approved') {
+        await this.applyInvoicePayment({
+          invoiceId: invoice.id,
+          paymentId: result.paymentId,
+        });
+        this.metrics.recordAutoCharge(reason, 'approved');
+        logger.log(
+          `Auto-charge approved for sub ${subscription.id}, invoice ${invoice.id}`,
+        );
+        return { success: true, invoiceId: invoice.id };
+      } else {
+        await this.applyInvoiceFailure({
+          invoiceId: invoice.id,
+          statusDetail: result.statusDetail,
+        });
+        this.metrics.recordAutoCharge(reason, 'rejected');
+        logger.warn(
+          `Auto-charge ${result.status} for sub ${subscription.id}: ${result.statusDetail}`,
+        );
+        return { success: false, invoiceId: invoice.id };
+      }
+    } catch (error) {
+      logger.error(
+        `Auto-charge error for sub ${subscription.id}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      this.metrics.recordAutoCharge(reason, 'error');
+      try {
+        await this.applyInvoiceFailure({ invoiceId: invoice.id });
+      } catch { /* prevent double failure */ }
+      return { success: false, invoiceId: invoice.id };
+    }
   }
 }

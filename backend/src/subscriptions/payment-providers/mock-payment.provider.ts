@@ -1,4 +1,6 @@
 import {
+  ChargeCardParams,
+  ChargeCardResult,
   CheckoutSessionParams,
   CheckoutSessionResult,
   PaymentProvider,
@@ -17,6 +19,15 @@ export class MockPaymentProvider implements PaymentProvider {
       sessionId,
       checkoutUrl,
       expiresAt,
+    };
+  }
+
+  async chargeCard(params: ChargeCardParams): Promise<ChargeCardResult> {
+    return {
+      provider: 'mock',
+      paymentId: `mock_payment_${Date.now()}`,
+      status: 'approved',
+      statusDetail: 'mock_approved',
     };
   }
 }

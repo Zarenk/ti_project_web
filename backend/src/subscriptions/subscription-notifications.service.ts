@@ -304,6 +304,48 @@ export class SubscriptionNotificationsService {
     return `${normalized}/dashboard/account/billing?${params}`;
   }
 
+  async sendPaymentRequired(payload: {
+    organizationId: number;
+    planName?: string | null;
+    amount?: string | null;
+    currency?: string;
+    checkoutUrl?: string | null;
+    reason: 'trial_end' | 'renewal';
+  }) {
+    const recipients = await this.getRecipients(payload.organizationId);
+    if (!this.canSend(recipients)) return;
+
+    const subject =
+      payload.reason === 'trial_end'
+        ? 'Tu periodo de prueba terminó — activa tu plan'
+        : 'No pudimos procesar tu pago de suscripción';
+
+    const lines = [
+      'Hola,',
+      '',
+      payload.reason === 'trial_end'
+        ? 'Tu periodo de prueba ha finalizado.'
+        : 'No pudimos completar el cobro automático de tu suscripción.',
+      payload.planName ? `Plan: ${payload.planName}.` : undefined,
+      payload.amount && payload.currency
+        ? `Monto: ${this.formatCurrency(payload.amount, payload.currency)}.`
+        : undefined,
+      '',
+      'Para continuar usando todas las funcionalidades, activa o actualiza tu método de pago.',
+      payload.checkoutUrl
+        ? `Puedes pagar directamente aquí: ${payload.checkoutUrl}`
+        : undefined,
+      '',
+      'Si tienes alguna duda, contacta a nuestro equipo de soporte.',
+    ];
+
+    await this.sendEmail(
+      recipients,
+      subject,
+      lines.filter(Boolean).join('\n'),
+    );
+  }
+
   private formatCurrency(value: string, currency: string) {
     const numeric = Number(value);
     if (Number.isFinite(numeric)) {

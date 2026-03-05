@@ -22,6 +22,7 @@ import { OrganizationExportCronService } from './organization-export.cron';
 import { OnboardingModule } from 'src/onboarding/onboarding.module';
 import { MercadoPagoWebhookService } from './mercado-pago-webhook.service';
 import { SubscriptionPrometheusService } from './subscription-prometheus.service';
+import { SubscriptionGuardService } from './subscription-guard.service';
 
 @Module({
   imports: [TenancyModule, SunatModule, ActivityModule, OnboardingModule],
@@ -56,11 +57,13 @@ import { SubscriptionPrometheusService } from './subscription-prometheus.service
     OrganizationExportCronService,
     MercadoPagoWebhookService,
     SubscriptionPrometheusService,
+    SubscriptionGuardService,
   ],
   exports: [
     SubscriptionsService,
     SubscriptionNotificationsService,
     SubscriptionPrometheusService,
+    SubscriptionGuardService,
   ],
 })
 export class SubscriptionsModule {}

@@ -160,10 +160,17 @@ export function ProductsClient() {
     return filteredProducts.slice(startIndex, endIndex)
   }, [filteredProducts, currentPage, itemsPerPage])
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 only when actual filters change (not on data refetch)
   useEffect(() => {
     setCurrentPage(1)
-  }, [filteredProducts])
+  }, [searchTerm, categoryFilter, migrationStatus])
+
+  // Clamp page if current page exceeds total after data changes (e.g. product deleted)
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
 
   return (
     <>
@@ -513,8 +520,8 @@ export function ProductsClient() {
             ) : viewMode === "gallery" ? (
               <div className="space-y-4 px-5">
                 {/* Search and controls for gallery view */}
-                <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center">
-                  <div className="relative flex-1">
+                <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center w-full min-w-0 overflow-hidden">
+                  <div className="relative flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       value={searchTerm}
@@ -523,6 +530,22 @@ export function ProductsClient() {
                       className="pl-9"
                     />
                   </div>
+                  <Select
+                    value={categoryFilter}
+                    onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}
+                  >
+                    <SelectTrigger className="w-full sm:w-[200px] cursor-pointer flex-shrink-0">
+                      <SelectValue placeholder="Todas las categorías" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="cursor-pointer">Todas las categorías</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat} className="cursor-pointer">
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Products count */}

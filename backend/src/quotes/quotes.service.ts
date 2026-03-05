@@ -671,7 +671,7 @@ export class QuotesService {
 
       const quote = await this.prisma.quote.findFirst({
         where: { id, companyId },
-        include: { items: true },
+        include: { items: true, client: true },
       });
       if (!quote) throw new NotFoundException('Cotizaci?n no encontrada.');
       return quote;

@@ -22,6 +22,8 @@ import { ModulePermission } from 'src/common/decorators/module-permission.decora
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
 import { EntityOwnershipGuard, EntityModel, EntityIdParam } from 'src/common/guards/entity-ownership.guard';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 const SALES_ALLOWED_ROLES = [
   'ADMIN',
@@ -40,6 +42,8 @@ export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('sales_write', { maxGraceTier: 'RESTRICTED' })
   async createSale(
     @Body() createSaleDto: CreateSaleDto,
     @CurrentTenant() fullTenant: any,
@@ -452,7 +456,8 @@ export class SalesController {
   }
 
   @Patch(':id/annul')
-  @UseGuards(EntityOwnershipGuard)
+  @UseGuards(SubscriptionStatusGuard, EntityOwnershipGuard)
+  @RequiresActiveSubscription('sales_write', { maxGraceTier: 'RESTRICTED' })
   @EntityModel('sales')
   @EntityIdParam('id')
   async annulSale(
@@ -471,7 +476,8 @@ export class SalesController {
   }
 
   @Delete(':id')
-  @UseGuards(EntityOwnershipGuard)
+  @UseGuards(SubscriptionStatusGuard, EntityOwnershipGuard)
+  @RequiresActiveSubscription('sales_write', { maxGraceTier: 'RESTRICTED' })
   @EntityModel('sales')
   @EntityIdParam('id')
   async deleteSale(

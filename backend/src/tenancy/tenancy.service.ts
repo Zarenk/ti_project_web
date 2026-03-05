@@ -819,6 +819,9 @@ export class TenancyService {
     );
     const sunatAddress = this.normalizeNullableInput(dto.sunatAddress);
     const sunatPhone = this.normalizeNullableInput(dto.sunatPhone);
+    const sunatContactEmail = this.normalizeNullableInput(
+      dto.sunatContactEmail,
+    );
     const logoUrl = this.normalizeNullableInput(dto.logoUrl);
     const primaryColor = this.normalizeColorInput(
       dto.primaryColor,
@@ -912,6 +915,9 @@ export class TenancyService {
     }
     if (dto.sunatPhone !== undefined) {
       data.sunatPhone = sunatPhone ?? null;
+    }
+    if (dto.sunatContactEmail !== undefined) {
+      data.sunatContactEmail = sunatContactEmail ?? null;
     }
     if (dto.logoUrl !== undefined) {
       data.logoUrl = logoUrl ?? null;

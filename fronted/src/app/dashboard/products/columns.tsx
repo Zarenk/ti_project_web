@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from "next/link"
 import { ColumnDef } from '@tanstack/react-table';
-import { ArrowUpDown, Loader2, Megaphone, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, Loader2, MoreHorizontal } from "lucide-react"
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -320,7 +320,6 @@ export function useProductColumns(options: ProductTableOptions = {}) {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href={`/dashboard/products/${product.id}/promote`}>
-                      <Megaphone className="mr-2 h-4 w-4" />
                       Promocionar
                     </Link>
                   </DropdownMenuItem>

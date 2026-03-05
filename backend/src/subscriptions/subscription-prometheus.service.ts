@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Counter } from 'prom-client';
+import { Counter, Gauge } from 'prom-client';
 
 type SignupResult = 'success' | 'error';
 type DunningAttemptResult = 'success' | 'failed' | 'retry_exhausted';
 type DunningJobResult = 'success' | 'error';
 type WebhookResult = 'success' | 'failed';
+type AutoChargeResult = 'approved' | 'rejected' | 'no_method' | 'error';
+type AutoChargeReason = 'trial_end' | 'renewal';
 
 function normalizeLabel(value?: string | null, fallback = 'unknown') {
   if (!value) {
@@ -69,6 +71,18 @@ export class SubscriptionPrometheusService {
     name: 'subscription_dunning_job_runs_total',
     help: 'Ejecuciones del cron de dunning',
     labelNames: ['result'],
+  });
+
+  private readonly autoChargeCounter = new Counter({
+    name: 'subscription_auto_charge_total',
+    help: 'Intentos de cobro automatico con tarjeta guardada',
+    labelNames: ['reason', 'result'],
+  });
+
+  private readonly graceTierGauge = new Gauge({
+    name: 'subscription_grace_tier_current',
+    help: 'Distribucion actual de suscripciones por nivel de gracia',
+    labelNames: ['tier'],
   });
 
   recordSignupStarted() {
@@ -148,6 +162,34 @@ export class SubscriptionPrometheusService {
       'subscription_dunning_job_run',
       { result },
     );
+  }
+
+  recordAutoCharge(reason: AutoChargeReason, result: AutoChargeResult) {
+    this.safeIncrement(
+      this.autoChargeCounter,
+      { reason, result },
+      'subscription_auto_charge',
+      { reason, result },
+    );
+  }
+
+  /**
+   * Sets the grace tier gauge with current counts.
+   * Call with the full tier distribution from the dunning cron.
+   */
+  setGraceTierDistribution(distribution: Record<string, number>) {
+    try {
+      this.graceTierGauge.reset();
+      for (const [tier, count] of Object.entries(distribution)) {
+        this.graceTierGauge.set({ tier }, count);
+      }
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      this.logger.warn(
+        `No se pudo actualizar grace_tier_current: ${reason}`,
+      );
+    }
   }
 
   private safeIncrement(

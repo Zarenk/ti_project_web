@@ -24,5 +24,5 @@ export function ProductsTable({ data, onViewProduct }: ProductsTableProps) {
   )
   const columns = useProductColumns(options)
 
-  return <DataTable columns={columns} data={data} />
+  return <DataTable columns={columns} data={data} onViewProduct={onViewProduct} />
 }

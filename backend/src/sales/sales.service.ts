@@ -32,6 +32,7 @@ import {
 import { InventoryHistoryUncheckedCreateInputWithOrganization } from 'src/tenancy/prisma-organization.types';
 import { SunatService } from 'src/sunat/sunat.service';
 import { SubscriptionQuotaService } from 'src/subscriptions/subscription-quota.service';
+import { SubscriptionGuardService } from 'src/subscriptions/subscription-guard.service';
 import { VerticalConfigService } from 'src/tenancy/vertical-config.service';
 import { ProfitAnalysisService } from './services/profit-analysis.service';
 
@@ -70,6 +71,7 @@ export class SalesService {
     private readonly accountingHook: AccountingHook,
     private readonly sunatService: SunatService,
     private readonly quotaService: SubscriptionQuotaService,
+    private readonly subscriptionGuard: SubscriptionGuardService,
     private readonly verticalConfig: VerticalConfigService,
     private readonly profitAnalysisService: ProfitAnalysisService,
   ) {}
@@ -162,6 +164,15 @@ export class SalesService {
         mismatchError:
           'La organización proporcionada no coincide con la tienda seleccionada.',
       });
+
+      // Service-level subscription guard (double protection beyond HTTP guard)
+      if (organizationId != null) {
+        await this.subscriptionGuard.ensureCanOperate(
+          organizationId,
+          'sales_write',
+          'RESTRICTED',
+        );
+      }
 
       logOrganizationContext({
         service: SalesService.name,

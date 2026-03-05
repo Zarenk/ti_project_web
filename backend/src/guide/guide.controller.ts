@@ -33,7 +33,7 @@ export class GuideController {
 
   @Post()
   @UseGuards(SubscriptionStatusGuard)
-  @RequiresActiveSubscription('guides')
+  @RequiresActiveSubscription('guides', { maxGraceTier: null })
   async generarGuia(
     @Body() dto: CreateGuideDto,
     @CurrentTenant('organizationId') organizationId: number | null,

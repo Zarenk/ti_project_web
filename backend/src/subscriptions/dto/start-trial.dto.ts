@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsInt,
   IsNotEmpty,
@@ -21,4 +22,8 @@ export class StartTrialDto {
   @IsOptional()
   @IsDateString()
   trialEndsAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  paymentEnforced?: boolean;
 }

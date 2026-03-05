@@ -299,6 +299,7 @@ export class PublicSignupService {
         await this.subscriptionsService.startTrial({
           organizationId,
           planCode,
+          paymentEnforced: true,
         });
       } catch (firstError) {
         this.logger.warn(
@@ -308,6 +309,7 @@ export class PublicSignupService {
           await this.subscriptionsService.startTrial({
             organizationId,
             planCode: 'trial',
+            paymentEnforced: true,
           });
         } catch (secondError) {
           this.logger.error(
