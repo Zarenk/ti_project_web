@@ -24,7 +24,8 @@ RUN npm install sharp@0.34.4 --force \
 # Copy Prisma schema + config, generate client
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
-RUN npx prisma generate
+# Dummy DATABASE_URL just for client generation (not used at runtime)
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
 # Copy source and build
 COPY . .
