@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+*.md
+.env
+.env.*
+npm-debug.log
+.DS_Store
+coverage
+test
+*.spec.ts
+*.test.ts
+whatsapp_auth
+uploads
+storage
