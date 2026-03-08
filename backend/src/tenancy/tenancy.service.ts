@@ -64,18 +64,18 @@ export class TenancyService {
       status: string;
       createdAt: Date;
       updatedAt: Date;
-      units: StoredOrganizationUnit[];
+      organizationUnits: StoredOrganizationUnit[];
       companies: CompanySnapshot[];
-      _count: { memberships: number };
+      _count: { organizationMemberships: number };
     },
   ): Promise<TenancySnapshot> {
-    const { _count, units, companies, ...rest } = organization;
+    const { _count, organizationUnits: units, companies, ...rest } = organization;
     const superAdmin = await this.resolveSuperAdmin(prisma, organization.id);
     return {
       ...rest,
       units,
       companies,
-      membershipCount: _count.memberships,
+      membershipCount: _count.organizationMemberships,
       superAdmin,
     };
   }
@@ -276,9 +276,9 @@ export class TenancyService {
     const prismaClient = this.prisma as unknown as PrismaService as any;
     const organizations = await prismaClient.organization.findMany({
       include: {
-        units: { orderBy: { id: 'asc' } },
+        organizationUnits: { orderBy: { id: 'asc' } },
         companies: { orderBy: { id: 'asc' } },
-        _count: { select: { memberships: true } },
+        _count: { select: { organizationMemberships: true } },
       },
       orderBy: { id: 'asc' },
     });
@@ -295,9 +295,9 @@ export class TenancyService {
     const organization = await prismaClient.organization.findUnique({
       where: { id },
       include: {
-        units: { orderBy: { id: 'asc' } },
+        organizationUnits: { orderBy: { id: 'asc' } },
         companies: { orderBy: { id: 'asc' } },
-        _count: { select: { memberships: true } },
+        _count: { select: { organizationMemberships: true } },
       },
     });
 
@@ -318,9 +318,9 @@ export class TenancyService {
     const organization = await prismaClient.organization.findFirst({
       where: { slug: normalizedSlug },
       include: {
-        units: { orderBy: { id: 'asc' } },
+        organizationUnits: { orderBy: { id: 'asc' } },
         companies: { orderBy: { id: 'asc' } },
-        _count: { select: { memberships: true } },
+        _count: { select: { organizationMemberships: true } },
       },
     });
 
@@ -732,14 +732,14 @@ export class TenancyService {
     const organizations = await prismaClient.organization.findMany({
       where,
       include: {
-        units: { orderBy: { id: 'asc' } },
+        organizationUnits: { orderBy: { id: 'asc' } },
         companies: {
           orderBy: { id: 'asc' },
           include: {
             documentSequences: { orderBy: { documentType: 'asc' } },
           },
         },
-        _count: { select: { memberships: true } },
+        _count: { select: { organizationMemberships: true } },
       },
       orderBy: { id: 'asc' },
     });
