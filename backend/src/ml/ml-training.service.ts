@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
@@ -289,9 +289,11 @@ export class MLTrainingService {
 
       child.on('error', (err) => {
         this.logger.error(`Failed to spawn Python: ${err.message}`);
+        this.isRunning = false;
+        this.childProcess = null;
         reject(
-          new Error(
-            `No se pudo ejecutar Python (${this.PYTHON_CMD}). Verifica que Python este instalado y las dependencias de ML esten disponibles.`,
+          new ServiceUnavailableException(
+            'El entrenamiento ML requiere Python, que no esta disponible en este entorno. Ejecuta el entrenamiento localmente o agrega Python al servidor.',
           ),
         );
       });
