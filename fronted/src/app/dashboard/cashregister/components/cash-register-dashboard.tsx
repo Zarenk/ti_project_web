@@ -1178,17 +1178,25 @@ export default function CashRegisterDashboard() {
         // inmediatamente después del cierre anterior aunque pertenezcan al
         // día calendario previo, evitando que se omitan en el saldo esperado.
         const fetchDates = Array.from(datesToFetch);
-        const responses = await Promise.all(
-          fetchDates.map(async (dateString) => {
-      try {
-              const data = await getTransactionsByDate(storeId, dateString);
-              return Array.isArray(data) ? data : [];
-      } catch (error) {
-              console.error(`Error al obtener transacciones para la fecha ${dateString}:`, error);
-              return [];
-            }
-          }),
-        );
+        // Batch requests to avoid hitting rate limit (max 5 concurrent)
+        const BATCH_SIZE = 5;
+        const responses: any[][] = [];
+        for (let i = 0; i < fetchDates.length; i += BATCH_SIZE) {
+          if (cancelled) return;
+          const batch = fetchDates.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(
+            batch.map(async (dateString) => {
+              try {
+                const data = await getTransactionsByDate(storeId, dateString);
+                return Array.isArray(data) ? data : [];
+              } catch (error) {
+                console.error(`Error al obtener transacciones para la fecha ${dateString}:`, error);
+                return [];
+              }
+            }),
+          );
+          responses.push(...batchResults);
+        }
 
         if (cancelled) return;
 
