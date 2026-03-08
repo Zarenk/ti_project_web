@@ -432,6 +432,13 @@ export default function NewGuidePage() {
   const [sunatSearchLoading, setSunatSearchLoading] = useState(false);
   const [sunatSaving, setSunatSaving] = useState(false);
 
+  // ── Transportista SUNAT lookup state ──────────────────────────
+  const [carrierSunatOpen, setCarrierSunatOpen] = useState(false);
+  const [carrierSunatRuc, setCarrierSunatRuc] = useState("");
+  const [carrierSunatResult, setCarrierSunatResult] = useState<LookupResponse | null>(null);
+  const [carrierSunatError, setCarrierSunatError] = useState<string | null>(null);
+  const [carrierSunatLoading, setCarrierSunatLoading] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -799,6 +806,52 @@ export default function NewGuidePage() {
     [interStoreEnabled, sourceStoreId, destinationStoreId, transferItems, userId],
   );
 
+  // ── Validation error feedback ─────────────────────────────
+  const FIELD_LABELS: Record<string, string> = {
+    tipoDocumentoRemitente: "Tipo documento remitente",
+    numeroDocumentoRemitente: "RUC remitente",
+    razonSocialRemitente: "Razón social remitente",
+    destinatarioTipoDoc: "Tipo documento destinatario",
+    destinatarioNumeroDoc: "N° documento destinatario",
+    destinatarioRazonSocial: "Razón social destinatario",
+    motivoTrasladoCodigo: "Motivo de traslado",
+    fechaTraslado: "Fecha de traslado",
+    puntoPartida: "Dirección punto de partida",
+    puntoPartidaUbigeo: "Ubigeo punto de partida",
+    puntoLlegada: "Dirección punto de llegada",
+    puntoLlegadaUbigeo: "Ubigeo punto de llegada",
+    transportistaTipoDoc: "Tipo documento transportista",
+    transportistaNumeroDoc: "N° documento transportista",
+    transportistaRazonSocial: "Razón social transportista",
+    items: "Items / productos",
+  };
+
+  function onFormInvalid(fieldErrors: Record<string, any>) {
+    const missing: string[] = [];
+    for (const key of Object.keys(fieldErrors)) {
+      if (key === "items" && fieldErrors.items?.root?.message) {
+        missing.push(fieldErrors.items.root.message);
+      } else if (FIELD_LABELS[key]) {
+        missing.push(FIELD_LABELS[key]);
+      }
+    }
+    if (missing.length === 0) {
+      toast.error("Completa todos los campos obligatorios antes de continuar.");
+      return;
+    }
+    toast.error(
+      <div className="flex flex-col gap-1">
+        <span className="font-semibold text-sm">Campos obligatorios faltantes:</span>
+        <ul className="list-disc pl-4 text-xs space-y-0.5">
+          {missing.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+      </div>,
+      { duration: 6000 },
+    );
+  }
+
   // ── Handlers ──────────────────────────────────────────────
   const onValidate = handleSubmit(async (data) => {
     setValidating(true);
@@ -813,7 +866,7 @@ export default function NewGuidePage() {
     } finally {
       setValidating(false);
     }
-  });
+  }, onFormInvalid);
 
   const onSubmit = handleSubmit(async (data) => {
     // Validate inter-store before submitting
@@ -913,7 +966,7 @@ export default function NewGuidePage() {
     } finally {
       setSubmitting(false);
     }
-  });
+  }, onFormInvalid);
 
   // ── Select destinatario → fill fields ─────────────────────
   function selectDestinatario(option: DestinatarioOption) {
@@ -1038,6 +1091,50 @@ export default function NewGuidePage() {
     setValue("transportistaRazonSocial", t.razonSocial);
     if (t.placa) setValue("transportistaPlaca", t.placa);
     setTransportistaOpen(false);
+  }
+
+  // ── Transportista SUNAT lookup ──────────────────────────
+  async function handleCarrierSunatSearch() {
+    const ruc = carrierSunatRuc.trim();
+    if (!ruc || ruc.length !== 11) {
+      setCarrierSunatError("Ingresa un RUC válido de 11 dígitos.");
+      setCarrierSunatResult(null);
+      return;
+    }
+    setCarrierSunatLoading(true);
+    setCarrierSunatError(null);
+    try {
+      const result = await lookupSunatDocument(ruc);
+      setCarrierSunatResult(result);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error al consultar RUC";
+      setCarrierSunatError(message);
+      setCarrierSunatResult(null);
+    } finally {
+      setCarrierSunatLoading(false);
+    }
+  }
+
+  function handleSelectCarrierSunatResult(result: LookupResponse) {
+    setValue("transportistaTipoDoc", "6", { shouldValidate: true });
+    setValue("transportistaNumeroDoc", result.identifier || "", { shouldValidate: true });
+    setValue("transportistaRazonSocial", result.name || "", { shouldValidate: true });
+
+    // Save to localStorage for future reuse
+    const saved: SavedTransportista = {
+      tipoDocumento: "6",
+      numeroDocumento: result.identifier || "",
+      razonSocial: result.name || "",
+    };
+    saveTransportista(saved);
+    setSavedTransportistas(getSavedTransportistas());
+
+    toast.success(`Transportista "${result.name}" cargado desde SUNAT.`);
+    setCarrierSunatOpen(false);
+    setCarrierSunatRuc("");
+    setCarrierSunatResult(null);
+    setCarrierSunatError(null);
   }
 
   // ── Select saved address → fill fields ───────────────────
@@ -1390,14 +1487,24 @@ export default function NewGuidePage() {
                 </Command>
               </PopoverContent>
             </Popover>
+            {/* SUNAT button: icon-only on mobile, text on sm+ */}
             <Button
               type="button"
               variant="outline"
-              className="cursor-pointer gap-2 flex-shrink-0 rounded-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              size="icon"
+              className="h-9 w-9 cursor-pointer flex-shrink-0 sm:hidden"
               onClick={() => setSunatDialogOpen(true)}
             >
-              <Search className="h-3.5 w-3.5" />
-              Buscar RUC en SUNAT
+              <Building2 className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 cursor-pointer gap-2 hidden sm:inline-flex flex-shrink-0"
+              onClick={() => setSunatDialogOpen(true)}
+            >
+              <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
+              Consulta SUNAT
             </Button>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -2142,64 +2249,94 @@ export default function NewGuidePage() {
 
         {/* ── 6. Transportista ────────────────────────────── */}
         <FormSection icon={Truck} title="Transportista" step={6}>
-          {/* Saved transportistas search */}
-          {savedTransportistas.length > 0 && (
-            <div className="mb-4">
-              <Label className="text-xs font-medium mb-1.5 block">
-                Transportistas guardados
-              </Label>
-              <Popover
-                open={transportistaOpen}
-                onOpenChange={setTransportistaOpen}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    type="button"
-                    className="w-full justify-between cursor-pointer text-sm font-normal text-muted-foreground hover:text-foreground"
-                  >
-                    <span className="flex items-center gap-2 truncate">
-                      <Search className="h-3.5 w-3.5 flex-shrink-0" />
-                      Buscar transportista guardado...
-                    </span>
-                    <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="p-0 w-[var(--radix-popover-trigger-width)]"
-                  align="start"
+          {/* SUNAT lookup + Saved transportistas — always same row */}
+          <div className="mb-4 space-y-1.5">
+            <Label className="text-xs font-medium">
+              {savedTransportistas.length > 0
+                ? "Transportistas guardados"
+                : "Buscar transportista"}
+            </Label>
+            <div className="flex gap-2 w-full min-w-0">
+              {savedTransportistas.length > 0 ? (
+                <Popover
+                  open={transportistaOpen}
+                  onOpenChange={setTransportistaOpen}
                 >
-                  <Command>
-                    <CommandInput placeholder="Buscar por nombre o RUC..." />
-                    <CommandList>
-                      <CommandEmpty>No encontrado.</CommandEmpty>
-                      <CommandGroup>
-                        {savedTransportistas.map((t) => (
-                          <CommandItem
-                            key={t.numeroDocumento}
-                            value={`${t.razonSocial} ${t.numeroDocumento}`}
-                            onSelect={() => selectTransportista(t)}
-                            className="cursor-pointer"
-                          >
-                            <div className="flex flex-col gap-0.5 min-w-0">
-                              <span className="font-medium text-sm truncate">
-                                {t.razonSocial}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {t.numeroDocumento}
-                                {t.placa ? ` · Placa: ${t.placa}` : ""}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      type="button"
+                      className="flex-1 min-w-0 justify-between cursor-pointer text-sm font-normal text-muted-foreground hover:text-foreground"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <Search className="h-3.5 w-3.5 flex-shrink-0" />
+                        Buscar transportista guardado...
+                      </span>
+                      <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="p-0 w-[var(--radix-popover-trigger-width)]"
+                    align="start"
+                  >
+                    <Command>
+                      <CommandInput placeholder="Buscar por nombre o RUC..." />
+                      <CommandList>
+                        <CommandEmpty>No encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {savedTransportistas.map((t) => (
+                            <CommandItem
+                              key={t.numeroDocumento}
+                              value={`${t.razonSocial} ${t.numeroDocumento}`}
+                              onSelect={() => selectTransportista(t)}
+                              className="cursor-pointer"
+                            >
+                              <div className="flex flex-col gap-0.5 min-w-0">
+                                <span className="font-medium text-sm truncate">
+                                  {t.razonSocial}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {t.numeroDocumento}
+                                  {t.placa ? ` · Placa: ${t.placa}` : ""}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <div className="flex-1 min-w-0 text-sm text-muted-foreground border rounded-md px-3 flex items-center h-9">
+                  Sin transportistas guardados
+                </div>
+              )}
+              {/* SUNAT button: icon-only on mobile, text on sm+ */}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 cursor-pointer flex-shrink-0 sm:hidden"
+                onClick={() => setCarrierSunatOpen(true)}
+              >
+                <Building2 className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 cursor-pointer gap-2 hidden sm:inline-flex flex-shrink-0"
+                onClick={() => setCarrierSunatOpen(true)}
+              >
+                <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
+                Consulta SUNAT
+              </Button>
             </div>
-          )}
+            <p className="text-[10px] text-muted-foreground">
+              Los datos del transportista se guardan automaticamente al enviar la guia.
+            </p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Tipo Documento *</Label>
@@ -2335,33 +2472,37 @@ export default function NewGuidePage() {
                                 onSelect={() =>
                                   !already && addTransferProduct(sp)
                                 }
-                                className={`cursor-pointer ${already ? "opacity-50" : ""}`}
+                                className={`cursor-pointer !items-start sm:!items-center ${already ? "opacity-50" : ""}`}
                               >
-                                <div className="flex items-center gap-2.5 w-full min-w-0">
-                                  <div className="rounded bg-primary/10 p-1 flex-shrink-0">
-                                    <Package className="h-3 w-3 text-primary" />
-                                  </div>
-                                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                                    <span className="font-medium text-sm truncate">
-                                      {product.name}
-                                    </span>
-                                    {product.barcode && (
-                                      <span className="text-[10px] text-muted-foreground font-mono">
-                                        {product.barcode}
+                                <div className="flex flex-col gap-1.5 w-full min-w-0 sm:flex-row sm:items-center sm:gap-2.5">
+                                  <div className="flex items-start gap-2 w-full min-w-0 flex-1">
+                                    <div className="rounded bg-primary/10 p-1 flex-shrink-0 mt-0.5 sm:mt-0">
+                                      <Package className="h-3 w-3 text-primary" />
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                      <span className="font-medium text-sm whitespace-normal break-words leading-snug">
+                                        {product.name}
                                       </span>
+                                      {product.barcode && (
+                                        <span className="text-[10px] text-muted-foreground font-mono">
+                                          {product.barcode}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 pl-7 sm:pl-0 flex-shrink-0">
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] flex-shrink-0"
+                                    >
+                                      Stock: {sp.stock ?? 0}
+                                    </Badge>
+                                    {already ? (
+                                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                                    ) : (
+                                      <Plus className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                                     )}
                                   </div>
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[10px] flex-shrink-0"
-                                  >
-                                    Stock: {sp.stock ?? 0}
-                                  </Badge>
-                                  {already ? (
-                                    <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
-                                  ) : (
-                                    <Plus className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                                  )}
                                 </div>
                               </CommandItem>
                             );
@@ -2383,7 +2524,158 @@ export default function NewGuidePage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border">
+                <>
+                {/* ── Mobile: card layout ── */}
+                <div className="flex flex-col gap-2.5 sm:hidden">
+                  {transferItems.map((ti, index) => (
+                    <div
+                      key={`mobile-${ti.productId}-${index}`}
+                      className="rounded-lg border p-3 w-full min-w-0 overflow-hidden animate-row-enter"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      {/* Row 1: Name + delete */}
+                      <div className="flex items-start gap-2 w-full min-w-0">
+                        <div className="rounded bg-primary/10 p-1 flex-shrink-0 mt-0.5">
+                          <Package className="h-3 w-3 text-primary" />
+                        </div>
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <span className="font-medium text-sm break-words leading-snug">
+                            {ti.name}
+                          </span>
+                          {ti.barcode && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {ti.barcode}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 cursor-pointer text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors flex-shrink-0"
+                          onClick={() => removeTransferItem(index)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+
+                      {/* Row 2: Stock + Quantity + Series */}
+                      <div className="flex items-center gap-2 mt-2.5 pl-7">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] font-mono flex-shrink-0"
+                        >
+                          Stock: {ti.stock}
+                        </Badge>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] text-muted-foreground">Cant:</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={ti.stock}
+                            value={ti.quantity}
+                            onChange={(e) =>
+                              updateTransferQuantity(
+                                index,
+                                Number(e.target.value),
+                              )
+                            }
+                            className="h-8 text-sm w-16"
+                          />
+                        </div>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs cursor-pointer gap-1.5 flex-shrink-0 ml-auto"
+                              onClick={() => {
+                                if (ti.availableSerials.length === 0) {
+                                  loadSerialsForItem(index);
+                                }
+                              }}
+                            >
+                              {ti.loadingSerials ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Package className="h-3 w-3" />
+                              )}
+                              {ti.selectedSerials.length > 0
+                                ? `${ti.selectedSerials.length} sel.`
+                                : "Series"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-60 p-0"
+                            align="end"
+                          >
+                            {ti.availableSerials.length === 0 ? (
+                              <div className="p-3 text-center text-xs text-muted-foreground">
+                                {ti.loadingSerials
+                                  ? "Cargando series..."
+                                  : "Sin series disponibles"}
+                              </div>
+                            ) : (
+                              <div className="max-h-48 overflow-y-auto">
+                                <div className="p-2 border-b">
+                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                                    {ti.availableSerials.length} series
+                                    disponibles
+                                  </p>
+                                </div>
+                                {ti.availableSerials.map((serial) => {
+                                  const isSelected =
+                                    ti.selectedSerials.includes(serial);
+                                  return (
+                                    <button
+                                      key={serial}
+                                      type="button"
+                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs font-mono cursor-pointer hover:bg-muted/50 transition-colors ${
+                                        isSelected
+                                          ? "bg-primary/5 text-primary"
+                                          : ""
+                                      }`}
+                                      onClick={() =>
+                                        toggleSerialSelection(
+                                          index,
+                                          serial,
+                                        )
+                                      }
+                                    >
+                                      <div
+                                        className={`h-3.5 w-3.5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+                                          isSelected
+                                            ? "bg-primary border-primary text-primary-foreground"
+                                            : "border-muted-foreground/30"
+                                        }`}
+                                      >
+                                        {isSelected && (
+                                          <CheckCircle2 className="h-2.5 w-2.5" />
+                                        )}
+                                      </div>
+                                      <span className="truncate">
+                                        {serial}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      {ti.quantity > ti.stock && (
+                        <p className="text-[10px] text-destructive mt-1 pl-7">
+                          Excede stock disponible
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Desktop: table layout ── */}
+                <div className="overflow-x-auto rounded-lg border hidden sm:block">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30">
@@ -2548,6 +2840,7 @@ export default function NewGuidePage() {
                     </TableBody>
                   </Table>
                 </div>
+                </>
               )}
             </>
           ) : (
@@ -2586,23 +2879,25 @@ export default function NewGuidePage() {
                           key={p.id}
                           value={String(p.id)}
                           onSelect={() => addProductAsItem(p)}
-                          className="cursor-pointer"
+                          className="cursor-pointer !items-start sm:!items-center"
                         >
-                          <div className="flex items-center gap-2.5 w-full min-w-0">
-                            <div className="rounded bg-primary/10 p-1 flex-shrink-0">
-                              <Package className="h-3 w-3 text-primary" />
-                            </div>
-                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                              <span className="font-medium text-sm truncate">
-                                {p.name}
-                              </span>
-                              {p.barcode && (
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  {p.barcode}
+                          <div className="flex flex-col gap-1.5 w-full min-w-0 sm:flex-row sm:items-center sm:gap-2.5">
+                            <div className="flex items-start gap-2 w-full min-w-0 flex-1">
+                              <div className="rounded bg-primary/10 p-1 flex-shrink-0 mt-0.5 sm:mt-0">
+                                <Package className="h-3 w-3 text-primary" />
+                              </div>
+                              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                <span className="font-medium text-sm whitespace-normal break-words leading-snug">
+                                  {p.name}
                                 </span>
-                              )}
+                                {p.barcode && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    {p.barcode}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <Plus className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                            <Plus className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground ml-7 sm:ml-0" />
                           </div>
                         </CommandItem>
                       ))}
@@ -3074,6 +3369,120 @@ export default function NewGuidePage() {
                 <Search className="h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm text-muted-foreground">
                   Ingresa un RUC de 11 digitos y presiona buscar.
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* ── Transportista SUNAT RUC Lookup Dialog ─────── */}
+      <Dialog
+        open={carrierSunatOpen}
+        onOpenChange={(open) => {
+          setCarrierSunatOpen(open);
+          if (!open) {
+            setCarrierSunatRuc("");
+            setCarrierSunatResult(null);
+            setCarrierSunatError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+              Consultar Transportista
+            </DialogTitle>
+            <DialogDescription>
+              Ingresa el RUC del transportista para consultar sus datos en SUNAT.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 w-full min-w-0">
+            <div className="flex gap-2">
+              <Input
+                value={carrierSunatRuc}
+                onChange={(e) => setCarrierSunatRuc(e.target.value.replace(/\D/g, ""))}
+                placeholder="Ej: 20519857538"
+                className="font-mono"
+                autoFocus
+                maxLength={11}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCarrierSunatSearch();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleCarrierSunatSearch}
+                disabled={carrierSunatLoading}
+                className="cursor-pointer flex-shrink-0"
+              >
+                {carrierSunatLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            {carrierSunatError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 w-full min-w-0 overflow-hidden">
+                <p className="text-sm text-destructive break-words">
+                  {carrierSunatError}
+                </p>
+              </div>
+            )}
+
+            {carrierSunatResult && (
+              <div className="rounded-lg border animate-in fade-in-0 slide-in-from-bottom-2 duration-300 overflow-hidden">
+                <div className="p-3">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <p className="font-semibold text-sm break-words">
+                      {carrierSunatResult.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      RUC: {carrierSunatResult.identifier}
+                    </p>
+                    {carrierSunatResult.address && (
+                      <p className="text-xs text-muted-foreground break-words">
+                        <MapPin className="inline h-3 w-3 mr-1" />
+                        {carrierSunatResult.address}
+                      </p>
+                    )}
+                    {carrierSunatResult.status && (
+                      <Badge
+                        variant="outline"
+                        className="w-fit text-[10px] mt-1"
+                      >
+                        {carrierSunatResult.status}
+                        {carrierSunatResult.condition
+                          ? ` · ${carrierSunatResult.condition}`
+                          : ""}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="border-t bg-muted/30 px-3 py-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full cursor-pointer gap-2 h-9"
+                    onClick={() => handleSelectCarrierSunatResult(carrierSunatResult)}
+                  >
+                    <Truck className="h-3.5 w-3.5 flex-shrink-0" />
+                    Usar como transportista
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {!carrierSunatResult && !carrierSunatError && !carrierSunatLoading && (
+              <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border border-dashed text-center">
+                <Truck className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Ingresa el RUC de 11 dígitos del transportista.
                 </p>
               </div>
             )}

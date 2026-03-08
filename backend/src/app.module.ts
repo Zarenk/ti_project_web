@@ -62,6 +62,7 @@ import { PublicSignupModule } from './public-signup/public-signup.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PublicRateLimitMiddleware } from './common/middleware/public-rate-limit.middleware';
+import { GlobalRateLimitMiddleware } from './common/middleware/global-rate-limit.middleware';
 import { RestaurantTablesModule } from './restaurant-tables/restaurant-tables.module';
 import { KitchenStationsModule } from './kitchen-stations/kitchen-stations.module';
 import { IngredientsModule } from './ingredients/ingredients.module';
@@ -171,6 +172,12 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Global rate limit: 200 req/min per IP for all API routes
+    consumer
+      .apply(GlobalRateLimitMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+
+    // Stricter limit for public/unauthenticated routes
     consumer.apply(PublicRateLimitMiddleware).forRoutes(
       { path: 'public/(.*)', method: RequestMethod.ALL },
       { path: 'contact', method: RequestMethod.ALL },

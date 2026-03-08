@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
 
 export default function GsapDemoPage() {
   const titleRef = useRef<HTMLHeadingElement>(null)
@@ -36,7 +36,7 @@ export default function GsapDemoPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <TemplateNavbar />
       <div className="container mx-auto py-20">
         <h2 ref={titleRef} className="text-3xl font-bold mb-8">Ejemplos de animación GSAP</h2>
         <ul ref={listRef} className="space-y-4">

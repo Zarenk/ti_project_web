@@ -166,6 +166,24 @@ export class InventoryController {
   }
 
 
+  /** Batch stock lookup: GET /inventory/batch-stock?ids=1,2,3 */
+  @Get('/batch-stock')
+  async getBatchStock(
+    @Query('ids') ids: string,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    const productIds = (ids ?? '')
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    return this.inventoryService.getBatchStock(
+      productIds,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+    );
+  }
+
   @Get('/product-entries/:productId')
   async getProductEntries(
     @Param('productId') productId: string,

@@ -129,6 +129,51 @@ export class InventoryService {
     });
   }
 
+  /**
+   * Returns total stock per product for a batch of product IDs.
+   * Single query instead of N individual calls.
+   */
+  async getBatchStock(
+    productIds: number[],
+    organizationId?: number | null,
+    companyId?: number | null,
+  ): Promise<Record<number, number>> {
+    if (productIds.length === 0) return {};
+
+    const organizationFilter = organizationId ?? undefined;
+    const companyFilter = companyId ?? undefined;
+    const storeWhere: Record<string, unknown> = {};
+    if (organizationFilter !== undefined) {
+      storeWhere.organizationId = organizationFilter;
+    }
+    if (companyFilter !== undefined) {
+      storeWhere.companyId = companyFilter;
+    }
+
+    const rows = await this.prisma.storeOnInventory.findMany({
+      where: {
+        inventory: {
+          productId: { in: productIds },
+          ...(organizationFilter !== undefined
+            ? { organizationId: organizationFilter }
+            : {}),
+        },
+        ...(Object.keys(storeWhere).length > 0 ? { store: storeWhere } : {}),
+      },
+      select: {
+        stock: true,
+        inventory: { select: { productId: true } },
+      },
+    });
+
+    const stockMap: Record<number, number> = {};
+    for (const row of rows) {
+      const pid = row.inventory.productId;
+      stockMap[pid] = (stockMap[pid] ?? 0) + row.stock;
+    }
+    return stockMap;
+  }
+
   parseExcel(filePath: string): any[] {
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];

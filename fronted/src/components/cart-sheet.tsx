@@ -86,10 +86,11 @@ export default function CartSheet() {
                 <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">Añade productos para comenzar</p>
               </div>
             ) : (
-              items.map((item) => (
+              items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                  className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 animate-cart-item-enter"
+                  style={{ animationDelay: `${index * 50}ms` }}
                 >
                   {item.image && (
                     <Image

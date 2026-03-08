@@ -9,6 +9,7 @@ import { inventoryTools } from "./tools/inventory-tools"
 import { cashregisterTools } from "./tools/cashregister-tools"
 import { statsTools } from "./tools/stats-tools"
 import { navigationTools } from "./tools/navigation-tools"
+import { mlTools } from "./tools/ml-tools"
 
 const ALL_TOOLS: ChatTool[] = [
   ...saleTools,
@@ -16,6 +17,7 @@ const ALL_TOOLS: ChatTool[] = [
   ...cashregisterTools,
   ...statsTools,
   ...navigationTools,
+  ...mlTools,
 ]
 
 const toolMap = new Map(ALL_TOOLS.map(t => [t.id, t]))

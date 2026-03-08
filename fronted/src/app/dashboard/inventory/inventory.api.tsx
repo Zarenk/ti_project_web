@@ -290,6 +290,33 @@ export async function getPublicStoresWithProduct(productId: number) {
   }
 }
 
+/** Batch stock lookup — single query for all product IDs. Returns { [productId]: totalStock } */
+export async function getPublicBatchStock(productIds: number[]): Promise<Record<number, number>> {
+  if (productIds.length === 0) return {}
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/public/inventory/batch-stock?ids=${productIds.join(',')}`,
+    )
+    if (!response.ok) return {}
+    return await response.json()
+  } catch {
+    return {}
+  }
+}
+
+export async function getBatchStock(productIds: number[]): Promise<Record<number, number>> {
+  if (productIds.length === 0) return {}
+  try {
+    const response = await authFetch(
+      `${BACKEND_URL}/api/inventory/batch-stock?ids=${productIds.join(',')}`,
+    )
+    if (!response.ok) return {}
+    return await response.json()
+  } catch {
+    return {}
+  }
+}
+
 // Obtener todas las tiendas
 export async function getAllStores() {
   try {

@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useForm } from 'react-hook-form'
-import { checkSeries, processPDF, uploadDraftGuiaPdf, uploadDraftPdf } from '../entries.api'
+import { checkSeries, processPDF, uploadDraftGuiaPdf, uploadDraftPdf, createDraftEntry, updateDraftEntry, postDraftEntry } from '../entries.api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useParams, useRouter } from 'next/navigation'
 import { z } from 'zod'
@@ -20,7 +20,7 @@ import { ProviderSection } from '../components/entries/ProviderSection'
 import { StoreSection } from '../components/entries/StoreSection'
 import { ProductSelection } from '../components/entries/ProductSelection'
 import { SelectedProductsTable } from '../components/entries/SelectedProductsTable'
-import { handleFormSubmission } from '../utils/onSubmitHelper'
+import { handleFormSubmission, handleDraftSubmission } from '../utils/onSubmitHelper'
 import { ActionButtons } from '../components/entries/ActionButtons'
 import { getLatestExchangeRateByCurrency } from '../../exchange/exchange.api'
 import {
@@ -114,6 +114,9 @@ const entriesSchema = z.object({
 export type EntriesType = z.infer<typeof entriesSchema>;
 
 function buildDefaultEntryValues(entry?: any): EntriesType {
+  // Support both flat fields (local draft) and nested backend structure
+  const inv = entry?.invoice;
+  const guide = entry?.guide;
   return {
     name: entry?.name ?? "",
     description: entry?.description ?? "",
@@ -121,36 +124,36 @@ function buildDefaultEntryValues(entry?: any): EntriesType {
     priceSell: entry?.priceSell ?? 1,
     quantity: entry?.quantity ?? 1,
     category_name: entry?.category_name ?? "",
-    provider_name: entry?.provider_name ?? "",
-    provider_adress: entry?.provider_adress ?? "",
-    provider_documentNumber: entry?.provider_documentNumber ?? "",
-    store_name: entry?.store_name ?? "",
-    store_adress: entry?.store_adress ?? "",
-    entry_date: entry?.entry_date ? new Date(entry.entry_date) : new Date(),
-    entry_description: entry?.entry_description ?? "",
-    ruc: entry?.ruc ?? "",
-    serie: entry?.serie ?? "",
-    nroCorrelativo: entry?.nroCorrelativo ?? "",
-    fecha_emision_comprobante: entry?.fecha_emision_comprobante ?? "",
-    comprobante: entry?.comprobante ?? "",
-    total_comprobante: entry?.total_comprobante ?? "",
-    tipo_moneda: entry?.tipo_moneda ?? "PEN",
-    payment_method: entry?.payment_method ?? "CASH",
-    guia_serie: entry?.guia_serie ?? "",
-    guia_correlativo: entry?.guia_correlativo ?? "",
-    guia_fecha_emision: entry?.guia_fecha_emision ?? "",
-    guia_fecha_entrega_transportista: entry?.guia_fecha_entrega_transportista ?? "",
-    guia_motivo_traslado: entry?.guia_motivo_traslado ?? "",
-    guia_punto_partida: entry?.guia_punto_partida ?? "",
-    guia_punto_llegada: entry?.guia_punto_llegada ?? "",
-    guia_destinatario: entry?.guia_destinatario ?? "",
-    guia_peso_bruto_unidad: entry?.guia_peso_bruto_unidad ?? "",
-    guia_peso_bruto_total: entry?.guia_peso_bruto_total ?? "",
-    guia_transportista: entry?.guia_transportista ?? "",
+    provider_name: entry?.provider_name ?? entry?.provider?.name ?? "",
+    provider_adress: entry?.provider_adress ?? entry?.provider?.adress ?? "",
+    provider_documentNumber: entry?.provider_documentNumber ?? entry?.provider?.documentNumber ?? "",
+    store_name: entry?.store_name ?? entry?.store?.name ?? "",
+    store_adress: entry?.store_adress ?? entry?.store?.adress ?? "",
+    entry_date: entry?.entry_date ? new Date(entry.entry_date) : entry?.date ? new Date(entry.date) : new Date(),
+    entry_description: entry?.entry_description ?? entry?.description ?? "",
+    ruc: entry?.ruc ?? entry?.provider?.documentNumber ?? "",
+    serie: entry?.serie ?? inv?.serie ?? "",
+    nroCorrelativo: entry?.nroCorrelativo ?? inv?.nroCorrelativo ?? "",
+    fecha_emision_comprobante: entry?.fecha_emision_comprobante ?? (inv?.fechaEmision ? String(inv.fechaEmision).slice(0, 10) : ""),
+    comprobante: entry?.comprobante ?? inv?.tipoComprobante ?? "",
+    total_comprobante: entry?.total_comprobante ?? (inv?.total != null ? String(inv.total) : ""),
+    tipo_moneda: entry?.tipo_moneda ?? entry?.tipoMoneda ?? "PEN",
+    payment_method: entry?.payment_method ?? entry?.paymentMethod ?? "CASH",
+    guia_serie: entry?.guia_serie ?? guide?.serie ?? "",
+    guia_correlativo: entry?.guia_correlativo ?? guide?.correlativo ?? "",
+    guia_fecha_emision: entry?.guia_fecha_emision ?? guide?.fechaEmision ?? "",
+    guia_fecha_entrega_transportista: entry?.guia_fecha_entrega_transportista ?? guide?.fechaEntregaTransportista ?? "",
+    guia_motivo_traslado: entry?.guia_motivo_traslado ?? guide?.motivoTraslado ?? "",
+    guia_punto_partida: entry?.guia_punto_partida ?? guide?.puntoPartida ?? "",
+    guia_punto_llegada: entry?.guia_punto_llegada ?? guide?.puntoLlegada ?? "",
+    guia_destinatario: entry?.guia_destinatario ?? guide?.destinatario ?? "",
+    guia_peso_bruto_unidad: entry?.guia_peso_bruto_unidad ?? guide?.pesoBrutoUnidad ?? "",
+    guia_peso_bruto_total: entry?.guia_peso_bruto_total ?? guide?.pesoBrutoTotal ?? "",
+    guia_transportista: entry?.guia_transportista ?? guide?.transportista ?? "",
   };
 }
 
-export function EntriesForm({entries, categories}: {entries: any; categories: any}) {
+export function EntriesForm({entries, categories, isDraftEdit = false}: {entries: any; categories: any; isDraftEdit?: boolean}) {
 
     const initialValues = useMemo<EntriesType>(() => buildDefaultEntryValues(entries), [entries]);
     const form = useForm<EntriesType>({
@@ -173,6 +176,7 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
 
   // Estado para manejar el envÃ­o del formulario
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingStores, setLoadingStores] = useState(true);
@@ -319,13 +323,31 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
     };
   }, [guidePreviewUrl]);
 
-  // Estado para manejar el diÃ¡logo de confirmaciÃ³n
+  // Estado para manejar el diálogo de confirmación
   const handleConfirm = async () => {
     if (isSubmitting) return;
-    setIsDialogOpen(false); // Cierra el modal inmediatamente
+    setIsDialogOpen(false);
     setIsSubmitting(true);
-    await onSubmit(); // Esto ejecuta handleSubmit(...)
-    setIsSubmitting(false);
+    try {
+      if (isDraftEdit && entries?.id) {
+        // First update the draft with latest form data, then post it
+        await onSaveDraft();
+        await postDraftEntry(Number(entries.id));
+        clearEntryDraft();
+        queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) });
+        toast.success("Entrada confirmada y registrada correctamente.");
+        router.push("/dashboard/entries");
+        router.refresh();
+      } else {
+        await onSubmit(); // Normal create flow
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Error al confirmar la entrada.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // VARIABLES DE CALENDAR
@@ -775,6 +797,34 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
       }
     } finally {
       setIsSubmitting(false); // âœ… Libera el botÃ³n cuando termina
+    }
+  });
+
+  // Draft save handler
+  const onSaveDraft = handleSubmit(async (data) => {
+    if (isSavingDraft) return;
+    setIsSavingDraft(true);
+    try {
+      const success = await handleDraftSubmission({
+        data,
+        form,
+        stores,
+        providers,
+        selectedProducts,
+        isNewInvoiceBoolean,
+        categories: categoriesState,
+        router,
+        getUserIdFromToken,
+        tipoMoneda,
+        tipoCambioActual,
+        existingDraftId: isDraftEdit && entries?.id ? Number(entries.id) : null,
+      });
+      if (success) {
+        clearEntryDraft();
+        queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) });
+      }
+    } finally {
+      setIsSavingDraft(false);
     }
   });
 
@@ -1497,6 +1547,64 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
   }, [tenantKey, form]);
   //
 
+  // ── Hydrate form from backend entry when editing a draft ──
+  const hasDraftHydratedRef = useRef(false);
+  useEffect(() => {
+    if (!isDraftEdit || !entries || hasDraftHydratedRef.current) return;
+    if (loadingStores || loadingProviders || loadingProducts) return;
+
+    hasDraftHydratedRef.current = true;
+    hasEntryDraftAppliedRef.current = true; // prevent localStorage draft from overwriting
+
+    // Hydrate store combobox
+    if (entries.store?.name) {
+      setValueStore(entries.store.name);
+      setValue("store_name", entries.store.name);
+      setValue("store_adress", entries.store.adress ?? "");
+    }
+
+    // Hydrate provider combobox
+    if (entries.provider?.name) {
+      setValueProvider(entries.provider.name);
+      setValue("provider_name", entries.provider.name);
+      setValue("provider_adress", entries.provider.adress ?? "");
+      setValue("provider_documentNumber", entries.provider.documentNumber ?? "");
+      setValue("ruc", entries.provider.documentNumber ?? "");
+    }
+
+    // Hydrate currency
+    if (entries.tipoMoneda) {
+      const cur = entries.tipoMoneda === "USD" ? "USD" : "PEN";
+      setTipoMoneda(cur);
+      setCurrency(cur);
+      setValue("tipo_moneda", cur);
+    }
+
+    // Hydrate payment method
+    if (entries.paymentMethod) {
+      setValue("payment_method", entries.paymentMethod === "CREDIT" ? "CREDIT" : "CASH");
+    }
+
+    // Hydrate invoice fields
+    if (entries.invoice) {
+      setShowInvoiceFields(true);
+    }
+
+    // Hydrate selectedProducts from entry details
+    if (Array.isArray(entries.details) && entries.details.length > 0) {
+      const hydratedProducts = entries.details.map((detail: any) => ({
+        id: detail.product?.id ?? detail.productId ?? 0,
+        name: detail.product_name ?? detail.product?.name ?? "Sin nombre",
+        price: detail.price ?? 0,
+        priceSell: detail.product?.priceSell ?? detail.price ?? 0,
+        quantity: detail.quantity ?? 1,
+        category_name: detail.product?.category?.name ?? "",
+        series: Array.isArray(detail.series) ? detail.series : [],
+      }));
+      setSelectedProducts(hydratedProducts);
+    }
+  }, [isDraftEdit, entries, loadingStores, loadingProviders, loadingProducts, setValue]);
+
   useEffect(() => {
     if (!entryDefaults || hasAppliedDefaultsRef.current) {
       return;
@@ -1794,6 +1902,9 @@ export function EntriesForm({entries, categories}: {entries: any; categories: an
                       onCurrencyToggle={handleCurrencyToggle}
                       currency={currency}
                       isConvertingCurrency={isConvertingCurrency}
+                      isDraftEdit={isDraftEdit}
+                      onSaveDraft={onSaveDraft}
+                      isSavingDraft={isSavingDraft}
                     />
         </fieldset>
         <AlertDialog

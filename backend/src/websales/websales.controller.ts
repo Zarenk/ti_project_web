@@ -122,6 +122,9 @@ export class WebSalesController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...ORDERS_ALLOWED_ROLES)
+  @ModulePermission('sales')
   @Post('order/:id/reject')
   async rejectOrder(
     @Param('id', ParseIntPipe) id: number,
@@ -260,6 +263,9 @@ export class WebSalesController {
     });
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', ...ORDERS_ALLOWED_ROLES)
+  @ModulePermission('sales')
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
@@ -273,6 +279,9 @@ export class WebSalesController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', ...ORDERS_ALLOWED_ROLES)
+  @ModulePermission('sales')
   @Get('order/:id')
   async findOrder(
     @Param('id', ParseIntPipe) id: number,
@@ -299,6 +308,9 @@ export class WebSalesController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'EMPLOYEE', ...ORDERS_ALLOWED_ROLES)
+  @ModulePermission('sales')
   @Get('order/by-user/:id')
   async findOrdersByUser(
     @Param('id', ParseIntPipe) id: number,
@@ -312,6 +324,9 @@ export class WebSalesController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...ORDERS_ALLOWED_ROLES)
+  @ModulePermission('sales')
   @Get('order/by-email/:email')
   async findOrdersByEmail(
     @Param('email') email: string,
@@ -325,6 +340,9 @@ export class WebSalesController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...ORDERS_ALLOWED_ROLES)
+  @ModulePermission('sales')
   @Get('order/by-dni/:dni')
   async findOrdersByDni(
     @Param('dni') dni: string,

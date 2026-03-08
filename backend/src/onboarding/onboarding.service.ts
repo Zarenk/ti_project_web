@@ -86,14 +86,61 @@ export class OnboardingService {
     const now = new Date();
     const nowIso = now.toISOString();
 
+    // Validate required fields when marking a step as complete
+    if (dto.completed === true) {
+      this.validateStepCompletion(definition.key, dto.payload ?? null);
+    }
+
+    // Extract and persist metrics from frontend (_metrics field)
+    const rawPayload = dto.payload ?? {};
+    const metricsData = rawPayload._metrics as
+      | { timeSpentMs?: number; viewedAt?: string }
+      | undefined;
+    // Strip _metrics from the payload stored in step data
+    const { _metrics, ...cleanPayload } = rawPayload;
+    dto.payload = Object.keys(cleanPayload).length > 0 ? cleanPayload : null;
+
+    // Auto-mark SUNAT as skipped when completing with empty payload
+    let effectivePayload = dto.payload ?? undefined;
+    if (
+      dto.completed === true &&
+      definition.key === OnboardingStepKey.SUNAT_SETUP
+    ) {
+      const hasMeaningfulData = this.hasSunatData(dto.payload ?? null);
+      if (!hasMeaningfulData) {
+        effectivePayload = {
+          ...(dto.payload ?? {}),
+          skipped: true,
+          reason: 'configurar-despues',
+        };
+      }
+    }
+
     const nextState = this.mergeStepState(
       this.normalizeStepState(current[definition.field]),
       {
         completed: dto.completed,
         updatedAt: nowIso,
-        data: dto.payload ?? undefined,
+        data: effectivePayload,
       },
     );
+
+    // Persist metrics alongside step state data
+    if (metricsData) {
+      const prevData = nextState.data ?? {};
+      const prevMetrics = (prevData._stepMetrics as Record<string, any>) ?? {};
+      nextState.data = {
+        ...prevData,
+        _stepMetrics: {
+          firstViewedAt: prevMetrics.firstViewedAt ?? metricsData.viewedAt ?? nowIso,
+          lastViewedAt: metricsData.viewedAt ?? nowIso,
+          totalTimeSpentMs:
+            ((prevMetrics.totalTimeSpentMs as number) ?? 0) +
+            (metricsData.timeSpentMs ?? 0),
+          saveCount: ((prevMetrics.saveCount as number) ?? 0) + 1,
+        },
+      };
+    }
 
     const sideEffects = await this.applySideEffects(
       definition.key,
@@ -182,6 +229,62 @@ export class OnboardingService {
     organizationId: number,
   ): Promise<OnboardingProgress> {
     return this.ensureProgressRecord(organizationId);
+  }
+
+  async getOnboardingMetrics(): Promise<{
+    totalOrganizations: number;
+    completedOrganizations: number;
+    completionRate: number;
+    stepMetrics: {
+      step: string;
+      completedCount: number;
+      avgTimeSpentMs: number;
+      dropOffCount: number;
+    }[];
+  }> {
+    const allProgress = await this.prisma.onboardingProgress.findMany({
+      select: {
+        isCompleted: true,
+        companyProfile: true,
+        storeSetup: true,
+        sunatSetup: true,
+        dataImport: true,
+      },
+    });
+
+    const total = allProgress.length;
+    const completed = allProgress.filter((p) => p.isCompleted).length;
+
+    const stepMetrics = this.stepDefinitions.map((def) => {
+      let completedCount = 0;
+      let totalTimeMs = 0;
+      let timeEntries = 0;
+
+      for (const row of allProgress) {
+        const state = this.normalizeStepState(row[def.field]);
+        if (state.completed) completedCount++;
+        const metrics = (state.data?._stepMetrics as Record<string, any>) ?? {};
+        const time = metrics.totalTimeSpentMs as number | undefined;
+        if (typeof time === 'number' && time > 0) {
+          totalTimeMs += time;
+          timeEntries++;
+        }
+      }
+
+      return {
+        step: def.key,
+        completedCount,
+        avgTimeSpentMs: timeEntries > 0 ? Math.round(totalTimeMs / timeEntries) : 0,
+        dropOffCount: total - completedCount,
+      };
+    });
+
+    return {
+      totalOrganizations: total,
+      completedOrganizations: completed,
+      completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+      stepMetrics,
+    };
   }
 
   private async updateDemoStatusForOrganization(
@@ -618,5 +721,59 @@ export class OnboardingService {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     );
+  }
+
+  private validateStepCompletion(
+    step: OnboardingStepKey,
+    payload: Record<string, any> | null,
+  ): void {
+    const errors: string[] = [];
+
+    switch (step) {
+      case OnboardingStepKey.COMPANY_PROFILE: {
+        const legalName = this.normalizeString(payload?.legalName);
+        const ruc = this.normalizeString(payload?.ruc);
+        if (!legalName || legalName.length < 3) {
+          errors.push('La razón social es obligatoria (mínimo 3 caracteres).');
+        }
+        if (!ruc || !/^\d{11}$/.test(ruc)) {
+          errors.push('El RUC debe tener exactamente 11 dígitos.');
+        }
+        break;
+      }
+
+      case OnboardingStepKey.STORE_SETUP: {
+        const primaryStore = this.normalizeString(payload?.primaryStore);
+        if (!primaryStore || primaryStore.length < 2) {
+          errors.push('La tienda principal es obligatoria (mínimo 2 caracteres).');
+        }
+        break;
+      }
+
+      case OnboardingStepKey.SUNAT_SETUP:
+        // SUNAT is intentionally optional — no required fields.
+        // If payload is empty, it will be auto-marked as "skipped".
+        break;
+
+      case OnboardingStepKey.DATA_IMPORT: {
+        const strategy = this.normalizeString(payload?.dataStrategy);
+        if (!strategy || !['demo', 'csv', 'manual'].includes(strategy)) {
+          errors.push('Selecciona una estrategia de datos válida (demo, csv o manual).');
+        }
+        break;
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException(errors.join(' '));
+    }
+  }
+
+  private hasSunatData(payload: Record<string, any> | null): boolean {
+    if (!payload) return false;
+    const solUser = this.normalizeString(payload.solUser);
+    const solPassword = this.normalizeString(payload.solPassword);
+    const certificateStatus = this.normalizeString(payload.certificateStatus);
+    return Boolean(solUser || solPassword || certificateStatus);
   }
 }

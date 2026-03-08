@@ -26,6 +26,7 @@ import {
   AlertCircle,
   Building2,
   Box,
+  Check,
   Download,
   ImageIcon,
   Layout,
@@ -33,6 +34,7 @@ import {
   Monitor,
   Moon,
   Navigation,
+  Paintbrush,
   Palette,
   RotateCcw,
   Save,
@@ -93,12 +95,15 @@ import { useOptionalTenantSelection } from "@/context/tenant-selection-context";
 import { getCompanyDetail, type CompanyDetail } from "../tenancy/tenancy.api";
 
 import { BACKEND_URL } from "@/lib/utils";
+import { TEMPLATE_META } from "@/templates/resolve-template";
+import type { TemplateId } from "@/templates/types";
 
 export type SettingsFormData = SiteSettings;
 
 type SectionId =
     "company"
   | "brand"
+  | "storeTemplate"
   | "theme"
   | "typography"
   | "layout"
@@ -123,7 +128,7 @@ function getStoredActiveSection(): SectionId {
   try {
     const stored = window.sessionStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);
     if (!stored) return "company";
-    return sections.some((section) => section.id === stored)
+    return allSections.some((section) => section.id === stored)
       ? (stored as SectionId)
       : "company";
   } catch {
@@ -131,9 +136,10 @@ function getStoredActiveSection(): SectionId {
   }
 }
 
-const sections: { id: SectionId; label: string; icon: typeof Palette }[] = [
+const allSections: { id: SectionId; label: string; icon: typeof Palette; superAdminOnly?: boolean }[] = [
   { id: "company", label: "Empresa", icon: Building2 },
   { id: "brand", label: "Marca", icon: Sparkles },
+  { id: "storeTemplate", label: "Plantilla de tienda", icon: Paintbrush, superAdminOnly: true },
   { id: "theme", label: "Colores y tema", icon: Palette },
   { id: "typography", label: "Tipografía", icon: Type },
   { id: "layout", label: "Diseño", icon: Layout },
@@ -401,6 +407,17 @@ export default function SettingsPage() {
   const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
   const tenantCtx = useOptionalTenantSelection();
+  const { role } = useAuth();
+  const canChangeTemplate =
+    role?.toUpperCase() === "SUPER_ADMIN_GLOBAL" ||
+    role?.toUpperCase() === "SUPER_ADMIN_ORG";
+  const sections = useMemo(
+    () =>
+      allSections.filter(
+        (s) => !s.superAdminOnly || canChangeTemplate,
+      ),
+    [canChangeTemplate],
+  );
 
   const {
     settings,
@@ -892,6 +909,9 @@ export default function SettingsPage() {
                   )}
                   {activeSection === "brand" && (
                     <BrandSection register={register} errors={errors} setValue={setValue} watch={watch} />
+                  )}
+                  {activeSection === "storeTemplate" && canChangeTemplate && (
+                    <StoreTemplateSection watch={watch} setValue={setValue} />
                   )}
                   {activeSection === "theme" && (
                     <ThemeSection
@@ -2438,6 +2458,98 @@ function MaintenanceSection({ register, errors, watch, setValue }: SectionProps)
       </CardContent>
     </Card>
   );
+}
+
+/* ────────────────────────────────────────────
+ * Store Template Selector (Super Admin only)
+ * ──────────────────────────────────────────── */
+
+const TEMPLATE_PREVIEWS: Record<TemplateId, { gradient: string; features: string[] }> = {
+  classic: {
+    gradient: "from-sky-500 to-blue-600",
+    features: ["Paleta sky-blue familiar", "Cards con hover shadow", "Hero con carrusel y partículas"],
+  },
+  elegance: {
+    gradient: "from-neutral-400 to-stone-600",
+    features: ["Diseño minimalista editorial", "Mucho white space", "Animaciones lentas y elegantes"],
+  },
+  bold: {
+    gradient: "from-violet-500 to-fuchsia-600",
+    features: ["Glass-morphism y gradientes", "Fondo oscuro vibrante", "Animaciones snappy con glow"],
+  },
+}
+
+function StoreTemplateSection({
+  watch,
+  setValue,
+}: {
+  watch: UseFormWatch<SettingsFormData>
+  setValue: UseFormSetValue<SettingsFormData>
+}) {
+  const currentTemplate = watch("storeTemplate") ?? "classic"
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Plantilla de tienda</CardTitle>
+        <CardDescription>
+          Elige el diseño visual de toda la tienda virtual. Afecta homepage,
+          catálogo, detalle de producto, carrito, pago, navegación y footer.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {(Object.keys(TEMPLATE_META) as TemplateId[]).map((id) => {
+            const meta = TEMPLATE_META[id]
+            const preview = TEMPLATE_PREVIEWS[id]
+            const isActive = currentTemplate === id
+
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setValue("storeTemplate", id, { shouldDirty: true })}
+                className={`relative flex flex-col overflow-hidden rounded-xl border-2 transition-all duration-200 cursor-pointer text-left ${
+                  isActive
+                    ? "border-primary ring-2 ring-primary/20 shadow-lg"
+                    : "border-border hover:border-primary/40 hover:shadow-md"
+                }`}
+              >
+                {/* Gradient preview bar */}
+                <div
+                  className={`h-24 w-full bg-gradient-to-br ${preview.gradient} flex items-center justify-center`}
+                >
+                  <span className="text-white font-bold text-lg tracking-wide drop-shadow-md">
+                    {meta.label}
+                  </span>
+                </div>
+
+                {/* Info */}
+                <div className="p-4 space-y-2">
+                  <p className="text-sm text-muted-foreground">{meta.description}</p>
+                  <ul className="space-y-1">
+                    {preview.features.map((f) => (
+                      <li key={f} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                        <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary/60 flex-shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Active badge */}
+                {isActive && (
+                  <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow">
+                    <Check className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 function PermissionsSection({ watch, setValue }: PermissionsSectionProps) {

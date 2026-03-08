@@ -28,13 +28,13 @@ function MaintenanceSectionTestForm() {
             message: REQUIRED_MESSAGE,
           },
         } as unknown as FieldErrors<SettingsFormData>,
-      } satisfies Awaited<ResolverResult>;
+      } as Awaited<ResolverResult>;
     }
 
     return {
       values,
       errors: {},
-    } satisfies Awaited<ResolverResult>;
+    } as Awaited<ResolverResult>;
   };
 
   const form = useForm<SettingsFormData>({

@@ -83,8 +83,9 @@ def train_prophet_model(product_df: pd.DataFrame, product_id: int):
     model.add_regressor("is_quincena")
     model.fit(ts)
 
-    # Forecast next 7 days
-    future = model.make_future_dataframe(periods=7)
+    # Forecast next 90 days (frontend slices by period: 7, 30, 90)
+    forecast_days = 90
+    future = model.make_future_dataframe(periods=forecast_days)
     future["is_quincena"] = future["ds"].dt.day.apply(
         lambda d: 1 if d in [14, 15, 16, 28, 29, 30, 31, 1] else 0
     )
@@ -93,10 +94,10 @@ def train_prophet_model(product_df: pd.DataFrame, product_id: int):
     return {
         "product_id": product_id,
         "method": "prophet",
-        "forecast": forecast.tail(7)[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+        "forecast": forecast.tail(forecast_days)[["ds", "yhat", "yhat_lower", "yhat_upper"]]
         .assign(ds=lambda x: x["ds"].dt.strftime("%Y-%m-%d"))
         .to_dict("records"),
-        "mae": float(np.mean(np.abs(forecast["yhat"].values[:-7] - ts["y"].values))),
+        "mae": float(np.mean(np.abs(forecast["yhat"].values[:-forecast_days] - ts["y"].values))),
     }
 
 
@@ -105,12 +106,13 @@ def train_moving_average(product_df: pd.DataFrame, product_id: int):
     ts = product_df.groupby("sale_date")["units_sold"].sum().reset_index()
     ts.columns = ["ds", "y"]
 
-    # 7-day moving average
+    # Moving average — generate 30 days (frontend slices by period)
     avg_7d = ts["y"].tail(min(30, len(ts))).mean()
     today = datetime.now()
+    forecast_days = 30
 
     forecast = []
-    for i in range(1, 8):
+    for i in range(1, forecast_days + 1):
         date = today + timedelta(days=i)
         # Quincena boost
         boost = 1.3 if date.day in [14, 15, 16, 28, 29, 30, 31, 1] else 1.0

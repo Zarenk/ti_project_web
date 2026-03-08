@@ -202,11 +202,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace('/login')
       return
     }
-    const { pathname, search, hash } = window.location
-    if (pathname.startsWith('/login')) {
+    const { pathname: currentPath, search, hash } = window.location
+    if (currentPath.startsWith('/login')) {
+      authRedirectInProgressRef.current = false
       return
     }
-    let returnTo = `${pathname}${search}${hash}` || '/'
+    // Clear localStorage token immediately to prevent stale token reads
+    // after navigation (httpOnly cookie is cleared by middleware/logout API).
+    try { localStorage.removeItem('token') } catch { /* ignore */ }
+
+    let returnTo = `${currentPath}${search}${hash}` || '/'
     try {
       const stored = window.sessionStorage.getItem(lastPathKey)
       if (stored && stored.startsWith('/')) {
@@ -217,15 +222,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const target = `/login?returnTo=${encodeURIComponent(returnTo)}`
     router.replace(target)
-    window.setTimeout(() => {
-      try {
-        if (!window.location.pathname.startsWith('/login')) {
-          window.location.assign(target)
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 800)
+    // No hard-reload fallback — window.location.assign() caused reload
+    // loops on mobile where router.replace() hadn't completed within
+    // the timeout window, triggering middleware → login → dashboard → loop.
   }, [router])
 
   const forceLogoutDueToExpiry = useCallback(async () => {
@@ -234,6 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     sessionExpiryInProgressRef.current = true
     autoLogoutTriggeredRef.current = true
+    // Clear localStorage token BEFORE async logout to prevent stale reads
+    // if a hard reload or navigation interrupts the await below.
+    try { localStorage.removeItem('token') } catch { /* ignore */ }
     setSessionExpiryOverlay(true)
     try {
       toast.error('Tu sesión ha expirado. Redirigiendo al inicio de sesión.')
@@ -264,6 +266,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const scheduleSessionCheck = useCallback(async () => {
     if (typeof window === 'undefined' || !userId) {
+      clearSessionTimer()
+      return
+    }
+    // Don't schedule session checks while on the login page — there's no
+    // active session to monitor and API calls would produce 401s that
+    // re-trigger the expiry flow.
+    if (window.location.pathname.startsWith('/login')) {
       clearSessionTimer()
       return
     }
@@ -351,14 +360,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    if (!sessionExpiryOverlay) {
-      return
-    }
     if (typeof window === "undefined") {
       return
     }
+    // When we arrive at /login, reset redirect/session flags so they
+    // don't stay permanently locked from a previous expiry cycle.
     if (pathname && pathname.startsWith("/login")) {
-      setSessionExpiryOverlay(false)
+      authRedirectInProgressRef.current = false
+      sessionExpiryInProgressRef.current = false
+      if (sessionExpiryOverlay) {
+        setSessionExpiryOverlay(false)
+      }
     }
   }, [pathname, sessionExpiryOverlay])
 

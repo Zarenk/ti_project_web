@@ -210,6 +210,75 @@ export class EntriesController {
     };
   }
 
+  // ── Draft System Endpoints ──
+  // IMPORTANT: These must be BEFORE :id routes to avoid NestJS route conflicts
+
+  @Post('draft/create')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
+  async createDraft(
+    @Body() body: CreateEntryDto,
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
+  ) {
+    return this.entriesService.createDraft(
+      body,
+      organizationId === undefined ? undefined : organizationId,
+    );
+  }
+
+  @Patch('draft/:id')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
+  async updateDraft(
+    @Param('id') id: string,
+    @Body() body: CreateEntryDto,
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('ID de entrada inválido.');
+    }
+    return this.entriesService.updateDraft(
+      numericId,
+      body,
+      organizationId === undefined ? undefined : organizationId,
+    );
+  }
+
+  @Post('draft/:id/post')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
+  async postDraft(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('ID de entrada inválido.');
+    }
+    return this.entriesService.postDraft(
+      numericId,
+      organizationId === undefined ? undefined : organizationId,
+    );
+  }
+
+  @Post(':id/cancel')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('entries_write', { maxGraceTier: 'RESTRICTED' })
+  async cancelEntry(
+    @Param('id') id: string,
+    @CurrentTenant('organizationId') organizationId: number | null | undefined,
+  ) {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new BadRequestException('ID de entrada inválido.');
+    }
+    return this.entriesService.cancelEntry(
+      numericId,
+      organizationId === undefined ? undefined : organizationId,
+    );
+  }
+
   // Endpoint para actualizar una entrada con un PDF (con :id específico)
   @Post(':id/upload-pdf')
   @UseInterceptors(
@@ -362,6 +431,32 @@ export class EntriesController {
 
     const pdfUrl = `/uploads/guides/${draftId}`;
     return this.entriesService.updateEntryPdfGuia(Number(id), pdfUrl);
+  }
+
+  // Endpoint para buscar documentos PDF de entradas
+  @Get('documents')
+  async findEntryDocuments(
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @Query('search') search?: string,
+    @Query('type') type?: string,
+    @Query('providerId') providerId?: string,
+    @Query('storeId') storeId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.entriesService.findEntryDocuments({
+      organizationId: organizationId ?? undefined,
+      search: search?.trim(),
+      type: type as 'invoice' | 'guide' | 'all' | undefined,
+      providerId: providerId ? parseInt(providerId, 10) : undefined,
+      storeId: storeId ? parseInt(storeId, 10) : undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      page: page ? parseInt(page, 10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+    });
   }
 
   // Endpoint para listar todas las entradas

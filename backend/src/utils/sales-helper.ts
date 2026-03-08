@@ -292,6 +292,24 @@ export async function executeSale(
       }
       descriptionTransaction += '; ';
 
+      // ── Pessimistic lock: prevent race condition on concurrent sales ──
+      await prismaTx.$queryRawUnsafe<unknown[]>(
+        `SELECT id FROM "StoreOnInventory" WHERE id = $1 FOR UPDATE`,
+        storeInventory.id,
+      );
+
+      // Re-read stock under lock to get the real current value
+      const lockedInventory = await prismaTx.storeOnInventory.findUnique({
+        where: { id: storeInventory.id },
+        select: { stock: true },
+      });
+      if (!lockedInventory || lockedInventory.stock < detail.quantity) {
+        throw new BadRequestException(
+          `Stock insuficiente para el producto con ID ${detail.productId}.`,
+        );
+      }
+      const currentStock = lockedInventory.stock;
+
       const entryDetail = await prismaTx.entryDetail.findFirst({
         where: {
           productId: detail.productId,
@@ -343,7 +361,7 @@ export async function executeSale(
 
       await prismaTx.storeOnInventory.update({
         where: { id: storeInventory.id },
-        data: { stock: storeInventory.stock - detail.quantity },
+        data: { stock: currentStock - detail.quantity },
       });
 
       await prismaTx.inventoryHistory.create({
@@ -353,8 +371,8 @@ export async function executeSale(
           action: 'sales',
           description: `Venta realizada en la tienda ${getStoreName({ detail, storeInventory })}`,
           stockChange: -detail.quantity,
-          previousStock: storeInventory.stock,
-          newStock: storeInventory.stock - detail.quantity,
+          previousStock: currentStock,
+          newStock: currentStock - detail.quantity,
           organizationId: organizationId ?? null,
           companyId: companyId ?? null,
         },

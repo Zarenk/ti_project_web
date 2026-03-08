@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { AuditAction, Prisma, SiteSettings } from '@prisma/client';
 
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -47,7 +47,10 @@ function deepMergeJson(
   return output;
 }
 
+const SUPER_ADMIN_ROLES = ['SUPER_ADMIN_ORG', 'SUPER_ADMIN_GLOBAL'];
+
 const DEFAULT_SITE_SETTINGS: Prisma.JsonObject = {
+  storeTemplate: 'classic',
   company: {
     name: 'Mi Empresa',
     receiptFormat: 'a4',
@@ -233,12 +236,37 @@ export class SiteSettingsService {
     dto: UpdateSiteSettingsDto,
     organizationId: number | null,
     companyId: number | null,
-    actor?: { actorId?: number | null; actorEmail?: string | null },
+    actor?: {
+      actorId?: number | null;
+      actorEmail?: string | null;
+      userRole?: string | null;
+    },
   ): Promise<SiteSettings> {
     const tenantKey = this.buildTenantKey(organizationId, companyId);
     let previousData: Prisma.JsonValue | null = null;
     let changeSummary = 'Actualizo la configuracion';
     let changeDiff: Prisma.JsonValue | null = null;
+
+    // Enforce: only super admins can change the store template
+    const incomingData = dto.data as Prisma.JsonObject | undefined;
+    if (incomingData && typeof incomingData.storeTemplate === 'string') {
+      const existing = await this.prisma.siteSettings.findUnique({
+        where: { tenantKey },
+      });
+      const currentTemplate = existing?.data
+        ? (existing.data as Prisma.JsonObject).storeTemplate
+        : 'classic';
+      if (incomingData.storeTemplate !== currentTemplate) {
+        const normalizedRole = (actor?.userRole ?? '')
+          .toString()
+          .toUpperCase();
+        if (!SUPER_ADMIN_ROLES.includes(normalizedRole)) {
+          throw new ForbiddenException(
+            'Solo administradores superiores pueden cambiar la plantilla de tienda',
+          );
+        }
+      }
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.siteSettings.findUnique({

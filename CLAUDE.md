@@ -784,6 +784,15 @@ Mensaje usuario → Intent Parser → ¿intent confianza ≥ 0.85?
 - No agregar capas de abstracción "por si acaso"
 - Ver `docs/plans/KISS_PHASE3_PHASE4.md` para refactors pendientes de mayor riesgo
 
+### Disciplina de Refactoring y Cambios
+
+1. **No mezclar refactor con cambios funcionales** en el mismo PR/commit. Refactor puro va separado de features o bugfixes — facilita rollback y aísla regresiones.
+2. **Strangler pattern para migrar código legacy** — nuevo flujo convive con el viejo (ej: draft entries con `@default("POSTED")`), no big-bang rewrite.
+3. **Characterization tests (golden master)** antes de refactorizar flujos críticos — snapshot del estado de BD después de operaciones clave (createEntry, executeSale, deleteSale) para detectar regresiones silenciosas.
+4. **Observabilidad antes de refactorizar** — agregar logs estructurados, métricas y trazas en flujos complejos ANTES de cambiarlos, para detectar regresiones temprano.
+5. **Documentar contratos externos** (inputs, outputs, errores, side effects) antes de tocar código que interactúa con servicios externos (SUNAT, MercadoPago, WhatsApp).
+6. **Mapear side effects explícitamente** — antes de modificar un servicio, listar: BD, colas, archivos, cache, APIs externas, estado global, transacciones afectadas.
+
 ### Performance
 - Lazy loading de componentes pesados
 - Debouncing en búsquedas

@@ -1,0 +1,78 @@
+/* ────────────────────────────────────────────
+ * Bold Template — Animations
+ *
+ * Snappy, energetic. duration-200 to duration-300.
+ * Scale on hover. Shimmer gradients. Glow pulse.
+ * Respects prefers-reduced-motion.
+ * ──────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes boldGlowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(var(--primary-rgb, 99, 102, 241), 0.15);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(var(--primary-rgb, 99, 102, 241), 0.3);
+  }
+}
+
+@keyframes boldShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes boldGradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Scrollbar hide utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

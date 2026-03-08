@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
@@ -106,4 +107,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry only if DSN is configured
+const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN);
+
+export default sentryEnabled
+  ? withSentryConfig(nextConfig, {
+      // Suppress source map upload warnings when no auth token is set
+      silent: !process.env.SENTRY_AUTH_TOKEN,
+      // Disable source map upload in dev (no auth token needed locally)
+      disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+      disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+    })
+  : nextConfig;

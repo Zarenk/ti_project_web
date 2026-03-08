@@ -35,9 +35,21 @@ fronted/cypress/screenshots/
 
 # Database backup dumps
 backups/
+*.dump
 
 # OCR traineddata (large binary)
 backend/spa.traineddata
+*.traineddata
 
 # Temporary test scripts
 backend/test-jurisprudence*.sh
+
+# Cypress credentials (NEVER commit)
+fronted/cypress.env.json
+
+# Auto-backups (may contain org data)
+backend/storage/auto-backups/
+
+# Local packages and build artifacts
+.localpkgs/
+artifacts/

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
 import { getWebSaleById } from "@/app/dashboard/sales/sales.api"
 import { resolveImageUrl } from "@/lib/images"
 
@@ -54,18 +54,38 @@ export default function OrderDetails() {
   const params = useParams()
   const id = Array.isArray(params.id) ? params.id[0] : params.id
   const [order, setOrder] = useState<any | null>(null)
+  const [authError, setAuthError] = useState(false)
 
   useEffect(() => {
     async function fetchOrder() {
       try {
         const data = await getWebSaleById(id as string)
         setOrder(data)
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.toLowerCase().includes('unauthorized') || error?.message?.toLowerCase().includes('401')) {
+          setAuthError(true)
+        }
         console.error("Error al obtener la orden:", error)
       }
     }
     if (id) fetchOrder()
   }, [id])
+
+  if (authError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6">
+        <TemplateNavbar />
+        <Package className="h-12 w-12 text-muted-foreground" />
+        <h2 className="text-xl font-semibold">Acceso restringido</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          Para ver los detalles de tu orden, usa el código de seguimiento que recibiste.
+        </p>
+        <Link href="/track-order">
+          <Button className="cursor-pointer">Rastrear mi orden</Button>
+        </Link>
+      </div>
+    )
+  }
 
   if (!order) {
     return <div className="p-6">Cargando...</div>
@@ -167,7 +187,7 @@ export default function OrderDetails() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-      <Navbar />
+      <TemplateNavbar />
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <div className="mb-8">

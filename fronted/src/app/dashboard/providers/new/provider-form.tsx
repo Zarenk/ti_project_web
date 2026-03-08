@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { useTenantSelection } from '@/context/tenant-selection-context'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
-import { AlertTriangle, ArrowLeft, Check, Eraser, Save } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Building2, Check, Eraser, Loader2, MapPin, Save, Search, X } from 'lucide-react'
 import { resolveImageUrl } from '@/lib/images'
 import {
   Tooltip,
@@ -26,6 +26,15 @@ import {
 } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { FileSpreadsheet } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { lookupSunatDocument, type LookupResponse } from '@/app/dashboard/sales/sales.api'
+import { cn } from '@/lib/utils'
 
 const normalizeProviderImagePath = (input?: string): string => {
   const raw = input?.trim() ?? ""
@@ -51,8 +60,8 @@ export function ProviderForm({provider}: {provider: any}) {
       required_error: "Se requiere el nombre del proveedor",
     })
       .min(3, "El nombre del proveedor debe tener al menos 3 caracteres")
-      .max(50, "El nombre del proveedor no puede tener mケs de 50 caracteres")
-      .regex(/^[a-zA-Z0-9\s]+$/, "El nombre solo puede contener letras, nカmeros y espacios"),
+      .max(100, "El nombre del proveedor no puede tener mas de 100 caracteres")
+      .regex(/^[a-zA-ZÀ-ÿ0-9\s.,&\-'()]+$/, "El nombre contiene caracteres no permitidos"),
     document: z.enum(["Otro Documento", "DNI", "RUC"], {
         required_error: "El tipo de documento es obligatorio",
       }),
@@ -136,6 +145,11 @@ export function ProviderForm({provider}: {provider: any}) {
   const watchedWebsite = form.watch("website");
   const watchedImage = form.watch("image");
   const [isImageUploading, setIsImageUploading] = useState(false);
+  const [sunatDialogOpen, setSunatDialogOpen] = useState(false);
+  const [sunatSearchValue, setSunatSearchValue] = useState("");
+  const [sunatSearchResult, setSunatSearchResult] = useState<LookupResponse | null>(null);
+  const [sunatSearchError, setSunatSearchError] = useState<string | null>(null);
+  const [sunatSearchLoading, setSunatSearchLoading] = useState(false);
   const trimmedDocumentNumber = (watchedDocumentNumber ?? '').trim()
   const normalizedDocumentNumber = trimmedDocumentNumber.replace(/\D/g, '')
   const documentValidationTarget =
@@ -262,6 +276,52 @@ export function ProviderForm({provider}: {provider: any}) {
     if (!nameError) return
     setNameError(null)
   }, [watchedName, watchedDocumentNumber, selectedDocumentType])
+
+  const resetSunatDialog = () => {
+    setSunatSearchValue("");
+    setSunatSearchResult(null);
+    setSunatSearchError(null);
+    setSunatSearchLoading(false);
+  };
+
+  const handleSunatSearch = async () => {
+    const value = sunatSearchValue.trim();
+    if (!/^\d{8}$|^\d{11}$/.test(value)) {
+      setSunatSearchError("Ingresa un DNI (8 digitos) o RUC (11 digitos).");
+      setSunatSearchResult(null);
+      return;
+    }
+
+    setSunatSearchLoading(true);
+    setSunatSearchError(null);
+    setSunatSearchResult(null);
+    try {
+      const result = await lookupSunatDocument(value);
+      setSunatSearchResult(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo consultar el documento.";
+      setSunatSearchError(message);
+    } finally {
+      setSunatSearchLoading(false);
+    }
+  };
+
+  const handleSelectSunatResult = (result: LookupResponse) => {
+    const docType = result.type === "RUC" ? "RUC" : "DNI";
+    setValue("name", result.name && !result.name.startsWith("(") ? result.name : "", { shouldValidate: true });
+    setValue("document", docType, { shouldValidate: true });
+    setValue("documentNumber", result.identifier ?? "", { shouldValidate: true });
+    if (result.address) {
+      setValue("adress", result.address, { shouldValidate: true });
+    }
+    // Reset validations since we're filling fresh data from SUNAT
+    setNameValidation({ status: "idle", message: undefined });
+    setDocumentValidation({ status: "idle", message: undefined });
+    setNameError(null);
+    setSunatDialogOpen(false);
+    resetSunatDialog();
+    toast.success("Datos del proveedor aplicados desde SUNAT.");
+  };
 
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
@@ -423,10 +483,39 @@ export function ProviderForm({provider}: {provider: any}) {
               Nombre del Proveedor
               {renderRequiredValidationChip(nameValidation.status, hasName)}
             </Label>
-            <Input
-              {...register('name')}
-              maxLength={50} // Limita a 50 caracteres
-            />
+            <div className="flex items-center gap-1.5 w-full min-w-0">
+              <Input
+                {...register('name')}
+                maxLength={50}
+                className="flex-1 min-w-0"
+              />
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 cursor-pointer flex-shrink-0 text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors"
+                      onClick={() => {
+                        const currentDoc = form.getValues("documentNumber")?.trim() ?? "";
+                        setSunatSearchValue(currentDoc);
+                        setSunatSearchResult(null);
+                        setSunatSearchError(null);
+                        setSunatDialogOpen(true);
+                      }}
+                    >
+                      {sunatSearchLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Consulta SUNAT</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             {nameValidation.status === "checking" ? (
               <p className="mt-2 text-xs text-amber-600">Validando nombre...</p>
             ) : nameValidation.status === "invalid" ? (
@@ -791,6 +880,122 @@ export function ProviderForm({provider}: {provider: any}) {
         {/* Spacer to prevent content from hiding behind fixed mobile bar */}
         <div className="h-16 lg:hidden" />
       </form>
+
+      {/* ── SUNAT Lookup Dialog ── */}
+      <Dialog
+        open={sunatDialogOpen}
+        onOpenChange={(open) => {
+          setSunatDialogOpen(open);
+          if (!open) resetSunatDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+              Consulta SUNAT
+            </DialogTitle>
+            <DialogDescription>
+              Ingresa un DNI (8 digitos) o RUC (11 digitos) para buscar datos del proveedor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 w-full min-w-0">
+            {/* Search input */}
+            <div className="flex gap-2">
+              <Input
+                value={sunatSearchValue}
+                onChange={(e) => setSunatSearchValue(e.target.value)}
+                placeholder="Ej: 20519857538"
+                className="font-mono flex-1 min-w-0"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleSunatSearch();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleSunatSearch}
+                disabled={sunatSearchLoading}
+                className="cursor-pointer flex-shrink-0"
+              >
+                {sunatSearchLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            {/* Error */}
+            {sunatSearchError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 w-full min-w-0 overflow-hidden">
+                <X className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive break-words">{sunatSearchError}</p>
+              </div>
+            )}
+
+            {/* Result */}
+            {sunatSearchResult ? (
+              <div
+                className={cn(
+                  "p-3 rounded-lg border cursor-pointer w-full min-w-0 overflow-hidden",
+                  "transition-all duration-200 ease-out",
+                  "hover:bg-primary/5 hover:border-primary/30 hover:shadow-sm",
+                  "active:scale-[0.98]",
+                  "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                )}
+                onClick={() => handleSelectSunatResult(sunatSearchResult)}
+              >
+                <div className="flex items-start justify-between gap-2 w-full min-w-0">
+                  <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
+                    <p className="text-sm font-semibold break-words leading-snug">
+                      {sunatSearchResult.name}
+                    </p>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {sunatSearchResult.type}: {sunatSearchResult.identifier}
+                    </p>
+                  </div>
+                  {sunatSearchResult.status && (
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 tracking-wide",
+                        sunatSearchResult.status === "ACTIVO"
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : "bg-red-500/15 text-red-600 dark:text-red-400",
+                      )}
+                    >
+                      {sunatSearchResult.status}
+                    </span>
+                  )}
+                </div>
+
+                {sunatSearchResult.address && sunatSearchResult.address !== "—" && (
+                  <div className="flex items-start gap-1.5 mt-2 pt-2 border-t w-full min-w-0 overflow-hidden">
+                    <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground break-words leading-relaxed">
+                      {sunatSearchResult.address}
+                    </p>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                  Clic para aplicar datos al formulario
+                </p>
+              </div>
+            ) : !sunatSearchLoading && !sunatSearchError ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border border-dashed text-center">
+                <Search className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Ingresa un documento y presiona buscar.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

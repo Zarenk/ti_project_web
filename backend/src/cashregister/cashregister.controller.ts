@@ -19,6 +19,8 @@ import { CreateCashTransactionDto } from './dto/create-cashtransactions.dto';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
 import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { SubscriptionStatusGuard } from 'src/common/guards/subscription-status.guard';
+import { RequiresActiveSubscription } from 'src/common/decorators/requires-subscription.decorator';
 
 @Controller('cashregister')
 @UseGuards(JwtAuthGuard, TenantRequiredGuard)
@@ -102,6 +104,8 @@ export class CashregisterController {
   }
 
   @Post()
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('cashregister_write', { maxGraceTier: 'RESTRICTED' })
   async create(
     @Body() createCashRegisterDto: CreateCashRegisterDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,
@@ -262,6 +266,8 @@ export class CashregisterController {
   }
 
   @Patch(':id')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('cashregister_write', { maxGraceTier: 'RESTRICTED' })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCashRegisterDto: UpdateCashRegisterDto,
@@ -284,6 +290,8 @@ export class CashregisterController {
   }
 
   @Delete(':id')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('cashregister_write', { maxGraceTier: 'RESTRICTED' })
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('organizationId') organizationIdRaw?: string,
@@ -307,6 +315,8 @@ export class CashregisterController {
   //////////////////////////////// TRANSFER //////////////////////////////////
 
   @Post('transaction')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('cashregister_write', { maxGraceTier: 'RESTRICTED' })
   async createTransaction(
     @Body() createCashTransactionDto: CreateCashTransactionDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,
@@ -417,6 +427,8 @@ export class CashregisterController {
   ///////////////////////////////// CLOSURE //////////////////////////////////
 
   @Post('closure')
+  @UseGuards(SubscriptionStatusGuard)
+  @RequiresActiveSubscription('cashregister_write', { maxGraceTier: 'RESTRICTED' })
   async createClosure(
     @Body() createCashClosureDto: CreateCashClosureDto,
     @CurrentTenant('organizationId') organizationIdFromContext: number | null,

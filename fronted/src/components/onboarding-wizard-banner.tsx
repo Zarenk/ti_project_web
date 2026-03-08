@@ -38,10 +38,14 @@ export function OnboardingWizardBanner() {
     (key) => !(progress as any)[key]?.completed,
   )
 
+  const sunatSkipped = Boolean((progress.sunatSetup?.data as any)?.skipped)
+
   const nextLabel =
     pendingSteps.length > 0
       ? `Paso pendiente: ${mapStepKeyToLabel(pendingSteps[0] as keyof OnboardingProgress)}`
-      : "Completa el asistente inicial para desbloquear todo"
+      : sunatSkipped
+        ? "Configura SUNAT cuando estés listo (Configuración → SUNAT)"
+        : "Completa el asistente inicial para desbloquear todo"
 
   async function handleDismiss() {
     try {
@@ -65,13 +69,13 @@ export function OnboardingWizardBanner() {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button asChild className="gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
+          <Button asChild className="cursor-pointer gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
             <Link href="/dashboard/onboarding">
               <ClipboardList className="h-4 w-4" />
               Abrir asistente
             </Link>
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleDismiss}>
+          <Button variant="ghost" size="sm" className="cursor-pointer" onClick={handleDismiss}>
             Ocultar
           </Button>
         </div>

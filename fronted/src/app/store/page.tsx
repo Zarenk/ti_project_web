@@ -4,7 +4,9 @@ import Image from "next/image"
 import { getBrandLogoSources, resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
 import { Search, Filter, Package, PackageOpen, DollarSign, Tag } from "lucide-react"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
+import { useActiveTemplate } from "@/templates/use-active-template"
+import { useTemplateComponents } from "@/templates/use-store-template"
 import { useState, useMemo, useEffect } from "react"
 import { useDebounce } from "@/app/hooks/useDebounce"
 import { useSearchParams } from "next/navigation"
@@ -28,7 +30,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { getProducts, getPublicProducts } from "../dashboard/products/products.api"
-import { getStoresWithProduct, getPublicStoresWithProduct } from "../dashboard/inventory/inventory.api"
+import { getBatchStock, getPublicBatchStock } from "../dashboard/inventory/inventory.api"
 import Link from "next/link"
 import { toast } from "sonner"
 import { useCart } from "@/context/cart-context"
@@ -45,8 +47,6 @@ interface Brand {
 
 type ProductsResponse = Awaited<ReturnType<typeof getProducts>>
 type ProductListItem = ProductsResponse extends Array<infer Item> ? Item : never
-type StoreStockResponse = Awaited<ReturnType<typeof getStoresWithProduct>>
-type StoreStockRecord = StoreStockResponse extends Array<infer Item> ? Item : never
 interface Product {
   id: number
   name: string
@@ -120,8 +120,6 @@ const mapSpecification = (spec: unknown): Product["specification"] | undefined =
   }
 }
 
-const calculateTotalStock = (stores: StoreStockRecord[]): number =>
-  stores.reduce((sum, store) => sum + (parseNumber(store?.stock) ?? 0), 0)
 const normalizeBaseProduct = (product: ProductListItem): Omit<Product, "stock"> => {
   const price = parseNumber(product?.priceSell) ?? parseNumber(product?.price) ?? 0
   const categoryName =
@@ -141,6 +139,8 @@ const normalizeBaseProduct = (product: ProductListItem): Omit<Product, "stock"> 
 }
 
 export default function StorePage() {
+  const templateId = useActiveTemplate()
+  const { StoreLayout } = useTemplateComponents(templateId)
   const [products, setProducts] = useState<Product[]>([])
   const { addItem } = useCart()
   const [currentPage, setCurrentPage] = useState(1)
@@ -155,21 +155,17 @@ export default function StorePage() {
         const hasAuth = Boolean(await getAuthToken())
         const fetchedProducts = hasAuth ? await getProducts() : await getPublicProducts()
         const productList = Array.isArray(fetchedProducts) ? fetchedProducts : []
-        const mapped = await Promise.all(
-          productList.map(async (product) => {
-            const normalized = normalizeBaseProduct(product)
-            try {
-              const stores = hasAuth
-                ? await getStoresWithProduct(product.id)
-                : await getPublicStoresWithProduct(product.id)
-              const totalStock = Array.isArray(stores) ? calculateTotalStock(stores) : null
-              return { ...normalized, stock: totalStock }
-            } catch (error) {
-              console.error("Error fetching stock:", error)
-              return normalized
-            }
-          }),
-        )
+        // Batch stock lookup — single API call instead of N individual calls
+        const productIds = productList.map((p) => p.id)
+        const stockMap = hasAuth
+          ? await getBatchStock(productIds)
+          : await getPublicBatchStock(productIds)
+
+        const mapped = productList.map((product) => {
+          const normalized = normalizeBaseProduct(product)
+          const totalStock = stockMap[product.id] ?? null
+          return { ...normalized, stock: totalStock }
+        })
         if (isMounted) {
           setProducts(mapped)
         }
@@ -457,9 +453,18 @@ export default function StorePage() {
     </>
   )
   
+  if (templateId !== "classic") {
+    return (
+      <>
+        <TemplateNavbar />
+        <StoreLayout products={products} />
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <TemplateNavbar />
       {/* Header */}
       <header className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -615,13 +620,13 @@ export default function StorePage() {
                       <Link href={`/store/${product.id}`}
                         className="block">
                       <CardHeader className="p-0">
-                        <div className="relative overflow-hidden rounded-t-lg">
+                        <div className="relative aspect-square overflow-hidden rounded-t-lg">
                           <Image
                             src={resolvedPrimaryImage}
                             alt={product.name}
                             width={300}
                             height={300}
-                            className="w-full h-60 sm:h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                             priority={index === 0}
                           />
                         </div>

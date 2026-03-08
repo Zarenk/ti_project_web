@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useAuth } from "@/context/auth-context"
@@ -8,15 +8,24 @@ import {
   fetchMLStatus,
   reloadMLModels,
   fetchDemandForecast,
+  fetchDemandProductIds,
   fetchBasketSuggestions,
   checkPriceAnomaly,
   fetchClientSegments,
   fetchCategoryMap,
+  fetchTrainingStatus,
+  startTraining,
+  cancelTraining,
+  toggleTrainingCron,
+  fetchMLProducts,
   type MLStatusMap,
   type DemandForecastResult,
   type BasketRule,
   type PriceCheckResult,
   type ClientSegment,
+  type TrainingStatus,
+  type TrainingResult,
+  type MLProduct,
 } from "./ml-analytics.api"
 
 export type MLAnalyticsData = {
@@ -30,10 +39,19 @@ export type MLAnalyticsData = {
   reloading: boolean
   handleReload: () => Promise<void>
 
+  // Training
+  trainingStatus: TrainingStatus | null
+  trainingLoading: boolean
+  isTraining: boolean
+  handleStartTraining: (steps?: string[]) => Promise<void>
+  handleCancelTraining: () => Promise<void>
+  handleToggleCron: (enabled: boolean) => Promise<void>
+
   // Demand forecast
   demandResult: DemandForecastResult | null
   demandLoading: boolean
-  searchDemand: (productId: number) => Promise<void>
+  demandProductIds: Set<number>
+  searchDemand: (productId: number, days?: number) => Promise<void>
 
   // Basket analysis
   basketRules: BasketRule[]
@@ -51,6 +69,10 @@ export type MLAnalyticsData = {
 
   // Category map
   categoryMap: Record<string, string>
+
+  // Products for search
+  products: MLProduct[]
+  productsLoading: boolean
 }
 
 export function useMLAnalytics(): MLAnalyticsData {
@@ -78,6 +100,14 @@ export function useMLAnalytics(): MLAnalyticsData {
   const [priceResult, setPriceResult] = useState<PriceCheckResult | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
 
+  const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null)
+  const [trainingLoading, setTrainingLoading] = useState(false)
+  const [isTraining, setIsTraining] = useState(false)
+
+  const [products, setProducts] = useState<MLProduct[]>([])
+  const [productsLoading, setProductsLoading] = useState(false)
+  const [demandProductIds, setDemandProductIds] = useState<Set<number>>(new Set())
+
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (authPending) return
@@ -96,16 +126,24 @@ export function useMLAnalytics(): MLAnalyticsData {
     async function loadInitial() {
       setStatusLoading(true)
       setSegmentsLoading(true)
+      setProductsLoading(true)
       try {
-        const [statusData, segmentsData, categories] = await Promise.all([
+        const [statusData, segmentsData, categories, trainStatus, productsList, demandIds] = await Promise.all([
           fetchMLStatus(),
           fetchClientSegments(),
           fetchCategoryMap(),
+          fetchTrainingStatus(),
+          fetchMLProducts(),
+          fetchDemandProductIds(),
         ])
         if (cancelled) return
         setStatus(statusData)
         setSegments(segmentsData)
         setCategoryMap(categories)
+        setTrainingStatus(trainStatus)
+        setProducts(productsList)
+        setDemandProductIds(new Set(demandIds))
+        if (trainStatus.isRunning) setIsTraining(true)
       } catch (err) {
         if (!cancelled) {
           console.error("Error loading ML data:", err)
@@ -115,6 +153,7 @@ export function useMLAnalytics(): MLAnalyticsData {
         if (!cancelled) {
           setStatusLoading(false)
           setSegmentsLoading(false)
+          setProductsLoading(false)
         }
       }
     }
@@ -139,11 +178,11 @@ export function useMLAnalytics(): MLAnalyticsData {
     }
   }, [])
 
-  const searchDemand = useCallback(async (productId: number) => {
+  const searchDemand = useCallback(async (productId: number, days = 7) => {
     setDemandLoading(true)
     setDemandResult(null)
     try {
-      const result = await fetchDemandForecast(productId)
+      const result = await fetchDemandForecast(productId, days)
       setDemandResult(result)
       if (!result.available) {
         toast.info("No hay prediccion disponible para este producto")
@@ -190,6 +229,101 @@ export function useMLAnalytics(): MLAnalyticsData {
     }
   }, [])
 
+  const handleStartTraining = useCallback(async (steps?: string[]) => {
+    setIsTraining(true)
+    try {
+      const result = await startTraining(steps)
+      // Refresh status + models after training
+      const [newStatus, trainSt] = await Promise.all([
+        fetchMLStatus(),
+        fetchTrainingStatus(),
+      ])
+      setStatus(newStatus)
+      setTrainingStatus(trainSt)
+
+      if (result.success) {
+        toast.success(
+          `Entrenamiento completado: ${result.summary.successful}/${result.summary.total} modelos entrenados en ${result.elapsedSeconds.toFixed(0)}s`
+        )
+      } else {
+        toast.warning(
+          `Entrenamiento parcial: ${result.summary.successful} exitosos, ${result.summary.failed} con errores`
+        )
+      }
+    } catch (err) {
+      console.error("Training error:", err)
+      toast.error(err instanceof Error ? err.message : "Error al iniciar entrenamiento")
+      // Refresh status anyway
+      fetchTrainingStatus().then(setTrainingStatus).catch(() => {})
+    } finally {
+      setIsTraining(false)
+    }
+  }, [])
+
+  const handleCancelTraining = useCallback(async () => {
+    try {
+      const result = await cancelTraining()
+      if (result.cancelled) {
+        toast.info("Entrenamiento cancelado")
+        setIsTraining(false)
+        const trainSt = await fetchTrainingStatus()
+        setTrainingStatus(trainSt)
+      } else {
+        toast.warning("No hay entrenamiento en curso para cancelar")
+      }
+    } catch (err) {
+      console.error("Cancel training error:", err)
+      toast.error("Error al cancelar el entrenamiento")
+    }
+  }, [])
+
+  const handleToggleCron = useCallback(async (enabled: boolean) => {
+    try {
+      await toggleTrainingCron(enabled)
+      const trainSt = await fetchTrainingStatus()
+      setTrainingStatus(trainSt)
+      toast.success(enabled ? "Entrenamiento automatico activado" : "Entrenamiento automatico desactivado")
+    } catch (err) {
+      console.error("Toggle cron error:", err)
+      toast.error("Error al cambiar configuracion de entrenamiento automatico")
+    }
+  }, [])
+
+  // ── Poll training status while training is running ────────────────────────
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (!isTraining) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+      return
+    }
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const trainSt = await fetchTrainingStatus()
+        setTrainingStatus(trainSt)
+        // Auto-detect completion from another tab or cron
+        if (!trainSt.isRunning && isTraining) {
+          setIsTraining(false)
+          const newStatus = await fetchMLStatus()
+          setStatus(newStatus)
+        }
+      } catch {
+        // Ignore polling errors
+      }
+    }, 2000)
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [isTraining])
+
   return {
     authorized: isSuperAdmin,
     loading,
@@ -197,8 +331,15 @@ export function useMLAnalytics(): MLAnalyticsData {
     statusLoading,
     reloading,
     handleReload,
+    trainingStatus,
+    trainingLoading,
+    isTraining,
+    handleStartTraining,
+    handleCancelTraining,
+    handleToggleCron,
     demandResult,
     demandLoading,
+    demandProductIds,
     searchDemand,
     basketRules,
     basketLoading,
@@ -209,5 +350,7 @@ export function useMLAnalytics(): MLAnalyticsData {
     segments,
     segmentsLoading,
     categoryMap,
+    products,
+    productsLoading,
   }
 }

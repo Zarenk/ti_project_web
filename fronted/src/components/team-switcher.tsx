@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Check, ChevronsUpDown, Pencil, Plus, Settings } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, Loader2, Pencil, Plus, Rocket, Settings } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -41,6 +41,7 @@ import {
   createCompany,
   listOrganizations,
   getCurrentTenant,
+  selfCreateOrganization,
   type CompanyResponse,
   type OrganizationResponse,
   type CurrentTenantResponse,
@@ -144,6 +145,12 @@ export function TeamSwitcher(): React.ReactElement | null {
   const [companyLegalName, setCompanyLegalName] = useState("")
   const [companyTaxId, setCompanyTaxId] = useState("")
   const [companyStatus, setCompanyStatus] = useState("ACTIVE")
+
+  const [createOrgDialogOpen, setCreateOrgDialogOpen] = useState(false)
+  const [newOrgName, setNewOrgName] = useState("")
+  const [newOrgCompanyName, setNewOrgCompanyName] = useState("")
+  const [newOrgVertical, setNewOrgVertical] = useState("GENERAL")
+  const [creatingOrg, setCreatingOrg] = useState(false)
 
   const normalizedTaxId = companyTaxId.replace(/\D/g, "")
   const isTaxIdValid = normalizedTaxId.length === 0 || normalizedTaxId.length === 11
@@ -531,6 +538,48 @@ export function TeamSwitcher(): React.ReactElement | null {
 
   const canAddCompanies = showGlobalSwitcher && Boolean(activeOrganization)
 
+  const handleCreateOwnOrg = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      const trimmedOrg = newOrgName.trim()
+      const trimmedCompany = newOrgCompanyName.trim()
+      if (trimmedOrg.length < 3) {
+        toast.error("El nombre de la organización debe tener al menos 3 caracteres.")
+        return
+      }
+      if (trimmedCompany.length < 2) {
+        toast.error("El nombre de la empresa debe tener al menos 2 caracteres.")
+        return
+      }
+      setCreatingOrg(true)
+      try {
+        const result = await selfCreateOrganization({
+          organizationName: trimmedOrg,
+          companyName: trimmedCompany,
+          businessVertical: newOrgVertical,
+        })
+        toast.success("Organización creada exitosamente. Redirigiendo...")
+        setCreateOrgDialogOpen(false)
+        setNewOrgName("")
+        setNewOrgCompanyName("")
+        setNewOrgVertical("GENERAL")
+        setManualTenantSelection({
+          orgId: result.organizationId,
+          companyId: result.companyId,
+        })
+        setTimeout(() => {
+          window.location.assign("/dashboard")
+        }, 600)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Error al crear la organización"
+        toast.error(msg)
+      } finally {
+        setCreatingOrg(false)
+      }
+    },
+    [newOrgName, newOrgCompanyName, newOrgVertical],
+  )
+
   const resolvedNonSuperOrgId = tenantSummary?.organization?.id ?? activeOrgId
   const employeeCompanies = tenantSummary?.companies ?? []
 
@@ -576,17 +625,119 @@ export function TeamSwitcher(): React.ReactElement | null {
 
     if (!tenantSummary?.organization) {
       return (
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <div className="flex w-full items-center gap-2">
-              <SidebarMenuButton size="lg" className="flex-1 justify-between">
-                <span className="text-sm font-medium">
-                  No se pudo cargar la organizacion activa
-                </span>
-              </SidebarMenuButton>
+        <>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <div className="flex w-full flex-col gap-2 px-2 py-3">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Building2 className="h-5 w-5 flex-shrink-0 text-amber-500" />
+                  <span className="text-sm font-medium">Sin organización activa</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  No perteneces a ninguna organización. Crea tu propia organización para comenzar.
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full cursor-pointer gap-2 mt-1"
+                  onClick={() => setCreateOrgDialogOpen(true)}
+                >
+                  <Rocket className="h-4 w-4" />
+                  Crear mi organización
+                </Button>
               </div>
-          </SidebarMenuItem>
-        </SidebarMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+
+          <Dialog open={createOrgDialogOpen} onOpenChange={setCreateOrgDialogOpen}>
+            <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Rocket className="h-5 w-5 text-primary flex-shrink-0" />
+                  Crear mi organización
+                </DialogTitle>
+                <DialogDescription>
+                  Crea tu propia organización y empresa. Serás el dueño y podrás
+                  administrarla completamente.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateOwnOrg} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-org-name-orphan">
+                    Nombre de la organización <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="new-org-name-orphan"
+                    value={newOrgName}
+                    onChange={(e) => setNewOrgName(e.target.value)}
+                    placeholder="Mi Organización"
+                    required
+                    minLength={3}
+                    maxLength={100}
+                    className="cursor-text"
+                    disabled={creatingOrg}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-org-company-orphan">
+                    Nombre de la empresa <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="new-org-company-orphan"
+                    value={newOrgCompanyName}
+                    onChange={(e) => setNewOrgCompanyName(e.target.value)}
+                    placeholder="Mi Empresa S.A.C."
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    className="cursor-text"
+                    disabled={creatingOrg}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-org-vertical-orphan">Tipo de negocio</Label>
+                  <select
+                    id="new-org-vertical-orphan"
+                    value={newOrgVertical}
+                    onChange={(e) => setNewOrgVertical(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    disabled={creatingOrg}
+                  >
+                    <option value="GENERAL">General</option>
+                    <option value="RETAIL">Retail</option>
+                    <option value="RESTAURANTS">Restaurante</option>
+                    <option value="SERVICES">Servicios</option>
+                    <option value="MANUFACTURING">Manufactura</option>
+                    <option value="COMPUTERS">Computación</option>
+                    <option value="LAW_FIRM">Estudio de Abogados</option>
+                    <option value="GYM">Gimnasio</option>
+                  </select>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCreateOrgDialogOpen(false)}
+                    disabled={creatingOrg}
+                    className="cursor-pointer"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={creatingOrg} className="cursor-pointer gap-2">
+                    {creatingOrg ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      "Crear organización"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </>
       )
     }
 
@@ -642,6 +793,7 @@ export function TeamSwitcher(): React.ReactElement | null {
                     : "bg-transparent"
 
     return (
+      <>
       <SidebarMenu>
         <SidebarMenuItem>
           <div className="flex items-center gap-2">
@@ -779,11 +931,114 @@ export function TeamSwitcher(): React.ReactElement | null {
                     Sin empresas disponibles
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2 p-2"
+                  onClick={() => setCreateOrgDialogOpen(true)}
+                >
+                  <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                    <Rocket className="size-3.5" />
+                  </div>
+                  <div className="text-muted-foreground font-medium">
+                    Crear mi organización
+                  </div>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </SidebarMenuItem>
       </SidebarMenu>
+
+      <Dialog open={createOrgDialogOpen} onOpenChange={setCreateOrgDialogOpen}>
+        <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Rocket className="h-5 w-5 text-primary flex-shrink-0" />
+              Crear mi organización
+            </DialogTitle>
+            <DialogDescription>
+              Crea tu propia organización y empresa. Serás el dueño y podrás
+              administrarla completamente.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateOwnOrg} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-org-name">
+                Nombre de la organización <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="new-org-name"
+                value={newOrgName}
+                onChange={(e) => setNewOrgName(e.target.value)}
+                placeholder="Mi Organización"
+                required
+                minLength={3}
+                maxLength={100}
+                className="cursor-text"
+                disabled={creatingOrg}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-org-company">
+                Nombre de la empresa <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="new-org-company"
+                value={newOrgCompanyName}
+                onChange={(e) => setNewOrgCompanyName(e.target.value)}
+                placeholder="Mi Empresa S.A.C."
+                required
+                minLength={2}
+                maxLength={100}
+                className="cursor-text"
+                disabled={creatingOrg}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-org-vertical">Tipo de negocio</Label>
+              <select
+                id="new-org-vertical"
+                value={newOrgVertical}
+                onChange={(e) => setNewOrgVertical(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                disabled={creatingOrg}
+              >
+                <option value="GENERAL">General</option>
+                <option value="RETAIL">Retail</option>
+                <option value="RESTAURANTS">Restaurante</option>
+                <option value="SERVICES">Servicios</option>
+                <option value="MANUFACTURING">Manufactura</option>
+                <option value="COMPUTERS">Computación</option>
+                <option value="LAW_FIRM">Estudio de Abogados</option>
+                <option value="GYM">Gimnasio</option>
+              </select>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOrgDialogOpen(false)}
+                disabled={creatingOrg}
+                className="cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={creatingOrg} className="cursor-pointer gap-2">
+                {creatingOrg ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creando...
+                  </>
+                ) : (
+                  "Crear organización"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
     )
   }
 

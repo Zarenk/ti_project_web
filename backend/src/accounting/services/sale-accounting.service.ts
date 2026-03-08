@@ -39,7 +39,7 @@ export class SaleAccountingService {
       0,
     );
 
-    const invoice = sale.invoices?.[0];
+    const invoice = sale.invoices ?? null;
     const invoiceCode = invoice
       ? `${invoice.serie}-${invoice.nroCorrelativo}`
       : '';

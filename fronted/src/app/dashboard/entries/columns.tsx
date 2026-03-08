@@ -21,7 +21,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { useTenantSelection } from '@/context/tenant-selection-context';
 import { toast } from 'sonner';
-import { deleteEntry, getPdfGuiaUrl, getPdfUrl } from './entries.api';
+import { Badge } from '@/components/ui/badge';
+import { deleteEntry, postDraftEntry, cancelEntry, getPdfGuiaUrl, getPdfUrl } from './entries.api';
 import { DeleteActionsGuard } from '@/components/delete-actions-guard';
 import { InvoiceSampleStatus } from './components/invoice-sample-status';
 
@@ -32,6 +33,7 @@ export type Entryes = {
     tipoMoneda: string
     date: Date
     description?: string
+    status?: string
     provider: {
         id: string
         name: string
@@ -83,6 +85,24 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
       ),
       enableSorting: false,
       enableHiding: false,
+    },
+    {
+      accessorKey: 'status',
+      header: 'Estado',
+      cell: ({ row }) => {
+        const status = row.original.status || 'POSTED';
+        if (status === 'DRAFT') {
+          return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Borrador</Badge>;
+        }
+        if (status === 'CANCELED') {
+          return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Anulado</Badge>;
+        }
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Registrado</Badge>;
+      },
+      filterFn: (row, columnId, filterValue) => {
+        const status = (row.original as any).status || 'POSTED';
+        return filterValue.includes(status);
+      },
     },
     {
         accessorKey: 'createdAt',
@@ -209,36 +229,74 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
       cell: ({ row }) => {
 
         const entries = row.original
+        const status = entries.status || 'POSTED';
 
         const router = useRouter();
         const queryClient = useQueryClient();
         const { selection } = useTenantSelection();
+
+        const invalidateAll = () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.inventory.root(selection.orgId, selection.companyId) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.products.root(selection.orgId, selection.companyId) });
+        };
+
         const handleRemoveEntry = async (id: number) => {
           try {
             await deleteEntry(id);
             toast.success("Registro eliminado correctamente.");
-            queryClient.invalidateQueries({ queryKey: queryKeys.entries.root(selection.orgId, selection.companyId) });
+            invalidateAll();
           } catch (error: any) {
             toast.error(error.message || "No se pudo eliminar el registro.");
           }
         };
 
-        // PARA EL MENSAJE DE ALERTA
+        const handlePostDraft = async (id: number) => {
+          try {
+            await postDraftEntry(id);
+            toast.success("Entrada confirmada y registrada correctamente.");
+            invalidateAll();
+          } catch (error: any) {
+            toast.error(error.message || "No se pudo confirmar la entrada.");
+          }
+        };
+
+        const handleCancelEntry = async (id: number) => {
+          try {
+            await cancelEntry(id);
+            toast.success("Entrada anulada correctamente.");
+            invalidateAll();
+          } catch (error: any) {
+            toast.error(error.message || "No se pudo anular la entrada.");
+          }
+        };
+
         const [isDialogOpen, setIsDialogOpen] = useState(false)
+        const [dialogAction, setDialogAction] = useState<'delete' | 'post' | 'cancel'>('delete');
 
-        const handleDeleteClick = () => {
-          setIsDialogOpen(true) // Abre el diálogo
-        }
-
-        const handleDialogClose = () => {
-          setIsDialogOpen(false) // Cierra el diálogo
-        }
+        const dialogConfig = {
+          delete: {
+            title: '¿Eliminar esta entrada?',
+            description: 'Esta acción no se puede deshacer. Se eliminará permanentemente la entrada.',
+            action: () => handleRemoveEntry(Number(entries.id)),
+          },
+          post: {
+            title: '¿Confirmar y registrar esta entrada?',
+            description: 'Esto aplicará el stock al inventario y creará los registros contables. Una vez confirmada, no se podrá editar.',
+            action: () => handlePostDraft(Number(entries.id)),
+          },
+          cancel: {
+            title: '¿Anular esta entrada?',
+            description: 'Se revertirá el stock del inventario. Las series asociadas quedarán inactivas. Esta acción no se puede deshacer.',
+            action: () => handleCancelEntry(Number(entries.id)),
+          },
+        };
 
         return (
           <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
                 <span className="sr-only">Abrir Menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -246,45 +304,84 @@ export const getColumns = (onView?: (rowData: Entryes) => void): ColumnDef<Entry
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => {
+                <DropdownMenuItem className="cursor-pointer" onClick={() => {
                   if (onView) {
                     onView(entries);
                   }
                 }}>
                 Visualizar
                 </DropdownMenuItem>
-                <DeleteActionsGuard>
-                  <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
-                    Eliminar
-                  </DropdownMenuItem>
-                </DeleteActionsGuard>             
+
+                {/* DRAFT actions: Edit, Confirm, Delete */}
+                {status === 'DRAFT' && (
+                  <>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/dashboard/entries/new?draftId=${entries.id}`)}
+                    >
+                      Editar borrador
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer text-green-700"
+                      onClick={() => {
+                        setDialogAction('post');
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      Confirmar y registrar
+                    </DropdownMenuItem>
+                    <DeleteActionsGuard>
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        onClick={() => {
+                          setDialogAction('delete');
+                          setIsDialogOpen(true);
+                        }}
+                      >
+                        Eliminar borrador
+                      </DropdownMenuItem>
+                    </DeleteActionsGuard>
+                  </>
+                )}
+
+                {/* POSTED actions: Cancel */}
+                {status === 'POSTED' && (
+                  <DeleteActionsGuard>
+                    <DropdownMenuItem
+                      className="cursor-pointer text-red-600"
+                      onClick={() => {
+                        setDialogAction('cancel');
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      Anular entrada
+                    </DropdownMenuItem>
+                  </DeleteActionsGuard>
+                )}
+
+                {/* CANCELED: view only, no extra actions */}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* AlertDialog fuera del DropdownMenu */}
           <AlertDialog open={isDialogOpen} onOpenChange={(open) => {
-            // Solo actualiza el estado si el usuario cierra el diálogo manualmente
-            if (!open) {
-              setIsDialogOpen(false);
-            }
+            if (!open) setIsDialogOpen(false);
           }}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogTitle>{dialogConfig[dialogAction].title}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta acción no se puede deshacer. Esto eliminará permanentemente el producto.
+                  {dialogConfig[dialogAction].description}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => {
-                  // Cierra el diálogo al hacer clic en "Cancelar"
-                  setIsDialogOpen(false);
-                }}>Cancelar
+                <AlertDialogCancel className="cursor-pointer" onClick={() => setIsDialogOpen(false)}>
+                  Cancelar
                 </AlertDialogCancel>
                 <AlertDialogAction
+                  className="cursor-pointer"
                   onClick={async () => {
-                    await handleRemoveEntry(Number(entries.id))
-                    setIsDialogOpen(false)
+                    await dialogConfig[dialogAction].action();
+                    setIsDialogOpen(false);
                   }}
                 >
                   Continuar

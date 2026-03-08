@@ -7,27 +7,31 @@ import { EntryFormGuideButton } from './entry-form-guide-button'
 
 interface Props {
     params: Promise<{ id?: string }>;
+    searchParams: Promise<{ draftId?: string }>;
 }
 
-export default async function EntriesNewPage({ params }: Props) {
+export default async function EntriesNewPage({ params, searchParams }: Props) {
   const resolvedParams = await params
-  const entry = resolvedParams.id ? await getEntryById(resolvedParams.id) : null
+  const resolvedSearchParams = await searchParams
+  const editId = resolvedParams.id || resolvedSearchParams.draftId
+  const entry = editId ? await getEntryById(editId) : null
+  const isDraftEdit = !!resolvedSearchParams.draftId && entry?.status === 'DRAFT'
   const categories = await getCategories()
 
   return (
     <div className="min-h-screen w-full px-4 py-6 sm:px-6 lg:px-10">
-      {resolvedParams.id ? (
+      {editId ? (
         <Card className="mx-auto w-full max-w-6xl shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-center gap-2 pt-5">
               <CardTitle className="text-center text-xl font-bold">
-                Editar Registro Existente
+                {isDraftEdit ? 'Editar Borrador' : 'Editar Registro Existente'}
               </CardTitle>
               <EntryFormGuideButton />
             </div>
           </CardHeader>
           <CardContent className="px-0 sm:px-6">
-            <EntriesForm entries={entry} categories={categories} />
+            <EntriesForm entries={entry} categories={categories} isDraftEdit={isDraftEdit} />
           </CardContent>
         </Card>
       ) : (

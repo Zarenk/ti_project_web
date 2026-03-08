@@ -6,10 +6,11 @@ import { ActivityModule } from 'src/activity/activity.module';
 import { AccountingHook } from 'src/accounting/hooks/accounting-hook.service';
 import { InventoryModule } from 'src/inventory/inventory.module';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
+import { WebSalesCleanupCronService } from './websales-cleanup.cron';
 
 @Module({
   imports: [ActivityModule, InventoryModule, TenancyModule],
   controllers: [WebSalesController],
-  providers: [WebSalesService, PrismaService, AccountingHook],
+  providers: [WebSalesService, PrismaService, AccountingHook, WebSalesCleanupCronService],
 })
 export class WebsalesModule {}

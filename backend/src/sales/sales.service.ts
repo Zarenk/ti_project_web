@@ -304,12 +304,19 @@ export class SalesService {
         companyId: companyId ?? null,
       });
 
-      await this.triggerSunatIfNeeded({
+      // Fire-and-forget: don't block the response waiting for SUNAT (45-60s)
+      this.triggerSunatIfNeeded({
         saleId: sale.id,
         invoice,
         companyId,
         storeName: store.name,
         tipoComprobante,
+      }).catch((err) => {
+        this.logger.error(
+          `SUNAT fire-and-forget failed for sale ${sale.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
       });
 
       return { ...sale, invoice: invoice ?? null };
@@ -2185,6 +2192,7 @@ export class SalesService {
           user: { select: { username: true } },
           store: { select: { name: true } },
           client: { select: { name: true } },
+          company: { select: { sunatRuc: true } },
           salesDetails: {
             include: {
               entryDetail: {
@@ -2209,6 +2217,7 @@ export class SalesService {
           source: sale.source,
           total: sale.total,
           createdAt: sale.createdAt,
+          companyRuc: sale.company?.sunatRuc ?? null,
           products: sale.salesDetails.map((detail) => ({
             name: detail.entryDetail.product.name,
             quantity: detail.quantity,
@@ -2352,6 +2361,7 @@ export class SalesService {
         orderBy: { createdAt: 'desc' },
         include: {
           client: true,
+          company: { select: { sunatRuc: true } },
           invoices: true,
           payments: { include: { paymentMethod: true } },
           salesDetails: {
@@ -2376,7 +2386,7 @@ export class SalesService {
         const sunatStatus = this.extractSunatStatus(
           sale.sunatTransmissions?.[0] ?? null,
         );
-        const { sunatTransmissions, ...rest } = sale as any;
+        const { sunatTransmissions, company, ...rest } = sale as any;
 
         return {
           ...rest,
@@ -2384,6 +2394,7 @@ export class SalesService {
           serie: invoice?.serie ?? null,
           correlativo: invoice?.nroCorrelativo ?? null,
           tipoComprobante: invoice?.tipoComprobante ?? null,
+          companyRuc: company?.sunatRuc ?? null,
           customerName: sale.client?.name ?? null,
           total: sale.total,
           sunatStatus,

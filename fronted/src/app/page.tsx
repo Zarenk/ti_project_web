@@ -21,7 +21,9 @@ import {
   Loader2,
   type LucideIcon,
 } from "lucide-react"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
+import { useActiveTemplate } from "@/templates/use-active-template"
+import { useTemplateComponents } from "@/templates/use-store-template"
 import { toast } from "sonner"
 import ProductForm from "@/app/dashboard/products/new/product-form"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -282,6 +284,8 @@ const HOME_TESTIMONIALS = [
 ]
 
 export default function Homepage() {
+  const templateId = useActiveTemplate()
+  const T = useTemplateComponents(templateId)
   const sectionsRef = useRef<HTMLDivElement>(null)
   const authStateRef = useRef<boolean | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -545,9 +549,49 @@ export default function Homepage() {
         ]
 
 
+  if (templateId !== "classic") {
+    const benefitsForTemplate = HOME_BENEFITS.map((b) => ({
+      icon: <b.icon className="h-6 w-6" />,
+      title: b.title,
+      description: b.description,
+    }))
+    return (
+      <div className="min-h-screen">
+        <TemplateNavbar />
+        <T.HeroSection heroProducts={heroProducts as any} onEditProduct={handleEditProduct} />
+        {recentProducts.length > 0 && (
+          <T.RecentProducts
+            products={recentProducts as any}
+            visibleProducts={visibleRecent as any}
+            currentIndex={recentIndex}
+            direction={recentDirection}
+            onNext={nextRecent}
+            onPrev={prevRecent}
+            totalLength={recentProducts.length}
+          />
+        )}
+        <T.FeaturedProducts products={featuredProducts as any} onEditProduct={handleEditProduct} />
+        {categories.length > 0 && (
+          <T.CategoriesSection
+            categories={categories}
+            visibleCategories={visibleCategories}
+            currentIndex={categoryIndex}
+            direction={direction}
+            onNext={nextCategories}
+            onPrev={prevCategories}
+            totalLength={categories.length}
+          />
+        )}
+        <T.BenefitsSection benefits={benefitsForTemplate} />
+        <T.TestimonialsSection testimonials={HOME_TESTIMONIALS} />
+        <T.NewsletterSection />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white dark:from-gray-950 dark:to-black">
-      <Navbar />
+      <TemplateNavbar />
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>

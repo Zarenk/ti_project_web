@@ -55,6 +55,7 @@ import { VerticalOverridesPanel } from "../vertical-overrides-panel"
 import { VerticalMigrationMetrics } from "../vertical-migration-metrics"
 import { VerticalHistoryPanel } from "../vertical-history-panel"
 import { VerticalNotificationsBanner } from "../vertical-notifications-banner"
+import { OrgMembersCard } from "./org-members-card"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 import type { SubscriptionSummary } from "@/types/subscription"
 import { useTenantSelection } from "@/context/tenant-selection-context"
@@ -781,6 +782,11 @@ export default function OrganizationDetailPage({
                 )}
               </CardContent>
             </Card>
+
+            <OrgMembersCard
+              organizationId={organizationId}
+              organizationName={organization.name}
+            />
 
             {organization.companies && organization.companies.length > 0 && (
               <>

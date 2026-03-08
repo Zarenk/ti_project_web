@@ -1,10 +1,10 @@
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
 import { PageLoading } from "@/components/page-loading"
 
 export default function Loading() {
   return (
     <>
-      <Navbar />
+      <TemplateNavbar />
       <PageLoading />
     </>
   )

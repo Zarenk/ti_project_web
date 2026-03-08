@@ -3,29 +3,13 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import LoginForm from './login-form';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { isTokenValid, getUserDataFromToken } from '@/lib/auth';
 
 export default function LoginPage() {
-
-  const router = useRouter();
-
-  useEffect(() => {
-    async function check() {
-      if (await isTokenValid()) {
-        const data = await getUserDataFromToken();
-        if (data) {
-          if (data.role && ['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG', 'ADMIN', 'EMPLOYEE'].includes(data.role)) {
-            router.replace('/dashboard');
-          } else {
-            router.replace('/users');
-          }
-        }
-      }
-    }
-    check();
-  }, [router]);
+  // No token check here — LoginForm handles post-login redirect.
+  // A previous useEffect calling isTokenValid() caused reload loops:
+  // middleware clears httpOnly cookie but localStorage token survives,
+  // isTokenValid() succeeds via Authorization header → redirects to
+  // /dashboard → middleware bounces back → infinite loop on mobile.
 
   return (
     <div className="flex min-h-screen items-center justify-center p-3">

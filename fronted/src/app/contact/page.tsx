@@ -9,10 +9,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
+import { useActiveTemplate } from "@/templates/use-active-template"
+import { useTemplateComponents } from "@/templates/use-store-template"
 import { sendContactMessage } from "./contact.api"
 
 export default function ContactPage() {
+  const templateId = useActiveTemplate()
+  const { ContactLayout } = useTemplateComponents(templateId)
+
+  if (templateId !== "classic") {
+    return (
+      <>
+        <TemplateNavbar />
+        <ContactLayout />
+      </>
+    )
+  }
   const [formData, setFormData] = useState({
     nombre: "",
     email: "",
@@ -44,7 +57,7 @@ export default function ContactPage() {
   return (
     
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
-    <Navbar />
+    <TemplateNavbar />
       {/* Header Section */}
       <div
         className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-700 dark:to-cyan-700 py-16 px-4"

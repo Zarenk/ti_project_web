@@ -122,12 +122,27 @@ export function SalesTable({ dateRange }: Props) {
                 <TableCell className="hidden sm:table-cell truncate">{sale.store}</TableCell>
                 <TableCell className="hidden sm:table-cell truncate">{sale.client}</TableCell>
                 <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                  {sale.invoice ? (
-                    <>
-                      <span className="font-medium block truncate">{sale.invoice.tipoComprobante}</span>
-                      <span className="block">{sale.invoice.serie}-{sale.invoice.nroCorrelativo}</span>
-                    </>
-                  ) : (
+                  {sale.invoice ? (() => {
+                    const tipo = String(sale.invoice.tipoComprobante).toLowerCase()
+                    const code = tipo === "boleta" ? "03" : "01"
+                    const ruc = sale.companyRuc ?? "00000000000"
+                    const fileName = `${ruc}-${code}-${sale.invoice.serie}-${sale.invoice.nroCorrelativo}.pdf`
+                    const pdfUrl = `/api/sunat/pdf/${tipo}/${fileName}`
+                    return (
+                      <div className="flex flex-col">
+                        <span className="font-medium">{sale.invoice.tipoComprobante}</span>
+                        <a
+                          href={pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline hover:text-blue-800 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {sale.invoice.serie}-{sale.invoice.nroCorrelativo}
+                        </a>
+                      </div>
+                    )
+                  })() : (
                     <span className="italic">Sin comprobante</span>
                   )}
                 </TableCell>
