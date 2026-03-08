@@ -17,7 +17,7 @@ describe('CashregisterService (multi-organization)', () => {
       store: {
         findUnique: jest.fn(),
       },
-      cashRegister: {
+      cash_registers: {
         findFirst: jest.fn(),
         create: jest.fn(),
         findUnique: jest.fn(),
@@ -25,7 +25,7 @@ describe('CashregisterService (multi-organization)', () => {
         delete: jest.fn(),
         findMany: jest.fn(),
       },
-      cashTransaction: {
+      cash_transactions: {
         create: jest.fn(),
         findMany: jest.fn(),
       },
@@ -39,7 +39,7 @@ describe('CashregisterService (multi-organization)', () => {
       user: {
         findUnique: jest.fn(),
       },
-      cashClosure: {
+      cash_closures: {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -58,14 +58,14 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('findOne', () => {
     it('applies organization filter when provided', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({
         id: 4,
         organizationId: 22,
       });
 
       const result = await service.findOne(4, { organizationId: 22 });
 
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: { id: 4, organizationId: 22 },
         include: {
           store: true,
@@ -77,7 +77,7 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('throws when cash register not found for tenant', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(service.findOne(9, { organizationId: 1 })).rejects.toThrow(
         /No se encontro la caja con ID 9/,
@@ -91,8 +91,8 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: 42,
         companyId: null,
       });
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.cashRegister.create as jest.Mock).mockResolvedValue({ id: 1 });
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cash_registers.create as jest.Mock).mockResolvedValue({ id: 1 });
 
       await service.create({
         name: 'Caja Principal',
@@ -106,7 +106,7 @@ describe('CashregisterService (multi-organization)', () => {
         where: { id: 5 },
         select: { id: true, organizationId: true, companyId: true },
       });
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: {
           storeId: 5,
           status: 'ACTIVE',
@@ -114,7 +114,7 @@ describe('CashregisterService (multi-organization)', () => {
           store: { companyId: null },
         },
       });
-      expect(prisma.cashRegister.create).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           storeId: 5,
           organizationId: 42,
@@ -135,8 +135,8 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: 9,
         companyId: 31,
       });
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.cashRegister.create as jest.Mock).mockResolvedValue({ id: 10 });
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cash_registers.create as jest.Mock).mockResolvedValue({ id: 10 });
 
       await service.create({
         name: 'Caja Secundaria',
@@ -148,7 +148,7 @@ describe('CashregisterService (multi-organization)', () => {
         where: { id: 8 },
         select: { id: true, organizationId: true, companyId: true },
       });
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: {
           storeId: 8,
           status: 'ACTIVE',
@@ -156,7 +156,7 @@ describe('CashregisterService (multi-organization)', () => {
           store: { companyId: 31 },
         },
       });
-      expect(prisma.cashRegister.create).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ organizationId: 9 }),
       });
       expect(logOrganizationContextMock).toHaveBeenCalledWith(
@@ -187,11 +187,11 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('findAll', () => {
     it('applies organization filter when provided', async () => {
-      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_registers.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAll({ organizationId: 21 });
 
-      expect(prisma.cashRegister.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findMany).toHaveBeenCalledWith({
         where: { organizationId: 21 },
         include: {
           store: true,
@@ -202,11 +202,11 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('omits organization filter when undefined', async () => {
-      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_registers.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAll();
 
-      expect(prisma.cashRegister.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findMany).toHaveBeenCalledWith({
         where: {},
         include: {
           store: true,
@@ -217,11 +217,11 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('supports querying legacy records with null organizationId', async () => {
-      (prisma.cashRegister.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_registers.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAll({ organizationId: null });
 
-      expect(prisma.cashRegister.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findMany).toHaveBeenCalledWith({
         where: { organizationId: null },
         include: {
           store: true,
@@ -234,21 +234,21 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('getCashRegisterBalance', () => {
     it('propagates organization filter when provided', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({
         currentBalance: 150,
         organizationId: 9,
       });
 
       await service.getCashRegisterBalance(4, { organizationId: 9 });
 
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: { storeId: 4, status: 'ACTIVE', organizationId: 9 },
         select: { currentBalance: true, organizationId: true },
       });
     });
 
     it('returns null when cash register not found', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getCashRegisterBalance(2, {
         organizationId: 7,
@@ -260,11 +260,11 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('getActiveCashRegister', () => {
     it('passes organization filter to prisma query', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue(null);
 
       await service.getActiveCashRegister(8, { organizationId: 5 });
 
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: { storeId: 8, status: 'ACTIVE', organizationId: 5 },
         select: {
           id: true,
@@ -277,11 +277,11 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('omits organization filter when undefined', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 1 });
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({ id: 1 });
 
       await service.getActiveCashRegister(3);
 
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: { storeId: 3, status: 'ACTIVE' },
         select: {
           id: true,
@@ -303,18 +303,18 @@ describe('CashregisterService (multi-organization)', () => {
       (
         prisma.cashTransactionPaymentMethod.create as jest.Mock
       ).mockResolvedValue({});
-      (prisma.cashRegister.update as jest.Mock).mockResolvedValue({ id: 15 });
+      (prisma.cash_registers.update as jest.Mock).mockResolvedValue({ id: 15 });
     });
 
     it('uses cash register organization when not provided', async () => {
-      (prisma.cashRegister.findUnique as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findUnique as jest.Mock).mockResolvedValue({
         id: 2,
         status: 'ACTIVE',
         currentBalance: 50,
         organizationId: 77,
         store: { organizationId: 77 },
       });
-      (prisma.cashTransaction.create as jest.Mock).mockResolvedValue({
+      (prisma.cash_transactions.create as jest.Mock).mockResolvedValue({
         id: 30,
       });
 
@@ -328,7 +328,7 @@ describe('CashregisterService (multi-organization)', () => {
       });
 
       expect(result).toEqual({ id: 30 });
-      expect(prisma.cashTransaction.create).toHaveBeenCalledWith({
+      expect(prisma.cash_transactions.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ organizationId: 77 }),
       });
       expect(logOrganizationContextMock).toHaveBeenCalledWith(
@@ -340,7 +340,7 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('validates organization consistency when provided', async () => {
-      (prisma.cashRegister.findUnique as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findUnique as jest.Mock).mockResolvedValue({
         id: 9,
         status: 'ACTIVE',
         currentBalance: 100,
@@ -366,8 +366,8 @@ describe('CashregisterService (multi-organization)', () => {
     const endOfDay = new Date('2024-05-01T23:59:59.999Z');
 
     beforeEach(() => {
-      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
-      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_transactions.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_closures.findMany as jest.Mock).mockResolvedValue([]);
     });
 
     it('applies organization filter on transactions and closures', async () => {
@@ -375,20 +375,20 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: 6,
       });
 
-      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith(
+      expect(prisma.cash_transactions.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             organizationId: 6,
-            cashRegister: { storeId: 10, organizationId: 6 },
+            cash_registers: { storeId: 10, organizationId: 6 },
             createdAt: { gte: startOfDay, lte: endOfDay },
           },
         }),
       );
-      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith(
+      expect(prisma.cash_closures.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             organizationId: 6,
-            cashRegister: { storeId: 10, organizationId: 6 },
+            cash_registers: { storeId: 10, organizationId: 6 },
             createdAt: { gte: startOfDay, lte: endOfDay },
           },
         }),
@@ -398,18 +398,18 @@ describe('CashregisterService (multi-organization)', () => {
     it('omits organization filter when not provided', async () => {
       await service.getTransactionsByStoreAndDate(7, startOfDay, endOfDay);
 
-      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith(
+      expect(prisma.cash_transactions.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            cashRegister: { storeId: 7 },
+            cash_registers: { storeId: 7 },
             createdAt: { gte: startOfDay, lte: endOfDay },
           },
         }),
       );
-      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith(
+      expect(prisma.cash_closures.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            cashRegister: { storeId: 7 },
+            cash_registers: { storeId: 7 },
             createdAt: { gte: startOfDay, lte: endOfDay },
           },
         }),
@@ -418,7 +418,7 @@ describe('CashregisterService (multi-organization)', () => {
 
     it('incluye los nombres completos de los productos en saleItems, incluso con tildes', async () => {
       const createdAt = new Date('2024-05-01T15:00:00.000Z');
-      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([
+      (prisma.cash_transactions.findMany as jest.Mock).mockResolvedValue([
         {
           id: 99,
           cashRegisterId: 12,
@@ -461,7 +461,7 @@ describe('CashregisterService (multi-organization)', () => {
           ],
         },
       ]);
-      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_closures.findMany as jest.Mock).mockResolvedValue([]);
 
       const records = await service.getTransactionsByStoreAndDate(
         3,
@@ -492,14 +492,14 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('findAllTransaction', () => {
     it('filters by organization when provided', async () => {
-      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_transactions.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAllTransaction({ organizationId: 3 });
 
-      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_transactions.findMany).toHaveBeenCalledWith({
         where: { organizationId: 3 },
         include: {
-          cashRegister: true,
+          cash_registers: true,
           paymentMethods: true,
           user: true,
         },
@@ -508,14 +508,14 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('omits organization filter for global queries', async () => {
-      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_transactions.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAllTransaction();
 
-      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_transactions.findMany).toHaveBeenCalledWith({
         where: {},
         include: {
-          cashRegister: true,
+          cash_registers: true,
           paymentMethods: true,
           user: true,
         },
@@ -526,11 +526,11 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('findByCashRegister', () => {
     it('combines cash register id with organization filter', async () => {
-      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_transactions.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findByCashRegister(11, { organizationId: null });
 
-      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_transactions.findMany).toHaveBeenCalledWith({
         where: { cashRegisterId: 11, organizationId: null },
         include: {
           paymentMethods: true,
@@ -541,11 +541,11 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('omits organization filter when undefined', async () => {
-      (prisma.cashTransaction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_transactions.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findByCashRegister(12);
 
-      expect(prisma.cashTransaction.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_transactions.findMany).toHaveBeenCalledWith({
         where: { cashRegisterId: 12 },
         include: {
           paymentMethods: true,
@@ -561,12 +561,12 @@ describe('CashregisterService (multi-organization)', () => {
       (prisma.$transaction as jest.Mock).mockImplementation((callback: any) =>
         callback(prisma),
       );
-      (prisma.cashRegister.update as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.update as jest.Mock).mockResolvedValue({
         id: 1,
         initialBalance: 100,
         currentBalance: 80,
       });
-      (prisma.cashClosure.create as jest.Mock).mockResolvedValue({
+      (prisma.cash_closures.create as jest.Mock).mockResolvedValue({
         id: 3,
         openingBalance: 100,
         closingBalance: 80,
@@ -575,17 +575,17 @@ describe('CashregisterService (multi-organization)', () => {
         nextOpeningBalance: 80,
         organizationId: 15,
       });
-      (prisma.cashRegister.create as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.create as jest.Mock).mockResolvedValue({
         id: 4,
         initialBalance: 80,
         currentBalance: 80,
         organizationId: 15,
       });
-      (prisma.cashRegister.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      (prisma.cash_registers.findUnique as jest.Mock).mockResolvedValueOnce(null);
     });
 
     it('propagates organization from cash register when closing', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({
         id: 1,
         status: 'ACTIVE',
         storeId: 5,
@@ -606,10 +606,10 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: null,
       });
 
-      expect(prisma.cashClosure.create).toHaveBeenCalledWith({
+      expect(prisma.cash_closures.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ organizationId: 15 }),
       });
-      expect(prisma.cashRegister.create).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ organizationId: 15 }),
       });
       expect(logOrganizationContextMock).toHaveBeenCalledWith(
@@ -622,7 +622,7 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('validates organization mismatches', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({
         id: 1,
         status: 'ACTIVE',
         storeId: 5,
@@ -649,18 +649,18 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('getClosuresByStore', () => {
     it('applies organization filter to closures and related register', async () => {
-      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_closures.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.getClosuresByStore(4, { organizationId: 13 });
 
-      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_closures.findMany).toHaveBeenCalledWith({
         where: {
           organizationId: 13,
-          cashRegister: { storeId: 4, organizationId: 13 },
+          cash_registers: { storeId: 4, organizationId: 13 },
         },
         include: {
           user: true,
-          cashRegister: true,
+          cash_registers: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -669,7 +669,7 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('getClosureByStoreAndDate', () => {
     it('propagates organization filter when provided', async () => {
-      (prisma.cashClosure.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cash_closures.findFirst as jest.Mock).mockResolvedValue(null);
       const baseDate = new Date('2024-04-30T12:34:56.000Z');
       const expectedStart = new Date(baseDate);
       expectedStart.setHours(0, 0, 0, 0);
@@ -680,10 +680,10 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: 2,
       });
 
-      expect(prisma.cashClosure.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_closures.findFirst).toHaveBeenCalledWith({
         where: {
           organizationId: 2,
-          cashRegister: { storeId: 9, organizationId: 2 },
+          cash_registers: { storeId: 9, organizationId: 2 },
           createdAt: { gte: expectedStart, lte: expectedEnd },
         },
         orderBy: { createdAt: 'desc' },
@@ -693,14 +693,14 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('findAllClosure', () => {
     it('filters by organization when provided', async () => {
-      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_closures.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAllClosure({ organizationId: 5 });
 
-      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_closures.findMany).toHaveBeenCalledWith({
         where: { organizationId: 5 },
         include: {
-          cashRegister: true,
+          cash_registers: true,
           user: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -708,14 +708,14 @@ describe('CashregisterService (multi-organization)', () => {
     });
 
     it('omits organization filter when undefined', async () => {
-      (prisma.cashClosure.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.cash_closures.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findAllClosure();
 
-      expect(prisma.cashClosure.findMany).toHaveBeenCalledWith({
+      expect(prisma.cash_closures.findMany).toHaveBeenCalledWith({
         where: {},
         include: {
-          cashRegister: true,
+          cash_registers: true,
           user: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -725,13 +725,13 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('update', () => {
     beforeEach(() => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({
         id: 3,
         name: 'Principal',
         organizationId: 12,
         store: { organizationId: 12 },
       });
-      (prisma.cashRegister.update as jest.Mock).mockResolvedValue({ id: 3 });
+      (prisma.cash_registers.update as jest.Mock).mockResolvedValue({ id: 3 });
     });
 
     it('resolves organizationId using existing record', async () => {
@@ -740,7 +740,7 @@ describe('CashregisterService (multi-organization)', () => {
         organizationId: undefined,
       });
 
-      expect(prisma.cashRegister.update).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.update).toHaveBeenCalledWith({
         where: { id: 3 },
         data: expect.objectContaining({ organizationId: 12, name: 'Caja' }),
       });
@@ -759,15 +759,15 @@ describe('CashregisterService (multi-organization)', () => {
 
   describe('remove', () => {
     it('validates organization before deleting', async () => {
-      (prisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({
+      (prisma.cash_registers.findFirst as jest.Mock).mockResolvedValue({
         id: 7,
         organizationId: 5,
       });
-      (prisma.cashRegister.delete as jest.Mock).mockResolvedValue({ id: 7 });
+      (prisma.cash_registers.delete as jest.Mock).mockResolvedValue({ id: 7 });
 
       const result = await service.remove(7, { organizationId: 5 });
 
-      expect(prisma.cashRegister.findFirst).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.findFirst).toHaveBeenCalledWith({
         where: { id: 7, organizationId: 5 },
         include: {
           store: true,
@@ -775,7 +775,7 @@ describe('CashregisterService (multi-organization)', () => {
           closures: true,
         },
       });
-      expect(prisma.cashRegister.delete).toHaveBeenCalledWith({
+      expect(prisma.cash_registers.delete).toHaveBeenCalledWith({
         where: { id: 7 },
       });
       expect(logOrganizationContextMock).toHaveBeenCalledWith(

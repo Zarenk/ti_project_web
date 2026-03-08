@@ -202,7 +202,7 @@ export class ProductsService {
           companyId: ctx.companyId ?? null,
           categoryId: categoryId ?? undefined,
           brandId: brandEntity ? brandEntity.id : (brandId ?? undefined),
-          brandName: brandEntity ? brandEntity.name : undefined,
+          brandLabel: brandEntity ? brandEntity.name : undefined,
           images: images ?? [],
           specification: specification ? { create: specification } : undefined,
           features: normalizedFeatures?.length
@@ -523,7 +523,7 @@ export class ProductsService {
               ? { status: normalizedStatus }
               : {}),
             brandId: brandEntity ? brandEntity.id : (brandId ?? undefined),
-            brandName: brandEntity ? brandEntity.name : undefined,
+            brandLabel: brandEntity ? brandEntity.name : undefined,
             images: images ?? undefined,
             specification: specification
               ? { upsert: { create: specification, update: specification } }
@@ -590,7 +590,7 @@ export class ProductsService {
       priceSell: any;
       images: string[];
       categoryId: number | null;
-      brandName: string | null;
+      brandLabel: string | null;
       brand: { id: number; name: string } | null;
       category: { id: number; name: string } | null;
       stock: { storeId: number; storeName: string; stock: number }[];
@@ -636,7 +636,7 @@ export class ProductsService {
           priceSell: existing.priceSell,
           images: existing.images,
           categoryId: existing.categoryId,
-          brandName: existing.brandName,
+          brandLabel: existing.brandLabel,
           brand: existing.brand,
           category: existing.category,
           stock: existing.inventory?.flatMap((inv) =>

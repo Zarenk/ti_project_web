@@ -57,7 +57,7 @@ export class AccountingAnalyticsService {
     const endToday = endOfDay(today);
 
     // Get cash available (from cash register)
-    const cashRegisters = await this.prisma.cashRegister.findMany({
+    const cashRegisters = await this.prisma.cash_registers.findMany({
       where: {
         organizationId,
         status: 'ACTIVE',

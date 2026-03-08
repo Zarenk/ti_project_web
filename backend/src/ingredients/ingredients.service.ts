@@ -140,7 +140,7 @@ export class IngredientsService {
       take: 100,
       include: {
         order: { select: { id: true, status: true } },
-        createdBy: { select: { id: true, username: true } },
+        user: { select: { id: true, username: true } },
       },
     });
   }

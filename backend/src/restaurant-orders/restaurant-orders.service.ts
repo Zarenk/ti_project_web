@@ -551,11 +551,11 @@ export class RestaurantOrdersService {
     const resolvedCompanyId = companyIdFromContext ?? store.companyId ?? order.companyId;
 
     // Find or create active cash register for the store
-    let cashRegister = await this.prisma.cashRegister.findFirst({
+    let cashRegister = await this.prisma.cash_registers.findFirst({
       where: { storeId: dto.storeId, status: 'ACTIVE' },
     });
     if (!cashRegister) {
-      cashRegister = await this.prisma.cashRegister.create({
+      cashRegister = await this.prisma.cash_registers.create({
         data: {
           storeId: dto.storeId,
           name: `Caja Principal - ${store.name}`,
@@ -640,7 +640,7 @@ export class RestaurantOrdersService {
           }
         }
 
-        const transaction = await tx.cashTransaction.create({
+        const transaction = await tx.cash_transactions.create({
           data: {
             cashRegisterId: cashRegister!.id,
             type: 'INCOME',
@@ -726,7 +726,7 @@ export class RestaurantOrdersService {
       }
 
       // 4. Update cash register balance
-      await tx.cashRegister.update({
+      await tx.cash_registers.update({
         where: { id: cashRegister!.id },
         data: {
           currentBalance: cashRegister!.currentBalance.add(

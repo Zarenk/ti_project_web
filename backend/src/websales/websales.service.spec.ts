@@ -127,6 +127,7 @@ describe('WebSalesService multi-organization support', () => {
       activityService as unknown as ActivityService,
       accountingHook as unknown as AccountingHook,
       inventoryService,
+      {} as any,
     );
   });
 

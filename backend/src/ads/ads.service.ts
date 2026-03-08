@@ -416,7 +416,7 @@ export class AdsService {
       description: product.description ?? undefined,
       price: product.price,
       priceSell: product.priceSell ?? undefined,
-      brand: product.brand?.name ?? product.brandName ?? undefined,
+      brand: product.brand?.name ?? product.brandLabel ?? undefined,
       category: product.category?.name ?? undefined,
       features: product.features?.map((f) => ({
         title: f.title,

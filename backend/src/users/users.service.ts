@@ -534,7 +534,7 @@ export class UsersService {
     };
 
     if (organizationId !== null) {
-      where.memberships = {
+      where.organizationMemberships = {
         some: { organizationId },
       };
     }
@@ -547,7 +547,7 @@ export class UsersService {
         email: true,
         role: true,
         lastActiveAt: true,
-        memberships: {
+        organizationMemberships: {
           select: {
             organization: {
               select: { id: true, name: true },
@@ -565,7 +565,7 @@ export class UsersService {
       email: u.email,
       role: u.role,
       lastActiveAt: u.lastActiveAt,
-      organizations: u.memberships.map((m) => ({
+      organizations: u.organizationMemberships.map((m) => ({
         id: m.organization.id,
         name: m.organization.name,
         membershipRole: m.role,

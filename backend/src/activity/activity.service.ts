@@ -833,7 +833,7 @@ export class ActivityService {
         role: { not: 'SUPER_ADMIN_GLOBAL' },
         OR: [
           { organizationId },
-          { memberships: { some: { organizationId } } },
+          { organizationMemberships: { some: { organizationId } } },
         ],
         ...(searchTerm
           ? {

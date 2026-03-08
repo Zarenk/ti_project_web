@@ -34,7 +34,7 @@ export async function setupPosStations(
       stationCode: 'POS-01',
       stationName: 'Main Counter',
       isActive: true,
-    },
+    } as any,
   });
 
   console.log(
@@ -99,7 +99,7 @@ export async function createRetailCatalogs(
       ...cat,
       companyId,
       status: 'Activo',
-    })),
+    })) as any,
     skipDuplicates: true,
   });
 
@@ -142,7 +142,7 @@ export async function cleanupRetailData(
         isActive: station.isActive,
         lastHeartbeat: station.lastHeartbeat,
         archivedReason: archiveReason,
-      })),
+      })) as any,
       skipDuplicates: true,
     });
 

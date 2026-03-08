@@ -53,7 +53,7 @@ export async function setupGymDefaults(
       ...cat,
       companyId,
       status: 'Activo',
-    })),
+    })) as any,
     skipDuplicates: true,
   });
 
@@ -155,7 +155,7 @@ export async function setupGymClasses(
       companyId,
       organizationId: organizationId ?? null,
       isActive: true,
-    })),
+    })) as any,
     skipDuplicates: true,
   });
 

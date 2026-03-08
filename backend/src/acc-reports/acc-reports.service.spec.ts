@@ -39,7 +39,7 @@ describe('AccReportsService – multi-tenant filtering', () => {
     (queueModule as any).accReportsQueue = queueMock;
 
     const prisma = {
-      cashTransaction: { groupBy: jest.fn() },
+      cash_transactions: { groupBy: jest.fn() },
       trialBalanceCache: { create: jest.fn() },
     };
 
@@ -64,7 +64,7 @@ describe('AccReportsService – multi-tenant filtering', () => {
 
   it('filters cash transactions by organization/company when processing a job', async () => {
     const prisma = {
-      cashTransaction: {
+      cash_transactions: {
         groupBy: jest
           .fn()
           .mockResolvedValue([{ type: 'INCOME', _sum: { amount: 150 } }]),
@@ -87,7 +87,7 @@ describe('AccReportsService – multi-tenant filtering', () => {
 
     await (service as any).processJob(job);
 
-    expect(prisma.cashTransaction.groupBy).toHaveBeenCalledWith({
+    expect(prisma.cash_transactions.groupBy).toHaveBeenCalledWith({
       by: ['type'],
       where: {
         createdAt: {
@@ -95,7 +95,7 @@ describe('AccReportsService – multi-tenant filtering', () => {
           lte: new Date('2024-02-29'),
         },
         organizationId: 11,
-        cashRegister: { store: { companyId: 3 } },
+        cash_registers: { store: { companyId: 3 } },
       },
       _sum: { amount: true },
     });
@@ -122,7 +122,7 @@ describe('AccReportsService – multi-tenant filtering', () => {
     (queueModule as any).accReportsQueue = queueMock;
 
     const prisma = {
-      cashTransaction: { groupBy: jest.fn() },
+      cash_transactions: { groupBy: jest.fn() },
       trialBalanceCache: { create: jest.fn() },
     };
 
@@ -148,7 +148,7 @@ describe('AccReportsService – multi-tenant filtering', () => {
     (queueModule as any).accReportsQueue = queueMock;
 
     const prisma = {
-      cashTransaction: { groupBy: jest.fn() },
+      cash_transactions: { groupBy: jest.fn() },
       trialBalanceCache: { create: jest.fn() },
     };
 

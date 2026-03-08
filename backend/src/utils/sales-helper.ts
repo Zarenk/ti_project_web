@@ -109,7 +109,7 @@ export async function prepareSaleContext(
     throw new NotFoundException(`La tienda con ID ${storeId} no existe.`);
   }
 
-  let cashRegister = await prisma.cashRegister.findFirst({
+  let cashRegister = await prisma.cash_registers.findFirst({
     where: { storeId, status: 'ACTIVE' },
     select: {
       id: true,
@@ -123,7 +123,7 @@ export async function prepareSaleContext(
   });
 
   if (!cashRegister) {
-    cashRegister = await prisma.cashRegister.create({
+    cashRegister = await prisma.cash_registers.create({
       data: {
         storeId,
         name: `Caja Principal - Tienda ${storeId} - ${Date.now()}`,
@@ -139,7 +139,7 @@ export async function prepareSaleContext(
     store.organizationId !== undefined &&
     cashRegister.organizationId !== store.organizationId
   ) {
-    cashRegister = await prisma.cashRegister.update({
+    cashRegister = await prisma.cash_registers.update({
       where: { id: cashRegister.id },
       data: { organizationId: store.organizationId ?? null },
     });
@@ -417,7 +417,7 @@ export async function executeSale(
         }
       }
 
-      const transaction = await prismaTx.cashTransaction.create({
+      const transaction = await prismaTx.cash_transactions.create({
         data: {
           cashRegisterId: cashRegister.id,
           type: 'INCOME',
@@ -481,7 +481,7 @@ export async function executeSale(
       });
     }
 
-    await prisma.cashRegister.update({
+    await prisma.cash_registers.update({
       where: { id: cashRegister.id },
       data: { currentBalance: cashRegister.currentBalance.add(total) },
     });

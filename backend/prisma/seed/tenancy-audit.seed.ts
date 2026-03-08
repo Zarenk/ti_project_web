@@ -43,12 +43,12 @@ const AUDIT_ENTITIES: AuditDefinition[] = [
   { name: 'Orders', model: 'orders', organizationField: 'organizationId' },
   {
     name: 'CashTransaction',
-    model: 'cashTransaction',
+    model: 'cash_transactions',
     organizationField: 'organizationId',
   },
   {
     name: 'CashClosure',
-    model: 'cashClosure',
+    model: 'cash_closures',
     organizationField: 'organizationId',
   },
   {

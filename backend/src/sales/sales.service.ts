@@ -701,7 +701,7 @@ export class SalesService {
               payments: {
                 include: {
                   paymentMethod: { select: { id: true, name: true } },
-                  cashTransaction: {
+                  cash_transactions: {
                     select: {
                       id: true,
                       cashRegisterId: true,
@@ -770,13 +770,13 @@ export class SalesService {
 
           // Reversar movimientos de caja
           for (const payment of sale.payments) {
-            if (payment.cashTransaction) {
+            if (payment.cash_transactions) {
               await prismaTx.cashTransactionPaymentMethod.deleteMany({
-                where: { cashTransactionId: payment.cashTransaction.id },
+                where: { cashTransactionId: payment.cash_transactions.id },
               });
 
-              await prismaTx.cashRegister.update({
-                where: { id: payment.cashTransaction.cashRegisterId },
+              await prismaTx.cash_registers.update({
+                where: { id: payment.cash_transactions.cashRegisterId },
                 data: {
                   currentBalance: {
                     decrement: new Prisma.Decimal(payment.amount),
@@ -784,8 +784,8 @@ export class SalesService {
                 },
               });
 
-              await prismaTx.cashTransaction.delete({
-                where: { id: payment.cashTransaction.id },
+              await prismaTx.cash_transactions.delete({
+                where: { id: payment.cash_transactions.id },
               });
             }
           }
@@ -975,7 +975,7 @@ export class SalesService {
             payments: {
               include: {
                 paymentMethod: { select: { id: true, name: true } },
-                cashTransaction: {
+                cash_transactions: {
                   select: {
                     id: true,
                     cashRegisterId: true,
@@ -1044,13 +1044,13 @@ export class SalesService {
 
         // Reversar movimientos de caja
         for (const payment of sale.payments) {
-          if (payment.cashTransaction) {
+          if (payment.cash_transactions) {
             await prismaTx.cashTransactionPaymentMethod.deleteMany({
-              where: { cashTransactionId: payment.cashTransaction.id },
+              where: { cashTransactionId: payment.cash_transactions.id },
             });
 
-            await prismaTx.cashRegister.update({
-              where: { id: payment.cashTransaction.cashRegisterId },
+            await prismaTx.cash_registers.update({
+              where: { id: payment.cash_transactions.cashRegisterId },
               data: {
                 currentBalance: {
                   decrement: new Prisma.Decimal(payment.amount),
@@ -1058,8 +1058,8 @@ export class SalesService {
               },
             });
 
-            await prismaTx.cashTransaction.delete({
-              where: { id: payment.cashTransaction.id },
+            await prismaTx.cash_transactions.delete({
+              where: { id: payment.cash_transactions.id },
             });
           }
         }

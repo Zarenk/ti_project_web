@@ -72,7 +72,7 @@ describe('SunatService', () => {
       },
     } as unknown as PrismaService;
 
-    service = new SunatService(prisma as PrismaService);
+    service = new SunatService(prisma as PrismaService, {} as any);
     (firmarDocumentoUBL as jest.Mock).mockResolvedValue('<Signed/>');
     (generateInvoiceXML as jest.Mock).mockReturnValue('<Invoice/>');
   });

@@ -43,7 +43,7 @@ export async function createRestaurantTables(
       ...t,
       companyId,
       status: 'AVAILABLE' as const,
-    })),
+    })) as any,
     skipDuplicates: true,
   });
 
@@ -94,7 +94,7 @@ export async function createKitchenStations(
       ...s,
       companyId,
       isActive: true,
-    })),
+    })) as any,
     skipDuplicates: true,
   });
 
@@ -164,7 +164,7 @@ export async function convertToMenuItems(
         companyId,
         organizationId: company.organizationId,
         status: 'Activo',
-      },
+      } as any,
     });
   }
 
@@ -215,7 +215,7 @@ export async function cleanupRestaurantsData(
         status: table.status,
         currentOrderId: table.currentOrderId,
         archivedReason: archiveReason,
-      })),
+      })) as any,
       skipDuplicates: true,
     });
 
@@ -243,7 +243,7 @@ export async function cleanupRestaurantsData(
         code: station.code,
         isActive: station.isActive,
         archivedReason: archiveReason,
-      })),
+      })) as any,
       skipDuplicates: true,
     });
 

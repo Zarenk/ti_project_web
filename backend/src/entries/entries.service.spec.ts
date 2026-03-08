@@ -171,6 +171,8 @@ describe('EntriesService multi-organization support', () => {
       accountingHook as unknown as AccountingHook,
       accountingService as unknown as AccountingService,
       tenantContextService as unknown as TenantContextService,
+      {} as any,
+      {} as any,
     );
 
     logOrganizationContextMock = logOrganizationContext as unknown as jest.Mock;

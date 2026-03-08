@@ -253,7 +253,7 @@ export class InvoiceExtractionService {
       where: { entryId },
       orderBy: { createdAt: 'desc' },
       include: includeLogs
-        ? { logs: { orderBy: { createdAt: 'desc' }, take: 20 } }
+        ? { extractionLogs: { orderBy: { createdAt: 'desc' }, take: 20 } }
         : undefined,
     });
 
@@ -869,7 +869,7 @@ export class InvoiceExtractionService {
 
   private serializeSample(
     sample: InvoiceSample & {
-      logs?: InvoiceExtractionLog[];
+      extractionLogs?: InvoiceExtractionLog[];
     },
   ) {
     return {

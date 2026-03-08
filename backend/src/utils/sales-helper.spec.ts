@@ -52,7 +52,7 @@ describe('executeSale', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
       },
-      cashTransaction: { create: cashTransactionCreate },
+      cash_transactions: { create: cashTransactionCreate },
       cashTransactionPaymentMethod: {
         create: jest.fn().mockResolvedValue(undefined),
       },
@@ -73,7 +73,7 @@ describe('executeSale', () => {
             name: `Producto ${id}`,
           })),
       },
-      cashRegister: {
+      cash_registers: {
         update: jest.fn().mockResolvedValue(undefined),
       },
     };

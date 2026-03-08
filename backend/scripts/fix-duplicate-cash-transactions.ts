@@ -73,7 +73,7 @@ async function handleGroup(
     },
     orderBy: { id: 'asc' },
     include: {
-      cashTransaction: true,
+      cash_transactions: true,
     },
   });
 
@@ -105,7 +105,7 @@ async function handleGroup(
         await tx.cashTransactionPaymentMethod.deleteMany({
           where: { cashTransactionId: duplicate.cashTransactionId },
         });
-        await tx.cashTransaction.delete({
+        await tx.cash_transactions.delete({
           where: { id: duplicate.cashTransactionId },
         });
         removedTransactions += 1;
