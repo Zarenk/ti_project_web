@@ -2,9 +2,10 @@ import type { HelpSection } from "../types"
 
 export const apiIntegrationsSection: HelpSection = {
   id: "api-integrations",
-  title: "API e Integraciones",
+  label: "API e Integraciones",
   description: "Documentación para desarrolladores: API REST, Webhooks, SDKs e integraciones con sistemas externos",
-  icon: "🔌",
+  welcomeMessage: "Estás en Integraciones API. Consulta documentación REST, webhooks y SDKs.",
+  quickActions: ["api-getting-started"],
   entries: [
     {
       id: "api-getting-started",
