@@ -245,8 +245,14 @@ export async function startTraining(steps?: string[]): Promise<TrainingResult> {
     body: JSON.stringify(steps ? { steps } : {}),
   })
   if (!res.ok) {
-    const message = await res.text().catch(() => "No se pudo iniciar el entrenamiento")
-    throw new Error(message || "No se pudo iniciar el entrenamiento")
+    let message = "No se pudo iniciar el entrenamiento"
+    try {
+      const body = await res.json()
+      message = body.message || body.error || message
+    } catch {
+      message = await res.text().catch(() => message)
+    }
+    throw new Error(message)
   }
   return res.json()
 }
