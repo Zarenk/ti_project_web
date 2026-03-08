@@ -2,9 +2,10 @@ import type { HelpSection } from "../types"
 
 export const hardwareSection: HelpSection = {
   id: "hardware",
-  title: "Hardware y Periféricos",
+  label: "Hardware y Periféricos",
   description: "Solución de problemas con impresoras, lectores de código de barras, cajones de dinero y otros dispositivos",
-  icon: "🖨️",
+  welcomeMessage: "Estás en Hardware. Resuelve problemas con impresoras, lectores de barras y otros periféricos.",
+  quickActions: ["printer-not-printing"],
   entries: [
     {
       id: "printer-not-printing",

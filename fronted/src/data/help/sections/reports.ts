@@ -2,9 +2,10 @@ import type { HelpSection } from "../types"
 
 export const reportsSection: HelpSection = {
   id: "reports",
-  title: "Reportes y Análisis",
+  label: "Reportes y Análisis",
   description: "Reportes personalizados, exportación de datos, dashboards y análisis avanzado",
-  icon: "📊",
+  welcomeMessage: "Estás en Reportes. Genera reportes, exporta datos y consulta dashboards de análisis.",
+  quickActions: ["reports-overview"],
   entries: [
     {
       id: "reports-overview",

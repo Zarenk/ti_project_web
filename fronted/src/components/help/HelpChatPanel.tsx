@@ -438,8 +438,8 @@ export function HelpChatPanel() {
   }
 
   const quickEntries = sectionMeta?.quickActions
-    .map((id) => sectionMeta.entries.find((e) => e.id === id))
-    .filter(Boolean)
+    ?.map((id) => sectionMeta.entries?.find((e) => e.id === id))
+    ?.filter(Boolean)
 
   return (
     <div
