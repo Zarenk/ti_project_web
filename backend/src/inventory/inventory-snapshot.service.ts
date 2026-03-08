@@ -56,7 +56,7 @@ export class InventorySnapshotService {
             },
           },
         },
-        entryDetail: {
+        entryDetails: {
           select: {
             price: true,
             createdAt: true,
@@ -75,7 +75,7 @@ export class InventorySnapshotService {
     let totalUnits = 0;
 
     for (const product of productsWithStock) {
-      const lastPurchasePrice = product.entryDetail[0]?.price ?? 0;
+      const lastPurchasePrice = product.entryDetails[0]?.price ?? 0;
 
       // Sumar stock de todas las tiendas
       const productStock = product.inventory.reduce((sum, inv) => {

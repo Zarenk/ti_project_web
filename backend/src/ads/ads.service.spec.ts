@@ -38,7 +38,7 @@ describe('AdsService multi-tenancy', () => {
     jest
       .spyOn(Date, 'now')
       .mockImplementation(() => realDateNow() + ++sequence);
-    service = new AdsService(null as any, null as any, null as any);
+    service = new AdsService(null as any, null as any, null as any, null as any);
   });
 
   afterEach(() => {

@@ -111,7 +111,7 @@ export class VerticalCompatibilityService {
           createdAt: { gte: subMinutes(new Date(), 15) },
         },
       }),
-      this.prisma.cashRegister.count({
+      this.prisma.cash_registers.count({
         where: {
           store: { companyId },
           status: CashRegisterStatus.ACTIVE,

@@ -32,7 +32,7 @@ describe('VerticalCompatibilityService', () => {
       sales: {
         count: jest.fn().mockResolvedValue(counts.posSales ?? 0),
       },
-      cashRegister: {
+      cash_registers: {
         count: jest.fn().mockResolvedValue(counts.cashRegisters ?? 0),
       },
       inventoryHistory: {

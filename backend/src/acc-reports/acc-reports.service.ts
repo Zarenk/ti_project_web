@@ -65,13 +65,13 @@ export class AccReportsService {
     }
 
     if (companyId !== undefined) {
-      where.cashRegister = {
-        ...(where.cashRegister ?? {}),
+      where.cash_registers = {
+        ...(where.cash_registers ?? {}),
         store: { companyId },
       };
     }
 
-    const grouped = await this.prisma.cashTransaction.groupBy({
+    const grouped = await this.prisma.cash_transactions.groupBy({
       by: ['type'],
       where,
       _sum: { amount: true },

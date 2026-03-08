@@ -35,8 +35,8 @@ type PrismaMock = {
   inventoryHistory: { create: jest.Mock };
   entryDetailSeries: { updateMany: jest.Mock };
   cashTransactionPaymentMethod: { deleteMany: jest.Mock };
-  cashRegister: { update: jest.Mock };
-  cashTransaction: { delete: jest.Mock };
+  cash_registers: { update: jest.Mock };
+  cash_transactions: { delete: jest.Mock };
   invoiceSales: { deleteMany: jest.Mock; findFirst: jest.Mock };
   orders: { update: jest.Mock };
   shippingGuide: { updateMany: jest.Mock };
@@ -104,10 +104,10 @@ describe('SalesService multi-organization support', () => {
       cashTransactionPaymentMethod: {
         deleteMany: jest.fn(),
       },
-      cashRegister: {
+      cash_registers: {
         update: jest.fn(),
       },
-      cashTransaction: {
+      cash_transactions: {
         delete: jest.fn(),
       },
       invoiceSales: {
@@ -158,7 +158,9 @@ describe('SalesService multi-organization support', () => {
       accountingHook as unknown as AccountingHook,
       sunatService as any,
       quotaService as any,
+      {} as any,
       verticalConfig as any,
+      {} as any,
     );
   });
 
@@ -490,8 +492,8 @@ describe('SalesService multi-organization support', () => {
           cashTransactionPaymentMethod: {
             deleteMany: jest.fn().mockResolvedValue(undefined),
           },
-          cashRegister: { update: jest.fn().mockResolvedValue(undefined) },
-          cashTransaction: { delete: jest.fn().mockResolvedValue(undefined) },
+          cash_registers: { update: jest.fn().mockResolvedValue(undefined) },
+          cash_transactions: { delete: jest.fn().mockResolvedValue(undefined) },
         }),
       );
 
@@ -561,8 +563,8 @@ describe('SalesService multi-organization support', () => {
           cashTransactionPaymentMethod: {
             deleteMany: jest.fn().mockResolvedValue(undefined),
           },
-          cashRegister: { update: jest.fn().mockResolvedValue(undefined) },
-          cashTransaction: { delete: jest.fn().mockResolvedValue(undefined) },
+          cash_registers: { update: jest.fn().mockResolvedValue(undefined) },
+          cash_transactions: { delete: jest.fn().mockResolvedValue(undefined) },
         }),
       );
 

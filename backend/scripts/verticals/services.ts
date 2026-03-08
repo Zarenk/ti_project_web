@@ -53,7 +53,7 @@ export async function setupProjectTemplates(
       ...cat,
       companyId,
       status: 'Activo',
-    })),
+    })) as any,
     skipDuplicates: true,
   });
 

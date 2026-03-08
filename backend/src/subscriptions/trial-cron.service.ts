@@ -41,7 +41,7 @@ export class TrialCronService {
         include: {
           plan: true,
           organization: true,
-          defaultPaymentMethod: true,
+          billingPaymentMethod: true,
         },
       });
     } catch {

@@ -1312,7 +1312,7 @@ export class SubscriptionsService {
     ] = await Promise.all([
       this.prisma.subscription.findUnique({
         where: { organizationId },
-        include: { plan: true, defaultPaymentMethod: true },
+        include: { plan: true, billingPaymentMethod: true },
       }).catch(() =>
         // Fallback if new columns don't exist yet (migration pending)
         this.prisma.subscription.findUnique({
@@ -1322,7 +1322,7 @@ export class SubscriptionsService {
             trialEndsAt: true, currentPeriodStart: true, currentPeriodEnd: true,
             cancelAtPeriodEnd: true, canceledAt: true, defaultPaymentMethodId: true,
             metadata: true, createdAt: true, updatedAt: true,
-            plan: true, defaultPaymentMethod: true,
+            plan: true, billingPaymentMethod: true,
           },
         }),
       ),
@@ -2955,7 +2955,7 @@ export class SubscriptionsService {
   async attemptAutoCharge(
     subscription: Subscription & {
       plan: SubscriptionPlan;
-      defaultPaymentMethod?: { externalId: string } | null;
+      billingPaymentMethod?: { externalId: string } | null;
     },
     reason: 'trial_end' | 'renewal',
   ): Promise<{ success: boolean; invoiceId: number }> {
@@ -3008,7 +3008,7 @@ export class SubscriptionsService {
 
     // 7. If no payment method → generate checkout link
     if (
-      !subscription.defaultPaymentMethod?.externalId ||
+      !subscription.billingPaymentMethod?.externalId ||
       !subscription.billingCustomerId
     ) {
       logger.log(
@@ -3060,7 +3060,7 @@ export class SubscriptionsService {
     try {
       const result = await this.paymentProvider.chargeCard({
         customerId: subscription.billingCustomerId,
-        cardTokenOrId: subscription.defaultPaymentMethod.externalId,
+        cardTokenOrId: subscription.billingPaymentMethod.externalId,
         amount,
         currency,
         description: `Suscripcion ${subscription.plan.name} - ${

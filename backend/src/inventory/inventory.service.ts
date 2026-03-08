@@ -1017,7 +1017,7 @@ export class InventoryService {
               category: true,
             },
           },
-          entryDetails: {
+          entryDetail: {
             include: {
               entry: true,
               salesDetails: true,
@@ -1052,19 +1052,19 @@ export class InventoryService {
               (storeInventory) => storeInventory.storeId,
             ),
           );
-          const filteredEntryDetails = item.entryDetails.filter(
+          const filteredEntryDetails = item.entryDetail.filter(
             (detail) => detail.entry && allowedStoreIds.has(detail.entry.storeId),
           );
 
           return {
             ...item,
             storeOnInventory: filteredStoreOnInventory,
-            entryDetails: filteredEntryDetails,
+            entryDetail: filteredEntryDetails,
           };
         })
         .filter(
           (item) =>
-            item.storeOnInventory.length > 0 || item.entryDetails.length > 0,
+            item.storeOnInventory.length > 0 || item.entryDetail.length > 0,
         );
 
       this.logger.debug(
@@ -1099,7 +1099,7 @@ export class InventoryService {
       return inventory.map((item) => {
       // Agrupar los detalles de entrada por tienda
       const stockByStore = item.storeOnInventory.map((storeInventory) => {
-        const stockByCurrency = item.entryDetails
+        const stockByCurrency = item.entryDetail
           .filter((detail) => detail.entry && detail.entry.storeId === storeInventory.storeId)
           .reduce(
             (acc, detail) => {
@@ -1183,7 +1183,7 @@ export class InventoryService {
         // Sumar entradas brutas por moneda para esta tienda (sin descontar ventas)
         let grossPEN = 0;
         let grossUSD = 0;
-        item.entryDetails
+        item.entryDetail
           .filter((d) => d.entry && d.entry.storeId === storeId)
           .forEach((d) => {
             if (d.entry.tipoMoneda === 'PEN') grossPEN += d.quantity;

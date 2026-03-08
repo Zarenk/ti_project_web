@@ -99,7 +99,7 @@ describe('StoresService multi-organization support', () => {
       {
         ...baseStorePayload,
         organizationId: null,
-      },
+      } as any,
       request,
       55,
     );
@@ -126,7 +126,7 @@ describe('StoresService multi-organization support', () => {
       {
         ...baseStorePayload,
         organizationId: undefined,
-      },
+      } as any,
       request,
     );
 

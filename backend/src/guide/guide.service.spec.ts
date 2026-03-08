@@ -65,8 +65,8 @@ describe('GuideService integration (mocked SUNAT)', () => {
         ),
     } as any;
 
-    const service = new GuideService(prismaService, firmadorJavaService, httpService);
-    const result = await service.generarGuia(baseDto);
+    const service = new GuideService(prismaService, httpService, {} as any);
+    const result = await service.generarGuia(baseDto, 1, 1);
 
     expect(firmadorJavaService.firmarXmlConJava).toHaveBeenCalled();
     expect(prismaService.shippingGuide.create).toHaveBeenCalled();
@@ -88,8 +88,8 @@ describe('GuideService integration (mocked SUNAT)', () => {
       post: jest.fn(),
     } as any;
 
-    const service = new GuideService(prismaService, firmadorJavaService, httpService);
-    const result = await service.validateGuide(baseDto);
+    const service = new GuideService(prismaService, httpService, {} as any);
+    const result = await service.validateGuide(baseDto, 1, 1);
 
     expect(result.zipSize).toBeGreaterThan(0);
     expect(result.xmlPreview).toContain('<Signed/>');
@@ -110,9 +110,9 @@ describe('GuideService integration (mocked SUNAT)', () => {
       post: jest.fn(),
     } as any;
 
-    const service = new GuideService(prismaService, firmadorJavaService, httpService);
+    const service = new GuideService(prismaService, httpService, {} as any);
 
-    await expect(service.validateGuide({} as CreateGuideDto)).rejects.toThrow(
+    await expect(service.validateGuide({} as CreateGuideDto, 1, 1)).rejects.toThrow(
       'Datos incompletos para la guía',
     );
   });

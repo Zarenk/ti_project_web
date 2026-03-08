@@ -36,6 +36,7 @@ describe('QuotesService.findEvents', () => {
     service = new QuotesService(
       createConfigMock(),
       prisma as unknown as PrismaService,
+      {} as any,
     );
   });
 

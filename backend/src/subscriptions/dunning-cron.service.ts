@@ -120,7 +120,7 @@ export class DunningCronService {
         },
         include: {
           plan: true,
-          defaultPaymentMethod: true,
+          billingPaymentMethod: true,
         },
       });
     } catch {

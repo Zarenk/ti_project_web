@@ -172,12 +172,12 @@ export class CashregisterService {
     });
 
     await this.ensureCashRegisterFeatureEnabled(companyId);
-    const existingWhere: Prisma.CashRegisterWhereInput = {
+    const existingWhere: Prisma.cash_registersWhereInput = {
       storeId,
       status: 'ACTIVE',
       ...(buildOrganizationFilter(
         organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (companyId !== undefined) {
       existingWhere.store = {
@@ -185,7 +185,7 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(companyId),
       } as Prisma.StoreWhereInput;
     }
-    const existingActiveCash = await this.prisma.cashRegister.findFirst({
+    const existingActiveCash = await this.prisma.cash_registers.findFirst({
       where: existingWhere,
     });
     if (existingActiveCash) {
@@ -200,13 +200,13 @@ export class CashregisterService {
       companyId,
       metadata: { storeId },
     });
-    return this.prisma.cashRegister.create({
+    return this.prisma.cash_registers.create({
       data: {
         ...rest,
         storeId,
         organizationId,
         currentBalance: rest.initialBalance,
-      } as Prisma.CashRegisterUncheckedCreateInput,
+      } as Prisma.cash_registersUncheckedCreateInput,
     });
   }
 
@@ -218,14 +218,14 @@ export class CashregisterService {
 
     const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
-    ) as Prisma.CashRegisterWhereInput;
+    ) as Prisma.cash_registersWhereInput;
     if (options?.companyId !== undefined) {
       organizationFilter.store = {
         ...(organizationFilter.store ?? {}),
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    const cashRegister = await this.prisma.cashRegister.findFirst({
+    const cashRegister = await this.prisma.cash_registers.findFirst({
       where: {
         storeId,
         status: 'ACTIVE',
@@ -249,12 +249,12 @@ export class CashregisterService {
 
     const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
-    ) as Prisma.CashTransactionWhereInput;
-    const cashRegisterFilter: Prisma.CashRegisterWhereInput = {
+    ) as Prisma.cash_transactionsWhereInput;
+    const cashRegisterFilter: Prisma.cash_registersWhereInput = {
       storeId,
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       cashRegisterFilter.store = {
@@ -262,10 +262,10 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    const transactions = await this.prisma.cashTransaction.findMany({
+    const transactions = await this.prisma.cash_transactions.findMany({
       where: {
         ...organizationFilter,
-        cashRegister: {
+        cash_registers: {
           ...cashRegisterFilter,
         },
         createdAt: {
@@ -274,9 +274,9 @@ export class CashregisterService {
         },
       },
       include: {
-        cashRegister: true,
+        cash_registers: true,
         user: true,
-        paymentMethods: {
+        cashTransactionPaymentMethods: {
           include: {
             paymentMethod: true,
           },
@@ -307,12 +307,12 @@ export class CashregisterService {
     });
     const closureOrganizationFilter = buildOrganizationFilter(
       options?.organizationId,
-    ) as Prisma.CashClosureWhereInput;
-    const closureCashRegisterFilter: Prisma.CashRegisterWhereInput = {
+    ) as Prisma.cash_closuresWhereInput;
+    const closureCashRegisterFilter: Prisma.cash_registersWhereInput = {
       storeId,
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       closureCashRegisterFilter.store = {
@@ -320,10 +320,10 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    const closures = await this.prisma.cashClosure.findMany({
+    const closures = await this.prisma.cash_closures.findMany({
       where: {
         ...closureOrganizationFilter,
-        cashRegister: {
+        cash_registers: {
           ...closureCashRegisterFilter,
         },
         createdAt: {
@@ -333,7 +333,7 @@ export class CashregisterService {
       },
       include: {
         user: true,
-        cashRegister: true,
+        cash_registers: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -367,10 +367,10 @@ export class CashregisterService {
         userId: tx.userId,
         employee: tx.user?.username || 'Sistema',
         description: tx.description,
-        paymentMethods: this.formatPaymentMethods(tx.paymentMethods ?? [], {
+        paymentMethods: this.formatPaymentMethods(tx.cashTransactionPaymentMethods ?? [], {
           includeAmounts:
             (tx.salePayments ?? []).length === 0 &&
-            (tx.paymentMethods ?? []).some((method) => {
+            (tx.cashTransactionPaymentMethods ?? []).some((method) => {
               if (method.amount === null || method.amount === undefined) {
                 return false;
               }
@@ -392,7 +392,7 @@ export class CashregisterService {
     const formattedClosures = closures.map((closure) => ({
       id: `closure-${closure.id}`,
       cashRegisterId: closure.cashRegisterId,
-      cashRegisterName: closure.cashRegister?.name ?? null,
+      cashRegisterName: closure.cash_registers?.name ?? null,
       type: 'CLOSURE',
       amount: Number(closure.closingBalance),
       createdAt: closure.createdAt,
@@ -426,12 +426,12 @@ export class CashregisterService {
   ) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const where: Prisma.CashRegisterWhereInput = {
+    const where: Prisma.cash_registersWhereInput = {
       storeId,
       status: 'ACTIVE',
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       where.store = {
@@ -439,7 +439,7 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    return this.prisma.cashRegister.findFirst({
+    return this.prisma.cash_registers.findFirst({
       where,
       select: {
         id: true,
@@ -457,10 +457,10 @@ export class CashregisterService {
   }) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const where: Prisma.CashRegisterWhereInput = {
+    const where: Prisma.cash_registersWhereInput = {
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       where.store = {
@@ -468,12 +468,12 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    return this.prisma.cashRegister.findMany({
+    return this.prisma.cash_registers.findMany({
       where,
       include: {
         store: true,
-        transactions: true,
-        closures: true,
+        cash_transactions: true,
+        cash_closures: true,
       },
     });
   }
@@ -484,11 +484,11 @@ export class CashregisterService {
   ) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const where: Prisma.CashRegisterWhereInput = {
+    const where: Prisma.cash_registersWhereInput = {
       id,
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       where.store = {
@@ -496,12 +496,12 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    const cashRegister = await this.prisma.cashRegister.findFirst({
+    const cashRegister = await this.prisma.cash_registers.findFirst({
       where,
       include: {
         store: true,
-        transactions: true,
-        closures: true,
+        cash_transactions: true,
+        cash_closures: true,
       } as any,
     });
     if (!cashRegister) {
@@ -593,12 +593,12 @@ export class CashregisterService {
       metadata: { cashRegisterId: id },
     });
 
-    return this.prisma.cashRegister.update({
+    return this.prisma.cash_registers.update({
       where: { id },
       data: {
         ...updatePayload,
         organizationId,
-      } as Prisma.CashRegisterUncheckedUpdateInput,
+      } as Prisma.cash_registersUncheckedUpdateInput,
     });
   }
 
@@ -625,7 +625,7 @@ export class CashregisterService {
       companyId,
       metadata: { cashRegisterId: id },
     });
-    return this.prisma.cashRegister.delete({
+    return this.prisma.cash_registers.delete({
       where: { id },
     });
   }
@@ -661,7 +661,7 @@ export class CashregisterService {
       );
     }
 
-    const cashRegister = await this.prisma.cashRegister.findUnique({
+    const cashRegister = await this.prisma.cash_registers.findUnique({
       where: { id: cashRegisterId },
       include: {
         store: {
@@ -720,7 +720,7 @@ export class CashregisterService {
     // 🔒 Usar transacción para prevenir race conditions en currentBalance
     const transaction = await this.prisma.$transaction(async (prisma) => {
       // Re-validar que la caja sigue activa dentro de la transacción (prevenir TOCTOU)
-      const freshCashRegister = await prisma.cashRegister.findUnique({
+      const freshCashRegister = await prisma.cash_registers.findUnique({
         where: { id: cashRegisterId },
         select: { status: true },
       });
@@ -731,7 +731,7 @@ export class CashregisterService {
         );
       }
 
-      const cashTransaction = await prisma.cashTransaction.create({
+      const cashTransaction = await prisma.cash_transactions.create({
         data: {
           cashRegisterId,
           type,
@@ -743,7 +743,7 @@ export class CashregisterService {
           clientDocument: clientDocument || null,
           clientDocumentType: clientDocumentType || null,
           organizationId,
-        } as Prisma.CashTransactionUncheckedCreateInput,
+        } as Prisma.cash_transactionsUncheckedCreateInput,
       });
 
       for (const method of paymentMethods) {
@@ -769,7 +769,7 @@ export class CashregisterService {
       }
 
       // Actualizar saldo dentro de la misma transacción (atomicidad garantizada)
-      await prisma.cashRegister.update({
+      await prisma.cash_registers.update({
         where: { id: cashRegisterId },
         data: {
           currentBalance: newBalance,
@@ -788,24 +788,24 @@ export class CashregisterService {
   }) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const where: Prisma.CashTransactionWhereInput = {
+    const where: Prisma.cash_transactionsWhereInput = {
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashTransactionWhereInput),
+      ) as Prisma.cash_transactionsWhereInput),
     };
     if (options?.companyId !== undefined) {
-      where.cashRegister = {
-        ...(where.cashRegister ?? {}),
+      where.cash_registers = {
+        ...(where.cash_registers ?? {}),
         store: {
           ...this.buildStoreCompanyFilter(options.companyId),
         } as Prisma.StoreWhereInput,
-      } as Prisma.CashRegisterWhereInput;
+      } as Prisma.cash_registersWhereInput;
     }
-    return this.prisma.cashTransaction.findMany({
+    return this.prisma.cash_transactions.findMany({
       where,
       include: {
-        cashRegister: true,
-        paymentMethods: true,
+        cash_registers: true,
+        cashTransactionPaymentMethods: true,
         user: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -817,24 +817,24 @@ export class CashregisterService {
   ) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const where: Prisma.CashTransactionWhereInput = {
+    const where: Prisma.cash_transactionsWhereInput = {
       cashRegisterId,
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashTransactionWhereInput),
+      ) as Prisma.cash_transactionsWhereInput),
     };
     if (options?.companyId !== undefined) {
-      where.cashRegister = {
-        ...(where.cashRegister ?? {}),
+      where.cash_registers = {
+        ...(where.cash_registers ?? {}),
         store: {
           ...this.buildStoreCompanyFilter(options.companyId),
         } as Prisma.StoreWhereInput,
-      } as Prisma.CashRegisterWhereInput;
+      } as Prisma.cash_registersWhereInput;
     }
-    return this.prisma.cashTransaction.findMany({
+    return this.prisma.cash_transactions.findMany({
       where,
       include: {
-        paymentMethods: true,
+        cashTransactionPaymentMethods: true,
         user: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -847,12 +847,12 @@ export class CashregisterService {
       companyId: providedCompanyId,
     } = data;
     return this.prisma.$transaction(async (prisma) => {
-      const cashRegisterWhere: Prisma.CashRegisterWhereInput = {
+      const cashRegisterWhere: Prisma.cash_registersWhereInput = {
         id: data.cashRegisterId,
         status: 'ACTIVE',
         ...(buildOrganizationFilter(
           providedOrganizationId,
-        ) as Prisma.CashRegisterWhereInput),
+        ) as Prisma.cash_registersWhereInput),
       };
       if (providedCompanyId !== undefined) {
         cashRegisterWhere.store = {
@@ -861,7 +861,7 @@ export class CashregisterService {
         } as Prisma.StoreWhereInput;
       }
 
-      const cashRegister = await prisma.cashRegister.findFirst({
+      const cashRegister = await prisma.cash_registers.findFirst({
         where: cashRegisterWhere,
         include: {
           store: {
@@ -911,7 +911,7 @@ export class CashregisterService {
           userId: data.userId,
         },
       });
-      const closedCashRegister = await prisma.cashRegister.update({
+      const closedCashRegister = await prisma.cash_registers.update({
         where: { id: data.cashRegisterId },
         data: {
           status: 'CLOSED',
@@ -927,7 +927,7 @@ export class CashregisterService {
           'El saldo inicial de la siguiente caja no puede ser negativo.',
         );
       }
-      const closure = await prisma.cashClosure.create({
+      const closure = await prisma.cash_closures.create({
         data: {
           cashRegisterId: data.cashRegisterId,
           userId: data.userId,
@@ -938,13 +938,13 @@ export class CashregisterService {
           notes: data.notes,
           nextOpeningBalance: requestedNextInitialBalance,
           organizationId,
-        } as Prisma.CashClosureUncheckedCreateInput,
+        } as Prisma.cash_closuresUncheckedCreateInput,
       });
       const nextCashRegisterName = await this.generateNextCashRegisterName(
         prisma,
         cashRegister.name,
       );
-      const nextCashRegister = await prisma.cashRegister.create({
+      const nextCashRegister = await prisma.cash_registers.create({
         data: {
           name: nextCashRegisterName,
           description: cashRegister.description,
@@ -953,7 +953,7 @@ export class CashregisterService {
           currentBalance: requestedNextInitialBalance,
           status: 'ACTIVE',
           organizationId,
-        } as Prisma.CashRegisterUncheckedCreateInput,
+        } as Prisma.cash_registersUncheckedCreateInput,
       });
       return {
         closure: {
@@ -998,7 +998,7 @@ export class CashregisterService {
     let candidate = `${normalizedBase} - Turno ${timestamp}`;
     // Garantiza nombres unicos en caso de cierres simultaneos
     while (
-      await prisma.cashRegister.findFirst({
+      await prisma.cash_registers.findFirst({
         where: { name: candidate },
       })
     ) {
@@ -1015,12 +1015,12 @@ export class CashregisterService {
 
     const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
-    ) as Prisma.CashClosureWhereInput;
-    const cashRegisterFilter: Prisma.CashRegisterWhereInput = {
+    ) as Prisma.cash_closuresWhereInput;
+    const cashRegisterFilter: Prisma.cash_registersWhereInput = {
       storeId,
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       cashRegisterFilter.store = {
@@ -1028,16 +1028,16 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    return this.prisma.cashClosure.findMany({
+    return this.prisma.cash_closures.findMany({
       where: {
         ...organizationFilter,
-        cashRegister: {
+        cash_registers: {
           ...cashRegisterFilter,
         },
       },
       include: {
         user: true,
-        cashRegister: true,
+        cash_registers: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -1057,12 +1057,12 @@ export class CashregisterService {
     endOfDay.setHours(23, 59, 59, 999);
     const organizationFilter = buildOrganizationFilter(
       options?.organizationId,
-    ) as Prisma.CashClosureWhereInput;
-    const cashRegisterFilter: Prisma.CashRegisterWhereInput = {
+    ) as Prisma.cash_closuresWhereInput;
+    const cashRegisterFilter: Prisma.cash_registersWhereInput = {
       storeId,
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashRegisterWhereInput),
+      ) as Prisma.cash_registersWhereInput),
     };
     if (options?.companyId !== undefined) {
       cashRegisterFilter.store = {
@@ -1070,10 +1070,10 @@ export class CashregisterService {
         ...this.buildStoreCompanyFilter(options.companyId),
       } as Prisma.StoreWhereInput;
     }
-    return this.prisma.cashClosure.findFirst({
+    return this.prisma.cash_closures.findFirst({
       where: {
         ...organizationFilter,
-        cashRegister: {
+        cash_registers: {
           ...cashRegisterFilter,
         },
         createdAt: {
@@ -1090,23 +1090,23 @@ export class CashregisterService {
   }) {
     await this.ensureSalesFeatureEnabled(options?.companyId ?? null);
 
-    const where: Prisma.CashClosureWhereInput = {
+    const where: Prisma.cash_closuresWhereInput = {
       ...(buildOrganizationFilter(
         options?.organizationId,
-      ) as Prisma.CashClosureWhereInput),
+      ) as Prisma.cash_closuresWhereInput),
     };
     if (options?.companyId !== undefined) {
-      where.cashRegister = {
-        ...(where.cashRegister ?? {}),
+      where.cash_registers = {
+        ...(where.cash_registers ?? {}),
         store: {
           ...this.buildStoreCompanyFilter(options.companyId),
         } as Prisma.StoreWhereInput,
-      } as Prisma.CashRegisterWhereInput;
+      } as Prisma.cash_registersWhereInput;
     }
-    return this.prisma.cashClosure.findMany({
+    return this.prisma.cash_closures.findMany({
       where,
       include: {
-        cashRegister: true,
+        cash_registers: true,
         user: true,
       },
       orderBy: { createdAt: 'desc' },

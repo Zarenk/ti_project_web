@@ -150,7 +150,7 @@ export class VerticalMigrationService {
       }
 
       // Auto-close active cash registers before migration
-      const closedCashRegisters = await tx.cashRegister.updateMany({
+      const closedCashRegisters = await tx.cash_registers.updateMany({
         where: {
           store: { companyId },
           status: CashRegisterStatus.ACTIVE,

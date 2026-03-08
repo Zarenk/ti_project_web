@@ -220,7 +220,7 @@ export class OrganizationExportService {
       where: { id: organizationId },
       include: {
         companies: true,
-        memberships: {
+        organizationMemberships: {
           include: {
             user: true,
           },
@@ -265,7 +265,7 @@ export class OrganizationExportService {
         complimentary,
       },
       companies: organization.companies,
-      members: organization.memberships.map((membership) => ({
+      members: organization.organizationMemberships.map((membership) => ({
         id: membership.id,
         role: membership.role,
         createdAt: membership.createdAt,

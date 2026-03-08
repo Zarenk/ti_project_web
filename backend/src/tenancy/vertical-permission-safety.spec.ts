@@ -14,7 +14,9 @@ describe('Vertical permission safety checks', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       verticalConfig as any,
+      {} as any,
     );
 
     await expect(
@@ -27,7 +29,7 @@ describe('Vertical permission safety checks', () => {
     const verticalConfig = {
       getConfig: jest.fn().mockResolvedValue({ features: { sales: false } }),
     };
-    const service = new AccountingService({} as any, verticalConfig as any);
+    const service = new AccountingService({} as any, verticalConfig as any, {} as any, {} as any);
 
     await expect(
       (service as any).ensureAccountingFeatureEnabled(123),

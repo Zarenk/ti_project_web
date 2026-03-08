@@ -66,7 +66,7 @@ describe('EntityOwnershipGuard', () => {
         .mockReturnValueOnce('sales')  // entityModel
         .mockReturnValueOnce('id');     // entityIdParam
 
-      jest.spyOn(prisma.sales, 'findFirst').mockResolvedValue({ id: 123 });
+      jest.spyOn(prisma.sales, 'findFirst').mockResolvedValue({ id: 123 } as any);
 
       const result = await guard.canActivate(mockContext);
 
@@ -90,7 +90,7 @@ describe('EntityOwnershipGuard', () => {
       jest.spyOn(prisma.sales, 'findFirst').mockResolvedValue(null);
 
       // Pero existe globalmente
-      jest.spyOn(prisma.sales, 'findUnique').mockResolvedValue({ id: 123 });
+      jest.spyOn(prisma.sales, 'findUnique').mockResolvedValue({ id: 123 } as any);
 
       await expect(guard.canActivate(mockContext)).rejects.toThrow(
         ForbiddenException,
@@ -134,7 +134,7 @@ describe('EntityOwnershipGuard', () => {
         .mockReturnValueOnce('sales')
         .mockReturnValueOnce('id');
 
-      jest.spyOn(prisma.sales, 'findFirst').mockResolvedValue({ id: 'uuid-123-abc' });
+      jest.spyOn(prisma.sales, 'findFirst').mockResolvedValue({ id: 'uuid-123-abc' } as any);
 
       const result = await guard.canActivate(mockContext);
 
