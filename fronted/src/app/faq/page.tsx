@@ -11,9 +11,22 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/accordion"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
+import { useActiveTemplate } from "@/templates/use-active-template"
+import { useTemplateComponents } from "@/templates/use-store-template"
 
 export default function Component() {
+  const templateId = useActiveTemplate()
+  const { FaqLayout } = useTemplateComponents(templateId)
+
+  if (templateId !== "classic") {
+    return (
+      <>
+        <TemplateNavbar />
+        <FaqLayout />
+      </>
+    )
+  }
   const faqData = [
     {
       question: "¿Hacen envíos a todo el país?",
@@ -69,7 +82,7 @@ export default function Component() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-celeste-50 to-white dark:from-slate-900 dark:to-slate-950">
-      <Navbar />
+      <TemplateNavbar />
       <div
         className="container mx-auto px-4 py-12 max-w-4xl"
         data-navcolor="#ffffff"

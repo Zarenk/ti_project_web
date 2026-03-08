@@ -1,7 +1,7 @@
 ﻿// components/entries/ActionButtons.tsx
 import { Button } from "@/components/ui/button"
 import { ConfirmationDialog } from "./ConfirmationDialog"
-import { RefreshCcw } from "lucide-react"
+import { RefreshCcw, Save } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface ActionButtonsProps {
@@ -27,6 +27,9 @@ interface ActionButtonsProps {
   onCurrencyToggle: () => void;
   currency: 'USD' | 'PEN';
   isConvertingCurrency: boolean;
+  isDraftEdit?: boolean;
+  onSaveDraft?: () => void;
+  isSavingDraft?: boolean;
 }
 
 export function ActionButtons({
@@ -52,16 +55,20 @@ export function ActionButtons({
   onCurrencyToggle,
   currency,
   isConvertingCurrency,
+  isDraftEdit,
+  onSaveDraft,
+  isSavingDraft,
 }: ActionButtonsProps) {
   return (
     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+      {/* Primary action — Create / Confirm */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             className="flex w-full cursor-pointer items-center gap-2 transition-colors hover:border-border hover:bg-accent hover:text-foreground sm:w-auto"
             type="button"
             onClick={() => setIsDialogOpen(true)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isSavingDraft}
           >
             {isSubmitting ? (
               <>
@@ -82,12 +89,51 @@ export function ActionButtons({
                 Procesando...
               </>
             ) : (
-              "Crear Ingreso de Productos"
+              isDraftEdit ? "Confirmar y Registrar" : "Crear Ingreso de Productos"
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Abre la confirmacion para registrar el ingreso.</TooltipContent>
+        <TooltipContent>
+          {isDraftEdit
+            ? 'Confirma el borrador y aplica los cambios al inventario.'
+            : 'Abre la confirmacion para registrar el ingreso.'}
+        </TooltipContent>
       </Tooltip>
+
+      {/* Save as Draft button */}
+      {onSaveDraft && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="flex w-full cursor-pointer items-center gap-2 border-amber-300 bg-amber-50 text-amber-800 transition-colors hover:bg-amber-100 sm:w-auto"
+              type="button"
+              variant="outline"
+              onClick={onSaveDraft}
+              disabled={isSubmitting || isSavingDraft}
+            >
+              {isSavingDraft ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  {isDraftEdit ? 'Actualizar Borrador' : 'Guardar Borrador'}
+                </>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {isDraftEdit
+              ? 'Actualiza el borrador sin afectar inventario.'
+              : 'Guarda como borrador para revisar antes de confirmar.'}
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <Tooltip>
         <TooltipTrigger asChild>

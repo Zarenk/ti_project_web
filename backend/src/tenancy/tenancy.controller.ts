@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
@@ -13,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { TenancyService, TenantSelectionSummary } from './tenancy.service';
 import { CreateTenancyDto } from './dto/create-tenancy.dto';
+import { SelfCreateOrgDto } from './dto/self-create-org.dto';
 import { UpdateTenancyDto } from './dto/update-tenancy.dto';
 import { TenancySnapshot } from './entities/tenancy.entity';
 import { GlobalSuperAdminGuard } from './global-super-admin.guard';
@@ -83,6 +85,31 @@ export class TenancyController {
 
       return summary;
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('self-create')
+  async selfCreate(
+    @Body() dto: SelfCreateOrgDto,
+    @Req() req: Request,
+  ): Promise<{ organizationId: number; companyId: number }> {
+    const userId =
+      (req as any).user?.userId ??
+      (req as any).user?.sub ??
+      (req as any).user?.id;
+    if (typeof userId !== 'number') {
+      throw new BadRequestException('No se pudo identificar al usuario.');
+    }
+
+    const result = await this.tenancyService.selfCreateOrganization(dto, userId);
+
+    this.contextEventsGateway.emitContextChanged(userId, {
+      orgId: result.organizationId,
+      companyId: result.companyId,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return result;
   }
 
   @UseGuards(JwtAuthGuard, GlobalSuperAdminGuard)
@@ -156,5 +183,51 @@ export class TenancyController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number): Promise<TenancySnapshot> {
     return this.tenancyService.remove(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':orgId/members')
+  async getMembers(
+    @Param('orgId', ParseIntPipe) orgId: number,
+    @Req() req: Request,
+  ) {
+    this.assertSuperAdminRole(req);
+    return this.tenancyService.getOrganizationMembers(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':orgId/members/:userId')
+  async removeMember(
+    @Param('orgId', ParseIntPipe) orgId: number,
+    @Param('userId', ParseIntPipe) targetUserId: number,
+    @Req() req: Request,
+  ) {
+    this.assertSuperAdminRole(req);
+    const performedByUserId =
+      (req as any).user?.userId ??
+      (req as any).user?.sub ??
+      (req as any).user?.id;
+    if (typeof performedByUserId !== 'number') {
+      throw new BadRequestException('No se pudo identificar al usuario.');
+    }
+    const result = await this.tenancyService.removeMember(orgId, targetUserId, performedByUserId);
+
+    this.contextEventsGateway.emitContextChanged(targetUserId, {
+      orgId: result.nextOrgId ?? 0,
+      companyId: result.nextCompanyId,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return { removed: result.removed };
+  }
+
+  private assertSuperAdminRole(req: Request): void {
+    const role = ((req as any).user?.role ?? '').toString().toUpperCase();
+    const allowed = new Set(['SUPER_ADMIN_GLOBAL', 'SUPER_ADMIN_ORG']);
+    if (!allowed.has(role)) {
+      throw new ForbiddenException(
+        'Solo Super Admins pueden gestionar miembros de la organización.',
+      );
+    }
   }
 }

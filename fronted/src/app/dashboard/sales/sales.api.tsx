@@ -970,7 +970,7 @@ export async function getRecentSalesByRange(from: string, to: string) {
 }
 
 export async function getWebSaleById(id: number | string) {
-  const res = await fetch(`${BACKEND_URL}/api/web-sales/${id}`)
+  const res = await authFetch(`${BACKEND_URL}/api/web-sales/${id}`)
   if (!res.ok) throw new Error('Error al obtener la venta web')
   return res.json()
 }

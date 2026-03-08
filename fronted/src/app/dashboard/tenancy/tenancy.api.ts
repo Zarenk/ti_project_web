@@ -1680,3 +1680,73 @@ export function downloadFile(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+export interface SelfCreateOrgPayload {
+  organizationName: string
+  companyName: string
+  businessVertical?: string
+}
+
+export async function selfCreateOrganization(
+  payload: SelfCreateOrgPayload,
+): Promise<{ organizationId: number; companyId: number }> {
+  const res = await authFetch("/tenancy/self-create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  const data = await res.json()
+
+  if (!res.ok) {
+    const message =
+      typeof data === "object" && data?.message
+        ? data.message
+        : "No se pudo crear la organización"
+    throw new Error(message)
+  }
+
+  return data as { organizationId: number; companyId: number }
+}
+
+export interface OrgMember {
+  membershipId: number
+  userId: number
+  username: string
+  email: string
+  userRole: string
+  userStatus: string
+  membershipRole: string
+  createdAt: string
+}
+
+export async function getOrganizationMembers(orgId: number): Promise<OrgMember[]> {
+  const res = await authFetch(`/tenancy/${orgId}/members`)
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(
+      typeof data === "object" && data?.message
+        ? data.message
+        : "No se pudieron cargar los miembros",
+    )
+  }
+  return data as OrgMember[]
+}
+
+export async function removeMemberFromOrg(
+  orgId: number,
+  userId: number,
+): Promise<{ removed: true }> {
+  const res = await authFetch(`/tenancy/${orgId}/members/${userId}`, {
+    method: "DELETE",
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(
+      typeof data === "object" && data?.message
+        ? data.message
+        : "No se pudo desvincular al miembro",
+    )
+  }
+  return data as { removed: true }
+}
+

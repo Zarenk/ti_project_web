@@ -465,6 +465,96 @@ export const batchCheckSeries = async (
   }
 }
 
+// ── Draft System API ──
+
+export async function createDraftEntry(data: Parameters<typeof createEntry>[0]) {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      const msg = Array.isArray(errorData.message)
+        ? errorData.message.join(', ')
+        : errorData.message || 'Error al crear el borrador';
+      throw new Error(msg);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al crear el borrador:', error);
+    throw error;
+  }
+}
+
+export async function updateDraftEntry(id: number, data: Parameters<typeof createEntry>[0]) {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      const msg = Array.isArray(errorData.message)
+        ? errorData.message.join(', ')
+        : errorData.message || 'Error al actualizar el borrador';
+      throw new Error(msg);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al actualizar el borrador:', error);
+    throw error;
+  }
+}
+
+export async function postDraftEntry(id: number) {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/draft/${id}/post`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      const msg = Array.isArray(errorData.message)
+        ? errorData.message.join(', ')
+        : errorData.message || 'Error al confirmar el borrador';
+      throw new Error(msg);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al confirmar el borrador:', error);
+    throw error;
+  }
+}
+
+export async function cancelEntry(id: number) {
+  try {
+    const response = await authFetch(`${BACKEND_URL}/api/entries/${id}/cancel`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      const msg = Array.isArray(errorData.message)
+        ? errorData.message.join(', ')
+        : errorData.message || 'Error al anular la entrada';
+      throw new Error(msg);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error al anular la entrada:', error);
+    throw error;
+  }
+}
+
 export async function getRecentEntries(limit = 5) {
   try {
     const res = await authFetch(`${BACKEND_URL}/api/entries/recent?limit=${limit}`, {
@@ -492,4 +582,77 @@ export async function getRecentEntries(limit = 5) {
     }
     throw error;
   }
+}
+
+// ── Document Search API ──
+
+export interface EntryDocument {
+  id: number;
+  date: string;
+  createdAt: string;
+  pdfUrl: string | null;
+  guiaUrl: string | null;
+  tipoMoneda: string | null;
+  description: string | null;
+  provider: { id: number; name: string } | null;
+  store: { id: number; name: string } | null;
+  invoice: {
+    serie: string;
+    nroCorrelativo: string;
+    tipoComprobante: string | null;
+    total: number | null;
+    fechaEmision: string | null;
+  } | null;
+}
+
+export interface EntryDocumentsResponse {
+  items: EntryDocument[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getEntryDocuments(params: {
+  search?: string;
+  type?: 'invoice' | 'guide' | 'all';
+  providerId?: number;
+  storeId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<EntryDocumentsResponse> {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set('search', params.search);
+  if (params.type && params.type !== 'all') qs.set('type', params.type);
+  if (params.providerId) qs.set('providerId', String(params.providerId));
+  if (params.storeId) qs.set('storeId', String(params.storeId));
+  if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
+  if (params.dateTo) qs.set('dateTo', params.dateTo);
+  if (params.page) qs.set('page', String(params.page));
+  if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+
+  const response = await authFetch(
+    `${BACKEND_URL}/api/entries/documents${qs.toString() ? `?${qs}` : ''}`,
+    { method: 'GET' },
+  );
+
+  if (!response.ok) {
+    throw new Error('Error al buscar documentos');
+  }
+
+  return response.json();
+}
+
+/**
+ * Build a PDF URL that works in both local and production.
+ * In production, uses the Next.js proxy at /api/entries/pdf/...
+ * Locally, links directly to the backend.
+ */
+export function getDocumentPdfUrl(pdfPath: string): string {
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+    return `/api/entries/pdf${pdfPath}`;
+  }
+  return `${BACKEND_URL}${pdfPath}`;
 }

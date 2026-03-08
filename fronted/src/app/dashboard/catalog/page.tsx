@@ -432,6 +432,20 @@ export default function CatalogPage() {
       }
       return { ...prev, [productId]: value };
     });
+
+    // Auto-update "ANTES" when user hasn't manually set it:
+    // show original product price as the crossed-out reference.
+    setPreviousPriceOverrides((prev) => {
+      if (prev[productId] !== undefined) return prev; // user set it manually, don't overwrite
+      if (value === null || Number.isNaN(value)) return prev;
+      const product = products.find((p: any) => p.id === productId);
+      if (!product) return prev;
+      const originalPrice = (product as any).priceSell ?? (product as any).price;
+      if (typeof originalPrice !== "number") return prev;
+      // Only set "ANTES" if new price differs from original
+      if (value === originalPrice) return prev;
+      return { ...prev, [productId]: originalPrice };
+    });
   }
 
   function handlePreviousPriceChange(

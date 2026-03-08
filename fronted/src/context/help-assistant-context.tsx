@@ -477,6 +477,8 @@ export function HelpAssistantProvider({ children }: { children: ReactNode }) {
         params.quantity = entity.value
       } else if (entity.type === "period") {
         params.period = entity.value
+      } else if (entity.type === "amount") {
+        params.price = entity.value
       } else if (entity.type === "section") {
         params.section = entity.raw
       } else if (entity.type === "product" && !entity.resolved) {

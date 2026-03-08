@@ -7,6 +7,7 @@
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AuditAction } from '@prisma/client';
+import * as crypto from 'crypto';
 import { CreateWebSaleDto } from './dto/create-websale.dto';
 import {
   prepareSaleContext,
@@ -61,6 +62,12 @@ export class WebSalesService {
   }
 
   /** ---------- helpers ---------- */
+
+  /** Generates a cryptographically secure order code. */
+  private generateOrderCode(): string {
+    return crypto.randomBytes(5).toString('hex').toUpperCase();
+  }
+
   private async assertCompanyMatchesOrganization(
     companyId: number,
     organizationId: number,
@@ -76,10 +83,32 @@ export class WebSalesService {
     }
   }
 
-  async payWithCulqi(token: string, amount: number, order: CreateWebSaleDto) {
+  async payWithCulqi(token: string, _amount: number, order: CreateWebSaleDto) {
     const secret = process.env.CULQI_SECRET_KEY;
     if (!secret) {
       throw new BadRequestException('CULQI_SECRET_KEY not configured');
+    }
+
+    // ── Recalculate amount from DB prices (never trust frontend amount) ──
+    if (!order.details || order.details.length === 0) {
+      throw new BadRequestException('La orden no contiene productos.');
+    }
+    const productIds = order.details.map((d) => d.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, priceSell: true, name: true },
+    });
+    const priceMap = new Map(products.map((p) => [p.id, p]));
+
+    let verifiedAmount = 0;
+    for (const detail of order.details) {
+      const product = priceMap.get(detail.productId);
+      if (!product || product.priceSell == null) {
+        throw new BadRequestException(
+          `Producto con ID ${detail.productId} no encontrado o sin precio.`,
+        );
+      }
+      verifiedAmount += detail.quantity * Number(product.priceSell);
     }
 
     const chargeRes = await fetch('https://api.culqi.com/v2/charges', {
@@ -89,7 +118,7 @@ export class WebSalesService {
         Authorization: `Bearer ${secret}`,
       },
       body: JSON.stringify({
-        amount: Math.round(amount * 100),
+        amount: Math.round(verifiedAmount * 100),
         currency_code: 'PEN',
         email: order.email ?? 'cliente@example.com',
         source_id: token,
@@ -176,7 +205,7 @@ export class WebSalesService {
         city: city ?? '',
         postalCode: postalCode ?? '',
         phone,
-        code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
+        code: code ?? this.generateOrderCode(),
         payload: data as unknown as Prisma.JsonObject,
         organizationId: resolvedOrganizationId ?? null,
         companyId: resolvedCompanyId ?? null,
@@ -375,8 +404,40 @@ export class WebSalesService {
       },
     });
 
-    const allocations: SaleAllocation[] = [];
+    // ── P0-1: Price validation — recalculate from DB, reject manipulation ──
+    const productIds = details.map((d) => d.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, priceSell: true, name: true },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
 
+    for (const detail of details) {
+      const product = productMap.get(detail.productId);
+      if (!product) {
+        throw new BadRequestException(
+          `Producto con ID ${detail.productId} no encontrado.`,
+        );
+      }
+      if (product.priceSell == null) {
+        throw new BadRequestException(
+          `El producto "${product.name}" no tiene precio de venta configurado.`,
+        );
+      }
+      const dbPrice = Number(product.priceSell);
+      // Allow ±0.01 tolerance for floating point rounding
+      if (Math.abs(detail.price - dbPrice) > 0.01) {
+        this.logger.warn(
+          `Price mismatch for product ${detail.productId}: sent=${detail.price}, db=${dbPrice}`,
+        );
+        throw new BadRequestException(
+          `El precio del producto "${product.name}" no coincide con el precio registrado.`,
+        );
+      }
+    }
+
+    // ── Stock pre-check (fast fail, actual enforcement is inside executeSale transaction) ──
+    const allocations: SaleAllocation[] = [];
     let total = 0;
     for (const detail of details) {
       const storeInventory = await this.prisma.storeOnInventory.findFirst({
@@ -443,7 +504,7 @@ export class WebSalesService {
         city,
         postalCode,
         phone,
-        code: code ?? Math.random().toString(36).substr(2, 9).toUpperCase(),
+        code: code ?? this.generateOrderCode(),
         status: 'COMPLETED',
         organizationId: organizationId ?? null,
         companyId: companyId ?? null, // 👈 asociar compañía
@@ -552,7 +613,18 @@ export class WebSalesService {
       throw new NotFoundException(
         `No se encontró la orden con código ${code}.`,
       );
-    return order;
+    // Strip sensitive PII from payload for public access
+    const { payload, ...safeOrder } = order as any;
+    return {
+      ...safeOrder,
+      payload: payload
+        ? {
+            details: payload.details,
+            shippingMethod: payload.shippingMethod,
+            estimatedDelivery: payload.estimatedDelivery,
+          }
+        : null,
+    };
   }
 
   async getWebOrdersByUser(
@@ -623,6 +695,17 @@ export class WebSalesService {
     });
     if (!order || order.status !== 'PENDING' || !order.payload) {
       throw new BadRequestException('Orden no válida para completar');
+    }
+
+    // ── P0-4: Atomic claim to prevent double completion ──
+    // Atomically set status to COMPLETED only if still PENDING.
+    // If count=0, a concurrent request already claimed this order.
+    const claimed = await this.prisma.orders.updateMany({
+      where: { id, status: 'PENDING' },
+      data: { status: 'COMPLETED' },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestException('Esta orden ya fue completada');
     }
 
     const payloadAny = (order.payload as any) || {};
@@ -762,19 +845,29 @@ export class WebSalesService {
       }
     }
 
-    const sale = await this.createWebSale(
-      {
-        ...(order.payload as any),
-        organizationId: effectiveOrgId,
-        companyId: effectiveCompanyId,
-      },
-      true,
-    );
+    let sale: any;
+    try {
+      sale = await this.createWebSale(
+        {
+          ...(order.payload as any),
+          organizationId: effectiveOrgId,
+          companyId: effectiveCompanyId,
+        },
+        true,
+      );
+    } catch (err) {
+      // Revert status so the order can be retried
+      await this.prisma.orders.update({
+        where: { id: order.id },
+        data: { status: 'PENDING' },
+      });
+      throw err;
+    }
 
+    // Update order with sale reference and carrier info (status already COMPLETED)
     await this.prisma.orders.update({
       where: { id: order.id },
       data: {
-        status: 'COMPLETED',
         salesId: sale.id,
         organizationId: effectiveOrgId ?? null,
         companyId: effectiveCompanyId ?? null,

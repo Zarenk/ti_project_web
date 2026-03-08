@@ -7,7 +7,9 @@ import { Minus, Plus, X, Heart, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
+import { useActiveTemplate } from "@/templates/use-active-template"
+import { useTemplateComponents } from "@/templates/use-store-template"
 import { useCart, type CartItem } from "@/context/cart-context"
 import Link from "next/link"
 import { getProducts, getPublicProducts } from "../dashboard/products/products.api"
@@ -49,6 +51,8 @@ interface Product {
 
 
 export default function ShoppingCart() {
+  const templateId = useActiveTemplate()
+  const { CartLayout } = useTemplateComponents(templateId)
   const { items: cartItems, removeItem, updateQuantity, addItem } = useCart()
   const [couponCode, setCouponCode] = useState("")
   const [discount, setDiscount] = useState(0)
@@ -371,27 +375,12 @@ export default function ShoppingCart() {
 
 
   const applyCoupon = () => {
-
-    if (couponCode.toLowerCase() === "save10") {
-
-      setDiscount(0.1) // 10% discount
-
-      setCouponApplied("SAVE10 - 10% off")
-
-    } else if (couponCode.toLowerCase() === "welcome20") {
-
-      setDiscount(0.2) // 20% discount
-
-      setCouponApplied("WELCOME20 - 20% off")
-
-    } else {
-
-      setDiscount(0)
-
-      setCouponApplied("")
-
-    }
-
+    // Coupons disabled — no backend validation exists yet.
+    // When a coupon system is implemented server-side, this should
+    // call a backend endpoint to validate and return the discount.
+    setDiscount(0)
+    setCouponApplied("")
+    toast.info("Los cupones no están disponibles en este momento.")
   }
 
 
@@ -414,11 +403,18 @@ export default function ShoppingCart() {
 
   const canCheckout = cartItems.length > 0 && !hasOutOfStock
 
-
+  if (templateId !== "classic") {
+    return (
+      <>
+        <TemplateNavbar />
+        <CartLayout />
+      </>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <TemplateNavbar />
       <TooltipProvider delayDuration={150}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <CheckoutSteps step={1} />

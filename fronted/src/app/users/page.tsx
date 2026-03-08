@@ -25,7 +25,7 @@ import {
   selfRegisterClient,
 } from "../dashboard/clients/clients.api"
 import { getOrdersByUser, getOrdersByEmail, getOrdersByDni } from "../dashboard/sales/sales.api"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
 import { useRouter } from "next/navigation"
 import { ManualPagination } from "@/components/data-table-pagination"
 import { motion } from "framer-motion"
@@ -363,7 +363,7 @@ export default function UserPanel() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">
-      <Navbar />
+      <TemplateNavbar />
       {isLoading ? (
         <div className="container mx-auto px-4 py-8 max-w-7xl">
           <Skeleton className="h-8 w-64 mb-6" />

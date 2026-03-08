@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/users/jwt-auth.guard';
+import { GlobalSuperAdminGuard } from 'src/tenancy/global-super-admin.guard';
 import { OnboardingService } from './onboarding.service';
 import { UpdateOnboardingStepDto } from './dto/update-onboarding-step.dto';
 import { UpdateDemoStatusDto } from './dto/update-demo-status.dto';
@@ -14,6 +15,12 @@ export class OnboardingController {
   @Get('progress')
   async getProgress() {
     return this.onboardingService.getProgressForCurrentTenant();
+  }
+
+  @UseGuards(GlobalSuperAdminGuard)
+  @Get('metrics')
+  async getMetrics() {
+    return this.onboardingService.getOnboardingMetrics();
   }
 
   @Patch('step')

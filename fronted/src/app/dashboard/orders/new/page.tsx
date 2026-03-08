@@ -15,8 +15,23 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Search, ArrowLeft, ArrowRight } from "lucide-react";
-import { getClients } from "@/app/dashboard/clients/clients.api";
+import { Search, ArrowLeft, ArrowRight, Building2, Loader2, MapPin, X as XIcon } from "lucide-react";
+import { getClients, createClient } from "@/app/dashboard/clients/clients.api";
+import { lookupSunatDocument, type LookupResponse } from "@/app/dashboard/sales/sales.api";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { createRestaurantOrder } from "@/app/dashboard/orders/orders.api";
 import { getRestaurantTables, type RestaurantTable } from "@/app/dashboard/tables/tables.api";
 import { getCategories } from "@/app/dashboard/categories/categories.api";
@@ -369,6 +384,11 @@ export default function NewOrderPage() {
   const [storesLoading, setStoresLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
   const [clientsLoading, setClientsLoading] = useState(true);
+  const [sunatDialogOpen, setSunatDialogOpen] = useState(false);
+  const [sunatSearchValue, setSunatSearchValue] = useState("");
+  const [sunatSearchResult, setSunatSearchResult] = useState<LookupResponse | null>(null);
+  const [sunatSearchError, setSunatSearchError] = useState<string | null>(null);
+  const [sunatSearchLoading, setSunatSearchLoading] = useState(false);
   const clientsWithKey = useMemo(() => {
     return (clients || []).map((c: any) => {
       const key = `${c?.name ?? ''} ${c?.typeNumber ?? ''} ${c?.dni ?? ''} ${c?.ruc ?? ''} ${c?.email ?? ''} ${c?.phone ?? ''}`
@@ -507,6 +527,106 @@ export default function NewOrderPage() {
     setSelectedClientId(c.id ?? null);
     setSelectedClientLabel(name);
   }, []);
+
+  const resetSunatDialog = useCallback(() => {
+    setSunatSearchValue("");
+    setSunatSearchResult(null);
+    setSunatSearchError(null);
+    setSunatSearchLoading(false);
+  }, []);
+
+  const handleSunatSearch = useCallback(async () => {
+    const value = sunatSearchValue.trim();
+    if (!/^\d{8}$|^\d{11}$/.test(value)) {
+      setSunatSearchError("Ingresa un DNI (8 dígitos) o RUC (11 dígitos).");
+      setSunatSearchResult(null);
+      return;
+    }
+    setSunatSearchLoading(true);
+    setSunatSearchError(null);
+    setSunatSearchResult(null);
+    try {
+      const result = await lookupSunatDocument(value);
+      setSunatSearchResult(result);
+    } catch (error) {
+      setSunatSearchError(
+        error instanceof Error ? error.message : "No se pudo consultar el documento.",
+      );
+    } finally {
+      setSunatSearchLoading(false);
+    }
+  }, [sunatSearchValue]);
+
+  const handleSelectSunatResult = useCallback(async (result: LookupResponse) => {
+    const clientName = result.name && !result.name.startsWith("(") ? result.name : "";
+    if (!clientName) {
+      toast.info("Documento sin nombre registrado.");
+      setSunatDialogOpen(false);
+      resetSunatDialog();
+      return;
+    }
+
+    setSunatSearchLoading(true);
+    try {
+      // Auto-create client in the system
+      const created = await createClient({
+        name: clientName,
+        type: result.type === "RUC" ? "RUC" : "DNI",
+        typeNumber: result.identifier ?? "",
+        adress: result.address ?? "",
+      });
+
+      if (created?.id) {
+        // Add to local clients list and pick it
+        setClients((prev: any[]) => {
+          if (prev.some((c: any) => c.id === created.id)) return prev;
+          return [...prev, created];
+        });
+        handleClientPick(created);
+        toast.success("Cliente registrado y seleccionado.");
+      }
+    } catch (err: any) {
+      // If 409 conflict (already exists), try to find and pick existing
+      const isConflict = err?.response?.status === 409;
+      if (isConflict) {
+        try {
+          const allClients = await getClients();
+          const found = allClients?.find?.((c: any) => c.typeNumber === result.identifier);
+          if (found) {
+            setClients((prev: any[]) => {
+              if (prev.some((c: any) => c.id === found.id)) return prev;
+              return [...prev, found];
+            });
+            handleClientPick(found);
+            toast.success("Cliente encontrado y seleccionado.");
+          } else {
+            // Fill form fields manually
+            const parts = clientName.trim().split(/\s+/);
+            setFirstName(parts.slice(0, -1).join(" ") || parts[0] || "");
+            setLastName(parts.length > 1 ? parts[parts.length - 1] : "");
+            setPersonalDni(result.identifier ?? "");
+            toast.info("Datos aplicados. Verifica la información.");
+          }
+        } catch {
+          const parts = clientName.trim().split(/\s+/);
+          setFirstName(parts.slice(0, -1).join(" ") || parts[0] || "");
+          setLastName(parts.length > 1 ? parts[parts.length - 1] : "");
+          setPersonalDni(result.identifier ?? "");
+        }
+      } else {
+        // Other error — just fill form fields
+        const parts = clientName.trim().split(/\s+/);
+        setFirstName(parts.slice(0, -1).join(" ") || parts[0] || "");
+        setLastName(parts.length > 1 ? parts[parts.length - 1] : "");
+        setPersonalDni(result.identifier ?? "");
+        toast.error("No se pudo registrar el cliente. Datos aplicados manualmente.");
+      }
+    } finally {
+      setSunatSearchLoading(false);
+      setSunatDialogOpen(false);
+      resetSunatDialog();
+    }
+  }, [handleClientPick, resetSunatDialog]);
 
   const handleProductPick = useCallback((p: { id: number; name: string; price: number }) => {
     setSelectedProductId(p.id);
@@ -943,12 +1063,26 @@ export default function NewOrderPage() {
                       </div>
                       <div className="space-y-2">
                         <Label>Cliente</Label>
-                        <ClientCombobox
-                          clients={clientsWithKey}
-                          selectedId={selectedClientId}
-                          selectedLabel={selectedClientLabel}
-                          onPick={handleClientPick}
-                        />
+                        <div className="flex items-center gap-1.5 w-full min-w-0">
+                          <div className="flex-1 min-w-0">
+                            <ClientCombobox
+                              clients={clientsWithKey}
+                              selectedId={selectedClientId}
+                              selectedLabel={selectedClientLabel}
+                              onPick={handleClientPick}
+                            />
+                          </div>
+                          <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" className="h-9 w-9 cursor-pointer flex-shrink-0 text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors" onClick={() => { setSunatSearchValue(""); setSunatSearchResult(null); setSunatSearchError(null); setSunatDialogOpen(true); }}>
+                                  <Search className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">Consulta SUNAT</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -956,12 +1090,26 @@ export default function NewOrderPage() {
                   {orderType !== "DINE_IN" && (
                     <div className="space-y-2">
                       <Label>Cliente</Label>
-                      <ClientCombobox
-                        clients={clientsWithKey}
-                        selectedId={selectedClientId}
-                        selectedLabel={selectedClientLabel}
-                        onPick={handleClientPick}
-                      />
+                      <div className="flex items-center gap-1.5 w-full min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <ClientCombobox
+                            clients={clientsWithKey}
+                            selectedId={selectedClientId}
+                            selectedLabel={selectedClientLabel}
+                            onPick={handleClientPick}
+                          />
+                        </div>
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" className="h-9 w-9 cursor-pointer flex-shrink-0 text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors" onClick={() => { setSunatSearchValue(""); setSunatSearchResult(null); setSunatSearchError(null); setSunatDialogOpen(true); }}>
+                                <Search className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Consulta SUNAT</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </div>
                   )}
 
@@ -1082,6 +1230,7 @@ export default function NewOrderPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-950">
       <div className="container mx-auto px-4 py-6">
         <div className="mb-4 flex items-center gap-2">
@@ -1113,12 +1262,26 @@ export default function NewOrderPage() {
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <Search className="h-4 w-4 text-muted-foreground" /> Buscar cliente
                   </Label>
-                  <ClientCombobox
-                    clients={clientsWithKey}
-                    selectedId={selectedClientId}
-                    selectedLabel={selectedClientLabel}
-                    onPick={handleClientPick}
-                  />
+                  <div className="flex items-center gap-1.5 w-full min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <ClientCombobox
+                        clients={clientsWithKey}
+                        selectedId={selectedClientId}
+                        selectedLabel={selectedClientLabel}
+                        onPick={handleClientPick}
+                      />
+                    </div>
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button type="button" variant="outline" size="icon" className="h-9 w-9 cursor-pointer flex-shrink-0 text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors" onClick={() => { setSunatSearchValue(""); setSunatSearchResult(null); setSunatSearchError(null); setSunatDialogOpen(true); }}>
+                            <Search className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">Consulta SUNAT</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                   <p className="text-xs text-muted-foreground">Busca clientes registrados y autocompleta sus datos.</p>
                 </div>
 
@@ -1331,6 +1494,128 @@ export default function NewOrderPage() {
         </div>
       </div>
     </div>
+
+    {/* ── SUNAT Lookup Dialog ── */}
+    <Dialog
+        open={sunatDialogOpen}
+        onOpenChange={(open) => {
+          setSunatDialogOpen(open);
+          if (!open) resetSunatDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+              Consulta SUNAT
+            </DialogTitle>
+            <DialogDescription>
+              Ingresa un DNI (8 dígitos) o RUC (11 dígitos) para buscar y registrar el cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 w-full min-w-0">
+            <div className="flex gap-2">
+              <Input
+                value={sunatSearchValue}
+                onChange={(e) => setSunatSearchValue(e.target.value)}
+                placeholder="Ej: 20519857538"
+                className="font-mono flex-1 min-w-0"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleSunatSearch();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleSunatSearch}
+                disabled={sunatSearchLoading}
+                className="cursor-pointer flex-shrink-0"
+              >
+                {sunatSearchLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            {sunatSearchError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 w-full min-w-0 overflow-hidden">
+                <XIcon className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive break-words">{sunatSearchError}</p>
+              </div>
+            )}
+
+            {sunatSearchResult ? (
+              <div
+                className={cn(
+                  "p-3 rounded-lg border cursor-pointer w-full min-w-0 overflow-hidden",
+                  "transition-all duration-200 ease-out",
+                  "hover:bg-primary/5 hover:border-primary/30 hover:shadow-sm",
+                  "active:scale-[0.98]",
+                  "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                  sunatSearchLoading && "pointer-events-none opacity-50",
+                )}
+                onClick={() => handleSelectSunatResult(sunatSearchResult)}
+              >
+                <div className="flex items-start justify-between gap-2 w-full min-w-0">
+                  <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
+                    <p className="text-sm font-semibold break-words leading-snug">
+                      {sunatSearchResult.name}
+                    </p>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {sunatSearchResult.type}: {sunatSearchResult.identifier}
+                    </p>
+                  </div>
+                  {sunatSearchResult.status && (
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 tracking-wide",
+                        sunatSearchResult.status === "ACTIVO"
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : "bg-red-500/15 text-red-600 dark:text-red-400",
+                      )}
+                    >
+                      {sunatSearchResult.status}
+                    </span>
+                  )}
+                </div>
+
+                {sunatSearchResult.address && sunatSearchResult.address !== "—" && (
+                  <div className="flex items-start gap-1.5 mt-2 pt-2 border-t w-full min-w-0 overflow-hidden">
+                    <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground break-words leading-relaxed">
+                      {sunatSearchResult.address}
+                    </p>
+                  </div>
+                )}
+
+                {sunatSearchLoading ? (
+                  <div className="flex items-center justify-center gap-2 mt-2 pt-2 border-t">
+                    <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                    <span className="text-[10px] text-muted-foreground">Registrando cliente...</span>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                    Clic para registrar y seleccionar
+                  </p>
+                )}
+              </div>
+            ) : !sunatSearchLoading && !sunatSearchError ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border border-dashed text-center">
+                <Search className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Ingresa un documento y presiona buscar.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

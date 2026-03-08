@@ -46,6 +46,8 @@ export const queryKeys = {
       [...tenantScope(orgId, companyId), "entries", "list", filters] as const,
     detail: (orgId: number | null, companyId: number | null, id: number) =>
       [...tenantScope(orgId, companyId), "entries", "detail", id] as const,
+    documents: (orgId: number | null, companyId: number | null, filters?: Record<string, unknown>) =>
+      [...tenantScope(orgId, companyId), "entries", "documents", filters] as const,
   },
 
   // ── Inventory ──────────────────────────────────────────────

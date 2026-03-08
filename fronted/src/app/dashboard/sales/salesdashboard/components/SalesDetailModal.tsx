@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 
 export function SaleDetailModal({ sale, open, onClose }: { sale: any, open: boolean, onClose: () => void }) {
   if (!sale) return null;
-  console.log('Venta recibida en modal:', sale);
   const tipo = sale.invoice?.tipoComprobante?.toLowerCase(); // "factura" o "boleta"
   const ruc = sale.companyRuc ?? sale.company?.sunatRuc ?? sale.company?.ruc ?? "00000000000";
   const archivo = `${ruc}-${tipo === 'boleta' ? '03' : '01'}-${sale.invoice?.serie}-${sale.invoice?.nroCorrelativo}.pdf`;
@@ -32,7 +31,7 @@ export function SaleDetailModal({ sale, open, onClose }: { sale: any, open: bool
                 href={`/api/sunat/pdf/${tipo}/${archivo}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 underline"
+                className="text-blue-600 underline cursor-pointer hover:text-blue-800"
               >
                 Ver PDF del comprobante
               </a>

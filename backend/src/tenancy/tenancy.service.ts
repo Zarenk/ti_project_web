@@ -24,6 +24,7 @@ import {
 } from './entities/tenancy.entity';
 import { TenantContext } from './tenant-context.interface';
 import { resolveOrganizationId } from './organization.utils';
+import { SelfCreateOrgDto } from './dto/self-create-org.dto';
 
 type MinimalUnit = Pick<
   StoredOrganizationUnit,
@@ -1349,6 +1350,9 @@ export class TenancyService {
         allowedOrganizationIds = Array.from(membershipIds).sort(
           (a, b) => a - b,
         );
+      } else {
+        // User has no memberships — return empty immediately (don't leak other orgs)
+        return { organization: null, company: null, companies: [] };
       }
     }
 
@@ -2527,5 +2531,188 @@ export class TenancyService {
         'El codigo ingresado ya esta en uso por otra organizacion.',
       );
     }
+  }
+
+  async selfCreateOrganization(
+    dto: SelfCreateOrgDto,
+    userId: number,
+  ): Promise<{ organizationId: number; companyId: number }> {
+    const trimmedOrgName = dto.organizationName.trim();
+    const trimmedCompanyName = dto.companyName.trim();
+
+    const existingOrg = await this.prisma.organization.findFirst({
+      where: { name: { equals: trimmedOrgName, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existingOrg) {
+      throw new ConflictException(
+        'Ya existe una organización con ese nombre. Intenta con otro.',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const prisma = tx as unknown as PrismaService as any;
+
+      const slug = await this.ensureOrganizationSlug(
+        prisma,
+        null,
+        trimmedOrgName,
+      );
+
+      const organization = await prisma.organization.create({
+        data: {
+          name: trimmedOrgName,
+          slug,
+          status: 'ACTIVE',
+        },
+      });
+
+      const vertical = dto.businessVertical ?? 'GENERAL';
+
+      const company = await prisma.company.create({
+        data: {
+          organizationId: organization.id,
+          name: trimmedCompanyName,
+          legalName: trimmedCompanyName,
+          status: 'ACTIVE',
+          businessVertical: vertical,
+        },
+      });
+
+      await prisma.organizationMembership.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          role: 'OWNER',
+        },
+      });
+
+      await prisma.organizationUnit.create({
+        data: {
+          organizationId: organization.id,
+          name: 'General',
+          code: 'GEN',
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          lastOrgId: organization.id,
+          lastCompanyId: company.id,
+        },
+      });
+
+      return {
+        organizationId: organization.id,
+        companyId: company.id,
+      };
+    });
+  }
+
+  async getOrganizationMembers(organizationId: number) {
+    const memberships = await this.prisma.organizationMembership.findMany({
+      where: { organizationId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return memberships.map((m) => ({
+      membershipId: m.id,
+      userId: m.user.id,
+      username: m.user.username,
+      email: m.user.email,
+      userRole: m.user.role,
+      userStatus: m.user.status,
+      membershipRole: m.role,
+      createdAt: m.createdAt,
+    }));
+  }
+
+  async removeMember(
+    organizationId: number,
+    targetUserId: number,
+    performedByUserId: number,
+  ): Promise<{ removed: true; nextOrgId: number | null; nextCompanyId: number | null }> {
+    const membership =
+      await this.prisma.organizationMembership.findFirst({
+        where: { organizationId, userId: targetUserId },
+      });
+
+    if (!membership) {
+      throw new NotFoundException(
+        'El usuario no es miembro de esta organización.',
+      );
+    }
+
+    if (membership.role === 'OWNER') {
+      throw new ForbiddenException(
+        'No se puede desvincular al dueño (OWNER) de la organización.',
+      );
+    }
+
+    if (targetUserId === performedByUserId) {
+      throw new ForbiddenException(
+        'No puedes desvincularte a ti mismo. Contacta a otro administrador.',
+      );
+    }
+
+    let nextOrgId: number | null = null;
+    let nextCompanyId: number | null = null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.organizationMembership.delete({
+        where: { id: membership.id },
+      });
+
+      const user = await tx.user.findUnique({
+        where: { id: targetUserId },
+        select: { lastOrgId: true },
+      });
+
+      if (user?.lastOrgId === organizationId) {
+        const nextMembership = await tx.organizationMembership.findFirst({
+          where: { userId: targetUserId },
+          include: {
+            organization: {
+              include: { companies: { take: 1, select: { id: true } } },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        nextOrgId = nextMembership?.organizationId ?? null;
+        nextCompanyId =
+          nextMembership?.organization?.companies?.[0]?.id ?? null;
+
+        await tx.user.update({
+          where: { id: targetUserId },
+          data: {
+            lastOrgId: nextOrgId,
+            lastCompanyId: nextCompanyId,
+          },
+        });
+      }
+    });
+
+    return { removed: true, nextOrgId, nextCompanyId };
   }
 }

@@ -81,7 +81,7 @@ export class SalePostedController {
         await this.bootstrap.ensureDefaults(effectiveTenant.organizationId);
       }
 
-      const invoice = sale.invoices?.[0];
+      const invoice = sale.invoices ?? null;
       if (invoice) {
         // Verificar si ya existe un journal entry para esta factura
         const existing = await this.prisma.journalEntry.findFirst({
@@ -154,7 +154,7 @@ export class SalePostedController {
           date: new Date(data.timestamp),
           description,
           source: 'SALE',
-          moneda: invoice?.tipoMoneda || 'PEN',
+          moneda: (invoice?.tipoMoneda === 'USD' ? 'USD' : 'PEN') as 'PEN' | 'USD',
           tipoCambio: undefined,
           lines: journalLines,
         },

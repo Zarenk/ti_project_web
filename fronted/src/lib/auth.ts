@@ -88,7 +88,11 @@ function getTokenExpirationTimestamp(token: string): number | null {
 
 function isExpired(token: string): boolean {
   const expiresAt = getTokenExpirationTimestamp(token)
-  return !expiresAt || expiresAt < Date.now()
+  // Match middleware skew (10s) so client and edge layer agree on expiry.
+  // Without this, a 10-second window exists where the client considers the
+  // token valid but middleware rejects it, causing redirect loops.
+  const skewMs = 10_000
+  return !expiresAt || expiresAt <= Date.now() + skewMs
 }
 
 export async function getAuthTokenExpirationDate(): Promise<Date | null> {

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { TenantContext } from 'src/tenancy/tenant-context.interface';
+import * as Sentry from '@sentry/nestjs';
 
 @Catch()
 export class TenantExceptionFilter implements ExceptionFilter {
@@ -57,6 +58,20 @@ export class TenantExceptionFilter implements ExceptionFilter {
         ? { stack: exception.stack }
         : {}),
     });
+
+    // Report 5xx errors to Sentry with tenant context
+    if (status >= 500 && exception instanceof Error) {
+      Sentry.withScope((scope) => {
+        scope.setTag('organizationId', String(tenant?.organizationId ?? 'unknown'));
+        scope.setTag('companyId', String(tenant?.companyId ?? 'unknown'));
+        scope.setUser({ id: String(tenant?.userId ?? 'anonymous') });
+        scope.setContext('request', {
+          method: request.method,
+          url: request.url,
+        });
+        Sentry.captureException(exception);
+      });
+    }
 
     response.status(status).json({
       statusCode: status,

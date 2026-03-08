@@ -27,7 +27,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/accordion';
-import Navbar from '@/components/navbar';
+import TemplateNavbar from '@/templates/TemplateNavbar';
 
 export default function WarrantyPage() {
   const [formData, setFormData] = useState({
@@ -45,7 +45,7 @@ export default function WarrantyPage() {
 
   return (
     <div className="min-h-screen transition-colors duration-300">
-      <Navbar/>
+      <TemplateNavbar/>
       <div className="bg-gradient-to-br from-blue-50 via-cyan-50 to-white dark:from-slate-900 dark:via-blue-950 dark:to-slate-800">
         {/* Hero Section */}
         <section className="py-16 px-4">

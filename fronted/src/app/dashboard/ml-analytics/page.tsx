@@ -1,19 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   Activity,
-  BarChart3,
   Brain,
+  Check,
   CheckCircle2,
+  ChevronsUpDown,
+  Clock,
+  Cog,
   Loader2,
+  Package,
+  Play,
   RefreshCw,
   Search,
   ShieldCheck,
   ShoppingBasket,
+  Square,
+  Timer,
   Users,
   XCircle,
+  Zap,
 } from "lucide-react"
 import {
   AreaChart,
@@ -36,10 +44,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { mlAnalyticsGuideSteps } from "./ml-guide-steps"
 import { useMLAnalytics } from "./use-ml-analytics"
-import type { DemandForecastResult, BasketRule, PriceCheckResult, ClientSegment } from "./ml-analytics.api"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import type { DemandForecastResult, BasketRule, PriceCheckResult, ClientSegment, TrainingStatus, MLProduct } from "./ml-analytics.api"
+
+// ── Period options for demand forecast ──────────────────────────────────────
+
+type ForecastPeriod = { key: string; label: string; shortLabel: string; days: number }
+
+const FORECAST_PERIODS: ForecastPeriod[] = [
+  { key: "week", label: "Semana", shortLabel: "7D", days: 7 },
+  { key: "month", label: "Mes", shortLabel: "30D", days: 30 },
+  { key: "quarter", label: "Trimestre", shortLabel: "90D", days: 90 },
+]
 
 // ── Section IDs ──────────────────────────────────────────────────────────────
 
@@ -119,52 +141,52 @@ export default function MLAnalyticsPage() {
 
           {/* Content */}
           <main className="w-full min-w-0 overflow-hidden">
-            <AnimatePresence mode="sync" initial={false}>
-              <motion.div
-                key={activeSection}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.2 }}
-                className="w-full min-w-0"
-              >
-                {activeSection === "status" && (
-                  <StatusSection
-                    status={ml.status}
-                    loading={ml.statusLoading}
-                    reloading={ml.reloading}
-                    onReload={ml.handleReload}
-                  />
-                )}
-                {activeSection === "demand" && (
-                  <DemandSection
-                    result={ml.demandResult}
-                    loading={ml.demandLoading}
-                    onSearch={ml.searchDemand}
-                  />
-                )}
-                {activeSection === "basket" && (
-                  <BasketSection
-                    rules={ml.basketRules}
-                    loading={ml.basketLoading}
-                    onSearch={ml.searchBasket}
-                  />
-                )}
-                {activeSection === "prices" && (
-                  <PriceSection
-                    result={ml.priceResult}
-                    loading={ml.priceLoading}
-                    onSearch={ml.searchPrice}
-                  />
-                )}
-                {activeSection === "segments" && (
-                  <SegmentsSection
-                    segments={ml.segments}
-                    loading={ml.segmentsLoading}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
+            <div key={activeSection} className="w-full min-w-0 animate-in fade-in slide-in-from-bottom-1 duration-200">
+              {activeSection === "status" && (
+                <StatusSection
+                  status={ml.status}
+                  loading={ml.statusLoading}
+                  reloading={ml.reloading}
+                  onReload={ml.handleReload}
+                  trainingStatus={ml.trainingStatus}
+                  isTraining={ml.isTraining}
+                  onStartTraining={ml.handleStartTraining}
+                  onCancelTraining={ml.handleCancelTraining}
+                  onToggleCron={ml.handleToggleCron}
+                />
+              )}
+              {activeSection === "demand" && (
+                <DemandSection
+                  result={ml.demandResult}
+                  loading={ml.demandLoading}
+                  onSearch={ml.searchDemand}
+                  products={ml.products}
+                  demandProductIds={ml.demandProductIds}
+                />
+              )}
+              {activeSection === "basket" && (
+                <BasketSection
+                  rules={ml.basketRules}
+                  loading={ml.basketLoading}
+                  onSearch={ml.searchBasket}
+                  products={ml.products}
+                />
+              )}
+              {activeSection === "prices" && (
+                <PriceSection
+                  result={ml.priceResult}
+                  loading={ml.priceLoading}
+                  onSearch={ml.searchPrice}
+                  products={ml.products}
+                />
+              )}
+              {activeSection === "segments" && (
+                <SegmentsSection
+                  segments={ml.segments}
+                  loading={ml.segmentsLoading}
+                />
+              )}
+            </div>
           </main>
         </div>
       </div>
@@ -189,13 +211,41 @@ function StatusSection({
   loading,
   reloading,
   onReload,
+  trainingStatus,
+  isTraining,
+  onStartTraining,
+  onCancelTraining,
+  onToggleCron,
 }: {
   status: Record<string, { loaded: boolean; count?: number }>
   loading: boolean
   reloading: boolean
   onReload: () => Promise<void>
+  trainingStatus: TrainingStatus | null
+  isTraining: boolean
+  onStartTraining: (steps?: string[]) => Promise<void>
+  onCancelTraining: () => Promise<void>
+  onToggleCron: (enabled: boolean) => Promise<void>
 }) {
   const models = Object.keys(MODEL_LABELS)
+
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds.toFixed(0)}s`
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.round(seconds % 60)
+    return `${mins}m ${secs}s`
+  }
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso)
+    return d.toLocaleDateString("es-PE", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
 
   return (
     <div className="space-y-6 w-full min-w-0">
@@ -204,15 +254,18 @@ function StatusSection({
           <h2 className="text-lg font-semibold">Estado de Modelos</h2>
           <p className="text-sm text-muted-foreground">Modelos ML cargados en el servidor</p>
         </div>
-        <Button
-          onClick={onReload}
-          disabled={reloading}
-          size="sm"
-          className="gap-2 cursor-pointer"
-        >
-          <RefreshCw className={`h-4 w-4 ${reloading ? "animate-spin" : ""}`} />
-          {reloading ? "Recargando..." : "Recargar modelos"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={onReload}
+            disabled={reloading}
+            size="sm"
+            variant="outline"
+            className="gap-2 cursor-pointer"
+          >
+            <RefreshCw className={`h-4 w-4 ${reloading ? "animate-spin" : ""}`} />
+            {reloading ? "Recargando..." : "Recargar"}
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -262,19 +315,403 @@ function StatusSection({
         </div>
       )}
 
-      {/* Training instructions */}
-      <Card className="w-full min-w-0 overflow-hidden border-dashed">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Como entrenar los modelos</CardTitle>
+      {/* ── Training Controls ──────────────────────────────────────────────── */}
+      <Card className="w-full min-w-0 overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary flex-shrink-0" />
+            <CardTitle className="text-base">Entrenamiento Automatico</CardTitle>
+          </div>
+          <CardDescription className="text-xs">
+            Exporta datos, entrena todos los modelos ML y recarga los resultados automaticamente.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="text-xs text-muted-foreground space-y-2">
-          <p>1. Instalar dependencias: <code className="bg-muted px-1 py-0.5 rounded">pip install -r backend/ml/requirements-training.txt</code></p>
-          <p>2. Exportar datos: <code className="bg-muted px-1 py-0.5 rounded">python backend/ml/training/export_all.py</code></p>
-          <p>3. Entrenar modelos (ejemplo): <code className="bg-muted px-1 py-0.5 rounded">python backend/ml/training/train_demand_forecast.py</code></p>
-          <p>4. Hacer clic en &quot;Recargar modelos&quot; arriba para cargar los resultados sin reiniciar.</p>
+        <CardContent className="space-y-4">
+          {/* Action button */}
+          <Button
+            onClick={() => onStartTraining()}
+            disabled={isTraining || reloading}
+            className="gap-2 cursor-pointer w-full sm:w-auto bg-primary hover:bg-primary/90 transition-all duration-150 active:scale-[0.98]"
+          >
+            {isTraining ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Entrenando...
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4" />
+                Entrenar todos los modelos
+              </>
+            )}
+          </Button>
+
+          {/* ── Animated Progress Bar ─────────────────────────────────────────── */}
+          <AnimatePresence>
+            {isTraining && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                <TrainingProgressBar
+                  currentStep={trainingStatus?.currentStep ?? null}
+                  completedSteps={trainingStatus?.completedSteps ?? []}
+                  totalSteps={trainingStatus?.totalSteps ?? 5}
+                  onCancel={onCancelTraining}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Schedule toggle */}
+          <div className="flex items-center justify-between gap-3 pt-2 border-t">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Entrenamiento programado</p>
+              <p className="text-xs text-muted-foreground">
+                {trainingStatus?.schedule.nextDescription || "Todos los dias a las 3:00 AM"}
+              </p>
+            </div>
+            <Switch
+              checked={trainingStatus?.schedule.enabled ?? false}
+              onCheckedChange={onToggleCron}
+              className="cursor-pointer flex-shrink-0"
+            />
+          </div>
+
+          {/* Last training result */}
+          {trainingStatus?.lastRun && !isTraining && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="pt-2 border-t space-y-2"
+            >
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>Ultimo entrenamiento: {formatDate(trainingStatus.lastRun)}</span>
+              </div>
+              {trainingStatus.lastDuration != null && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Timer className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>Duracion: {formatDuration(trainingStatus.lastDuration)}</span>
+                </div>
+              )}
+              {trainingStatus.lastResult && (
+                <div className="flex flex-wrap gap-2">
+                  {trainingStatus.lastResult.summary.successful > 0 && (
+                    <Badge variant="default" className="text-xs gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {trainingStatus.lastResult.summary.successful} exitosos
+                    </Badge>
+                  )}
+                  {trainingStatus.lastResult.summary.failed > 0 && (
+                    <Badge variant="destructive" className="text-xs gap-1">
+                      <XCircle className="h-3 w-3" />
+                      {trainingStatus.lastResult.summary.failed} con errores
+                    </Badge>
+                  )}
+                </div>
+              )}
+              {/* Per-model results */}
+              {trainingStatus.lastResult?.training && Object.keys(trainingStatus.lastResult.training).length > 0 && (
+                <div className="grid gap-1.5 text-xs">
+                  {Object.entries(trainingStatus.lastResult.training).map(([key, res]) => (
+                    <div key={key} className="flex items-center gap-2 w-full min-w-0">
+                      {res.status === "ok" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                      )}
+                      <span className="font-medium">{MODEL_LABELS[key]?.label || key}</span>
+                      {res.message && (
+                        <span className="text-muted-foreground truncate min-w-0">— {res.message}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Training Progress Bar
+// ══════════════════════════════════════════════════════════════════════════════
+
+const TRAINING_STEPS = [
+  { key: "demand", label: "Demanda", icon: Activity },
+  { key: "baskets", label: "Canasta", icon: ShoppingBasket },
+  { key: "prices", label: "Precios", icon: ShieldCheck },
+  { key: "products", label: "Productos", icon: Package },
+  { key: "clients", label: "Clientes", icon: Users },
+]
+
+function TrainingProgressBar({
+  currentStep,
+  completedSteps,
+  totalSteps,
+  onCancel,
+}: {
+  currentStep: string | null
+  completedSteps: string[]
+  totalSteps: number
+  onCancel?: () => void
+}) {
+  const completedSet = new Set(completedSteps)
+  const completedCount = completedSteps.length
+  const progressPercent = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0
+
+  // Detect which step is currently active
+  const activeStepKey = TRAINING_STEPS.find(
+    (s) => !completedSet.has(s.key) && currentStep && !currentStep.includes("Exportando") && !currentStep.includes("Datos exportados")
+  )?.key
+
+  const isExporting = currentStep?.includes("Exportando") || currentStep?.includes("Datos exportados")
+
+  return (
+    <div className="rounded-xl border bg-card/50 p-3 sm:p-4 space-y-3 w-full min-w-0 overflow-hidden">
+      {/* Header with percentage + stop button */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Cog className="h-4 w-4 text-primary animate-spin flex-shrink-0" />
+          <span className="text-sm font-medium truncate">
+            {isExporting ? "Exportando datos..." : currentStep || "Iniciando..."}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-xs font-mono text-muted-foreground tabular-nums">
+            {completedCount}/{totalSteps}
+          </span>
+          {onCancel && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20, delay: 0.2 }}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+                onClick={onCancel}
+                title="Detener entrenamiento"
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+              </Button>
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      {/* Main progress bar */}
+      <div className="relative h-2.5 rounded-full bg-muted overflow-hidden w-full">
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary via-primary to-primary/80"
+          initial={{ width: "0%" }}
+          animate={{ width: `${progressPercent}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
+        {/* Shimmer effect while training */}
+        <div className="absolute inset-0 overflow-hidden rounded-full">
+          <div
+            className="h-full w-1/3 animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent"
+            style={{ animationTimingFunction: "ease-in-out" }}
+          />
+        </div>
+      </div>
+
+      {/* Step indicators */}
+      <div className="grid grid-cols-5 gap-1 sm:gap-2 w-full min-w-0">
+        {TRAINING_STEPS.map((step) => {
+          const isDone = completedSet.has(step.key)
+          const isActive = step.key === activeStepKey && !isExporting
+          const Icon = step.icon
+
+          return (
+            <motion.div
+              key={step.key}
+              className={`
+                flex flex-col items-center gap-1 rounded-lg p-1.5 sm:p-2 transition-colors duration-300
+                ${isDone ? "bg-green-500/10" : isActive ? "bg-primary/10" : "bg-muted/30"}
+              `}
+              animate={isActive ? { scale: [1, 1.03, 1] } : {}}
+              transition={isActive ? { repeat: Infinity, duration: 1.5 } : {}}
+            >
+              <div className={`
+                relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full transition-all duration-300
+                ${isDone
+                  ? "bg-green-500 text-white"
+                  : isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }
+              `}>
+                {isDone ? (
+                  <motion.div
+                    initial={{ scale: 0, rotate: -45 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                  >
+                    <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  </motion.div>
+                ) : isActive ? (
+                  <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                ) : (
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                )}
+              </div>
+              <span className={`
+                text-[10px] sm:text-xs font-medium text-center leading-tight transition-colors duration-300
+                ${isDone ? "text-green-600 dark:text-green-400" : isActive ? "text-primary" : "text-muted-foreground"}
+              `}>
+                {step.label}
+              </span>
+            </motion.div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Product Search Combobox (shared)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function ProductCombobox({
+  products,
+  selectedId,
+  onSelect,
+  disabled,
+  placeholder = "Buscar producto...",
+  highlightIds,
+  highlightLabel = "Datos ML",
+}: {
+  products: MLProduct[]
+  selectedId: number | null
+  onSelect: (product: MLProduct) => void
+  disabled?: boolean
+  placeholder?: string
+  highlightIds?: Set<number>
+  highlightLabel?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState("")
+
+  const selected = products.find((p) => p.id === selectedId)
+
+  const filtered = useMemo(() => {
+    const base = search.trim()
+      ? products.filter((p) => {
+          const q = search.toLowerCase().trim()
+          return (
+            p.name.toLowerCase().includes(q) ||
+            p.id.toString().includes(q) ||
+            (p.categoryName && p.categoryName.toLowerCase().includes(q))
+          )
+        })
+      : products
+
+    // Sort: highlighted products first, then by name
+    if (highlightIds && highlightIds.size > 0) {
+      const sorted = [...base].sort((a, b) => {
+        const aHas = highlightIds.has(a.id) ? 0 : 1
+        const bHas = highlightIds.has(b.id) ? 0 : 1
+        if (aHas !== bHas) return aHas - bHas
+        return a.name.localeCompare(b.name)
+      })
+      return sorted.slice(0, 50)
+    }
+
+    return base.slice(0, 50)
+  }, [products, search, highlightIds])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-full justify-between cursor-pointer min-w-0 h-9 text-sm font-normal"
+        >
+          <span className="truncate min-w-0 flex items-center gap-1.5">
+            {selected ? (
+              <>
+                <span className="font-medium truncate">{selected.name}</span>
+                <span className="text-muted-foreground flex-shrink-0">#{selected.id}</span>
+                {highlightIds?.has(selected.id) && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 flex-shrink-0 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                    {highlightLabel}
+                  </Badge>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+          </span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 flex-shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Nombre, ID o categoria..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList>
+            <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
+              {products.length === 0 ? "Cargando productos..." : "Sin resultados"}
+            </CommandEmpty>
+            <CommandGroup>
+              {filtered.map((product) => {
+                const hasData = highlightIds?.has(product.id)
+                return (
+                  <CommandItem
+                    key={product.id}
+                    value={`${product.id}-${product.name}`}
+                    onSelect={() => {
+                      onSelect(product)
+                      setOpen(false)
+                      setSearch("")
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Check
+                      className={`mr-2 h-3.5 w-3.5 flex-shrink-0 ${
+                        selectedId === product.id ? "opacity-100" : "opacity-0"
+                      }`}
+                    />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm truncate">{product.name}</span>
+                        {hasData && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0 leading-4">
+                            {highlightLabel}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground truncate">
+                        #{product.id}
+                        {product.categoryName && ` · ${product.categoryName}`}
+                        {product.priceSell > 0 && ` · S/${product.priceSell.toFixed(2)}`}
+                      </span>
+                    </div>
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -286,44 +723,112 @@ function DemandSection({
   result,
   loading,
   onSearch,
+  products,
+  demandProductIds,
 }: {
   result: DemandForecastResult | null
   loading: boolean
-  onSearch: (productId: number) => Promise<void>
+  onSearch: (productId: number, days?: number) => Promise<void>
+  products: MLProduct[]
+  demandProductIds: Set<number>
 }) {
-  const [productId, setProductId] = useState("")
+  const [selectedProduct, setSelectedProduct] = useState<MLProduct | null>(null)
+  const [activePeriod, setActivePeriod] = useState<ForecastPeriod>(FORECAST_PERIODS[0])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const id = parseInt(productId, 10)
-    if (!isNaN(id) && id > 0) onSearch(id)
+  // Auto-trigger analysis on product select
+  const handleProductSelect = (product: MLProduct) => {
+    setSelectedProduct(product)
+    onSearch(product.id, activePeriod.days)
   }
+
+  // Change period and re-fetch
+  const handlePeriodChange = (period: ForecastPeriod) => {
+    setActivePeriod(period)
+    if (selectedProduct) {
+      onSearch(selectedProduct.id, period.days)
+    }
+  }
+
+  // Total forecast summary
+  const forecastTotal = useMemo(() => {
+    if (!result?.forecast?.length) return null
+    const total = result.forecast.reduce((sum, r) => sum + r.yhat, 0)
+    const avg = total / result.forecast.length
+    return { total: total.toFixed(1), avg: avg.toFixed(1), days: result.forecast.length }
+  }, [result])
 
   return (
     <div className="space-y-6 w-full min-w-0">
       <div>
         <h2 className="text-lg font-semibold">Prediccion de Demanda</h2>
-        <p className="text-sm text-muted-foreground">Forecast de ventas para los proximos 7 dias</p>
+        <p className="text-sm text-muted-foreground">
+          Forecast de ventas — selecciona un producto para analizar
+          {demandProductIds.size > 0 && (
+            <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+              ({demandProductIds.size} productos con datos)
+            </span>
+          )}
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex items-end gap-3 w-full min-w-0">
-        <div className="flex-1 min-w-0">
-          <Label htmlFor="demand-product" className="text-sm">ID del Producto</Label>
-          <Input
-            id="demand-product"
-            type="number"
-            min={1}
-            placeholder="Ej: 42"
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="mt-1"
-          />
+      {/* Product search + Period selector */}
+      <div className="space-y-3 w-full min-w-0">
+        <div className="w-full min-w-0">
+          <Label className="text-sm">Producto</Label>
+          <div className="mt-1">
+            <ProductCombobox
+              products={products}
+              selectedId={selectedProduct?.id ?? null}
+              onSelect={handleProductSelect}
+              disabled={loading}
+              highlightIds={demandProductIds}
+              highlightLabel="Forecast"
+            />
+          </div>
         </div>
-        <Button type="submit" disabled={loading || !productId} className="gap-2 cursor-pointer flex-shrink-0">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Buscar
-        </Button>
-      </form>
+
+        {/* Period tabs */}
+        <div className="flex items-center gap-2 w-full min-w-0">
+          <span className="text-xs text-muted-foreground flex-shrink-0">Periodo:</span>
+          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
+            {FORECAST_PERIODS.map((period) => {
+              const isActive = activePeriod.key === period.key
+              const isAvailable = period.key === "quarter" ? (result?.method === "prophet") : true
+              return (
+                <TooltipProvider key={period.key} delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => isAvailable && handlePeriodChange(period)}
+                        disabled={!isAvailable || loading}
+                        className={`
+                          px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 cursor-pointer
+                          ${isActive
+                            ? "bg-background text-foreground shadow-sm"
+                            : isAvailable
+                              ? "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                              : "text-muted-foreground/40 cursor-not-allowed"
+                          }
+                          disabled:cursor-not-allowed disabled:opacity-50
+                        `}
+                      >
+                        <span className="hidden sm:inline">{period.label}</span>
+                        <span className="sm:hidden">{period.shortLabel}</span>
+                      </button>
+                    </TooltipTrigger>
+                    {!isAvailable && (
+                      <TooltipContent side="bottom" className="text-xs">
+                        Solo disponible con Prophet (requiere 30+ dias de historial)
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            })}
+          </div>
+          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground flex-shrink-0" />}
+        </div>
+      </div>
 
       {loading && (
         <div className="space-y-3">
@@ -333,24 +838,40 @@ function DemandSection({
       )}
 
       {result && !loading && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-1 duration-300">
           {!result.available ? (
             <Card className="w-full min-w-0 overflow-hidden">
               <CardContent className="py-8 text-center text-muted-foreground">
-                No hay datos de prediccion para este producto. Asegurate de haber entrenado el modelo de demanda.
+                <Activity className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
+                <p>No hay datos de prediccion para este producto.</p>
+                <p className="text-xs mt-1">Asegurate de haber entrenado el modelo de demanda.</p>
               </CardContent>
             </Card>
           ) : (
             <>
-              <div className="flex items-center gap-2">
+              {/* Summary badges */}
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">{result.method === "prophet" ? "Prophet" : "Media Movil"}</Badge>
-                <span className="text-xs text-muted-foreground">{result.forecast?.length ?? 0} dias de forecast</span>
+                <Badge variant="outline" className="text-xs tabular-nums">
+                  {result.forecast?.length ?? 0} dias
+                </Badge>
+                {forecastTotal && (
+                  <>
+                    <Badge variant="outline" className="text-xs tabular-nums gap-1">
+                      <Activity className="h-3 w-3" />
+                      Total: {forecastTotal.total} uds
+                    </Badge>
+                    <Badge variant="outline" className="text-xs tabular-nums gap-1">
+                      Promedio: {forecastTotal.avg} uds/dia
+                    </Badge>
+                  </>
+                )}
               </div>
 
               {/* Chart */}
               <Card className="w-full min-w-0 overflow-hidden">
                 <CardContent className="pt-4 pb-2 px-2 sm:px-4">
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={result.forecast ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis
@@ -360,18 +881,28 @@ function DemandSection({
                           return `${d.getDate()}/${d.getMonth() + 1}`
                         }}
                         className="text-xs"
+                        interval={activePeriod.days > 30 ? Math.floor(activePeriod.days / 10) : "preserveStartEnd"}
                       />
                       <YAxis className="text-xs" />
                       <RechartsTooltip
                         contentStyle={{ fontSize: 12 }}
                         labelFormatter={(v) => {
                           const d = new Date(v)
-                          return d.toLocaleDateString("es-PE")
+                          return d.toLocaleDateString("es-PE", { weekday: "short", day: "2-digit", month: "short" })
+                        }}
+                        formatter={(value: number, name: string) => {
+                          const labels: Record<string, string> = {
+                            yhat: "Demanda estimada",
+                            yhat_upper: "Maximo estimado",
+                            yhat_lower: "Minimo estimado",
+                          }
+                          return [value.toFixed(1), labels[name] || name]
                         }}
                       />
                       <Area
                         type="monotone"
                         dataKey="yhat_upper"
+                        name="yhat_upper"
                         stroke="none"
                         fill="#6366f1"
                         fillOpacity={0.1}
@@ -381,6 +912,7 @@ function DemandSection({
                       <Area
                         type="monotone"
                         dataKey="yhat_lower"
+                        name="yhat_lower"
                         stroke="none"
                         fill="#ffffff"
                         fillOpacity={1}
@@ -390,6 +922,7 @@ function DemandSection({
                       <Area
                         type="monotone"
                         dataKey="yhat"
+                        name="yhat"
                         stroke="#6366f1"
                         fill="#6366f1"
                         fillOpacity={0.2}
@@ -407,9 +940,9 @@ function DemandSection({
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Detalle diario</CardTitle>
                 </CardHeader>
-                <CardContent className="overflow-x-auto">
+                <CardContent className="overflow-x-auto max-h-[320px] overflow-y-auto">
                   <table className="w-full text-xs">
-                    <thead>
+                    <thead className="sticky top-0 bg-card z-10">
                       <tr className="border-b text-muted-foreground">
                         <th className="text-left py-2 pr-4">Fecha</th>
                         <th className="text-right py-2 px-2">Demanda</th>
@@ -432,7 +965,7 @@ function DemandSection({
               </Card>
             </>
           )}
-        </motion.div>
+        </div>
       )}
     </div>
   )
@@ -446,17 +979,19 @@ function BasketSection({
   rules,
   loading,
   onSearch,
+  products,
 }: {
   rules: BasketRule[]
   loading: boolean
   onSearch: (productId: number) => Promise<void>
+  products: MLProduct[]
 }) {
-  const [productId, setProductId] = useState("")
+  const [selectedProduct, setSelectedProduct] = useState<MLProduct | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const id = parseInt(productId, 10)
-    if (!isNaN(id) && id > 0) onSearch(id)
+  // Auto-trigger on select
+  const handleProductSelect = (product: MLProduct) => {
+    setSelectedProduct(product)
+    onSearch(product.id)
   }
 
   const chartData = rules.map((rule, i) => ({
@@ -472,29 +1007,22 @@ function BasketSection({
         <p className="text-sm text-muted-foreground">Analisis de canasta — productos comprados juntos frecuentemente</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex items-end gap-3 w-full min-w-0">
-        <div className="flex-1 min-w-0">
-          <Label htmlFor="basket-product" className="text-sm">ID del Producto</Label>
-          <Input
-            id="basket-product"
-            type="number"
-            min={1}
-            placeholder="Ej: 15"
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="mt-1"
+      <div className="w-full min-w-0">
+        <Label className="text-sm">Producto</Label>
+        <div className="mt-1">
+          <ProductCombobox
+            products={products}
+            selectedId={selectedProduct?.id ?? null}
+            onSelect={handleProductSelect}
+            disabled={loading}
           />
         </div>
-        <Button type="submit" disabled={loading || !productId} className="gap-2 cursor-pointer flex-shrink-0">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Buscar
-        </Button>
-      </form>
+      </div>
 
       {loading && <Skeleton className="h-64 rounded-xl" />}
 
       {!loading && rules.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-1 duration-300">
           {/* Horizontal bar chart */}
           <Card className="w-full min-w-0 overflow-hidden">
             <CardHeader className="pb-2">
@@ -542,13 +1070,13 @@ function BasketSection({
               </Card>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {!loading && rules.length === 0 && productId && (
+      {!loading && rules.length === 0 && selectedProduct && (
         <Card className="w-full min-w-0 overflow-hidden">
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            Busca un producto para ver sus reglas de asociacion.
+            No se encontraron reglas de asociacion para <strong>{selectedProduct.name}</strong>.
           </CardContent>
         </Card>
       )}
@@ -564,19 +1092,32 @@ function PriceSection({
   result,
   loading,
   onSearch,
+  products,
 }: {
   result: PriceCheckResult | null
   loading: boolean
   onSearch: (productId: number, price: number) => Promise<void>
+  products: MLProduct[]
 }) {
-  const [productId, setProductId] = useState("")
+  const [selectedProduct, setSelectedProduct] = useState<MLProduct | null>(null)
   const [price, setPrice] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const id = parseInt(productId, 10)
+  const handleSearch = () => {
     const p = parseFloat(price)
-    if (!isNaN(id) && id > 0 && !isNaN(p) && p > 0) onSearch(id, p)
+    if (selectedProduct && !isNaN(p) && p > 0) onSearch(selectedProduct.id, p)
+  }
+
+  // Auto-fill price and auto-trigger when product is selected
+  const handleProductSelect = (product: MLProduct) => {
+    setSelectedProduct(product)
+    const autoPrice = product.priceSell > 0 ? product.priceSell : parseFloat(price)
+    if (product.priceSell > 0) {
+      setPrice(product.priceSell.toFixed(2))
+    }
+    // Auto-trigger if we have a valid price
+    if (!isNaN(autoPrice) && autoPrice > 0) {
+      onSearch(product.id, autoPrice)
+    }
   }
 
   return (
@@ -586,42 +1127,47 @@ function PriceSection({
         <p className="text-sm text-muted-foreground">Verifica si un precio esta dentro del rango normal</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-end gap-3 w-full min-w-0">
-        <div className="w-full sm:flex-1 min-w-0">
-          <Label htmlFor="price-product" className="text-sm">ID del Producto</Label>
-          <Input
-            id="price-product"
-            type="number"
-            min={1}
-            placeholder="Ej: 10"
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="mt-1"
-          />
+      <div className="flex flex-col gap-3 w-full min-w-0">
+        <div className="flex flex-col sm:flex-row gap-3 w-full min-w-0">
+          <div className="w-full sm:flex-1 min-w-0">
+            <Label className="text-sm">Producto</Label>
+            <div className="mt-1">
+              <ProductCombobox
+                products={products}
+                selectedId={selectedProduct?.id ?? null}
+                onSelect={handleProductSelect}
+                disabled={loading}
+              />
+            </div>
+          </div>
+          <div className="w-full sm:w-40 min-w-0">
+            <Label htmlFor="price-value" className="text-sm">Precio (S/)</Label>
+            <Input
+              id="price-value"
+              type="number"
+              min={0.01}
+              step={0.01}
+              placeholder="Ej: 25.50"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="mt-1 h-9"
+            />
+          </div>
         </div>
-        <div className="w-full sm:flex-1 min-w-0">
-          <Label htmlFor="price-value" className="text-sm">Precio (S/)</Label>
-          <Input
-            id="price-value"
-            type="number"
-            min={0.01}
-            step={0.01}
-            placeholder="Ej: 25.50"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="mt-1"
-          />
-        </div>
-        <Button type="submit" disabled={loading || !productId || !price} className="gap-2 cursor-pointer flex-shrink-0 w-full sm:w-auto">
+        <Button
+          onClick={handleSearch}
+          disabled={loading || !selectedProduct || !price}
+          className="gap-2 cursor-pointer w-full sm:w-auto sm:self-start transition-all duration-150 active:scale-[0.98]"
+        >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-          Verificar
+          Verificar precio
         </Button>
-      </form>
+      </div>
 
       {loading && <Skeleton className="h-48 rounded-xl" />}
 
       {result && !loading && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-1 duration-300">
           {!result.available ? (
             <Card className="w-full min-w-0 overflow-hidden">
               <CardContent className="py-8 text-center text-muted-foreground">
@@ -678,7 +1224,7 @@ function PriceSection({
               )}
             </>
           )}
-        </motion.div>
+        </div>
       )}
     </div>
   )
@@ -778,7 +1324,7 @@ function SegmentsSection({
           </CardContent>
         </Card>
       ) : (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-1 duration-300">
           {/* Pie chart */}
           <Card className="w-full min-w-0 overflow-hidden">
             <CardHeader className="pb-2">
@@ -847,7 +1393,7 @@ function SegmentsSection({
               </table>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       )}
     </div>
   )

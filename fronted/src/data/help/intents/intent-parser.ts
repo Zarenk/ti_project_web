@@ -110,6 +110,74 @@ export const OPERATIONAL_INTENT_PATTERNS: OperationalIntentPattern[] = [
     type: "query",
   },
 
+  // ══ ML - Predicción de demanda ══
+  {
+    intent: "ml.demand",
+    patterns: [
+      /(?:predicción|prediccion|pronóstico|pronostico|forecast)\s+(?:de\s+)?(?:demanda|ventas?)\s+(?:de\s+|del?\s+|para\s+)?(.+)/i,
+      /(?:cuánto|cuanto|cuántas|cuantas)\s+(?:se\s+)?(?:va[ns]?\s+a\s+)?(?:vender|demandar)\s+(?:de\s+)?(.+?)(?:\s+esta semana|\s+los\s+próximos\s+días)?/i,
+      /(?:demanda|ventas?\s+futuras?|proyección|proyeccion)\s+(?:de\s+|del?\s+|para\s+)?(.+)/i,
+      /(?:qué|que)\s+(?:tanto|tantos?)\s+(?:se\s+)?(?:venderá[n]?|va[n]?\s+a\s+vender)\s+(?:de\s+)?(.+)/i,
+    ],
+    entitySlots: ["product"],
+    type: "query",
+    requiredEntities: ["product"],
+  },
+
+  // ══ ML - Productos relacionados (basket) ══
+  {
+    intent: "ml.basket",
+    patterns: [
+      /(?:productos?\s+)?(?:relacionados?|asociados?|complementarios?)\s+(?:con|de|a|al?)\s+(.+)/i,
+      /(?:qué|que)\s+(?:se\s+)?(?:compra[n]?|vende[n]?|lleva[n]?)\s+(?:junto|con)\s+(?:con\s+)?(?:el?\s+)?(.+)/i,
+      /(?:quienes?|los?\s+que)\s+compra[n]?\s+(.+?)\s+(?:también|tambien)\s+(?:compra[n]?|lleva[n]?)/i,
+      /(?:sugerencias?|recomendaciones?)\s+(?:para|de|con)\s+(.+)/i,
+      /(?:combina[r]?|complementa[r]?)\s+(?:con\s+)?(.+)/i,
+    ],
+    entitySlots: ["product"],
+    type: "query",
+    requiredEntities: ["product"],
+  },
+
+  // ══ ML - Verificación de precio (producto primero, precio después) ══
+  {
+    intent: "ml.price",
+    patterns: [
+      /(?:verificar?|revisar?|checar?|comprobar?)\s+(?:el?\s+)?(?:precio)\s+(?:de\s+)?(.+?)\s+(?:a|en|por)\s+(?:s\/\.?\s*)?(\d+(?:\.\d+)?)/i,
+      /(?:el?\s+)?(?:precio)\s+(?:de\s+)?(.+?)\s+(?:a|en|por)\s+(?:s\/\.?\s*)?(\d+(?:\.\d+)?)\s+(?:es\s+)?(?:normal|correcto|está bien|esta bien)/i,
+      /(?:anomalía|anomalia)\s+(?:de\s+)?(?:precio)\s+(?:de\s+)?(.+?)\s+(?:a|en|por)\s+(?:s\/\.?\s*)?(\d+(?:\.\d+)?)/i,
+    ],
+    entitySlots: ["product", "amount"],
+    type: "query",
+    requiredEntities: ["product", "amount"],
+  },
+
+  // ══ ML - Verificación de precio (precio primero, producto después) ══
+  {
+    intent: "ml.price",
+    patterns: [
+      /(?:s\/\.?\s*)?(\d+(?:\.\d+)?)\s+(?:es\s+)?(?:un?\s+)?(?:buen\s+)?(?:precio)\s+(?:para|de)\s+(.+)/i,
+      /(?:es\s+)?(?:normal|correcto|buen\s+precio)\s+(?:s\/\.?\s*)?(\d+(?:\.\d+)?)\s+(?:para|por)\s+(.+)/i,
+    ],
+    entitySlots: ["amount", "product"],
+    type: "query",
+    requiredEntities: ["product", "amount"],
+  },
+
+  // ══ ML - Segmentos de clientes ══
+  {
+    intent: "ml.segments",
+    patterns: [
+      /(?:segmentos?|segmentación|segmentacion)\s+(?:de\s+)?(?:clientes?|compradores?)/i,
+      /(?:tipos?\s+de|clasificación\s+de|clasificacion\s+de)\s+clientes?/i,
+      /(?:clientes?\s+)?(?:vip|frecuentes?|en\s+riesgo|perdidos?|mejores)/i,
+      /(?:muestra|dame|ver|mostrar)\s+(?:los?\s+)?(?:segmentos?|tipos?)\s+(?:de\s+)?clientes?/i,
+      /(?:quiénes?|quienes?|cuáles?|cuales?)\s+(?:son\s+)?(?:mis|los|nuestros)\s+(?:mejores\s+)?clientes?/i,
+    ],
+    entitySlots: [],
+    type: "query",
+  },
+
   // ══ NAVEGACIÓN ══
   {
     intent: "navigate.to",

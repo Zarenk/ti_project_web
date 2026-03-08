@@ -58,6 +58,7 @@ export class SiteSettingsController {
       {
         actorId: req.user?.userId ?? null,
         actorEmail: req.user?.email ?? req.user?.username ?? null,
+        userRole: req.user?.role ?? null,
       },
     );
     return plainToInstance(CreateSiteSettingDto, {

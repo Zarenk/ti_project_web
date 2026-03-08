@@ -4,7 +4,6 @@ import Image from "next/image"
 import { getBrandLogoSources, resolveImageUrl } from "@/lib/images"
 import { BrandLogo } from "@/components/BrandLogo"
 import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,8 +19,6 @@ import { useSiteSettings } from "@/context/site-settings-context"
 import { getCardToneClass, getChipPresentation } from "@/utils/site-settings"
 import { cn } from "@/lib/utils"
 
-// Use the new `motion.create` API to avoid deprecated `motion()` usage
-const MotionButton = motion.create(Button)
 
 interface Brand {
   name: string
@@ -107,7 +104,7 @@ export default function MotionProductCard({ product, withActions = false, priori
   }
 
   return (
-    <motion.div layout>
+    <div>
       <Card
         className={cn(
           "group relative overflow-hidden transition-shadow duration-200 card-stripes",
@@ -132,7 +129,7 @@ export default function MotionProductCard({ product, withActions = false, priori
         </div>
         <Link href={`/store/${product.id}`} className="block">
           <CardHeader className="p-0">
-            <div className="relative h-56 flex items-center justify-center overflow-hidden rounded-t-lg">
+            <div className="relative aspect-square flex items-center justify-center overflow-hidden rounded-t-lg">
               <Image
                 src={resolvedPrimaryImage}
                 alt={product.name}
@@ -171,28 +168,12 @@ export default function MotionProductCard({ product, withActions = false, priori
               </span>
             <div className="flex items-center justify-between">
               {highlightPrice ? (
-                <motion.span
+                <span
                   aria-label="Precio"
-                  className="inline-block origin-left font-extrabold text-sky-600"
-                  animate={{
-                    x: [0, 6, 0],
-                    scale: [1, 1.08, 1],
-                    opacity: [1, 0.98, 1],
-                    color: [
-                      "#0369a1", // sky-700
-                      "#0ea5e9", // sky-500
-                      "#0369a1",
-                    ],
-                    textShadow: [
-                      "0 0 0 rgba(14,165,233,0)",
-                      "0 0 12px rgba(14,165,233,0.9), 0 0 24px rgba(14,165,233,0.6)",
-                      "0 0 0 rgba(14,165,233,0)",
-                    ],
-                  }}
-                  transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+                  className="inline-block origin-left font-extrabold text-sky-600 animate-price-pulse"
                 >
                   <span className="text-3xl">S/.{product.price.toFixed(2)}</span>
-                </motion.span>
+                </span>
               ) : (
                 <span className="text-2xl font-bold text-green-600">S/.{product.price.toFixed(2)}</span>
               )}
@@ -239,42 +220,36 @@ export default function MotionProductCard({ product, withActions = false, priori
         {withActions && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none md:flex-col md:gap-4 lg:flex-row lg:gap-2">
             {canAddToCart && (
-              <MotionButton
+              <Button
                 size="sm"
                 onClick={handleAddToCart}
-                whileHover={{ scale: 1.1, cursor: "grab" }}
-                whileTap={{ scale: 0.95, cursor: "grabbing" }}
-                className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto cursor-grab active:cursor-grabbing"
+                className="bg-sky-500 hover:bg-sky-600 text-white pointer-events-auto cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-150"
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
                 Agregar al carrito
-              </MotionButton>
+              </Button>
             )}
             <Tooltip>
               <TooltipTrigger asChild>
-                <MotionButton
+                <Button
                   aria-label="Agregar favoritos"
                   title="Agregar favoritos"
                   size="icon"
                   variant="outline"
                   onClick={handleToggleFavorite}
-                  whileHover={{ scale: 1.1, cursor: "grab" }}
-                  whileTap={{ scale: 0.95, cursor: "grabbing" }}
-                  className={`group pointer-events-auto cursor-grab active:cursor-grabbing transition-colors ${
+                  className={`group pointer-events-auto cursor-pointer hover:scale-110 active:scale-95 transition-all duration-150 ${
                     isFavorite ? "text-red-500 border-red-500" : ""
                   } hover:text-red-500 hover:border-red-500`}
                 >
-                  <Heart className={`w-4 h-4 transition-transform duration-150 ${
-                    isFavorite ? "" : ""
-                  } group-hover:scale-110`} />
-                </MotionButton>
+                  <Heart className="w-4 h-4 transition-transform duration-150 group-hover:scale-110" />
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="top">Agregar favoritos</TooltipContent>
             </Tooltip>
           </div>
         )}
       </Card>
-    </motion.div>
+    </div>
   )
 }
 

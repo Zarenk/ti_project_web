@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import Navbar from "@/components/navbar"
+import TemplateNavbar from "@/templates/TemplateNavbar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getWebOrderById, getWebSaleById, uploadOrderProofs } from "@/app/dashboard/sales/sales.api"
 import { getProduct } from "@/app/dashboard/products/products.api"
@@ -101,7 +101,7 @@ export default function OrderDetails() {
   if (!order) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-        <Navbar />
+        <TemplateNavbar />
         <div className="container mx-auto px-4 py-8 max-w-4xl">
           <div className="mb-8">
             <Skeleton className="h-9 w-40 mb-3" />
@@ -293,7 +293,7 @@ export default function OrderDetails() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-      <Navbar />
+      <TemplateNavbar />
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <div className="mb-8">

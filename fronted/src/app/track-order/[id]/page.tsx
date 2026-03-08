@@ -6,7 +6,7 @@ import { BACKEND_URL } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 
-import Navbar from "@/components/navbar";
+import TemplateNavbar from "@/templates/TemplateNavbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -115,7 +115,7 @@ export default function TrackOrderDetailsPage() {
   if (!order) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-        <Navbar />
+        <TemplateNavbar />
         <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center">
           <div className="flex items-center gap-2 text-blue-900 dark:text-blue-100">
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -207,7 +207,7 @@ export default function TrackOrderDetailsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-      <Navbar />
+      <TemplateNavbar />
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-6">
           <Link href="/track-order" className="inline-flex items-center">

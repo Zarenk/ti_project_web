@@ -45,6 +45,7 @@ import { CalendarDatePicker } from "@/components/calendar-date-picker";
 
 import { Cross2Icon, TrashIcon } from "@radix-ui/react-icons"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ChevronDown, EyeIcon, FileText, PrinterIcon, SlidersHorizontal, Store, User, Calendar, DollarSign, Package, CheckCircle, MapPin, X, Hash } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -58,6 +59,7 @@ import { getColumns } from "./columns"
 interface DataTableProps<TData extends {
 id:string,
 createdAt:Date,
+status?:string,
 store_name:string,
 provider_name:string,
 user_username:string,
@@ -70,10 +72,11 @@ details: { product_name: string; quantity: number; price: number; series?: strin
 }, TValue> {
   data: TData[]
 }
- 
+
 export function DataTable<TData extends {
 id:string,
 createdAt:Date,
+status?:string,
 store_name:string,
 provider_name:string,
 user_username:string,
@@ -82,7 +85,7 @@ tipoMoneda:string,
 description:string,
 pdfUrl: string,
 guiaUrl: string,
-details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[]; 
+details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[];
 }, TValue>({
   data,
 }: DataTableProps<TData, TValue>) {
@@ -703,6 +706,10 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   className="hover:border-gray-800"
+                  onClick={() => {
+                    // On mobile (< 640px), single click opens detail
+                    if (window.innerWidth < 640) handleRowDoubleClick(row.original);
+                  }}
                   onDoubleClick={() => handleRowDoubleClick(row.original)} // Evento de doble clic
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -730,83 +737,79 @@ details: { product_name: string; quantity: number; price: number; series?: strin
 
         {/* Modal para mostrar detalles */}
         {isModalOpen && selectedRowData && (
-          <AlertDialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <AlertDialogContent className="w-[95vw] sm:w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto p-3 sm:p-6 overflow-x-hidden [&>button]:hidden">
               {/* Header with ID and Status */}
-              <AlertDialogHeader className="pb-4 sm:pb-6 border-b flex flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <AlertDialogTitle className="text-lg sm:text-2xl font-bold">Ingreso #ID {selectedRowData.id}</AlertDialogTitle>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Control de Inventario: Ingresos</p>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                  <div className="flex items-center gap-1.5 sm:gap-2 bg-green-50 dark:bg-green-950/30 px-2 sm:px-3 py-1 rounded-full border border-green-200 dark:border-green-900/40">
-                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-400" />
-                    <span className="text-xs sm:text-sm font-medium text-green-700 dark:text-green-300">Completado</span>
-                  </div>
+              <DialogHeader className="pb-3 sm:pb-6 border-b space-y-0">
+                <div className="flex items-start justify-between gap-2 w-full min-w-0">
+                  <DialogTitle className="text-base sm:text-2xl font-bold truncate min-w-0">Ingreso #{selectedRowData.id}</DialogTitle>
                   <button
                     onClick={() => setIsModalOpen(false)}
-                    className="inline-flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer p-1"
+                    className="inline-flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer p-1 flex-shrink-0"
                     aria-label="Cerrar"
                   >
                     <X className="h-5 w-5 text-slate-600 dark:text-slate-300" />
                   </button>
                 </div>
-              </AlertDialogHeader>
+                <div className="flex items-center gap-2 mt-1.5 sm:mt-2 w-full min-w-0">
+                  {(() => {
+                    const st = selectedRowData.status || 'POSTED';
+                    if (st === 'DRAFT') return (
+                      <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 sm:py-1 rounded-full border border-amber-200 dark:border-amber-900/40">
+                        <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <span className="text-[11px] sm:text-sm font-medium text-amber-700 dark:text-amber-300">Borrador</span>
+                      </div>
+                    );
+                    if (st === 'CANCELED') return (
+                      <div className="flex items-center gap-1.5 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 sm:py-1 rounded-full border border-red-200 dark:border-red-900/40">
+                        <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                        <span className="text-[11px] sm:text-sm font-medium text-red-700 dark:text-red-300">Anulado</span>
+                      </div>
+                    );
+                    return (
+                      <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950/30 px-2 py-0.5 sm:py-1 rounded-full border border-green-200 dark:border-green-900/40">
+                        <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                        <span className="text-[11px] sm:text-sm font-medium text-green-700 dark:text-green-300">Completado</span>
+                      </div>
+                    );
+                  })()}
+                  <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">Ingresos</p>
+                </div>
+              </DialogHeader>
 
-              <AlertDialogDescription className="sr-only">
+              <DialogDescription className="sr-only">
                 Detalles del ingreso de inventario
-              </AlertDialogDescription>
+              </DialogDescription>
 
               <TooltipProvider delayDuration={200}>
               <div className="space-y-4 sm:space-y-6 py-3 sm:py-4">
                 {/* Information Grid - 1 col mobile, 2 cols desktop */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full min-w-0">
                   {/* Tienda */}
-                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors hover:border-slate-300 dark:hover:border-slate-600">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors hover:border-slate-300 dark:hover:border-slate-600 w-full min-w-0 overflow-hidden">
                     <div className="flex items-center gap-2 mb-2 sm:mb-3">
                       <Store className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
                       <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tienda</label>
                     </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 truncate cursor-default hover:text-primary transition-colors">{selectedRowData.store_name}</p>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs">
-                        <p className="text-sm">{selectedRowData.store_name}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 break-words sm:truncate">{selectedRowData.store_name}</p>
                   </div>
 
                   {/* Proveedor */}
-                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors hover:border-slate-300 dark:hover:border-slate-600">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors hover:border-slate-300 dark:hover:border-slate-600 w-full min-w-0 overflow-hidden">
                     <div className="flex items-center gap-2 mb-2 sm:mb-3">
                       <MapPin className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
                       <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Proveedor</label>
                     </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 truncate cursor-default hover:text-primary transition-colors">{selectedRowData.provider_name}</p>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs">
-                        <p className="text-sm">{selectedRowData.provider_name}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 break-words sm:truncate">{selectedRowData.provider_name}</p>
                   </div>
 
                   {/* Usuario */}
-                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors hover:border-slate-300 dark:hover:border-slate-600">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors hover:border-slate-300 dark:hover:border-slate-600 w-full min-w-0 overflow-hidden">
                     <div className="flex items-center gap-2 mb-2 sm:mb-3">
                       <User className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                      <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Usuario Registrador</label>
+                      <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Usuario</label>
                     </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 truncate cursor-default hover:text-primary transition-colors">{selectedRowData.user_username}</p>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs">
-                        <p className="text-sm">{selectedRowData.user_username}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 break-words sm:truncate">{selectedRowData.user_username}</p>
                   </div>
 
                   {/* Moneda */}
@@ -822,19 +825,19 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                 </div>
 
                 {/* Dates and Description */}
-                <div className="space-y-3 p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                <div className="space-y-3 p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 w-full min-w-0 overflow-hidden">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1 sm:mb-2">
                         <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                        <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha de Creación</label>
+                        <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Creación</label>
                       </div>
                       <p className="text-xs sm:text-sm font-medium text-slate-900 dark:text-slate-100">{new Date(selectedRowData.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1 sm:mb-2">
                         <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                        <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha de Compra</label>
+                        <label className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Compra</label>
                       </div>
                       <p className="text-xs sm:text-sm font-medium text-slate-900 dark:text-slate-100">{new Date(selectedRowData.date).toLocaleDateString()}</p>
                     </div>
@@ -879,10 +882,10 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                 )}
 
                 {/* Products — Card layout on mobile, table on sm+ */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-3 w-full min-w-0">
+                  <div className="flex items-center gap-2 w-full min-w-0">
                     <Package className="w-4 h-4 sm:w-5 sm:h-5 text-slate-700 dark:text-slate-300 flex-shrink-0" />
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">Detalles de Productos</h3>
+                    <h3 className="text-sm sm:text-lg font-bold text-slate-900 dark:text-slate-100 min-w-0">Productos</h3>
                     <span className="ml-auto text-[10px] sm:text-xs bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 sm:py-1 rounded-full font-semibold flex-shrink-0">
                       {selectedRowData.details.length} producto{selectedRowData.details.length !== 1 ? 's' : ''}
                     </span>
@@ -892,19 +895,12 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                   <div className="sm:hidden space-y-2">
                     {selectedRowData.details.map((detail: any, index: number) => (
                       <div key={index} className="bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2 w-full min-w-0 overflow-hidden">
-                        {/* Product name */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate cursor-default hover:text-primary transition-colors">{detail.product_name}</p>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-[280px]">
-                            <p className="text-sm break-words">{detail.product_name}</p>
-                          </TooltipContent>
-                        </Tooltip>
+                        {/* Product name — wraps instead of truncating on mobile */}
+                        <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 break-words leading-snug">{detail.product_name}</p>
                         {/* Category */}
                         <p className="text-[11px] text-slate-500 dark:text-slate-400">{detail.category_name || 'Sin categoría'}</p>
                         {/* Qty + Prices */}
-                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex flex-wrap items-center justify-between gap-1 text-xs pt-1 border-t border-slate-200 dark:border-slate-700">
                           <div className="flex items-center gap-3">
                             <span className="text-slate-500 dark:text-slate-400">Cant: <span className="font-semibold text-slate-900 dark:text-slate-100">{detail.quantity}</span></span>
                             <span className="text-slate-500 dark:text-slate-400">P.U: <span className="font-medium text-slate-900 dark:text-slate-100">{selectedRowData.tipoMoneda === "PEN" ? "S/." : "$"} {detail.price.toFixed(2)}</span></span>
@@ -1018,8 +1014,8 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                 })()}
               </div>
               </TooltipProvider>
-            </AlertDialogContent>
-          </AlertDialog>
+            </DialogContent>
+          </Dialog>
         )}
 
           {isViewModalOpen && selectedRowsDataVisual &&(
@@ -1050,10 +1046,27 @@ details: { product_name: string; quantity: number; price: number; series?: strin
                             <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">Ingreso #ID {entry.id}</h4>
                             <p className="text-sm text-slate-500 dark:text-slate-400 truncate" title={`${entry.store_name} • ${entry.provider_name}`}>{entry.store_name} &bull; {entry.provider_name}</p>
                           </div>
-                          <div className="flex-shrink-0 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 px-3 py-1 rounded-full border border-green-200 dark:border-green-900/40">
-                            <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-                            <span className="text-xs font-medium text-green-700 dark:text-green-300">Completado</span>
-                          </div>
+                          {(() => {
+                            const st = (entry as any).status || 'POSTED';
+                            if (st === 'DRAFT') return (
+                              <div className="flex-shrink-0 flex items-center gap-2 bg-amber-50 dark:bg-amber-950/30 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-900/40">
+                                <CheckCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Borrador</span>
+                              </div>
+                            );
+                            if (st === 'CANCELED') return (
+                              <div className="flex-shrink-0 flex items-center gap-2 bg-red-50 dark:bg-red-950/30 px-3 py-1 rounded-full border border-red-200 dark:border-red-900/40">
+                                <CheckCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                <span className="text-xs font-medium text-red-700 dark:text-red-300">Anulado</span>
+                              </div>
+                            );
+                            return (
+                              <div className="flex-shrink-0 flex items-center gap-2 bg-green-50 dark:bg-green-950/30 px-3 py-1 rounded-full border border-green-200 dark:border-green-900/40">
+                                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                <span className="text-xs font-medium text-green-700 dark:text-green-300">Completado</span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* KPI Mini Cards */}

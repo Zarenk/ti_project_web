@@ -79,19 +79,31 @@ export class MLModelsService implements OnModuleInit {
   // ==================== B.1 Demand Forecast ====================
 
   /**
-   * Get demand forecast for a product (next 7 days).
+   * Get product IDs that have demand forecast models.
    */
-  getDemandForecast(productId: number): {
+  getDemandProductIds(): number[] {
+    return Object.keys(this.demandForecasts).map(Number).filter((n) => !isNaN(n));
+  }
+
+  /**
+   * Get demand forecast for a product (sliced by days: 7, 30, 90).
+   */
+  getDemandForecast(productId: number, days = 7): {
     available: boolean;
     method?: string;
     forecast?: Array<{ ds: string; yhat: number; yhat_lower: number; yhat_upper: number }>;
   } {
     const data = this.demandForecasts[String(productId)];
     if (!data) return { available: false };
+
+    // Slice forecast to requested period (data may have up to 90 days stored)
+    const allForecast = data.forecast || [];
+    const sliced = allForecast.slice(0, days);
+
     return {
       available: true,
       method: data.method,
-      forecast: data.forecast,
+      forecast: sliced,
     };
   }
 

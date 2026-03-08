@@ -1,6 +1,9 @@
 import { z } from "zod";
 
+export const storeTemplateEnum = z.enum(["classic", "elegance", "bold"]);
+
 export const siteSettingsSchema = z.object({
+  storeTemplate: storeTemplateEnum.default("classic"),
   company: z.object({
     name: z.string().min(1, "Este campo es obligatorio."),
     receiptFormat: z.enum(["a4", "ticket"]),
@@ -140,6 +143,7 @@ export type DeepPartial<T> = T extends (infer U)[]
     : T;
 
 export const defaultSiteSettings: SiteSettings = {
+  storeTemplate: "classic",
   company: {
     name: "Mi Empresa",
     receiptFormat: "a4",

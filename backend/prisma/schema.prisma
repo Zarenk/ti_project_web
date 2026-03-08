@@ -982,6 +982,13 @@ model Entry {
   store                         Store              @relation(fields: [storeId], references: [id])
   tipoCambio                    TipoCambio?        @relation(fields: [tipoCambioId], references: [id])
   user                          User               @relation(fields: [userId], references: [id])
+  status                        String             @default("POSTED")
+  postedAt                      DateTime?
+  canceledAt                    DateTime?
+  canceledByEntryId             Int?
+  reversalEntryId               Int?               @unique
+  reversalEntry                 Entry?             @relation("EntryReversal", fields: [reversalEntryId], references: [id])
+  reversedBy                    Entry?             @relation("EntryReversal")
   details                       EntryDetail[]
   invoice                       Invoice?
   invoiceSamples                InvoiceSample[]
@@ -993,6 +1000,7 @@ model Entry {
   @@index([journalId])
   @@index([date])
   @@index([organizationId, date])
+  @@index([organizationId, status])
 }
 
 model Invoice {
@@ -1037,6 +1045,7 @@ model EntryDetail {
   updatedAt    DateTime            @updatedAt
   priceInSoles Float?
   inventoryId  Int?
+  draftSeries  Json?
   entry        Entry               @relation(fields: [entryId], references: [id], onDelete: Cascade)
   inventory    Inventory?          @relation(fields: [inventoryId], references: [id])
   product      Product             @relation(fields: [productId], references: [id])

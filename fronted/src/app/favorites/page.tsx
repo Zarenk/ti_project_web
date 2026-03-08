@@ -1,6 +1,6 @@
 "use client"
 import React, { useEffect, useState } from 'react'
-import Navbar from '@/components/navbar'
+import TemplateNavbar from '@/templates/TemplateNavbar'
 import MotionProductCard from '@/components/MotionProductCard'
 import { Skeleton } from "@/components/ui/skeleton"
 import { isTokenValid } from '@/lib/auth'
@@ -34,7 +34,7 @@ export default function FavoritesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-900 dark:to-slate-950">
-      <Navbar />
+      <TemplateNavbar />
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6">Mis Favoritos</h1>
         {isLoading ? (

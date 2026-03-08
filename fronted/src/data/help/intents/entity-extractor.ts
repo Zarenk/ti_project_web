@@ -20,8 +20,10 @@ export function extractEntities(
 
     switch (type) {
       case "quantity":
-      case "amount":
         entity.value = parseInt(raw, 10)
+        break
+      case "amount":
+        entity.value = parseFloat(raw)
         break
       case "period":
         entity.value = parsePeriod(raw)
