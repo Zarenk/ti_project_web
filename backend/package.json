@@ -121,7 +121,8 @@
     "xml-crypto": "^6.1.0",
     "xml2js": "^0.6.2",
     "xmlbuilder": "^15.1.1",
-    "xmlbuilder2": "^3.1.1"
+    "xmlbuilder2": "^3.1.1",
+    "dotenv": "^17.2.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -144,7 +145,6 @@
     "@types/xml-c14n": "^0.0.3",
     "@types/xml-crypto": "^1.4.6",
     "@types/xml2js": "^0.4.14",
-    "dotenv": "^17.2.4",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
