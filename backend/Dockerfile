@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install ALL dependencies (including devDeps for nest build)
+# Copy package files + postinstall script (needed by npm ci)
 COPY package.json package-lock.json ./
+COPY scripts ./scripts/
 RUN npm ci
 
 # sharp rebuild for linux-x64
@@ -60,8 +61,9 @@ RUN pip3 install --no-cache-dir --break-system-packages "prophet>=1.1" \
 
 WORKDIR /app
 
-# Copy only production node_modules from builder
+# Copy only production node_modules
 COPY package.json package-lock.json ./
+COPY scripts ./scripts/
 RUN npm ci --omit=dev
 
 # sharp rebuild for linux-x64 in production stage
@@ -83,9 +85,6 @@ COPY ml ./ml/
 
 # Copy nest-cli.json (may be needed by runtime)
 COPY nest-cli.json ./
-
-# Copy postinstall and other scripts
-COPY scripts ./scripts/
 
 ENV NODE_ENV=production
 ENV ML_PYTHON_CMD=python3
