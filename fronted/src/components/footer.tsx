@@ -114,52 +114,87 @@ export default function Footer() {
   return (
     <footer className="bg-blue-900 text-white py-10 md:py-16">
       <div className="container mx-auto px-4">
-        {/* Brand column — always visible */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-6">
-            <Image src={logoSrc} alt={siteName} width={64} height={64} className="h-16 w-16" />
-            <span className="text-2xl font-bold">{siteName}</span>
-          </div>
-          <p className="text-blue-200 mb-6 max-w-md">
-            {siteName} es tu socio de confianza para computadoras, laptops y accesorios tecnológicos de primera calidad.
-            Productos de calidad, soporte experto y precios inmejorables.
-          </p>
-          {socialLinks.length > 0 && (
-            <div className="flex gap-4">
-              {socialLinks.map(({ key, icon: Icon, href, label }) => {
-                const isExternal = href.startsWith("http")
-                return (
-                  <Button
-                    key={key}
-                    size="icon"
-                    variant="ghost"
-                    className="text-blue-200 hover:text-white hover:bg-blue-800 cursor-pointer"
-                    asChild
-                  >
-                    <Link
-                      href={href}
-                      aria-label={label}
-                      target={isExternal ? "_blank" : undefined}
-                      rel={isExternal ? "noreferrer" : undefined}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </Link>
-                  </Button>
-                )
-              })}
+        {/* Mobile: brand + accordion sections */}
+        <div className="md:hidden mb-8">
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Image src={logoSrc} alt={siteName} width={64} height={64} className="h-16 w-16" />
+              <span className="text-2xl font-bold">{siteName}</span>
             </div>
-          )}
+            <p className="text-blue-200 mb-4 max-w-md">
+              {siteName} es tu socio de confianza para computadoras, laptops y accesorios tecnológicos de primera calidad.
+              Productos de calidad, soporte experto y precios inmejorables.
+            </p>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-4">
+                {socialLinks.map(({ key, icon: Icon, href, label }) => {
+                  const isExternal = href.startsWith("http")
+                  return (
+                    <Button
+                      key={key}
+                      size="icon"
+                      variant="ghost"
+                      className="text-blue-200 hover:text-white hover:bg-blue-800 cursor-pointer"
+                      asChild
+                    >
+                      <Link
+                        href={href}
+                        aria-label={label}
+                        target={isExternal ? "_blank" : undefined}
+                        rel={isExternal ? "noreferrer" : undefined}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </Link>
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          <div className="divide-y divide-blue-800 border-t border-blue-800">
+            <FooterAccordion title="Acceso Rapido">{quickLinks}</FooterAccordion>
+            <FooterAccordion title="Servicio al Cliente">{customerService}</FooterAccordion>
+            <FooterAccordion title="Contactanos">{contactInfo}</FooterAccordion>
+          </div>
         </div>
 
-        {/* Mobile: accordion sections */}
-        <div className="md:hidden divide-y divide-blue-800 border-t border-blue-800 mb-8">
-          <FooterAccordion title="Acceso Rapido">{quickLinks}</FooterAccordion>
-          <FooterAccordion title="Servicio al Cliente">{customerService}</FooterAccordion>
-          <FooterAccordion title="Contactanos">{contactInfo}</FooterAccordion>
-        </div>
-
-        {/* Desktop: grid columns (skip brand, it's above) */}
-        <div className="hidden md:grid md:grid-cols-3 gap-8 mb-8">
+        {/* Desktop: all 4 columns aligned in one row */}
+        <div className="hidden md:grid md:grid-cols-4 gap-8 mb-8">
+          <div>
+            <div className="flex items-center gap-2 mb-6">
+              <Image src={logoSrc} alt={siteName} width={64} height={64} className="h-16 w-16" />
+              <span className="text-2xl font-bold">{siteName}</span>
+            </div>
+            <p className="text-blue-200 mb-6">
+              {siteName} es tu socio de confianza para computadoras, laptops y accesorios tecnológicos de primera calidad.
+              Productos de calidad, soporte experto y precios inmejorables.
+            </p>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-4">
+                {socialLinks.map(({ key, icon: Icon, href, label }) => {
+                  const isExternal = href.startsWith("http")
+                  return (
+                    <Button
+                      key={key}
+                      size="icon"
+                      variant="ghost"
+                      className="text-blue-200 hover:text-white hover:bg-blue-800 cursor-pointer"
+                      asChild
+                    >
+                      <Link
+                        href={href}
+                        aria-label={label}
+                        target={isExternal ? "_blank" : undefined}
+                        rel={isExternal ? "noreferrer" : undefined}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </Link>
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <div>
             <h3 className="text-lg font-bold mb-6">Acceso Rapido</h3>
             {quickLinks}

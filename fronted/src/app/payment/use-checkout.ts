@@ -144,7 +144,7 @@ export function useCheckout() {
       }))
 
       const userData = await getUserDataFromToken()
-      const userIdToSend = userData?.id ?? 1
+      const userIdToSend = userData?.id ?? undefined
 
       let clientId: number | undefined
       if (formData.invoiceType === "BOLETA" || formData.invoiceType === "FACTURA") {

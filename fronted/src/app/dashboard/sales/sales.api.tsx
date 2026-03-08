@@ -165,7 +165,7 @@ export async function createWebOrder(data: any) {
 }
 
 export async function payWithCulqi(token: string, amount: number, order: any) {
-  const res = await authFetch(`${BACKEND_URL}/api/payments/culqi`, {
+  const res = await authFetch(`${BACKEND_URL}/api/web-sales/payments/culqi`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, amount, order }),
