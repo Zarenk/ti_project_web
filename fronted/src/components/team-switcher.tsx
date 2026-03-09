@@ -96,6 +96,8 @@ export function TeamSwitcher(): React.ReactElement | null {
   const isOrgSuperAdmin = normalizedRole === "SUPER_ADMIN_ORG"
   const isLandingUser = isOrgSuperAdmin && isPublicSignup !== false
   const showGlobalSwitcher = isGlobalSuperAdmin
+  // With org: only SUPER_ADMIN_GLOBAL can create another. Without org: anyone can create one.
+  const canCreateOrgFromSwitcher = isGlobalSuperAdmin
   const roleLabel = useMemo(() => {
     if (!normalizedRole) return "Nivel: desconocido"
     const labels: Record<string, string> = {
@@ -931,18 +933,23 @@ export function TeamSwitcher(): React.ReactElement | null {
                     Sin empresas disponibles
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="cursor-pointer gap-2 p-2"
-                  onClick={() => setCreateOrgDialogOpen(true)}
-                >
-                  <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                    <Rocket className="size-3.5" />
-                  </div>
-                  <div className="text-muted-foreground font-medium">
-                    Crear mi organización
-                  </div>
-                </DropdownMenuItem>
+                {/* With active org: only SUPER_ADMIN_GLOBAL can create another org */}
+                {canCreateOrgFromSwitcher && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="cursor-pointer gap-2 p-2"
+                      onClick={() => setCreateOrgDialogOpen(true)}
+                    >
+                      <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                        <Rocket className="size-3.5" />
+                      </div>
+                      <div className="text-muted-foreground font-medium">
+                        Crear mi organización
+                      </div>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
