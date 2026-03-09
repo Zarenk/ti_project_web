@@ -3,7 +3,9 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -51,8 +53,94 @@ type NormalizedSequenceInput = {
 };
 
 @Injectable()
-export class TenancyService {
+export class TenancyService implements OnModuleInit {
+  private readonly logger = new Logger(TenancyService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    await this.repairOrphanMemberships();
+  }
+
+  /**
+   * One-time startup repair: creates OrganizationMembership for users
+   * that have User.organizationId but no membership record.
+   */
+  private async repairOrphanMemberships(): Promise<void> {
+    try {
+      const prismaClient = this.prisma as any;
+
+      // Find users with organizationId but no membership
+      const orphanUsers = await prismaClient.$queryRaw`
+        SELECT u.id, u."organizationId", u.role
+        FROM "User" u
+        WHERE u."organizationId" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "OrganizationMembership" om
+            WHERE om."userId" = u.id
+          )
+      `;
+
+      if (!Array.isArray(orphanUsers) || orphanUsers.length === 0) {
+        this.logger.log('[membership-repair] No orphan users found — all good.');
+        return;
+      }
+
+      this.logger.warn(
+        `[membership-repair] Found ${orphanUsers.length} orphan user(s). Repairing...`,
+      );
+
+      const membershipRoleMap: Record<string, string> = {
+        SUPER_ADMIN_GLOBAL: 'SUPER_ADMIN',
+        SUPER_ADMIN_ORG: 'SUPER_ADMIN',
+        ADMIN: 'ADMIN',
+        EMPLOYEE: 'MEMBER',
+        CLIENT: 'VIEWER',
+      };
+
+      let repaired = 0;
+      for (const user of orphanUsers as Array<{
+        id: number;
+        organizationId: number;
+        role: string | null;
+      }>) {
+        const normalizedRole = (user.role ?? '')
+          .toUpperCase()
+          .replace(/\s+/g, '_');
+        const membershipRole = membershipRoleMap[normalizedRole] ?? 'MEMBER';
+
+        try {
+          await prismaClient.organizationMembership.create({
+            data: {
+              userId: user.id,
+              organizationId: user.organizationId,
+              organizationUnitId: null,
+              role: membershipRole,
+              isDefault: true,
+            },
+          });
+          repaired++;
+          this.logger.log(
+            `[membership-repair] Created membership: user ${user.id} → org ${user.organizationId} (${membershipRole})`,
+          );
+        } catch (err) {
+          // Skip if duplicate (race condition or already repaired)
+          this.logger.warn(
+            `[membership-repair] Skipped user ${user.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `[membership-repair] Done. Repaired ${repaired}/${orphanUsers.length} user(s).`,
+      );
+    } catch (err) {
+      // Non-blocking — don't crash the app
+      this.logger.error(
+        `[membership-repair] Failed: ${(err as Error).message}`,
+      );
+    }
+  }
 
   private async mapToSnapshot(
     prisma: PrismaService,
@@ -1351,8 +1439,46 @@ export class TenancyService {
           (a, b) => a - b,
         );
       } else {
-        // User has no memberships — return empty immediately (don't leak other orgs)
-        return { organization: null, company: null, companies: [] };
+        // Auto-repair: user has organizationId on User record but no membership
+        const orphanUser = await prismaClient.user.findUnique({
+          where: { id: context.userId },
+          select: { organizationId: true, role: true },
+        });
+        if (
+          orphanUser?.organizationId &&
+          typeof orphanUser.organizationId === 'number'
+        ) {
+          const normalizedRole = (orphanUser.role ?? '')
+            .toString()
+            .toUpperCase()
+            .replace(/\s+/g, '_');
+          const membershipRoleMap: Record<string, string> = {
+            SUPER_ADMIN_GLOBAL: 'SUPER_ADMIN',
+            SUPER_ADMIN_ORG: 'SUPER_ADMIN',
+            ADMIN: 'ADMIN',
+            EMPLOYEE: 'MEMBER',
+            CLIENT: 'VIEWER',
+          };
+          const membershipRole =
+            membershipRoleMap[normalizedRole] ?? 'MEMBER';
+
+          await prismaClient.organizationMembership.create({
+            data: {
+              userId: context.userId,
+              organizationId: orphanUser.organizationId,
+              organizationUnitId: null,
+              role: membershipRole as any,
+              isDefault: true,
+            },
+          });
+          this.logger.warn(
+            `[auto-repair] Created missing membership for user ${context.userId} → org ${orphanUser.organizationId} (role: ${membershipRole})`,
+          );
+          allowedOrganizationIds = [orphanUser.organizationId];
+        } else {
+          // User truly has no org — return empty
+          return { organization: null, company: null, companies: [] };
+        }
       }
     }
 

@@ -369,6 +369,36 @@ export class UsersService {
         },
       });
 
+      // Create OrganizationMembership so the user can access the org
+      if (data.organizationId) {
+        const normalizedRole = (data.role ?? '').toUpperCase().replace(/\s+/g, '_');
+        const membershipRoleMap: Record<string, string> = {
+          SUPER_ADMIN_GLOBAL: 'SUPER_ADMIN',
+          SUPER_ADMIN_ORG: 'SUPER_ADMIN',
+          ADMIN: 'ADMIN',
+          EMPLOYEE: 'MEMBER',
+          CLIENT: 'VIEWER',
+        };
+        const membershipRole = membershipRoleMap[normalizedRole] ?? 'MEMBER';
+
+        const existingMembership =
+          await this.prismaService.organizationMembership.findFirst({
+            where: { userId: user.id, organizationId: data.organizationId },
+          });
+
+        if (!existingMembership) {
+          await this.prismaService.organizationMembership.create({
+            data: {
+              userId: user.id,
+              organizationId: data.organizationId,
+              organizationUnitId: null,
+              role: membershipRole as any,
+              isDefault: true,
+            },
+          });
+        }
+      }
+
       await this.activityService.log({
         actorId: user.id,
         actorEmail: user.email,
