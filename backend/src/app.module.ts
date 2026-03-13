@@ -49,6 +49,7 @@ import { JournalsModule } from './journals/journals.module';
 import { AccReportsModule } from './acc-reports/acc-reports.module';
 import { KeywordsModule } from './keywords/keywords.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
+import { MenuConfigModule } from './menu-config/menu-config.module';
 import { ModulePermissionsGuard } from './common/guards/module-permissions.guard';
 import { TenantRequiredGuard } from './common/guards/tenant-required.guard';
 import { SystemMaintenanceModule } from './system-maintenance/system-maintenance.module';
@@ -79,6 +80,8 @@ import { JurisprudenceAssistantModule } from './jurisprudence-assistant/jurispru
 import { JurisprudenceAdminModule } from './jurisprudence-admin/jurisprudence-admin.module';
 import { GymModule } from './gym/gym.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ComplaintsModule } from './complaints/complaints.module';
 
 @Module({
   imports: [
@@ -123,6 +126,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     AccReportsModule,
     KeywordsModule,
     SiteSettingsModule,
+    MenuConfigModule,
     SystemMaintenanceModule,
     TenancyModule,
     LookupsModule,
@@ -149,6 +153,8 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
     JurisprudenceAdminModule,
     GymModule,
     WhatsAppModule,
+    PaymentsModule,
+    ComplaintsModule,
   ],
   controllers: [AppController, CatalogExportController, CatalogCoverController],
   providers: [

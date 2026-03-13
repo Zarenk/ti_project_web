@@ -2830,12 +2830,23 @@ export class SubscriptionsService {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
-  private resolveBillingRetryUrls(organizationId: number, invoiceId: number) {
-    const base =
-      this.configService.get<string>('PORTAL_BILLING_URL') ??
+  private resolveFrontendBase(): string {
+    const raw =
+      this.configService.get<string>('FRONTEND_URL') ??
       this.configService.get<string>('PUBLIC_URL') ??
       'https://app.facturacloud.pe';
-    const normalized = base.replace(/\/$/, '');
+    const trimmed = raw.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return `https://${trimmed}`;
+    }
+    return trimmed;
+  }
+
+  private resolveBillingRetryUrls(organizationId: number, invoiceId: number) {
+    const explicit = this.configService.get<string>('PORTAL_BILLING_URL');
+    const normalized = explicit
+      ? explicit.replace(/\/$/, '')
+      : this.resolveFrontendBase();
     const params = new URLSearchParams({
       org: String(organizationId),
       invoice: String(invoiceId),

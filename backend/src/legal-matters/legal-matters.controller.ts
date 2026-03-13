@@ -107,10 +107,25 @@ export class LegalMattersController {
     @Body() dto: UpdateLegalMatterDto,
     @CurrentTenant('organizationId') organizationId: number | null,
     @CurrentTenant('companyId') companyId: number | null,
+    @Request() req: { user?: { userId?: number } },
   ) {
     return this.service.update(
       id,
       dto,
+      organizationId ?? undefined,
+      companyId ?? undefined,
+      req.user?.userId ?? null,
+    );
+  }
+
+  @Get(':id/audit-log')
+  getAuditLog(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentTenant('organizationId') organizationId: number | null,
+    @CurrentTenant('companyId') companyId: number | null,
+  ) {
+    return this.service.getAuditLog(
+      id,
       organizationId ?? undefined,
       companyId ?? undefined,
     );

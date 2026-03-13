@@ -232,6 +232,7 @@ export class LegalMattersService {
     dto: UpdateLegalMatterDto,
     organizationId?: number | null,
     companyId?: number | null,
+    changedById?: number | null,
   ) {
     await this.ensureLegalFeatureEnabled(companyId);
 
@@ -248,33 +249,87 @@ export class LegalMattersService {
 
     const data: Prisma.LegalMatterUpdateInput = {};
 
-    if (dto.title !== undefined) data.title = dto.title;
-    if (dto.internalCode !== undefined) data.internalCode = dto.internalCode;
-    if (dto.externalCode !== undefined) data.externalCode = dto.externalCode;
-    if (dto.description !== undefined) data.description = dto.description;
-    if (dto.area !== undefined) data.area = dto.area as any;
-    if (dto.status !== undefined) data.status = dto.status as any;
-    if (dto.priority !== undefined) data.priority = dto.priority as any;
-    if (dto.court !== undefined) data.court = dto.court;
-    if (dto.judge !== undefined) data.judge = dto.judge;
-    if (dto.jurisdiction !== undefined) data.jurisdiction = dto.jurisdiction;
-    if (dto.caseValue !== undefined) data.caseValue = dto.caseValue;
-    if (dto.currency !== undefined) data.currency = dto.currency;
+    // Track changes for audit log
+    const changes: { field: string; oldValue: string | null; newValue: string | null }[] = [];
+
+    const trackField = (
+      field: string,
+      oldVal: unknown,
+      newVal: unknown,
+    ) => {
+      const oldStr = oldVal != null ? String(oldVal) : null;
+      const newStr = newVal != null ? String(newVal) : null;
+      if (oldStr !== newStr) {
+        changes.push({ field, oldValue: oldStr, newValue: newStr });
+      }
+    };
+
+    if (dto.title !== undefined) {
+      trackField('title', existing.title, dto.title);
+      data.title = dto.title;
+    }
+    if (dto.internalCode !== undefined) {
+      trackField('internalCode', existing.internalCode, dto.internalCode);
+      data.internalCode = dto.internalCode;
+    }
+    if (dto.externalCode !== undefined) {
+      trackField('externalCode', existing.externalCode, dto.externalCode);
+      data.externalCode = dto.externalCode;
+    }
+    if (dto.description !== undefined) {
+      trackField('description', existing.description, dto.description);
+      data.description = dto.description;
+    }
+    if (dto.area !== undefined) {
+      trackField('area', existing.area, dto.area);
+      data.area = dto.area as any;
+    }
+    if (dto.status !== undefined) {
+      trackField('status', existing.status, dto.status);
+      data.status = dto.status as any;
+    }
+    if (dto.priority !== undefined) {
+      trackField('priority', existing.priority, dto.priority);
+      data.priority = dto.priority as any;
+    }
+    if (dto.court !== undefined) {
+      trackField('court', existing.court, dto.court);
+      data.court = dto.court;
+    }
+    if (dto.judge !== undefined) {
+      trackField('judge', existing.judge, dto.judge);
+      data.judge = dto.judge;
+    }
+    if (dto.jurisdiction !== undefined) {
+      trackField('jurisdiction', existing.jurisdiction, dto.jurisdiction);
+      data.jurisdiction = dto.jurisdiction;
+    }
+    if (dto.caseValue !== undefined) {
+      trackField('caseValue', existing.caseValue, dto.caseValue);
+      data.caseValue = dto.caseValue;
+    }
+    if (dto.currency !== undefined) {
+      trackField('currency', existing.currency, dto.currency);
+      data.currency = dto.currency;
+    }
     if (dto.nextDeadline !== undefined) {
+      trackField('nextDeadline', existing.nextDeadline?.toISOString() ?? null, dto.nextDeadline);
       data.nextDeadline = dto.nextDeadline ? new Date(dto.nextDeadline) : null;
     }
     if (dto.assignedToId !== undefined) {
+      trackField('assignedToId', existing.assignedToId, dto.assignedToId);
       data.assignedTo = dto.assignedToId
         ? { connect: { id: dto.assignedToId } }
         : { disconnect: true };
     }
     if (dto.clientId !== undefined) {
+      trackField('clientId', existing.clientId, dto.clientId);
       data.client = dto.clientId
         ? { connect: { id: dto.clientId } }
         : { disconnect: true };
     }
 
-    return this.prisma.legalMatter.update({
+    const updated = await this.prisma.legalMatter.update({
       where: { id },
       data,
       include: {
@@ -282,6 +337,53 @@ export class LegalMattersService {
         client: { select: { id: true, name: true } },
         parties: true,
       },
+    });
+
+    // Write audit log entries (non-blocking)
+    if (changes.length > 0 && changedById) {
+      this.prisma.legalMatterAuditLog
+        .createMany({
+          data: changes.map((c) => ({
+            matterId: id,
+            field: c.field,
+            oldValue: c.oldValue,
+            newValue: c.newValue,
+            changedById,
+          })),
+        })
+        .catch((err) =>
+          this.logger.warn(`Failed to write audit log for matter ${id}: ${err.message}`),
+        );
+    }
+
+    return updated;
+  }
+
+  async getAuditLog(
+    matterId: number,
+    organizationId?: number | null,
+    companyId?: number | null,
+  ) {
+    await this.ensureLegalFeatureEnabled(companyId);
+
+    const matter = await this.prisma.legalMatter.findFirst({
+      where: {
+        id: matterId,
+        ...this.buildTenantFilter(organizationId, companyId),
+      },
+      select: { id: true },
+    });
+    if (!matter) {
+      throw new NotFoundException('Expediente no encontrado.');
+    }
+
+    return this.prisma.legalMatterAuditLog.findMany({
+      where: { matterId },
+      include: {
+        changedBy: { select: { id: true, username: true } },
+      },
+      orderBy: { changedAt: 'desc' },
+      take: 200,
     });
   }
 

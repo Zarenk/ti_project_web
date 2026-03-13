@@ -916,6 +916,150 @@ export class InventoryService {
     return this.prisma.$transaction(async (tx) => runInTx(tx));
   }
 
+  /**
+   * Reverse a single Transfer record: restore stock to source, remove from destination,
+   * move series back to source store, and delete the transfer Entry created at destination.
+   * Used when a shipping guide with inter-store transfers is voided/annulled.
+   */
+  async reverseTransfer(
+    transferId: number,
+    userId: number,
+    reason?: string,
+    externalTx?: any,
+  ): Promise<void> {
+    const runInTx = async (tx: any) => {
+      const transfer = await tx.transfer.findUnique({
+        where: { id: transferId },
+      });
+      if (!transfer) {
+        this.logger.warn(`[reverseTransfer] Transfer ${transferId} not found, skipping`);
+        return;
+      }
+
+      const {
+        sourceStoreId,
+        destinationStoreId,
+        productId,
+        quantity,
+        serials,
+        organizationId,
+      } = transfer;
+
+      // 1. Increment source stock (return stock)
+      const sourceStoreInv = await tx.storeOnInventory.findFirst({
+        where: { storeId: sourceStoreId, inventory: { productId } },
+      });
+      if (sourceStoreInv) {
+        await tx.storeOnInventory.update({
+          where: { id: sourceStoreInv.id },
+          data: { stock: { increment: quantity } },
+        });
+      }
+
+      // 2. Decrement destination stock
+      const destStoreInv = await tx.storeOnInventory.findFirst({
+        where: { storeId: destinationStoreId, inventory: { productId } },
+      });
+      if (destStoreInv) {
+        await tx.storeOnInventory.update({
+          where: { id: destStoreInv.id },
+          data: { stock: { decrement: quantity } },
+        });
+      }
+
+      // 3. Move series back to source store
+      if (serials && serials.length > 0) {
+        await tx.entryDetailSeries.updateMany({
+          where: {
+            serial: { in: serials },
+            organizationId,
+            storeId: destinationStoreId,
+          },
+          data: { storeId: sourceStoreId },
+        });
+      }
+
+      // 4. Delete the transfer Entry created at destination (referenceId = "transfer-{id}")
+      const transferEntry = await tx.entry.findFirst({
+        where: {
+          referenceId: `transfer-${transferId}`,
+          storeId: destinationStoreId,
+        },
+        include: { details: true },
+      });
+      if (transferEntry) {
+        // Re-link series back to their original EntryDetail (before transfer) if possible
+        if (serials && serials.length > 0 && transferEntry.details.length > 0) {
+          // Find the original EntryDetail from before the transfer
+          const originalDetail = await tx.entryDetail.findFirst({
+            where: {
+              productId,
+              entry: { storeId: sourceStoreId },
+              id: { not: transferEntry.details[0].id },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (originalDetail) {
+            await tx.entryDetailSeries.updateMany({
+              where: {
+                serial: { in: serials },
+                organizationId,
+                storeId: sourceStoreId,
+              },
+              data: { entryDetailId: originalDetail.id },
+            });
+          }
+        }
+
+        // Delete EntryDetail(s) then Entry
+        await tx.entryDetail.deleteMany({
+          where: { entryId: transferEntry.id },
+        });
+        await tx.entry.delete({ where: { id: transferEntry.id } });
+      }
+
+      // 5. Create inventory history for the reversal
+      const historyData: any[] = [];
+      if (sourceStoreInv) {
+        historyData.push({
+          inventoryId: sourceStoreInv.inventoryId,
+          action: 'transfer-reversal-in',
+          stockChange: quantity,
+          previousStock: sourceStoreInv.stock,
+          newStock: sourceStoreInv.stock + quantity,
+          userId,
+          organizationId,
+          companyId: null,
+        });
+      }
+      if (destStoreInv) {
+        historyData.push({
+          inventoryId: destStoreInv.inventoryId,
+          action: 'transfer-reversal-out',
+          stockChange: -quantity,
+          previousStock: destStoreInv.stock,
+          newStock: destStoreInv.stock - quantity,
+          userId,
+          organizationId,
+          companyId: null,
+        });
+      }
+      if (historyData.length > 0) {
+        await tx.inventoryHistory.createMany({ data: historyData });
+      }
+
+      this.logger.log(
+        `[reverseTransfer] Transfer ${transferId} reversed: ${quantity}× product ${productId} from store ${destinationStoreId} → ${sourceStoreId}` +
+        (reason ? ` (reason: ${reason})` : ''),
+      );
+    };
+
+    if (externalTx) {
+      return runInTx(externalTx);
+    }
+    return this.prisma.$transaction(async (tx) => runInTx(tx));
+  }
+
   // Obtener el stock de un producto en una tienda específica
   async getSeriesByProductAndStore(
     storeId: number,

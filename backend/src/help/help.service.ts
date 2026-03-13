@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import type { HelpMessageSource, HelpFeedback } from '@prisma/client';
 import { HelpEmbeddingService } from './help-embedding.service';
+import { HelpArbiterService } from './help-arbiter.service';
 import { AiProviderManager } from './ai-providers/ai-provider-manager';
 import type { AiChatMessage } from './ai-providers/ai-provider.interface';
 
@@ -50,7 +51,13 @@ export interface AnalyticsResult {
     section: string;
     positiveVotes: number;
     negativeVotes: number;
+    status: string;
     createdAt: Date;
+    reviewedAt: Date | null;
+    qualityScore: number | null;
+    arbiterDecision: string | null;
+    scoreFactors: unknown;
+    scoredAt: Date | null;
   }>;
 }
 
@@ -116,6 +123,7 @@ export class HelpService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly embeddingService: HelpEmbeddingService,
+    private readonly arbiterService: HelpArbiterService,
     private readonly aiProviders: AiProviderManager,
   ) {}
 
@@ -827,7 +835,7 @@ REGLAS ESTRICTAS:
 
         if (count >= PROMOTION_THRESHOLD) {
           // Upsert candidate
-          await this.prisma.helpKBCandidate.upsert({
+          const upserted = await this.prisma.helpKBCandidate.upsert({
             where: {
               questionNorm_section: {
                 questionNorm,
@@ -846,6 +854,13 @@ REGLAS ESTRICTAS:
               positiveVotes: count,
             },
           });
+
+          // Non-blocking score recalculation after new vote
+          if (upserted) {
+            this.arbiterService.recalculateScore(upserted.id).catch((err) =>
+              this.logger.warn(`Score recalc failed: ${err instanceof Error ? err.message : err}`),
+            );
+          }
         }
       }
     }
@@ -913,10 +928,10 @@ REGLAS ESTRICTAS:
       LIMIT 10
     `;
 
-    // Pending candidates
+    // All candidates (pending first, then recently processed)
     const candidates = await this.prisma.helpKBCandidate.findMany({
-      where: { status: 'PENDING' },
-      orderBy: { positiveVotes: 'desc' },
+      orderBy: [{ status: 'asc' }, { qualityScore: 'desc' }, { positiveVotes: 'desc' }],
+      take: 100,
       select: {
         id: true,
         question: true,
@@ -924,7 +939,13 @@ REGLAS ESTRICTAS:
         section: true,
         positiveVotes: true,
         negativeVotes: true,
+        status: true,
         createdAt: true,
+        reviewedAt: true,
+        qualityScore: true,
+        arbiterDecision: true,
+        scoreFactors: true,
+        scoredAt: true,
       },
     });
 

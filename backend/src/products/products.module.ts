@@ -9,9 +9,10 @@ import { ActivityModule } from 'src/activity/activity.module';
 import { TenancyModule } from 'src/tenancy/tenancy.module';
 import { CategoryModule } from 'src/category/category.module';
 import { EntriesModule } from 'src/entries/entries.module';
+import { MenuConfigModule } from 'src/menu-config/menu-config.module';
 
 @Module({
-  imports: [ActivityModule, TenancyModule, CategoryModule, PrismaModule, EntriesModule],
+  imports: [ActivityModule, TenancyModule, CategoryModule, PrismaModule, EntriesModule, MenuConfigModule],
   controllers: [ProductsController, ProductsPublicController, MenuPublicController],
   providers: [ProductsService, BrandsService],
   exports: [ProductsService],

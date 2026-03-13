@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as forge from 'node-forge';
 
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { TenancyService } from './tenancy.service';
@@ -170,6 +171,126 @@ export class CompaniesController {
       kind: type === SunatUploadType.KEY ? 'key' : 'cert',
       filePath: relativePath,
       originalName: file.originalname,
+    });
+  }
+
+  @Post(':id/sunat/upload-pfx')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const tmpDir = resolveStoragePath('uploads', 'sunat', 'tmp');
+          fs.mkdirSync(tmpDir, { recursive: true });
+          cb(null, tmpDir);
+        },
+        filename: (_req, file, cb) => {
+          const safeName =
+            file.originalname?.replace(/\s+/g, '_') || 'certificate.pfx';
+          cb(null, `${Date.now()}-${safeName}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  async uploadSunatPfx(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('env', new ParseEnumPipe(SunatUploadEnvironment))
+    env: SunatUploadEnvironment,
+    @Body('password') password: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentTenant() tenant: TenantContext | null,
+  ): Promise<CompanySnapshot> {
+    if (!file) {
+      throw new BadRequestException('Debes adjuntar un archivo PFX/P12.');
+    }
+    if (!password) {
+      throw new BadRequestException(
+        'La contraseña del certificado es obligatoria.',
+      );
+    }
+
+    // Read the PFX file
+    const pfxBuffer = fs.readFileSync(file.path);
+    const pfxDer = forge.util.decode64(pfxBuffer.toString('base64'));
+
+    let p12: forge.pkcs12.Pkcs12Pfx;
+    try {
+      const asn1 = forge.asn1.fromDer(pfxDer);
+      p12 = forge.pkcs12.pkcs12FromAsn1(asn1, password);
+    } catch {
+      // Clean up tmp file
+      fs.unlinkSync(file.path);
+      throw new BadRequestException(
+        'No se pudo leer el certificado. Verifique que el archivo sea un PFX/P12 válido y que la contraseña sea correcta.',
+      );
+    }
+
+    // Extract certificate
+    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+    const certBag = (certBags[forge.pki.oids.certBag] || [])[0];
+    if (!certBag?.cert) {
+      fs.unlinkSync(file.path);
+      throw new BadRequestException(
+        'El archivo PFX no contiene un certificado válido.',
+      );
+    }
+
+    // Extract private key
+    const keyBags = p12.getBags({
+      bagType: forge.pki.oids.pkcs8ShroudedKeyBag,
+    });
+    const keyBag = (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0];
+    if (!keyBag?.key) {
+      fs.unlinkSync(file.path);
+      throw new BadRequestException(
+        'El archivo PFX no contiene una clave privada.',
+      );
+    }
+
+    // Convert to PEM format
+    const certPem = forge.pki.certificateToPem(certBag.cert);
+    const keyPem = forge.pki.privateKeyToPem(keyBag.key);
+
+    // Save files
+    const envFolder = env === SunatUploadEnvironment.PROD ? 'prod' : 'beta';
+    const finalDir = resolveStoragePath('uploads', 'sunat', String(id), envFolder);
+    fs.mkdirSync(finalDir, { recursive: true });
+
+    const ts = Date.now();
+    const certPath = path.join(finalDir, `cert-${ts}.pem`);
+    const keyPath = path.join(finalDir, `key-${ts}.pem`);
+    fs.writeFileSync(certPath, certPem);
+    fs.writeFileSync(keyPath, keyPem);
+
+    // Clean up tmp PFX
+    fs.unlinkSync(file.path);
+
+    const certRelative = path
+      .relative(resolveStoragePath(), certPath)
+      .replace(/\\/g, '/');
+    const keyRelative = path
+      .relative(resolveStoragePath(), keyPath)
+      .replace(/\\/g, '/');
+
+    const normalizedEnv = env === SunatUploadEnvironment.PROD ? 'PROD' : 'BETA';
+    const context = tenant ?? this.tenantContextService.getContext();
+
+    // Update cert
+    await this.tenancyService.updateCompanySunatFile(id, {
+      tenant: context,
+      environment: normalizedEnv,
+      kind: 'cert',
+      filePath: certRelative,
+      originalName: `${file.originalname} (certificado)`,
+    });
+
+    // Update key
+    return this.tenancyService.updateCompanySunatFile(id, {
+      tenant: context,
+      environment: normalizedEnv,
+      kind: 'key',
+      filePath: keyRelative,
+      originalName: `${file.originalname} (clave privada)`,
     });
   }
 

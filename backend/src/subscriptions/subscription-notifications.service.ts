@@ -267,41 +267,51 @@ export class SubscriptionNotificationsService {
     await this.sendEmail(recipients, subject, body);
   }
 
+  /**
+   * Resolve the frontend base URL.
+   * Priority: FRONTEND_URL → PUBLIC_URL → production default.
+   * Ensures the value always has a protocol (defaults to https://).
+   */
+  private resolveFrontendBase(): string {
+    const raw =
+      this.configService.get<string>('FRONTEND_URL') ??
+      this.configService.get<string>('PUBLIC_URL') ??
+      'https://app.facturacloud.pe';
+    const trimmed = raw.trim().replace(/\/$/, '');
+    // Ensure protocol is present
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return `https://${trimmed}`;
+    }
+    return trimmed;
+  }
+
   private resolvePortalLoginUrl() {
     const explicit = this.configService.get<string>('PORTAL_LOGIN_URL');
     if (explicit) {
       return explicit;
     }
-    const base = this.configService.get<string>('PUBLIC_URL');
-    if (base) {
-      return `${base.replace(/\/$/, '')}/portal/login`;
-    }
-    return 'https://app.facturacloud.pe/portal/login';
+    return `${this.resolveFrontendBase()}/portal/login`;
   }
 
   private resolvePortalVerificationUrl(token: string) {
     const explicit = this.configService.get<string>('PORTAL_VERIFICATION_URL');
-    const base = (
-      explicit ??
-      this.configService.get<string>('PUBLIC_URL')?.replace(/\/$/, '') ??
-      'https://app.facturacloud.pe'
-    ).replace(/\/$/, '');
-    const url = explicit ? base : `${base}/portal/verify`;
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}token=${encodeURIComponent(token)}`;
+    const base = explicit
+      ? explicit.replace(/\/$/, '')
+      : `${this.resolveFrontendBase()}/portal/verify`;
+    const separator = base.includes('?') ? '&' : '?';
+    return `${base}${separator}token=${encodeURIComponent(token)}`;
   }
 
   private resolveBillingUrl(organizationId: number, invoiceId?: number) {
-    const base =
-      this.configService.get<string>('PORTAL_BILLING_URL') ??
-      this.configService.get<string>('PUBLIC_URL') ??
-      'https://app.facturacloud.pe';
-    const normalized = base.replace(/\/$/, '');
+    const explicit = this.configService.get<string>('PORTAL_BILLING_URL');
+    const base = explicit
+      ? explicit.replace(/\/$/, '')
+      : this.resolveFrontendBase();
     const params = new URLSearchParams({
       org: String(organizationId),
       ...(invoiceId ? { invoice: String(invoiceId) } : {}),
     }).toString();
-    return `${normalized}/dashboard/account/billing?${params}`;
+    return `${base}/dashboard/account/billing?${params}`;
   }
 
   async sendPaymentRequired(payload: {

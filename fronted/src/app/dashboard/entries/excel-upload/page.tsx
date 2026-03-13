@@ -26,6 +26,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
+import { useTenantFeatures } from '@/context/tenant-features-context'
 
 type FilaError = {
   campo: string
@@ -121,81 +122,90 @@ function registrarErrorPorEspacios(
   }
 }
 
-function validarFilas(previewData: any[]): Record<number, FilaError[]> {
+function validarCampoObligatorioTexto(
+  filaErrores: FilaError[],
+  fila: any,
+  campo: string,
+  label?: string,
+) {
+  const val = fila[campo]
+  if (!val || typeof val !== 'string' || val.trim() === '') {
+    filaErrores.push({ campo, mensaje: `El campo ${label ?? campo} es obligatorio.`, valor: val })
+  } else {
+    registrarErrorPorEspacios(filaErrores, campo, val)
+  }
+}
+
+function validarCampoObligatorioNumerico(
+  filaErrores: FilaError[],
+  fila: any,
+  campo: string,
+) {
+  const val = fila[campo]
+  if (val === undefined || (typeof val === 'string' && val.trim() === '') || isNaN(Number(val))) {
+    filaErrores.push({ campo, mensaje: 'El valor debe ser numerico.', valor: val })
+  } else {
+    registrarErrorPorEspacios(filaErrores, campo, val)
+  }
+}
+
+function validarCampoOpcionalNumerico(
+  filaErrores: FilaError[],
+  fila: any,
+  campo: string,
+) {
+  const val = fila[campo]
+  if (val !== undefined && val !== null && val !== '' && isNaN(Number(val))) {
+    filaErrores.push({ campo, mensaje: 'El valor debe ser numerico.', valor: val })
+  } else if (val !== undefined && val !== null && val !== '') {
+    registrarErrorPorEspacios(filaErrores, campo, val)
+  }
+}
+
+const VALID_ESTACIONES = ['GRILL', 'FRY', 'COLD', 'BAKERY']
+
+function validarFilasRestaurant(previewData: any[]): Record<number, FilaError[]> {
+  const errores: Record<number, FilaError[]> = {}
+  previewData.forEach((fila, index) => {
+    const filaErrores: FilaError[] = []
+    validarCampoObligatorioTexto(filaErrores, fila, 'nombre')
+    validarCampoObligatorioTexto(filaErrores, fila, 'categoria')
+    registrarErrorPorEspacios(filaErrores, 'descripcion', fila.descripcion)
+    validarCampoObligatorioNumerico(filaErrores, fila, 'precioVenta')
+    validarCampoOpcionalNumerico(filaErrores, fila, 'tiempoPreparacion')
+
+    // Validate estacionCocina if provided
+    if (fila.estacionCocina && typeof fila.estacionCocina === 'string') {
+      const val = fila.estacionCocina.trim().toUpperCase()
+      if (!VALID_ESTACIONES.includes(val)) {
+        filaErrores.push({
+          campo: 'estacionCocina',
+          mensaje: `Valor no válido. Opciones: ${VALID_ESTACIONES.join(', ')}`,
+          valor: fila.estacionCocina,
+        })
+      }
+    }
+
+    registrarErrorPorEspacios(filaErrores, 'alergenos', fila.alergenos)
+
+    if (filaErrores.length > 0) {
+      errores[index] = filaErrores
+    }
+  })
+  return errores
+}
+
+function validarFilasGeneral(previewData: any[]): Record<number, FilaError[]> {
   const errores: Record<number, FilaError[]> = {}
 
   previewData.forEach((fila, index) => {
     const filaErrores: FilaError[] = []
-
-    if (!fila.nombre || typeof fila.nombre !== 'string' || fila.nombre.trim() === '') {
-      filaErrores.push({
-        campo: 'nombre',
-        mensaje: 'El campo nombre es obligatorio.',
-        valor: fila.nombre,
-      })
-    } else {
-      registrarErrorPorEspacios(filaErrores, 'nombre', fila.nombre)
-    }
-
-    if (!fila.categoria || typeof fila.categoria !== 'string' || fila.categoria.trim() === '') {
-      filaErrores.push({
-        campo: 'categoria',
-        mensaje: 'El campo categoria es obligatorio.',
-        valor: fila.categoria,
-      })
-    } else {
-      registrarErrorPorEspacios(filaErrores, 'categoria', fila.categoria)
-    }
-
+    validarCampoObligatorioTexto(filaErrores, fila, 'nombre')
+    validarCampoObligatorioTexto(filaErrores, fila, 'categoria')
     registrarErrorPorEspacios(filaErrores, 'descripcion', fila.descripcion)
-
-    if (
-      fila.precioCompra === undefined ||
-      (typeof fila.precioCompra === 'string' && fila.precioCompra.trim() === '') ||
-      isNaN(Number(fila.precioCompra))
-    ) {
-      filaErrores.push({
-        campo: 'precioCompra',
-        mensaje: 'El valor debe ser numerico.',
-        valor: fila.precioCompra,
-      })
-    } else {
-      registrarErrorPorEspacios(filaErrores, 'precioCompra', fila.precioCompra)
-    }
-
-    if (
-      fila.stock === undefined ||
-      (typeof fila.stock === 'string' && fila.stock.trim() === '') ||
-      isNaN(Number(fila.stock))
-    ) {
-      filaErrores.push({
-        campo: 'stock',
-        mensaje: 'El valor debe ser numerico.',
-        valor: fila.stock,
-      })
-    } else {
-      registrarErrorPorEspacios(filaErrores, 'stock', fila.stock)
-    }
-
-    if (
-      fila.precioVenta !== undefined &&
-      fila.precioVenta !== null &&
-      fila.precioVenta !== '' &&
-      isNaN(Number(fila.precioVenta))
-    ) {
-      filaErrores.push({
-        campo: 'precioVenta',
-        mensaje: 'El valor debe ser numerico.',
-        valor: fila.precioVenta,
-      })
-    } else if (
-      fila.precioVenta !== undefined &&
-      fila.precioVenta !== null &&
-      fila.precioVenta !== ''
-    ) {
-      registrarErrorPorEspacios(filaErrores, 'precioVenta', fila.precioVenta)
-    }
-
+    validarCampoObligatorioNumerico(filaErrores, fila, 'precioCompra')
+    validarCampoObligatorioNumerico(filaErrores, fila, 'stock')
+    validarCampoOpcionalNumerico(filaErrores, fila, 'precioVenta')
     registrarErrorPorEspacios(filaErrores, 'serie', fila.serie)
     registrarErrorPorEspacios(filaErrores, 'codigo', fila.codigo)
     registrarErrorPorEspacios(filaErrores, 'codigos', fila.codigos)
@@ -208,6 +218,10 @@ function validarFilas(previewData: any[]): Record<number, FilaError[]> {
   })
 
   return errores
+}
+
+function validarFilas(previewData: any[], isRestaurant = false): Record<number, FilaError[]> {
+  return isRestaurant ? validarFilasRestaurant(previewData) : validarFilasGeneral(previewData)
 }
 function encontrarSeriesDuplicadas(data: any[]): string[] {
   const vistas = new Set<string>()
@@ -234,7 +248,7 @@ function encontrarSeriesDuplicadas(data: any[]): string[] {
   return Array.from(duplicadas)
 }
 
-const EXAMPLE_COLUMNS = [
+const EXAMPLE_COLUMNS_GENERAL = [
   { header: 'nombre', example: 'Laptop XYZ', required: true },
   { header: 'categoria', example: 'Laptops', required: true },
   { header: 'descripcion', example: 'Descripcion opcional', required: false },
@@ -244,7 +258,21 @@ const EXAMPLE_COLUMNS = [
   { header: 'serie', example: 'ABC123, DEF456', required: false },
 ]
 
+const EXAMPLE_COLUMNS_RESTAURANT = [
+  { header: 'nombre', example: 'Ceviche Mixto', required: true },
+  { header: 'categoria', example: 'Platos de Fondo', required: true },
+  { header: 'descripcion', example: 'Ceviche con pescado y mariscos', required: false },
+  { header: 'precioVenta', example: '28.50', required: true },
+  { header: 'tiempoPreparacion', example: '15', required: false },
+  { header: 'estacionCocina', example: 'GRILL, FRY, COLD, BAKERY', required: false },
+  { header: 'alergenos', example: 'Pescado, Mariscos', required: false },
+]
+
 export default function ExcelUploadPage() {
+  const { verticalInfo } = useTenantFeatures()
+  const isRestaurant = verticalInfo?.businessVertical === 'RESTAURANTS'
+  const EXAMPLE_COLUMNS = isRestaurant ? EXAMPLE_COLUMNS_RESTAURANT : EXAMPLE_COLUMNS_GENERAL
+
   const [file, setFile] = useState<File | null>(null)
   const [previewData, setPreviewData] = useState<any[] | null>(null)
   const [stores, setStores] = useState<{ id: number; name: string }[]>([])
@@ -255,7 +283,7 @@ export default function ExcelUploadPage() {
   const [filasConError, setFilasConError] = useState<number[]>([])
   const [selectedCategory, setSelectedCategory] = useState<ErrorCategory | null>(null)
   const [errorSearchTerm, setErrorSearchTerm] = useState('')
-  const erroresMapeados: Record<number, FilaError[]> = previewData ? validarFilas(previewData) : {}
+  const erroresMapeados: Record<number, FilaError[]> = previewData ? validarFilas(previewData, isRestaurant) : {}
   const filaErroresEntries = useMemo(
     () =>
       Object.entries(erroresMapeados).map(([rowIndex, errores]) => ({
@@ -329,15 +357,18 @@ export default function ExcelUploadPage() {
         return
       }
 
-      const erroresPorFila = validarFilas(preview)
+      const erroresPorFila = validarFilas(preview, isRestaurant)
       const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx, 10))
       const hasRowErrors = Object.keys(erroresPorFila).length > 0
 
-      const seriesDuplicadas = encontrarSeriesDuplicadas(preview)
       const generalMessages: string[] = []
 
-      if (seriesDuplicadas.length > 0) {
-        generalMessages.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+      // Series validation only for non-restaurant verticals
+      if (!isRestaurant) {
+        const seriesDuplicadas = encontrarSeriesDuplicadas(preview)
+        if (seriesDuplicadas.length > 0) {
+          generalMessages.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+        }
       }
 
       setErroresValidacion(generalMessages)
@@ -350,8 +381,6 @@ export default function ExcelUploadPage() {
         toast.error('No se pudo procesar el archivo. Corrige los datos del Excel e intentalo nuevamente.')
         return
       }
-
-
 
       setPreviewData(preview)
       toast.success('Archivo procesado correctamente')
@@ -384,15 +413,17 @@ export default function ExcelUploadPage() {
       return
     }
 
-    const erroresPorFila = validarFilas(previewData)
+    const erroresPorFila = validarFilas(previewData, isRestaurant)
     const indicesConError = Object.keys(erroresPorFila).map((idx) => parseInt(idx, 10))
     const hasRowErrors = Object.keys(erroresPorFila).length > 0
 
-    const seriesDuplicadas = encontrarSeriesDuplicadas(previewData)
     const generalMessages: string[] = []
 
-    if (seriesDuplicadas.length > 0) {
-      generalMessages.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+    if (!isRestaurant) {
+      const seriesDuplicadas = encontrarSeriesDuplicadas(previewData)
+      if (seriesDuplicadas.length > 0) {
+        generalMessages.push(`Series duplicadas en el archivo: ${seriesDuplicadas.join(', ')}`)
+      }
     }
 
     setErroresValidacion(generalMessages)
@@ -516,8 +547,12 @@ export default function ExcelUploadPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold sm:text-2xl">Importar productos desde Excel</h1>
-              <p className="text-sm text-muted-foreground">Carga masiva de productos al inventario</p>
+              <h1 className="text-xl font-bold sm:text-2xl">
+                {isRestaurant ? 'Importar platos desde Excel' : 'Importar productos desde Excel'}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {isRestaurant ? 'Carga masiva de platos al menú' : 'Carga masiva de productos al inventario'}
+              </p>
             </div>
           </div>
         </div>
@@ -578,7 +613,11 @@ export default function ExcelUploadPage() {
                 </table>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                <span className="text-amber-600">*</span> Campos obligatorios. La columna <code className="rounded bg-muted px-1 text-[11px]">serie</code> acepta varios numeros separados por comas.
+                <span className="text-amber-600">*</span> Campos obligatorios.
+                {isRestaurant
+                  ? <> La columna <code className="rounded bg-muted px-1 text-[11px]">estacionCocina</code> acepta: GRILL, FRY, COLD, BAKERY.</>
+                  : <> La columna <code className="rounded bg-muted px-1 text-[11px]">serie</code> acepta varios numeros separados por comas.</>
+                }
               </p>
             </CardContent>
           </Card>

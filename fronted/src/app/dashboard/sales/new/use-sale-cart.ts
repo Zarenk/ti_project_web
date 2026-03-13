@@ -268,6 +268,22 @@ export function useSaleCart(storeId: number | null, serialsEnabled: boolean) {
   }, [serialsMap, serialDialogProductId])
 
   // ──────────────────────────────────────────────
+  // Series registration callback
+  // ──────────────────────────────────────────────
+  const handleSeriesRegistered = useCallback(
+    (serial: string) => {
+      if (serialDialogProductId === null) return
+      setAvailableSeriesMap((prev) => {
+        const next = new Map(prev)
+        const current = next.get(serialDialogProductId) ?? []
+        next.set(serialDialogProductId, [...current, serial])
+        return next
+      })
+    },
+    [serialDialogProductId],
+  )
+
+  // ──────────────────────────────────────────────
   // Hydrate (for draft restoration)
   // ──────────────────────────────────────────────
   const hydrateCart = useCallback(
@@ -326,6 +342,7 @@ export function useSaleCart(storeId: number | null, serialsEnabled: boolean) {
     serialDialogLoading,
     handleSerialClick,
     handleSerialSave,
+    handleSeriesRegistered,
     serialDialogProduct,
     serialDialogAssigned,
     serialDialogAvailable,

@@ -1,13 +1,21 @@
 "use client";
 
+import Image from "next/image";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
-const LOGOS = [
-  { name: "SUNAT", label: "Certificado SUNAT" },
-  { name: "ISO 27001", label: "ISO 27001" },
-  { name: "AES-256", label: "Encriptacion AES-256" },
-  { name: "SSL/TLS", label: "Conexion Segura" },
-  { name: "AWS", label: "Cloud AWS" },
+interface CertItem {
+  name: string;
+  label: string;
+  abbr: string;
+  logo?: string;
+}
+
+const CERTS: CertItem[] = [
+  { name: "SUNAT", label: "Certificado SUNAT", abbr: "SU", logo: "/icons/sunat-logo.png" },
+  { name: "ISO 27001", label: "ISO 27001", abbr: "IS" },
+  { name: "AES-256", label: "Encriptacion AES-256", abbr: "AE" },
+  { name: "SSL/TLS", label: "Conexion Segura", abbr: "SS" },
+  { name: "AWS", label: "Cloud AWS", abbr: "AW", logo: "/icons/aws-logo.png" },
 ];
 
 export default function SocialProof() {
@@ -19,16 +27,28 @@ export default function SocialProof() {
             Certificaciones y tecnologia que respaldan tu negocio
           </p>
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
-            {LOGOS.map((logo) => (
+            {CERTS.map((cert) => (
               <div
-                key={logo.name}
-                className="flex items-center gap-2 text-muted-foreground/70 hover:text-foreground/80 transition-colors"
+                key={cert.name}
+                className="flex items-center gap-2.5 text-muted-foreground/70 hover:text-foreground/80 transition-colors"
               >
-                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                  {logo.name.slice(0, 2).toUpperCase()}
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {cert.logo ? (
+                    <Image
+                      src={cert.logo}
+                      alt={cert.name}
+                      width={32}
+                      height={32}
+                      className="w-5 h-5 object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs font-bold text-muted-foreground">
+                      {cert.abbr}
+                    </span>
+                  )}
                 </div>
                 <span className="text-sm font-medium whitespace-nowrap">
-                  {logo.label}
+                  {cert.label}
                 </span>
               </div>
             ))}

@@ -54,10 +54,11 @@ export default function UsersPage(): React.ReactElement {
         const role = typeof user.role === "string" ? user.role.toUpperCase() : "";
         const username = user.username?.trim() || "";
 
-        // Excluir usuarios genéricos automáticos y GUEST
-        const isGenericUser = username.startsWith("generic_");
+        // Excluir usuarios auto-generados (web checkout + generic) y GUEST
+        const isAutoUser =
+          username.startsWith("generic_") || username.startsWith("web_");
 
-        return hasCredentials && role !== "GUEST" && !isGenericUser;
+        return hasCredentials && role !== "GUEST" && !isAutoUser;
       })
       .map((user) => ({
         ...user,

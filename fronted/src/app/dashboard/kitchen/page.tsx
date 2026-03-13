@@ -635,15 +635,21 @@ export default function KitchenPage() {
                                   >
                                     {meta.label}
                                   </Badge>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="cursor-pointer"
+                                  <button
+                                    type="button"
                                     disabled={item.status === "SERVED"}
                                     onClick={() => handleAdvanceStatus(item.id, item.status)}
+                                    className={cn(
+                                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold cursor-pointer transition-colors",
+                                      "disabled:opacity-40 disabled:cursor-not-allowed",
+                                      status === "PENDING" && "border-amber-500/40 text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95",
+                                      status === "COOKING" && "border-orange-500/40 text-orange-200 bg-orange-500/20 hover:bg-orange-500/30 active:scale-95",
+                                      status === "READY" && "border-emerald-500/40 text-emerald-200 bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95",
+                                      status === "SERVED" && "border-sky-500/40 text-sky-200 bg-sky-500/10",
+                                    )}
                                   >
                                     {meta.action}
-                                  </Button>
+                                  </button>
                                 </div>
                               </div>
                             ))}

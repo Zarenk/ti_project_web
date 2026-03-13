@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Ban, Banknote, CreditCard, FileText, FileX2, Landmark, Loader2, MessageCircle, ReceiptText, RefreshCw, Send, Smartphone } from "lucide-react";
+import { Ban, Banknote, CreditCard, FileText, FileX2, Landmark, Loader2, MessageCircle, Printer, ReceiptText, RefreshCw, Send, Smartphone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -34,6 +34,12 @@ import { CreditNoteDialog } from "./credit-note-dialog";
 import { useModulePermission } from "@/hooks/use-module-permission";
 import { useDeleteActionVisibility } from "@/hooks/use-delete-action-visibility";
 import { useAuth } from "@/context/auth-context";
+import { useSiteSettings } from "@/context/site-settings-context";
+import { useTenantSelection } from "@/context/tenant-selection-context";
+import { getCompanyDetail, type CompanyResponse } from "@/app/dashboard/tenancy/tenancy.api";
+import { RestaurantReceiptPdf, type RestaurantReceiptData } from "@/app/dashboard/restaurant-orders/components/RestaurantReceiptPdf";
+import { TicketRestaurantReceiptPdf } from "@/app/dashboard/restaurant-orders/components/TicketRestaurantReceiptPdf";
+import { pdf } from "@react-pdf/renderer";
 
 
 const parseNumber = (value: unknown): number => {
@@ -106,12 +112,32 @@ export function SaleDetailDialog({
   const [whatsappPopoverOpen, setWhatsappPopoverOpen] = useState(false);
   const [whatsappSendCount, setWhatsappSendCount] = useState(0);
   const [whatsAppConnected, setWhatsAppConnected] = useState<boolean | null>(null);
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
+  const [activeCompany, setActiveCompany] = useState<CompanyResponse | null>(null);
+  const companyFetched = useRef(false);
   const checkPermission = useModulePermission();
   const whatsappAllowed = checkPermission("whatsapp");
   const canSeeDeleteActions = useDeleteActionVisibility();
   const { role } = useAuth();
   const isEmployee = role?.trim().toUpperCase() === "EMPLOYEE";
   const canEmitCreditNote = canSeeDeleteActions && !isEmployee;
+  const { settings } = useSiteSettings();
+  const { selection } = useTenantSelection();
+  const receiptFormat = settings.company?.receiptFormat ?? "a4";
+
+  // Fetch company detail for receipt generation
+  useEffect(() => {
+    if (!open || !selection.companyId || companyFetched.current) return;
+    companyFetched.current = true;
+    getCompanyDetail(selection.companyId)
+      .then((data) => setActiveCompany(data))
+      .catch(() => {/* non-critical */});
+  }, [open, selection.companyId]);
+
+  // Reset company fetch flag when dialog closes
+  useEffect(() => {
+    if (!open) companyFetched.current = false;
+  }, [open]);
 
   // Check WhatsApp connection status when dialog opens
   useEffect(() => {
@@ -211,6 +237,100 @@ export function SaleDetailDialog({
       setIsSendingWhatsApp(false);
     }
   };
+
+  const PAYMENT_LABELS: Record<string, string> = {
+    EFECTIVO: "Efectivo",
+    TRANSFERENCIA: "Transferencia",
+    VISA: "Visa",
+    YAPE: "Yape",
+    PLIN: "Plin",
+    TARJETA: "Tarjeta",
+  };
+
+  const handleGenerateReceipt = useCallback(async () => {
+    if (!sale || isGeneratingReceipt) return;
+    setIsGeneratingReceipt(true);
+    try {
+      const companyName =
+        activeCompany?.sunatBusinessName?.trim() ||
+        activeCompany?.legalName?.trim() ||
+        activeCompany?.name?.trim() ||
+        undefined;
+      const companyRuc =
+        activeCompany?.sunatRuc?.trim() ||
+        activeCompany?.taxId?.trim() ||
+        undefined;
+      const companyAddress = activeCompany?.sunatAddress?.trim() || undefined;
+      const companyPhone = activeCompany?.sunatPhone?.trim() || undefined;
+
+      const paymentMethods = (sale.payments ?? [])
+        .map((p) => {
+          const name = p.paymentMethod?.name?.toUpperCase() ?? "";
+          return PAYMENT_LABELS[name] || p.paymentMethod?.name || "Otro";
+        })
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .join(", ") || "No especificado";
+
+      const items = (sale.details ?? []).map((d) => {
+        const qty = parseNumber(d.quantity);
+        const unitPrice = parseNumber(d.price);
+        return {
+          name: d.product?.name ?? d.productName ?? d.product_name ?? "Producto",
+          quantity: qty,
+          unitPrice,
+          total: getDetailTotal(d),
+        };
+      });
+
+      const subtotalRaw = items.reduce((sum, it) => sum + it.total, 0);
+      const total = parseNumber(sale.total);
+      const igv = +(total - total / 1.18).toFixed(2);
+      const subtotal = +(total - igv).toFixed(2);
+
+      const receiptNumber = String(sale.id).padStart(6, "0");
+
+      let dateTime = "";
+      try {
+        dateTime = format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm");
+      } catch {
+        dateTime = sale.createdAt;
+      }
+
+      const receiptData: RestaurantReceiptData = {
+        storeName: sale.store?.name ?? "Tienda",
+        companyName,
+        companyRuc,
+        companyAddress,
+        companyPhone,
+        receiptNumber,
+        orderNumber: String(sale.id),
+        orderType: sale.tipoComprobante ?? "SIN COMPROBANTE",
+        dateTime,
+        items,
+        subtotal,
+        igv,
+        total,
+        paymentMethod: paymentMethods,
+        tipoComprobante: sale.tipoComprobante ?? "SIN COMPROBANTE",
+        notes: sale.description?.trim() || undefined,
+      };
+
+      const ReceiptComponent =
+        receiptFormat === "ticket"
+          ? TicketRestaurantReceiptPdf
+          : RestaurantReceiptPdf;
+
+      const blob = await pdf(<ReceiptComponent data={receiptData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error("Error generating receipt:", err);
+      toast.error("Error al generar la nota de venta");
+    } finally {
+      setIsGeneratingReceipt(false);
+    }
+  }, [sale, isGeneratingReceipt, activeCompany, receiptFormat]);
 
   const currency = useMemo(() => {
     if (!sale) {
@@ -685,9 +805,25 @@ export function SaleDetailDialog({
                   })()}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  Esta venta no tiene comprobante generado.
-                </p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Esta venta no tiene comprobante SUNAT.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateReceipt}
+                    disabled={isGeneratingReceipt}
+                    className="cursor-pointer gap-2 transition-all duration-200 hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm active:scale-95"
+                  >
+                    {isGeneratingReceipt ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Printer className="h-4 w-4" />
+                    )}
+                    {isGeneratingReceipt ? "Generando..." : `Ver Nota de Venta (${receiptFormat === "ticket" ? "Ticket" : "A4"})`}
+                  </Button>
+                </div>
               )}
 
               {sunatLogs.length > 0 && (

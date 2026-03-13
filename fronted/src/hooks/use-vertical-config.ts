@@ -23,7 +23,7 @@ export function useVerticalConfig() {
   const [error, setError] = useState<string | null>(null)
   const [migration, setMigration] = useState<OrganizationVerticalInfo["migration"] | null>(null)
   const normalizedRole = role?.toString().trim().toUpperCase() ?? ""
-  const disallowedRoles = new Set(["EMPLOYEE", "ADMIN", "SUPER_ADMIN_ORG"])
+  const disallowedRoles = new Set(["EMPLOYEE", "ADMIN"])
 
   const loadConfig = useCallback(
     async (force?: boolean) => {

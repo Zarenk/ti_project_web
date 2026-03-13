@@ -663,6 +663,19 @@ export function ProductForm({
     const field = schemaFields.find((entry) => entry.key === "ingredient_unit")
     return field?.options ?? ["UNIDAD", "KG", "GR", "LT", "ML"]
   }, [schemaFields])
+  const MIGRATION_ASSISTANT_PATH = "/dashboard/products/migration"
+  const isLegacyProduct =
+    Boolean(product?.id) &&
+    (product?.isVerticalMigrated === false ||
+      !product?.extraAttributes ||
+      Object.keys(product.extraAttributes ?? {}).length === 0)
+  const [extraAttributes, setExtraAttributes] = useState<Record<string, unknown>>(
+    () => (product?.extraAttributes ?? {}) as Record<string, unknown>,
+  )
+  // Product kind for restaurant vertical (DISH, BEVERAGE, DESSERT, PACKAGED)
+  const productKind = isRestaurant
+    ? ((extraAttributes.product_kind as string) || "DISH")
+    : null
   const groupedSchemaFields = useMemo(() => {
     if (!schemaFields.length) return []
     const hiddenKeys = new Set<string>()
@@ -673,6 +686,32 @@ export function ProductForm({
     }
     if (isRestaurant) {
       hiddenKeys.add("ingredient_unit")
+      hiddenKeys.add("product_kind") // rendered separately as selector
+
+      // Hide groups based on product_kind
+      const kind = productKind ?? "DISH"
+      const hiddenGroups = new Set<string>()
+      if (kind === "BEVERAGE") {
+        hiddenGroups.add("general") // no ingredients
+        hiddenGroups.add("kitchen") // no kitchen routing
+      } else if (kind === "PACKAGED") {
+        hiddenGroups.add("general") // no ingredients
+        hiddenGroups.add("kitchen") // no kitchen
+        hiddenGroups.add("bebida")  // no serving
+        hiddenGroups.add("nutrition") // no nutrition
+      } else if (kind === "DESSERT") {
+        hiddenGroups.add("bebida") // no serving size
+      } else {
+        // DISH — hide beverage fields
+        hiddenGroups.add("bebida")
+      }
+
+      for (const f of schemaFields) {
+        const group = f.group ?? "general"
+        if (hiddenGroups.has(group)) {
+          hiddenKeys.add(f.key)
+        }
+      }
     }
     const groups = new Map<string, typeof schemaFields>()
     schemaFields
@@ -684,16 +723,7 @@ export function ProductForm({
       groups.set(key, current)
     })
     return Array.from(groups.entries())
-  }, [schemaFields, isRetail, isRestaurant])
-  const MIGRATION_ASSISTANT_PATH = "/dashboard/products/migration"
-  const isLegacyProduct =
-    Boolean(product?.id) &&
-    (product?.isVerticalMigrated === false ||
-      !product?.extraAttributes ||
-      Object.keys(product.extraAttributes ?? {}).length === 0)
-  const [extraAttributes, setExtraAttributes] = useState<Record<string, unknown>>(
-    () => (product?.extraAttributes ?? {}) as Record<string, unknown>,
-  )
+  }, [schemaFields, isRetail, isRestaurant, productKind])
   const [batchCart, setBatchCart] = useState<BatchCartItem[]>([])
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -1090,8 +1120,11 @@ export function ProductForm({
     for (const field of schemaFields) {
       if (
         (isRetail && (field.key === "size" || field.key === "color" || field.key === "sku_variant")) ||
-        (isRestaurant && field.key === "ingredient_unit")
+        (isRestaurant && (field.key === "ingredient_unit" || field.key === "product_kind"))
       ) {
+        if (field.key === "product_kind") {
+          normalized.product_kind = extraAttributes.product_kind || "DISH"
+        }
         continue
       }
       const raw = extraAttributes[field.key]
@@ -3301,6 +3334,10 @@ const VariantRowItem = memo(function VariantRowItem({
                 renderSchemaField={renderSchemaField}
                 productId={product?.id}
                 migrationAssistantPath={MIGRATION_ASSISTANT_PATH}
+                productKind={productKind}
+                onProductKindChange={isRestaurant ? (kind: string) => {
+                  setExtraAttributes((prev) => ({ ...prev, product_kind: kind }))
+                } : undefined}
               />
               {showComputerSpecs && (
                 <ProductComputerSpecs

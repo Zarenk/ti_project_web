@@ -3,6 +3,19 @@ import { authFetch } from "@/utils/auth-fetch"
 
 // ========== Types ==========
 
+export interface ArbiterStatus {
+  isRunning: boolean
+  lastRun: string | null
+  lastDuration: number | null
+  currentStep: string | null
+  completedSteps: string[]
+  totalSteps: number
+  processedCount: number
+  autoApprovedCount: number
+  autoRejectedCount: number
+  degradedCount: number
+}
+
 export interface HelpAnalytics {
   queries7d: number
   queries30d: number
@@ -25,6 +38,10 @@ export interface HelpAnalytics {
     status: string
     createdAt: string
     reviewedAt: string | null
+    qualityScore: number | null
+    arbiterDecision: string | null
+    scoreFactors: Record<string, number> | null
+    scoredAt: string | null
   }>
 }
 
@@ -161,5 +178,54 @@ export async function triggerAnalysis(): Promise<void> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err?.message || "Error al ejecutar analisis")
+  }
+}
+
+// ========== Arbiter API ==========
+
+export async function getArbiterStatus(): Promise<ArbiterStatus> {
+  const res = await authFetch(`${BACKEND_URL}/api/help/admin/arbiter/status`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message || "Error al obtener estado del árbitro")
+  }
+  return res.json()
+}
+
+export async function triggerArbiterRun(): Promise<void> {
+  const res = await authFetch(`${BACKEND_URL}/api/help/admin/arbiter/run`, {
+    method: "POST",
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message || "Error al iniciar el árbitro")
+  }
+}
+
+export async function cancelArbiterRun(): Promise<void> {
+  const res = await authFetch(`${BACKEND_URL}/api/help/admin/arbiter/cancel`, {
+    method: "POST",
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message || "Error al cancelar el árbitro")
+  }
+}
+
+export async function overrideArbiterDecision(
+  id: number,
+  decision: "APPROVED" | "REJECTED",
+): Promise<void> {
+  const res = await authFetch(
+    `${BACKEND_URL}/api/help/admin/arbiter/override/${id}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message || "Error al aplicar override")
   }
 }

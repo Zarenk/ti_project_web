@@ -20,9 +20,10 @@ type Props = {
   data: AccountData
   onChange: (data: AccountData) => void
   onNext: () => void
+  serverErrors?: Partial<Record<keyof AccountData, string>>
 }
 
-export function StepAccount({ data, onChange, onNext }: Props) {
+export function StepAccount({ data, onChange, onNext, serverErrors }: Props) {
   const [errors, setErrors] = useState<Errors>({})
   const [showPassword, setShowPassword] = useState(false)
 
@@ -51,6 +52,12 @@ export function StepAccount({ data, onChange, onNext }: Props) {
     if (validate()) onNext()
   }
 
+  // Merge client + server errors (client takes priority)
+  const displayErrors = {
+    ...serverErrors,
+    ...Object.fromEntries(Object.entries(errors).filter(([, v]) => v)),
+  } as Errors
+
   const inputClasses = (hasError?: boolean) =>
     `w-full rounded-lg border px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 transition-colors ${
       hasError
@@ -68,12 +75,12 @@ export function StepAccount({ data, onChange, onNext }: Props) {
           name="fullName"
           value={data.fullName}
           onChange={(e) => update("fullName", e.target.value)}
-          className={inputClasses(Boolean(errors.fullName))}
+          className={inputClasses(Boolean(displayErrors.fullName))}
           placeholder="Juan Perez Garcia"
           autoFocus
         />
-        {errors.fullName && (
-          <p className="mt-1 text-xs text-destructive">{errors.fullName}</p>
+        {displayErrors.fullName && (
+          <p className="mt-1 text-xs text-destructive">{displayErrors.fullName}</p>
         )}
       </div>
 
@@ -86,11 +93,11 @@ export function StepAccount({ data, onChange, onNext }: Props) {
           type="email"
           value={data.email}
           onChange={(e) => update("email", e.target.value)}
-          className={inputClasses(Boolean(errors.email))}
+          className={inputClasses(Boolean(displayErrors.email))}
           placeholder="tu@empresa.com"
         />
-        {errors.email && (
-          <p className="mt-1 text-xs text-destructive">{errors.email}</p>
+        {displayErrors.email && (
+          <p className="mt-1 text-xs text-destructive">{displayErrors.email}</p>
         )}
       </div>
 
@@ -104,7 +111,7 @@ export function StepAccount({ data, onChange, onNext }: Props) {
             type={showPassword ? "text" : "password"}
             value={data.password}
             onChange={(e) => update("password", e.target.value)}
-            className={`${inputClasses(Boolean(errors.password))} pr-10`}
+            className={`${inputClasses(Boolean(displayErrors.password))} pr-10`}
             placeholder="Min. 8 caracteres, letra + numero"
           />
           <button
@@ -122,8 +129,8 @@ export function StepAccount({ data, onChange, onNext }: Props) {
         <div className="mt-2">
           <PasswordStrength password={data.password} />
         </div>
-        {errors.password && (
-          <p className="mt-1 text-xs text-destructive">{errors.password}</p>
+        {displayErrors.password && (
+          <p className="mt-1 text-xs text-destructive">{displayErrors.password}</p>
         )}
       </div>
 

@@ -46,15 +46,17 @@ export function NavMain({
       <SidebarGroupLabel>Plataforma</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
-          const hasSubItems = item.items && item.items.length > 0
-          const isGroupActive = hasSubItems
-            ? item.items!.some(
+          const subItems = item.items ?? []
+          const hasMultipleSubItems = subItems.length > 1
+          const isGroupActive = subItems.length > 0
+            ? subItems.some(
                 (sub) => sub.url !== "#" && pathname.startsWith(sub.url),
               )
             : item.url !== "#" && pathname.startsWith(item.url)
 
-          if (!hasSubItems) {
-            // Direct link item (no sub-items) — e.g. WhatsApp
+          // Direct link: no sub-items OR exactly 1 sub-item
+          if (!hasMultipleSubItems) {
+            const directUrl = subItems.length === 1 ? subItems[0].url : item.url
             return (
               <SidebarMenuItem key={`${item.title}-${item.url}`}>
                 <SidebarMenuButton
@@ -64,7 +66,7 @@ export function NavMain({
                   className="group/btn transition-all duration-200 ease-out active:scale-[0.98]"
                 >
                   <Link
-                    href={item.url}
+                    href={directUrl}
                     onClick={() => {
                       if (isMobile) {
                         setOpenMobile(false)

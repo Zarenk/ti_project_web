@@ -11,7 +11,8 @@ export default function ConditionalFooter() {
     pathname.startsWith("/login") ||
     pathname.startsWith("/google-auth") ||
     pathname.startsWith("/signup") ||
-    pathname.startsWith("/barcode")
+    pathname.startsWith("/barcode") ||
+    pathname.startsWith("/menu")
   ) {
     return null;
   }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useTenantSelection } from "@/context/tenant-selection-context";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { queryKeys } from "@/lib/query-keys";
 import { createSalesColumns, Sale } from "./columns";
 import { DataTable } from "./data-table";
@@ -486,6 +487,32 @@ export default function Page() {
       setIsDetailLoading(false);
     }
   }, []);
+
+  // Auto-open sale detail when navigating with ?saleId=X
+  const searchParams = useSearchParams();
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    const saleIdParam = searchParams.get("saleId");
+    if (!saleIdParam || deepLinkHandled.current) return;
+    const saleId = Number(saleIdParam);
+    if (!Number.isFinite(saleId) || saleId <= 0) return;
+    deepLinkHandled.current = true;
+    // Open the detail dialog directly by fetching the sale
+    setIsDetailOpen(true);
+    setIsDetailLoading(true);
+    getSaleById(saleId)
+      .then((detailedSale) => {
+        const normalizedSale = normalizeApiSale(detailedSale);
+        setSelectedSale(normalizedSale);
+      })
+      .catch(() => {
+        toast.error("No se pudo cargar el detalle de la venta.");
+        setIsDetailOpen(false);
+      })
+      .finally(() => setIsDetailLoading(false));
+    // Clean URL without re-rendering
+    window.history.replaceState(null, "", "/dashboard/sales");
+  }, [searchParams]);
 
   const columns = useMemo(
     () => createSalesColumns(handleDeleted, handleViewDetail),

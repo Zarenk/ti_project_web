@@ -56,6 +56,8 @@ import { VerticalMigrationMetrics } from "../vertical-migration-metrics"
 import { VerticalHistoryPanel } from "../vertical-history-panel"
 import { VerticalNotificationsBanner } from "../vertical-notifications-banner"
 import { OrgMembersCard } from "./org-members-card"
+import { OrgRequestCard } from "./org-request-card"
+import { OrgTransferHistory } from "./org-transfer-history"
 import { fetchSubscriptionSummary } from "@/lib/subscription-summary"
 import type { SubscriptionSummary } from "@/types/subscription"
 import { useTenantSelection } from "@/context/tenant-selection-context"
@@ -157,6 +159,7 @@ export default function OrganizationDetailPage({
     legalName?: "idle" | "checking" | "valid" | "invalid"
     taxId?: "idle" | "checking" | "valid" | "invalid"
   }>({})
+  const [transferRefreshKey, setTransferRefreshKey] = useState(0)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<UserSummary[]>([])
@@ -592,7 +595,7 @@ export default function OrganizationDetailPage({
   )
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full min-w-0 max-w-6xl overflow-hidden px-4 py-8 sm:px-6 lg:px-8">
       {isRedirecting ? (
         <Card className="border-dashed border-slate-200 dark:border-slate-700/60">
           <CardContent className="flex items-center gap-3 py-6 text-sm text-slate-600 dark:text-slate-300">
@@ -645,8 +648,8 @@ export default function OrganizationDetailPage({
             </div>
           )}
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <section className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] w-full min-w-0">
+            <section className="space-y-6 min-w-0 overflow-hidden">
               <Card>
               <CardHeader>
                 <CardTitle className="group/title flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
@@ -752,11 +755,11 @@ export default function OrganizationDetailPage({
                         className="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-medium text-slate-900 dark:text-slate-100">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-slate-900 dark:text-slate-100 break-words">
                               {company.name}
                             </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 break-words">
                               {company.legalName || "Sin razon social"}
                             </p>
                           </div>
@@ -786,7 +789,12 @@ export default function OrganizationDetailPage({
             <OrgMembersCard
               organizationId={organizationId}
               organizationName={organization.name}
+              onTransferComplete={() => setTransferRefreshKey((k) => k + 1)}
             />
+
+            <OrgRequestCard currentOrganizationId={organizationId} />
+
+            <OrgTransferHistory organizationId={organizationId} refreshKey={transferRefreshKey} />
 
             {organization.companies && organization.companies.length > 0 && (
               <>
@@ -895,7 +903,7 @@ export default function OrganizationDetailPage({
             </Card>
           </section>
 
-          <aside className="space-y-6">
+          <aside className="space-y-6 min-w-0 overflow-hidden">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-slate-100">
@@ -1001,11 +1009,11 @@ export default function OrganizationDetailPage({
                 <CardContent className="space-y-4">
                   {/* Plan Status */}
                   <div>
-                    <div className="mb-2 flex items-center justify-between">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Plan actual
                       </p>
-                      <div className="text-right">
+                      <div className="text-right min-w-0">
                         <Badge
                           variant="outline"
                           className={`flex items-center gap-2 ${getSubscriptionStatusColor(
@@ -1192,7 +1200,7 @@ export default function OrganizationDetailPage({
       ) : null}
 
       <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md overflow-hidden">
           <DialogHeader>
             <DialogTitle>Agregar empresa</DialogTitle>
             <DialogDescription>

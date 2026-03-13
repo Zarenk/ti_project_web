@@ -25,7 +25,7 @@ export default function HorizontalScroller({
   }
 
   return (
-    <div className={clsx("relative", className)}>
+    <div className={clsx("relative w-full min-w-0 overflow-hidden", className)}>
       <div
         ref={scrollerRef}
         className={clsx(

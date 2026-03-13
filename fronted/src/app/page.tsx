@@ -641,7 +641,7 @@ export default function Homepage() {
             <HeroSection heroProducts={heroProducts} onEditProduct={handleEditProduct} />
           )}
         </section>
-        <section className="gsap-section" data-navcolor="#f1f5f9">
+        <section className="gsap-section w-full min-w-0 overflow-hidden" data-navcolor="#f1f5f9">
           {recentProducts.length === 0 ? (
             <div className="container mx-auto px-4 py-12">
               <div className="text-center mb-8">
@@ -673,7 +673,7 @@ export default function Homepage() {
             />
           )}
         </section>
-        <section className="gsap-section" data-navcolor="#e0f2fe">
+        <section className="gsap-section w-full min-w-0 overflow-hidden" data-navcolor="#e0f2fe">
           {featuredProducts.length === 0 ? (
             <div className="container mx-auto px-4 py-12">
               <div className="text-center mb-8">

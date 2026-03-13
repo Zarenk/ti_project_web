@@ -144,7 +144,7 @@ export function buildActivityFeed(params: {
       description: `Venta #${s.id}`,
       amount: typeof s.total === "number" ? s.total : null,
       createdAt: s.createdAt,
-      href: "/dashboard/sales",
+      href: `/dashboard/sales?saleId=${s.id}`,
     })),
     ...safeEntries
       .slice()
@@ -156,7 +156,7 @@ export function buildActivityFeed(params: {
         description: `Ingreso #${e.id}`,
         amount: null,
         createdAt: e.createdAt,
-        href: "/dashboard/entries",
+        href: `/dashboard/entries?entryId=${e.id}`,
       })),
     // Low stock alerts
     ...(() => {
@@ -178,7 +178,7 @@ export function buildActivityFeed(params: {
             description: `Sin stock: ${i.productName}`,
             amount: null,
             createdAt: new Date().toISOString(),
-            href: "/dashboard/inventory",
+            href: `/dashboard/inventory/product-details/${i.productId}`,
           })),
         )
         if (newLow.length === 0 && safeLowStock.length > 0) {
@@ -190,7 +190,9 @@ export function buildActivityFeed(params: {
               : `Sin stock: ${safeLowStock[0].productName} y ${safeLowStock.length - 1} mas`,
             amount: null,
             createdAt: new Date().toISOString(),
-            href: "/dashboard/inventory",
+            href: safeLowStock.length === 1
+              ? `/dashboard/inventory/product-details/${safeLowStock[0].productId}`
+              : "/dashboard/inventory/alerts",
           })
         } else if (safeLowStock.length - newLow.length > 0 && newLow.length > 0) {
           list.push({
@@ -199,7 +201,7 @@ export function buildActivityFeed(params: {
             description: `Otros ${safeLowStock.length - newLow.length} productos sin stock`,
             amount: null,
             createdAt: new Date().toISOString(),
-            href: "/dashboard/inventory",
+            href: "/dashboard/inventory/alerts",
           })
         }
         const updated = { ...seen }

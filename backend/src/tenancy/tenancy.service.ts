@@ -52,6 +52,12 @@ type NormalizedSequenceInput = {
   correlativeLength: number;
 };
 
+/** Filter for counting real organization members (excludes web guests/clients) */
+const MEMBERSHIP_COUNT_FILTER = {
+  isActive: true,
+  user: { role: { notIn: ['GUEST', 'CLIENT'] as any } },
+};
+
 @Injectable()
 export class TenancyService implements OnModuleInit {
   private readonly logger = new Logger(TenancyService.name);
@@ -157,7 +163,12 @@ export class TenancyService implements OnModuleInit {
       _count: { organizationMemberships: number };
     },
   ): Promise<TenancySnapshot> {
-    const { _count, organizationUnits: units, companies, ...rest } = organization;
+    const {
+      _count,
+      organizationUnits: units,
+      companies,
+      ...rest
+    } = organization;
     const superAdmin = await this.resolveSuperAdmin(prisma, organization.id);
     return {
       ...rest,
@@ -287,7 +298,9 @@ export class TenancyService implements OnModuleInit {
         const prisma = tx as unknown as PrismaService as any;
         const trimmedOrgName = createTenancyDto.name?.trim() ?? '';
         if (!trimmedOrgName) {
-          throw new BadRequestException('El nombre de la organizacion es obligatorio.');
+          throw new BadRequestException(
+            'El nombre de la organizacion es obligatorio.',
+          );
         }
 
         const existingByName = await prisma.organization.findFirst({
@@ -296,7 +309,9 @@ export class TenancyService implements OnModuleInit {
           },
         });
         if (existingByName) {
-          throw new BadRequestException('Ya existe una organizacion con ese nombre.');
+          throw new BadRequestException(
+            'Ya existe una organizacion con ese nombre.',
+          );
         }
 
         const organizationSlug = await this.ensureOrganizationSlug(
@@ -343,7 +358,7 @@ export class TenancyService implements OnModuleInit {
         );
 
         const membershipCount = await prisma.organizationMembership.count({
-          where: { organizationId: organization.id },
+          where: { organizationId: organization.id, ...MEMBERSHIP_COUNT_FILTER },
         });
 
         const superAdmin = await this.resolveSuperAdmin(tx, organization.id);
@@ -366,7 +381,7 @@ export class TenancyService implements OnModuleInit {
       include: {
         organizationUnits: { orderBy: { id: 'asc' } },
         companies: { orderBy: { id: 'asc' } },
-        _count: { select: { organizationMemberships: true } },
+        _count: { select: { organizationMemberships: { where: MEMBERSHIP_COUNT_FILTER } } },
       },
       orderBy: { id: 'asc' },
     });
@@ -385,7 +400,7 @@ export class TenancyService implements OnModuleInit {
       include: {
         organizationUnits: { orderBy: { id: 'asc' } },
         companies: { orderBy: { id: 'asc' } },
-        _count: { select: { organizationMemberships: true } },
+        _count: { select: { organizationMemberships: { where: MEMBERSHIP_COUNT_FILTER } } },
       },
     });
 
@@ -408,7 +423,7 @@ export class TenancyService implements OnModuleInit {
       include: {
         organizationUnits: { orderBy: { id: 'asc' } },
         companies: { orderBy: { id: 'asc' } },
-        _count: { select: { organizationMemberships: true } },
+        _count: { select: { organizationMemberships: { where: MEMBERSHIP_COUNT_FILTER } } },
       },
     });
 
@@ -534,7 +549,7 @@ export class TenancyService implements OnModuleInit {
         });
 
         const membershipCount = await prisma.organizationMembership.count({
-          where: { organizationId: id },
+          where: { organizationId: id, ...MEMBERSHIP_COUNT_FILTER },
         });
 
         const superAdmin = await this.resolveSuperAdmin(tx, id);
@@ -742,7 +757,7 @@ export class TenancyService implements OnModuleInit {
     const providedOrganizationId = dto.organizationId ?? null;
     const contextOrganizationId = tenant.organizationId ?? null;
     const organizationId = tenant.isGlobalSuperAdmin
-      ? providedOrganizationId ?? contextOrganizationId
+      ? (providedOrganizationId ?? contextOrganizationId)
       : resolveOrganizationId({
           provided: providedOrganizationId,
           fallbacks: [contextOrganizationId],
@@ -751,7 +766,9 @@ export class TenancyService implements OnModuleInit {
         });
 
     if (organizationId !== null && !Number.isFinite(organizationId)) {
-      throw new BadRequestException('Organizacion invalida para la validacion.');
+      throw new BadRequestException(
+        'Organizacion invalida para la validacion.',
+      );
     }
 
     if (
@@ -827,7 +844,7 @@ export class TenancyService implements OnModuleInit {
             documentSequences: { orderBy: { documentType: 'asc' } },
           },
         },
-        _count: { select: { organizationMemberships: true } },
+        _count: { select: { organizationMemberships: { where: MEMBERSHIP_COUNT_FILTER } } },
       },
       orderBy: { id: 'asc' },
     });
@@ -1286,7 +1303,7 @@ export class TenancyService implements OnModuleInit {
         });
 
         const membershipCount = await prisma.organizationMembership.count({
-          where: { organizationId: id },
+          where: { organizationId: id, ...MEMBERSHIP_COUNT_FILTER },
         });
 
         const superAdmin = await this.resolveSuperAdmin(tx, id);
@@ -1389,7 +1406,7 @@ export class TenancyService implements OnModuleInit {
         });
 
         const membershipCount = await prisma.organizationMembership.count({
-          where: { organizationId },
+          where: { organizationId, ...MEMBERSHIP_COUNT_FILTER },
         });
 
         const superAdmin = await this.resolveSuperAdmin(tx, organizationId);
@@ -2744,9 +2761,86 @@ export class TenancyService implements OnModuleInit {
     });
   }
 
+  async addMemberToOrg(organizationId: number, email: string, role: string) {
+    // 1. Verify organization exists
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true },
+    });
+    if (!org) {
+      throw new NotFoundException('Organización no encontrada.');
+    }
+
+    // 2. Find user by email
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, username: true, email: true },
+    });
+    if (!user) {
+      throw new NotFoundException(
+        `No existe un usuario con el email "${email}". El usuario debe estar registrado primero.`,
+      );
+    }
+
+    // 3. Check if already a member (active or inactive)
+    const existing = await this.prisma.organizationMembership.findFirst({
+      where: { userId: user.id, organizationId },
+    });
+    if (existing && existing.isActive) {
+      throw new BadRequestException(
+        `${user.username} ya es miembro activo de esta organización.`,
+      );
+    }
+
+    // 4. Create or reactivate membership
+    let membership;
+    if (existing && !existing.isActive) {
+      membership = await this.prisma.organizationMembership.update({
+        where: { id: existing.id },
+        data: {
+          isActive: true,
+          role: role as any,
+          deactivatedAt: null,
+          deactivatedBy: null,
+        },
+      });
+    } else {
+      membership = await this.prisma.organizationMembership.create({
+        data: {
+          userId: user.id,
+          organizationId,
+          role: role as any,
+          isDefault: false,
+        },
+      });
+    }
+
+    return {
+      membershipId: membership.id,
+      userId: user.id,
+      username: user.username,
+      email: user.email,
+      membershipRole: membership.role,
+      organizationName: org.name,
+    };
+  }
+
   async getOrganizationMembers(organizationId: number) {
     const memberships = await this.prisma.organizationMembership.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        isActive: true,
+        user: {
+          // Exclude auto-generated anonymous users
+          NOT: {
+            OR: [
+              { username: { startsWith: 'web_' } },
+              { username: { startsWith: 'generic_' } },
+            ],
+          },
+          role: { not: 'GUEST' },
+        },
+      },
       include: {
         user: {
           select: {
@@ -2769,6 +2863,7 @@ export class TenancyService implements OnModuleInit {
       userRole: m.user.role,
       userStatus: m.user.status,
       membershipRole: m.role,
+      isActive: m.isActive,
       createdAt: m.createdAt,
     }));
   }
@@ -2777,11 +2872,14 @@ export class TenancyService implements OnModuleInit {
     organizationId: number,
     targetUserId: number,
     performedByUserId: number,
-  ): Promise<{ removed: true; nextOrgId: number | null; nextCompanyId: number | null }> {
-    const membership =
-      await this.prisma.organizationMembership.findFirst({
-        where: { organizationId, userId: targetUserId },
-      });
+  ): Promise<{
+    removed: true;
+    nextOrgId: number | null;
+    nextCompanyId: number | null;
+  }> {
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: { organizationId, userId: targetUserId },
+    });
 
     if (!membership) {
       throw new NotFoundException(
@@ -2805,8 +2903,14 @@ export class TenancyService implements OnModuleInit {
     let nextCompanyId: number | null = null;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.organizationMembership.delete({
+      // Soft-deactivate instead of hard delete (preserves audit trail)
+      await tx.organizationMembership.update({
         where: { id: membership.id },
+        data: {
+          isActive: false,
+          deactivatedAt: new Date(),
+          deactivatedBy: performedByUserId,
+        },
       });
 
       const user = await tx.user.findUnique({
@@ -2816,7 +2920,7 @@ export class TenancyService implements OnModuleInit {
 
       if (user?.lastOrgId === organizationId) {
         const nextMembership = await tx.organizationMembership.findFirst({
-          where: { userId: targetUserId },
+          where: { userId: targetUserId, isActive: true },
           include: {
             organization: {
               include: { companies: { take: 1, select: { id: true } } },
@@ -2840,5 +2944,451 @@ export class TenancyService implements OnModuleInit {
     });
 
     return { removed: true, nextOrgId, nextCompanyId };
+  }
+
+  // ── Membership Requests ─────────────────────────────────────
+
+  async createMembershipRequest(
+    requesterId: number,
+    toOrganizationId: number,
+    reason?: string,
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: toOrganizationId },
+      select: { id: true, name: true },
+    });
+    if (!org) {
+      throw new NotFoundException('Organización destino no encontrada.');
+    }
+
+    // Check if user already has active membership
+    const existing = await this.prisma.organizationMembership.findFirst({
+      where: {
+        userId: requesterId,
+        organizationId: toOrganizationId,
+        isActive: true,
+      },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        'Ya eres miembro activo de esta organización.',
+      );
+    }
+
+    // Check for duplicate pending request
+    const pendingRequest = await this.prisma.membershipRequest.findFirst({
+      where: {
+        requesterId,
+        toOrganizationId,
+        status: 'PENDING',
+      },
+    });
+    if (pendingRequest) {
+      throw new BadRequestException(
+        'Ya tienes una solicitud pendiente para esta organización.',
+      );
+    }
+
+    const request = await this.prisma.membershipRequest.create({
+      data: {
+        requesterId,
+        toOrganizationId,
+        type: 'SELF_REQUEST',
+        reason,
+      },
+      include: {
+        toOrganization: { select: { name: true } },
+        requester: { select: { username: true, email: true } },
+      },
+    });
+
+    return {
+      id: request.id,
+      type: request.type,
+      status: request.status,
+      reason: request.reason,
+      organizationName: request.toOrganization.name,
+      requesterName: request.requester.username,
+      requesterEmail: request.requester.email,
+      createdAt: request.createdAt,
+    };
+  }
+
+  async getPendingRequests(organizationId: number) {
+    const requests = await this.prisma.membershipRequest.findMany({
+      where: { toOrganizationId: organizationId, status: 'PENDING' },
+      include: {
+        requester: { select: { id: true, username: true, email: true } },
+        targetUser: { select: { id: true, username: true, email: true } },
+        fromOrganization: { select: { id: true, name: true } },
+        toOrganization: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return requests.map((r) => ({
+      id: r.id,
+      type: r.type,
+      status: r.status,
+      reason: r.reason,
+      requester: r.requester,
+      targetUser: r.targetUser,
+      fromOrganization: r.fromOrganization,
+      toOrganization: r.toOrganization,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async approveMembershipRequest(
+    requestId: number,
+    resolvedBy: number,
+    resolutionNote?: string,
+  ) {
+    const request = await this.prisma.membershipRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        requester: { select: { id: true, username: true, email: true } },
+        toOrganization: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Solicitud no encontrada.');
+    }
+    if (request.status !== 'PENDING') {
+      throw new BadRequestException('Esta solicitud ya fue resuelta.');
+    }
+
+    const userId = request.targetUserId ?? request.requesterId;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Update request status
+      await tx.membershipRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'APPROVED',
+          resolvedBy,
+          resolvedAt: new Date(),
+          resolutionNote,
+        },
+      });
+
+      // Check if inactive membership exists (reactivate)
+      const existing = await tx.organizationMembership.findFirst({
+        where: { userId, organizationId: request.toOrganizationId },
+      });
+
+      if (existing && !existing.isActive) {
+        await tx.organizationMembership.update({
+          where: { id: existing.id },
+          data: {
+            isActive: true,
+            role: request.requestedRole,
+            deactivatedAt: null,
+            deactivatedBy: null,
+          },
+        });
+      } else if (!existing) {
+        await tx.organizationMembership.create({
+          data: {
+            userId,
+            organizationId: request.toOrganizationId,
+            role: request.requestedRole,
+            isDefault: false,
+          },
+        });
+      }
+
+      // For ADMIN_MOVE: deactivate from source org
+      if (request.type === 'ADMIN_MOVE' && request.fromOrganizationId) {
+        const sourceMembership = await tx.organizationMembership.findFirst({
+          where: {
+            userId,
+            organizationId: request.fromOrganizationId,
+            isActive: true,
+          },
+        });
+        if (sourceMembership) {
+          await tx.organizationMembership.update({
+            where: { id: sourceMembership.id },
+            data: {
+              isActive: false,
+              deactivatedAt: new Date(),
+              deactivatedBy: resolvedBy,
+            },
+          });
+        }
+      }
+    });
+
+    return {
+      approved: true,
+      userId,
+      organizationId: request.toOrganizationId,
+      organizationName: request.toOrganization.name,
+    };
+  }
+
+  async rejectMembershipRequest(
+    requestId: number,
+    resolvedBy: number,
+    resolutionNote?: string,
+  ) {
+    const request = await this.prisma.membershipRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Solicitud no encontrada.');
+    }
+    if (request.status !== 'PENDING') {
+      throw new BadRequestException('Esta solicitud ya fue resuelta.');
+    }
+
+    await this.prisma.membershipRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'REJECTED',
+        resolvedBy,
+        resolvedAt: new Date(),
+        resolutionNote,
+      },
+    });
+
+    return { rejected: true };
+  }
+
+  async moveMember(
+    targetUserId: number,
+    fromOrganizationId: number,
+    toOrganizationId: number,
+    role: string,
+    performedByUserId: number,
+    reason?: string,
+    userRole?: string,
+  ) {
+    // Validate orgs exist
+    const [fromOrg, toOrg] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: fromOrganizationId },
+        select: { id: true, name: true },
+      }),
+      this.prisma.organization.findUnique({
+        where: { id: toOrganizationId },
+        select: { id: true, name: true },
+      }),
+    ]);
+    if (!fromOrg)
+      throw new NotFoundException('Organización origen no encontrada.');
+    if (!toOrg)
+      throw new NotFoundException('Organización destino no encontrada.');
+
+    // Validate user exists and is active member of source org
+    const sourceMembership = await this.prisma.organizationMembership.findFirst(
+      {
+        where: {
+          userId: targetUserId,
+          organizationId: fromOrganizationId,
+          isActive: true,
+        },
+      },
+    );
+    if (!sourceMembership) {
+      throw new BadRequestException(
+        'El usuario no es miembro activo de la organización origen.',
+      );
+    }
+    if (sourceMembership.role === 'OWNER') {
+      throw new ForbiddenException(
+        'No se puede mover al dueño (OWNER) de una organización. Debe transferir propiedad primero.',
+      );
+    }
+
+    let nextOrgId: number | null = null;
+    let nextCompanyId: number | null = null;
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Deactivate source membership
+      await tx.organizationMembership.update({
+        where: { id: sourceMembership.id },
+        data: {
+          isActive: false,
+          deactivatedAt: new Date(),
+          deactivatedBy: performedByUserId,
+        },
+      });
+
+      // 2. Create or reactivate target membership
+      const existingTarget = await tx.organizationMembership.findFirst({
+        where: { userId: targetUserId, organizationId: toOrganizationId },
+      });
+
+      if (existingTarget) {
+        await tx.organizationMembership.update({
+          where: { id: existingTarget.id },
+          data: {
+            isActive: true,
+            role: role as any,
+            deactivatedAt: null,
+            deactivatedBy: null,
+          },
+        });
+      } else {
+        await tx.organizationMembership.create({
+          data: {
+            userId: targetUserId,
+            organizationId: toOrganizationId,
+            role: role as any,
+            isDefault: false,
+          },
+        });
+      }
+
+      // 3. Update user's organizationId + context to the new org
+      const firstCompany = await tx.company.findFirst({
+        where: { organizationId: toOrganizationId },
+        select: { id: true },
+      });
+      nextOrgId = toOrganizationId;
+      nextCompanyId = firstCompany?.id ?? null;
+
+      await tx.user.update({
+        where: { id: targetUserId },
+        data: {
+          organizationId: toOrganizationId,
+          lastOrgId: nextOrgId,
+          lastCompanyId: nextCompanyId,
+          ...(userRole ? { role: userRole as any } : {}),
+        },
+      });
+
+      // 4. Record request for audit
+      await tx.membershipRequest.create({
+        data: {
+          requesterId: performedByUserId,
+          targetUserId,
+          fromOrganizationId,
+          toOrganizationId,
+          type: 'ADMIN_MOVE',
+          status: 'APPROVED',
+          requestedRole: role as any,
+          reason,
+          resolvedBy: performedByUserId,
+          resolvedAt: new Date(),
+        },
+      });
+    });
+
+    return {
+      moved: true,
+      targetUserId,
+      fromOrganization: fromOrg.name,
+      toOrganization: toOrg.name,
+      nextOrgId,
+      nextCompanyId,
+    };
+  }
+
+  /**
+   * Transfer history for a specific organization (shows transfers IN and OUT).
+   */
+  async getTransferHistory(organizationId: number) {
+    const records = await this.prisma.membershipRequest.findMany({
+      where: {
+        OR: [
+          { fromOrganizationId: organizationId },
+          { toOrganizationId: organizationId },
+        ],
+        type: { in: ['ADMIN_MOVE', 'ADMIN_ADD'] },
+        status: 'APPROVED',
+      },
+      include: {
+        requester: { select: { id: true, username: true, email: true } },
+        targetUser: { select: { id: true, username: true, email: true } },
+        fromOrganization: { select: { id: true, name: true } },
+        toOrganization: { select: { id: true, name: true } },
+        resolver: { select: { id: true, username: true } },
+      },
+      orderBy: { resolvedAt: 'desc' },
+      take: 100,
+    });
+
+    return records.map((r) => ({
+      id: r.id,
+      type: r.type,
+      direction:
+        r.fromOrganizationId === organizationId ? 'OUT' : 'IN',
+      targetUser: r.targetUser
+        ? { id: r.targetUser.id, username: r.targetUser.username, email: r.targetUser.email }
+        : null,
+      fromOrganization: r.fromOrganization
+        ? { id: r.fromOrganization.id, name: r.fromOrganization.name }
+        : null,
+      toOrganization: { id: r.toOrganization.id, name: r.toOrganization.name },
+      requestedRole: r.requestedRole,
+      reason: r.reason,
+      resolvedBy: r.resolver
+        ? { id: r.resolver.id, username: r.resolver.username }
+        : null,
+      resolvedAt: r.resolvedAt,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /**
+   * Global transfer history (all orgs) — SUPER_ADMIN_GLOBAL only.
+   */
+  async getGlobalTransferHistory(page = 1, pageSize = 20) {
+    const skip = (page - 1) * pageSize;
+    const take = Math.min(pageSize, 100);
+
+    const [records, total] = await Promise.all([
+      this.prisma.membershipRequest.findMany({
+        where: {
+          type: { in: ['ADMIN_MOVE', 'ADMIN_ADD'] },
+          status: 'APPROVED',
+        },
+        include: {
+          requester: { select: { id: true, username: true, email: true } },
+          targetUser: { select: { id: true, username: true, email: true } },
+          fromOrganization: { select: { id: true, name: true } },
+          toOrganization: { select: { id: true, name: true } },
+          resolver: { select: { id: true, username: true } },
+        },
+        orderBy: { resolvedAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.membershipRequest.count({
+        where: {
+          type: { in: ['ADMIN_MOVE', 'ADMIN_ADD'] },
+          status: 'APPROVED',
+        },
+      }),
+    ]);
+
+    return {
+      data: records.map((r) => ({
+        id: r.id,
+        type: r.type,
+        targetUser: r.targetUser
+          ? { id: r.targetUser.id, username: r.targetUser.username, email: r.targetUser.email }
+          : null,
+        fromOrganization: r.fromOrganization
+          ? { id: r.fromOrganization.id, name: r.fromOrganization.name }
+          : null,
+        toOrganization: { id: r.toOrganization.id, name: r.toOrganization.name },
+        requestedRole: r.requestedRole,
+        reason: r.reason,
+        resolvedBy: r.resolver
+          ? { id: r.resolver.id, username: r.resolver.username }
+          : null,
+        resolvedAt: r.resolvedAt,
+        createdAt: r.createdAt,
+      })),
+      total,
+      page,
+      pageSize: take,
+    };
   }
 }

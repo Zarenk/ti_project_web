@@ -481,6 +481,24 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
   const logoSrc = resolveLogoSrc(data.remitenteLogo);
   const items = data.items || [];
 
+  // Compact mode for many items — reduce sizes to fit on one page
+  const compact = items.length > 10;
+  const c = {
+    pagePadding: compact ? 20 : 28,
+    pageFontSize: compact ? 7.5 : 9,
+    sectionMarginBottom: compact ? 4 : 8,
+    sectionBoxPadding: compact ? 5 : 8,
+    labelFontSize: compact ? 7 : 8,
+    valFontSize: compact ? 7.5 : 9,
+    thFontSize: compact ? 7 : 8,
+    tdFontSize: compact ? 7 : 8.5,
+    rowPaddingV: compact ? 3 : 5,
+    routePadding: compact ? 5 : 8,
+    headerMarginBottom: compact ? 8 : 14,
+    logoSize: compact ? 50 : 68,
+    serialsFontSize: compact ? 5.5 : 6.5,
+  };
+
   // Status badge
   const statusStyle = data.cdrAceptado
     ? s.statusAccepted
@@ -495,11 +513,11 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
+      <Page size="A4" style={[s.page, { padding: c.pagePadding, fontSize: c.pageFontSize }]}>
         {/* ── Header ─────────────────────────────────── */}
-        <View style={[s.header, { borderBottomColor: primary }]}>
+        <View style={[s.header, { borderBottomColor: primary, marginBottom: c.headerMarginBottom }]}>
           <View style={s.headerLeft}>
-            <CompanyLogo src={logoSrc} size={68} />
+            <CompanyLogo src={logoSrc} size={c.logoSize} />
             <Text style={s.companyName}>{data.remitenteRazonSocial}</Text>
             {data.remitenteAddress && (
               <Text style={s.companyInfo}>{data.remitenteAddress}</Text>
@@ -534,30 +552,30 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
         <Text style={[s.sectionTitle, { backgroundColor: secondary }]}>
           Datos del Traslado
         </Text>
-        <View style={s.sectionBox}>
+        <View style={[s.sectionBox, { padding: c.sectionBoxPadding, marginBottom: c.sectionMarginBottom }]}>
           <View style={s.twoCol}>
             <View style={s.col}>
               <View style={s.row}>
-                <Text style={s.label}>Fecha de Emision</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Fecha de Emision</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{formatDate(data.fechaEmision || data.fechaTraslado)}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{formatDate(data.fechaEmision || data.fechaTraslado)}</Text>
               </View>
               <View style={s.row}>
-                <Text style={s.label}>Fecha de Traslado</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Fecha de Traslado</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{formatDate(data.fechaTraslado)}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{formatDate(data.fechaTraslado)}</Text>
               </View>
             </View>
             <View style={s.col}>
               <View style={s.row}>
-                <Text style={s.label}>Motivo de Traslado</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Motivo de Traslado</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{getMotivo(data.motivoTraslado)}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{getMotivo(data.motivoTraslado)}</Text>
               </View>
               <View style={s.row}>
-                <Text style={s.label}>Modalidad</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Modalidad</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{getModalidad(data.modalidadTraslado)}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{getModalidad(data.modalidadTraslado)}</Text>
               </View>
             </View>
           </View>
@@ -567,19 +585,19 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
         <Text style={[s.sectionTitle, { backgroundColor: secondary }]}>
           Ruta de Traslado
         </Text>
-        <View style={s.routeContainer}>
-          <View style={s.routePoint}>
+        <View style={[s.routeContainer, { marginBottom: c.sectionMarginBottom }]}>
+          <View style={[s.routePoint, { padding: c.routePadding }]}>
             <Text style={s.routeLabel}>Punto de Partida</Text>
-            <Text style={s.routeAddress}>
+            <Text style={[s.routeAddress, { fontSize: c.valFontSize }]}>
               {data.puntoPartidaDireccion || data.puntoPartida}
             </Text>
             {data.puntoPartidaUbigeo && (
               <Text style={s.routeUbigeo}>Ubigeo: {data.puntoPartidaUbigeo}</Text>
             )}
           </View>
-          <View style={s.routePoint}>
+          <View style={[s.routePoint, { padding: c.routePadding }]}>
             <Text style={s.routeLabel}>Punto de Llegada</Text>
-            <Text style={s.routeAddress}>
+            <Text style={[s.routeAddress, { fontSize: c.valFontSize }]}>
               {data.puntoLlegadaDireccion || data.puntoLlegada}
             </Text>
             {data.puntoLlegadaUbigeo && (
@@ -589,26 +607,26 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
         </View>
 
         {/* ── Destinatario + Transportista ─────────────── */}
-        <View style={s.twoCol}>
+        <View style={[s.twoCol, { marginBottom: c.sectionMarginBottom }]}>
           <View style={s.col}>
             <Text style={[s.sectionTitle, { backgroundColor: secondary }]}>
               Destinatario
             </Text>
-            <View style={s.sectionBox}>
+            <View style={[s.sectionBox, { padding: c.sectionBoxPadding, marginBottom: c.sectionMarginBottom }]}>
               <View style={s.row}>
-                <Text style={s.label}>Tipo Documento</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Tipo Documento</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{getDocType(data.destinatarioTipoDocumento)}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{getDocType(data.destinatarioTipoDocumento)}</Text>
               </View>
               <View style={s.row}>
-                <Text style={s.label}>Numero</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Numero</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{data.destinatarioNumeroDocumento}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{data.destinatarioNumeroDocumento}</Text>
               </View>
               <View style={s.row}>
-                <Text style={s.label}>Razon Social</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Razon Social</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{data.destinatarioRazonSocial}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{data.destinatarioRazonSocial}</Text>
               </View>
             </View>
           </View>
@@ -616,27 +634,27 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
             <Text style={[s.sectionTitle, { backgroundColor: secondary }]}>
               Transportista
             </Text>
-            <View style={s.sectionBox}>
+            <View style={[s.sectionBox, { padding: c.sectionBoxPadding, marginBottom: c.sectionMarginBottom }]}>
               <View style={s.row}>
-                <Text style={s.label}>Tipo Documento</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Tipo Documento</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{getDocType(data.transportistaTipoDocumento)}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{getDocType(data.transportistaTipoDocumento)}</Text>
               </View>
               <View style={s.row}>
-                <Text style={s.label}>Numero</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Numero</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{data.transportistaNumeroDocumento}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{data.transportistaNumeroDocumento}</Text>
               </View>
               <View style={s.row}>
-                <Text style={s.label}>Razon Social</Text>
+                <Text style={[s.label, { fontSize: c.labelFontSize }]}>Razon Social</Text>
                 <Text style={s.colon}>:</Text>
-                <Text style={s.val}>{data.transportistaRazonSocial}</Text>
+                <Text style={[s.val, { fontSize: c.valFontSize }]}>{data.transportistaRazonSocial}</Text>
               </View>
               {data.transportistaNumeroPlaca && (
                 <View style={s.row}>
-                  <Text style={s.label}>Placa Vehiculo</Text>
+                  <Text style={[s.label, { fontSize: c.labelFontSize }]}>Placa Vehiculo</Text>
                   <Text style={s.colon}>:</Text>
-                  <Text style={[s.val, { fontWeight: "bold" }]}>
+                  <Text style={[s.val, { fontSize: c.valFontSize, fontWeight: "bold" }]}>
                     {data.transportistaNumeroPlaca}
                   </Text>
                 </View>
@@ -650,50 +668,48 @@ export function GuideDocument({ data }: { data: GuideDocumentData }) {
           Bienes a Trasladar
         </Text>
         {items.length > 0 ? (
-          <View style={s.table}>
-            <View style={[s.tableHeader, { backgroundColor: primary }]}>
-              <Text style={[s.th, { width: 30 }]}>N°</Text>
-              <Text style={[s.th, { width: 70 }]}>Codigo</Text>
-              <Text style={[s.th, { flex: 1, textAlign: "left" }]}>Descripcion</Text>
-              <Text style={[s.th, { width: 60 }]}>Cantidad</Text>
-              <Text style={[s.th, { width: 60 }]}>U.M.</Text>
+          <View style={[s.table, { marginBottom: c.sectionMarginBottom }]}>
+            <View style={[s.tableHeader, { backgroundColor: primary, paddingVertical: c.rowPaddingV }]}>
+              <Text style={[s.th, { width: 30, fontSize: c.thFontSize }]}>N°</Text>
+              <Text style={[s.th, { width: 70, fontSize: c.thFontSize }]}>Codigo</Text>
+              <Text style={[s.th, { flex: 1, textAlign: "left", fontSize: c.thFontSize }]}>Descripcion</Text>
+              <Text style={[s.th, { width: 60, fontSize: c.thFontSize }]}>Cantidad</Text>
+              <Text style={[s.th, { width: 60, fontSize: c.thFontSize }]}>U.M.</Text>
             </View>
             {items.map((item, idx) => (
               <React.Fragment key={idx}>
                 <View
-                  style={[s.tableRow, idx % 2 === 1 ? s.tableRowAlt : {}]}
+                  style={[s.tableRow, { paddingVertical: c.rowPaddingV }, idx % 2 === 1 ? s.tableRowAlt : {}]}
                 >
-                  <Text style={[s.td, { width: 30 }]}>{idx + 1}</Text>
-                  <Text style={[s.td, { width: 70 }]}>{item.codigo || "—"}</Text>
-                  <Text style={[s.td, { flex: 1, textAlign: "left" }]}>
+                  <Text style={[s.td, { width: 30, fontSize: c.tdFontSize }]}>{idx + 1}</Text>
+                  <Text style={[s.td, { width: 70, fontSize: c.tdFontSize }]}>{item.codigo || "—"}</Text>
+                  <Text style={[s.td, { flex: 1, textAlign: "left", fontSize: c.tdFontSize }]}>
                     {item.descripcion}
                   </Text>
-                  <Text style={[s.td, { width: 60, fontWeight: "bold" }]}>
+                  <Text style={[s.td, { width: 60, fontWeight: "bold", fontSize: c.tdFontSize }]}>
                     {item.cantidad}
                   </Text>
-                  <Text style={[s.td, { width: 60 }]}>{getUM(item.unidadMedida)}</Text>
+                  <Text style={[s.td, { width: 60, fontSize: c.tdFontSize }]}>{getUM(item.unidadMedida)}</Text>
                 </View>
                 {item.serials && item.serials.length > 0 && (
                   <View
                     style={[
                       s.tableRow,
+                      { paddingVertical: c.rowPaddingV },
                       idx % 2 === 1 ? s.tableRowAlt : {},
                       { borderTopWidth: 0, paddingTop: 0 },
                     ]}
                   >
-                    {/* Skip N° column */}
                     <Text style={{ width: 30 }} />
-                    {/* Skip Codigo column */}
                     <Text style={{ width: 70 }} />
-                    {/* Series aligned under Descripcion, wrapping naturally */}
                     <Text
                       style={{
                         flex: 1,
                         textAlign: "left",
-                        fontSize: 6.5,
+                        fontSize: c.serialsFontSize,
                         color: "#555",
                         paddingHorizontal: 4,
-                        paddingBottom: 3,
+                        paddingBottom: 2,
                       }}
                       wrap={true}
                     >

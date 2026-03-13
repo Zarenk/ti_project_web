@@ -25,7 +25,7 @@ export default function FeaturedProductsSection({ featuredProducts, onEditProduc
           </p>
         </div>
         {/* Mobile: horizontal scroller with chevrons */}
-        <div className="md:hidden">
+        <div className="md:hidden w-full min-w-0 overflow-hidden">
           <HorizontalScroller>
             {products.map((product) => (
               <MotionProductCard

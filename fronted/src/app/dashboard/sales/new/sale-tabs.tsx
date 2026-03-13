@@ -31,7 +31,7 @@ export function SaleTabs({ categories }: SaleTabsProps) {
   return (
     <Tabs
       defaultValue="quick"
-      className="mx-auto w-full max-w-7xl"
+      className="mx-auto w-full min-w-0 max-w-7xl overflow-hidden"
       onValueChange={setActiveTab}
     >
       <TooltipProvider delayDuration={200}>
@@ -83,7 +83,7 @@ export function SaleTabs({ categories }: SaleTabsProps) {
         forceMount
         className="data-[state=inactive]:hidden"
       >
-        <Card className="shadow-sm">
+        <Card className="w-full min-w-0 overflow-hidden shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-center gap-2 pt-5">
               <CardTitle className="text-center text-xl font-bold">
@@ -92,7 +92,7 @@ export function SaleTabs({ categories }: SaleTabsProps) {
               <PageGuideButton steps={SALE_FORM_GUIDE_STEPS} tooltipLabel="Guía del formulario" />
             </div>
           </CardHeader>
-          <CardContent className="w-full">
+          <CardContent className="w-full min-w-0 overflow-hidden px-2 sm:px-6">
             <SalesForm sales={null} categories={categories} />
           </CardContent>
         </Card>
