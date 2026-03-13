@@ -208,6 +208,14 @@ export const queryKeys = {
       [...tenantScope(orgId, companyId), "catalog", "list"] as const,
   },
 
+  // ── Menu Config (Restaurant) ──────────────────────────────
+  menuConfig: {
+    root: (orgId: number | null, companyId: number | null) =>
+      [...tenantScope(orgId, companyId), "menuConfig"] as const,
+    detail: (orgId: number | null, companyId: number | null) =>
+      [...tenantScope(orgId, companyId), "menuConfig", "detail"] as const,
+  },
+
   // ── Subscriptions / Billing ────────────────────────────────
   subscriptions: {
     root: (orgId: number | null, companyId: number | null) =>
@@ -250,11 +258,61 @@ export const queryKeys = {
     organizations: () => ["superUsers", "organizations"] as const,
   },
 
+  // ── Admin Signups ────────────────────────────────────────
+  adminSignups: {
+    root: () => ["adminSignups"] as const,
+    stats: () => ["adminSignups", "stats"] as const,
+    attempts: (filters?: Record<string, unknown>) =>
+      ["adminSignups", "attempts", filters] as const,
+    trials: (filters?: Record<string, unknown>) =>
+      ["adminSignups", "trials", filters] as const,
+    blocklist: (filters?: Record<string, unknown>) =>
+      ["adminSignups", "blocklist", filters] as const,
+  },
+
+  // ── Admin Dashboard ────────────────────────────────────
+  adminDashboard: {
+    root: () => ["adminDashboard"] as const,
+    globalOverview: () => ["adminDashboard", "globalOverview"] as const,
+    sunat: () => ["adminDashboard", "sunat"] as const,
+    security: () => ["adminDashboard", "security"] as const,
+    auditLog: (filters?: Record<string, unknown>) =>
+      ["adminDashboard", "auditLog", filters] as const,
+    financial: () => ["adminDashboard", "financial"] as const,
+    salesInventory: () => ["adminDashboard", "salesInventory"] as const,
+    whatsapp: () => ["adminDashboard", "whatsapp"] as const,
+    plans: () => ["adminDashboard", "plans"] as const,
+  },
+
   // ── Onboarding ───────────────────────────────────────────
   onboarding: {
     root: (orgId: number | null, companyId: number | null) =>
       [...tenantScope(orgId, companyId), "onboarding"] as const,
     progress: (orgId: number | null, companyId: number | null) =>
       [...tenantScope(orgId, companyId), "onboarding", "progress"] as const,
+  },
+
+  // ── Complaints (Libro de Reclamaciones) ─────────────────
+  complaints: {
+    root: (orgId: number | null, companyId: number | null) =>
+      [...tenantScope(orgId, companyId), "complaints"] as const,
+    list: (orgId: number | null, companyId: number | null, filters?: Record<string, unknown>) =>
+      [...tenantScope(orgId, companyId), "complaints", "list", filters] as const,
+    detail: (orgId: number | null, companyId: number | null, id: number) =>
+      [...tenantScope(orgId, companyId), "complaints", "detail", id] as const,
+    stats: (orgId: number | null, companyId: number | null) =>
+      [...tenantScope(orgId, companyId), "complaints", "stats"] as const,
+  },
+
+  // ── Payments (orchestration) ────────────────────────────
+  payments: {
+    root: (orgId: number | null, companyId: number | null) =>
+      [...tenantScope(orgId, companyId), "payments"] as const,
+    list: (orgId: number | null, companyId: number | null, filters?: Record<string, unknown>) =>
+      [...tenantScope(orgId, companyId), "payments", "list", filters] as const,
+    detail: (orgId: number | null, companyId: number | null, code: string) =>
+      [...tenantScope(orgId, companyId), "payments", "detail", code] as const,
+    commissions: (orgId: number | null, companyId: number | null, filters?: Record<string, unknown>) =>
+      [...tenantScope(orgId, companyId), "payments", "commissions", filters] as const,
   },
 } as const

@@ -296,6 +296,15 @@ export class CashregisterService {
                     },
                   },
                 },
+                restaurantOrder: {
+                  include: {
+                    items: {
+                      include: {
+                        product: true,
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -342,7 +351,7 @@ export class CashregisterService {
     const formattedTransactions = transactions.map((tx) => {
       const linkedSale = tx.salePayments[0]?.sale;
       const linkedClient = linkedSale?.client;
-      const saleItems =
+      const saleDetailsItems =
         linkedSale?.salesDetails?.map((detail) => {
           const productName =
             detail.entryDetail?.product?.name ??
@@ -357,6 +366,23 @@ export class CashregisterService {
             total: quantity * unitPrice,
           };
         }) ?? [];
+
+      // Fallback: if no SalesDetail (e.g. restaurant orders), use RestaurantOrderItem
+      const restaurantItems =
+        saleDetailsItems.length === 0 && linkedSale?.restaurantOrder?.items
+          ? linkedSale.restaurantOrder.items.map((item) => {
+              const quantity = Number(item.quantity ?? 0);
+              const unitPrice = Number(item.unitPrice ?? 0);
+              return {
+                name: item.product?.name?.trim() ?? `Producto ${item.productId}`,
+                quantity,
+                unitPrice,
+                total: quantity * unitPrice,
+              };
+            })
+          : [];
+
+      const saleItems = saleDetailsItems.length > 0 ? saleDetailsItems : restaurantItems;
       return {
         id: tx.id.toString(),
         cashRegisterId: tx.cashRegisterId,

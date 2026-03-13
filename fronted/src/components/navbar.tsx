@@ -224,7 +224,10 @@ export default function Navbar() {
       setNavColor("")
       return
     }
-    if (!window.matchMedia("(min-width: 768px)").matches) return
+    if (!window.matchMedia("(min-width: 768px)").matches) {
+      setNavColor("")
+      return
+    }
 
     const sections = document.querySelectorAll<HTMLElement>("[data-navcolor]")
 
@@ -247,6 +250,11 @@ export default function Navbar() {
   // ⚡ Cambio inmediato al togglear tema (sin esperar scroll)
   useEffect(() => {
     if (navbarStyle !== "light") {
+      setNavColor("")
+      return
+    }
+    // Dynamic nav color only applies to desktop (md+); on mobile use default Tailwind classes
+    if (!window.matchMedia("(min-width: 768px)").matches) {
       setNavColor("")
       return
     }

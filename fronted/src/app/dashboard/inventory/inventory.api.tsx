@@ -618,20 +618,25 @@ export async function importExcelFile(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await authFetch(`${BACKEND_URL}/api/inventory/import-excel`, {
+  const response = await authFetch(`${BACKEND_URL}/api/providers/import-excel`, {
     method: 'POST',
     body: formData,
   });
 
   if (!response.ok) {
-    throw new Error('Error al subir el archivo Excel');
+    const errorData = await response.json().catch(() => null);
+    const detail = errorData?.message || errorData?.error || '';
+    if (response.status === 404) {
+      throw new Error('El servicio de importación no está disponible. Contacte al administrador.');
+    }
+    throw new Error(detail || 'Error al subir el archivo Excel. Verifique que el formato sea correcto.');
   }
 
   return await response.json(); // { message, preview }
 }
 
 export async function commitImportedExcelData(previewData: any[], storeId: number, userId: number, providerId: number | null) {
-  const response = await authFetch(`${BACKEND_URL}/api/inventory/import-excel/commit`, {
+  const response = await authFetch(`${BACKEND_URL}/api/providers/import-excel/commit`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -640,7 +645,9 @@ export async function commitImportedExcelData(previewData: any[], storeId: numbe
   })
 
   if (!response.ok) {
-    throw new Error('Error al guardar datos importados')
+    const errorData = await response.json().catch(() => null);
+    const detail = errorData?.message || errorData?.error || '';
+    throw new Error(detail || 'Error al guardar datos importados.')
   }
 
   return await response.json()

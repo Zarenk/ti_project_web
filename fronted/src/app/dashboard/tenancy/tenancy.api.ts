@@ -868,6 +868,52 @@ export async function uploadCompanySunatFile(
   return mapCompanyResponse(data)
 }
 
+export async function uploadCompanySunatPfx(
+  companyId: number,
+  params: { env: SunatUploadEnv; file: File; password: string },
+): Promise<CompanyResponse> {
+  const headers = await getAuthHeaders()
+
+  if (!headers.Authorization) {
+    throw new Error("No se encontró un token de autenticación")
+  }
+
+  const formData = new FormData()
+  formData.append("file", params.file)
+  formData.append("password", params.password)
+
+  const uploadHeaders: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (value) {
+      uploadHeaders[key] = value
+    }
+  }
+  delete uploadHeaders["Content-Type"]
+
+  const response = await fetch(
+    `${BACKEND_URL}/api/companies/${companyId}/sunat/upload-pfx?env=${params.env}`,
+    {
+      method: "POST",
+      headers: uploadHeaders,
+      body: formData,
+    },
+  )
+
+  const contentType = response.headers.get("content-type") || ""
+  const isJson = contentType.includes("application/json")
+  const data = isJson ? await response.json() : await response.text()
+
+  if (!response.ok) {
+    const message =
+      (typeof data === "object" && data && "message" in data
+        ? (data as { message?: string }).message
+        : undefined) || "No se pudo procesar el certificado PFX"
+    throw new Error(message)
+  }
+
+  return mapCompanyResponse(data)
+}
+
 export async function uploadCompanyLogo(
   companyId: number,
   file: File,
@@ -1716,6 +1762,7 @@ export interface OrgMember {
   userRole: string
   userStatus: string
   membershipRole: string
+  isActive?: boolean
   createdAt: string
 }
 
@@ -1730,6 +1777,27 @@ export async function getOrganizationMembers(orgId: number): Promise<OrgMember[]
     )
   }
   return data as OrgMember[]
+}
+
+export async function addMemberToOrg(
+  orgId: number,
+  email: string,
+  role: string = "MEMBER",
+): Promise<OrgMember & { organizationName: string }> {
+  const res = await authFetch(`/tenancy/${orgId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, role }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(
+      typeof data === "object" && data?.message
+        ? data.message
+        : "No se pudo agregar al miembro",
+    )
+  }
+  return data
 }
 
 export async function removeMemberFromOrg(
@@ -1748,5 +1816,146 @@ export async function removeMemberFromOrg(
     )
   }
   return data as { removed: true }
+}
+
+// ── Membership Requests ─────────────────────────────────────
+
+export interface MembershipRequestItem {
+  id: number
+  type: "SELF_REQUEST" | "ADMIN_ADD" | "ADMIN_MOVE"
+  status: "PENDING" | "APPROVED" | "REJECTED"
+  reason: string | null
+  requester: { id: number; username: string; email: string }
+  targetUser: { id: number; username: string; email: string } | null
+  fromOrganization: { id: number; name: string } | null
+  toOrganization: { id: number; name: string }
+  createdAt: string
+}
+
+export async function createMembershipRequest(
+  toOrganizationId: number,
+  reason?: string,
+): Promise<{ id: number; organizationName: string }> {
+  const res = await authFetch("/tenancy/membership-requests", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ toOrganizationId, reason }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo crear la solicitud")
+  }
+  return data
+}
+
+export async function getPendingMembershipRequests(
+  orgId: number,
+): Promise<MembershipRequestItem[]> {
+  const res = await authFetch(`/tenancy/${orgId}/membership-requests`)
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudieron cargar las solicitudes")
+  }
+  return data as MembershipRequestItem[]
+}
+
+export async function approveMembershipRequest(
+  requestId: number,
+  resolutionNote?: string,
+): Promise<{ approved: true; organizationName: string }> {
+  const res = await authFetch(
+    `/tenancy/membership-requests/${requestId}/approve`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolutionNote }),
+    },
+  )
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo aprobar la solicitud")
+  }
+  return data
+}
+
+export async function rejectMembershipRequest(
+  requestId: number,
+  resolutionNote?: string,
+): Promise<{ rejected: true }> {
+  const res = await authFetch(
+    `/tenancy/membership-requests/${requestId}/reject`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolutionNote }),
+    },
+  )
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo rechazar la solicitud")
+  }
+  return data
+}
+
+export async function moveMemberBetweenOrgs(params: {
+  targetUserId: number
+  fromOrganizationId: number
+  toOrganizationId: number
+  role?: string
+  reason?: string
+}): Promise<{
+  moved: true
+  fromOrganization: string
+  toOrganization: string
+}> {
+  const res = await authFetch("/tenancy/members/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo mover al usuario")
+  }
+  return data
+}
+
+// ── Transfer History ──────────────────────────────────────────
+
+export interface TransferRecord {
+  id: number
+  type: "ADMIN_MOVE" | "ADMIN_ADD"
+  direction?: "IN" | "OUT"
+  targetUser: { id: number; username: string; email: string } | null
+  fromOrganization: { id: number; name: string } | null
+  toOrganization: { id: number; name: string }
+  requestedRole: string
+  reason: string | null
+  resolvedBy: { id: number; username: string } | null
+  resolvedAt: string | null
+  createdAt: string
+}
+
+export async function getTransferHistory(orgId: number): Promise<TransferRecord[]> {
+  const res = await authFetch(`/tenancy/${orgId}/transfer-history`)
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo cargar el historial de transferencias")
+  }
+  return data as TransferRecord[]
+}
+
+export async function getGlobalTransferHistory(
+  page = 1,
+  pageSize = 20,
+): Promise<{ data: TransferRecord[]; total: number; page: number; pageSize: number }> {
+  const res = await authFetch(
+    `/tenancy/global/transfer-history?page=${page}&pageSize=${pageSize}`,
+  )
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo cargar el historial global")
+  }
+  return data
 }
 

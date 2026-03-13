@@ -1,13 +1,13 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
+import { Controller, Post } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { CurrentTenant } from 'src/tenancy/tenant-context.decorator';
-import { TenantRequiredGuard } from 'src/common/guards/tenant-required.guard';
+import { SkipTenantContextGuard } from 'src/tenancy/skip-tenant-context.decorator';
 import { ClientService } from './clients.service';
 
 @Controller('public/clients')
-@UseGuards(TenantRequiredGuard)
+@SkipTenantContextGuard()
 export class ClientsPublicController {
   constructor(
     private readonly clientService: ClientService,

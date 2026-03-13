@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import {
   Barcode,
   Check,
@@ -8,10 +8,13 @@ import {
   X,
   ArrowLeftRight,
   Package,
+  Plus,
+  AlertCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -21,6 +24,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { registerNewSeries } from "../../sales.api"
 
 type SaleSerialsDialogProps = {
   open: boolean
@@ -36,6 +41,12 @@ type SaleSerialsDialogProps = {
   /** Loading state while fetching available series */
   loading?: boolean
   onSave: (serials: string[]) => void
+  /** Product ID for registering new series */
+  productId?: number
+  /** Store ID for registering new series */
+  storeId?: number
+  /** Callback when a new series is registered successfully */
+  onSeriesRegistered?: (serial: string) => void
 }
 
 export function SaleSerialsDialog({
@@ -48,19 +59,61 @@ export function SaleSerialsDialog({
   otherProductSerials,
   loading,
   onSave,
+  productId,
+  storeId,
+  onSeriesRegistered,
 }: SaleSerialsDialogProps) {
   // Local copy of assigned serials for editing
   const [localAssigned, setLocalAssigned] = useState<string[]>([])
   // Which serial is being swapped (shows available list)
   const [swapIndex, setSwapIndex] = useState<number | null>(null)
+  // Registration state
+  const [newSerialInput, setNewSerialInput] = useState("")
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [registerError, setRegisterError] = useState<string | null>(null)
+  const registerInputRef = useRef<HTMLInputElement>(null)
 
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
       setLocalAssigned([...assignedSerials])
       setSwapIndex(null)
+      setNewSerialInput("")
+      setRegisterError(null)
     }
   }, [open, assignedSerials])
+
+  // Can register: has productId, storeId and room for more series
+  const canRegister = !!productId && !!storeId && localAssigned.length < quantity
+
+  const handleRegister = async () => {
+    const trimmed = newSerialInput.trim()
+    if (!trimmed) return
+    if (!productId || !storeId) return
+
+    // Client-side duplicate check
+    if (localAssigned.includes(trimmed) || availableSerials.includes(trimmed)) {
+      setRegisterError("Esta serie ya existe o ya está asignada.")
+      return
+    }
+
+    setIsRegistering(true)
+    setRegisterError(null)
+    try {
+      await registerNewSeries({ serial: trimmed, productId, storeId })
+      // Add to local assigned
+      setLocalAssigned((prev) => [...prev, trimmed])
+      // Notify parent to update availableSeriesMap
+      onSeriesRegistered?.(trimmed)
+      setNewSerialInput("")
+      toast.success(`Serie "${trimmed}" registrada correctamente.`)
+      registerInputRef.current?.focus()
+    } catch (err: any) {
+      setRegisterError(err.message || "Error al registrar la serie.")
+    } finally {
+      setIsRegistering(false)
+    }
+  }
 
   // Filter available serials: exclude assigned to this product and other products
   const otherSet = useMemo(
@@ -246,12 +299,63 @@ export function SaleSerialsDialog({
             )}
 
             {/* No series available at all */}
-            {availableSerials.length === 0 && (
+            {availableSerials.length === 0 && !canRegister && (
               <div className="flex flex-col items-center gap-2 py-4 text-center">
                 <Package className="h-6 w-6 text-muted-foreground/20" />
                 <p className="text-xs text-muted-foreground">
                   No hay series registradas para este producto en la tienda
                   seleccionada
+                </p>
+              </div>
+            )}
+
+            {/* Register new series */}
+            {canRegister && (
+              <div className="mt-2 space-y-3 border-t pt-4">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  Registrar nueva serie
+                </span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={registerInputRef}
+                    value={newSerialInput}
+                    onChange={(e) => {
+                      setNewSerialInput(e.target.value)
+                      setRegisterError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleRegister()
+                      }
+                    }}
+                    placeholder="Ingresa el número de serie"
+                    className="h-9 text-sm"
+                    disabled={isRegistering}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 cursor-pointer bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                    onClick={handleRegister}
+                    disabled={isRegistering || !newSerialInput.trim()}
+                  >
+                    {isRegistering ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    {isRegistering ? "" : "Registrar"}
+                  </Button>
+                </div>
+                {registerError && (
+                  <div className="flex items-center gap-1.5 text-xs text-destructive">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>{registerError}</span>
+                  </div>
+                )}
+                <p className="mt-1 text-[10px] text-muted-foreground/50">
+                  Registra series que no se ingresaron durante la compra. La serie se vinculará al último ingreso del producto.
                 </p>
               </div>
             )}

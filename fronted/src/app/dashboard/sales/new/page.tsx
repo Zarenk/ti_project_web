@@ -5,7 +5,7 @@ export default async function SalesNewPage() {
   const categories = await getCategories();
 
   return (
-    <div className="min-h-screen w-full px-4 py-6 sm:px-6 lg:px-10">
+    <div className="min-h-screen w-full min-w-0 overflow-hidden px-4 py-6 sm:px-6 lg:px-10">
       <SaleTabs categories={categories} />
     </div>
   );

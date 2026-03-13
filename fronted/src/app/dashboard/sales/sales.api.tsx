@@ -440,6 +440,29 @@ export async function getSalesProfitByDateRange(from: string, to: string) {
     throw error;
   }
 }
+export async function registerNewSeries(data: { serial: string; productId: number; storeId: number }) {
+  const res = await authFetch(`${BACKEND_URL}/api/series/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    let message = 'Error al registrar la serie';
+    try {
+      const errorData = await res.json();
+      if (errorData?.message) {
+        message = typeof errorData.message === 'string' ? errorData.message : String(errorData.message);
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+
+  return res.json();
+}
+
 export async function getProductsByStore(storeId: number) {
   try {
     const response = await authFetch(`${BACKEND_URL}/api/inventory/products-by-store/${storeId}`, {

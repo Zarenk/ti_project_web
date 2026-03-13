@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { ShieldCheck, Lock, FileCheck } from "lucide-react";
+import { Lock, FileCheck } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -10,7 +11,7 @@ export default function Footer() {
         {/* Compliance badges (merged from standalone Compliance section) */}
         <div className="flex flex-wrap items-center justify-center gap-6 mb-10 pb-10 border-b border-border/30">
           <div className="flex items-center gap-2 text-sm text-foreground/60">
-            <ShieldCheck size={18} className="text-primary flex-shrink-0" />
+            <Image src="/icons/sunat-logo.png" alt="SUNAT" width={18} height={18} className="w-[18px] h-[18px] object-contain flex-shrink-0" />
             <span>Certificado SUNAT</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-foreground/60">

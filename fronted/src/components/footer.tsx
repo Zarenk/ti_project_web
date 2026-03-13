@@ -86,7 +86,8 @@ export default function Footer() {
 
   const customerService = (
     <ul className="space-y-3 text-blue-200">
-      <li><Link href="/track-order" className="hover:text-white transition-colors">Revisa tu pedido</Link></li>
+      <li><Link href="/track-order" className="hover:text-white transition-colors cursor-pointer">Revisa tu pedido</Link></li>
+      <li><Link href="/libro-reclamaciones" className="hover:text-white transition-colors cursor-pointer">Libro de Reclamaciones</Link></li>
     </ul>
   )
 

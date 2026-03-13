@@ -27,6 +27,7 @@ import {
   Building2,
   Box,
   Check,
+  ChevronDown,
   Download,
   ImageIcon,
   Layout,
@@ -72,7 +73,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -381,6 +382,112 @@ function SettingsPageSkeleton() {
               <Skeleton className="h-9 w-24 rounded-md" />
               <Skeleton className="h-9 w-36 rounded-md" />
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Mobile Section Selector ──────────────────────────────────────────────────
+
+function MobileSectionSelector({
+  sections,
+  activeSection,
+  onSelect,
+  onExport,
+  onImport,
+}: {
+  sections: { id: SectionId; label: string; icon: typeof Palette }[];
+  activeSection: SectionId;
+  onSelect: (id: SectionId) => void;
+  onExport: () => void;
+  onImport: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeItem = sections.find((s) => s.id === activeSection);
+  const ActiveIcon = activeItem?.icon ?? Palette;
+
+  return (
+    <div className="lg:hidden mb-4 w-full min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full gap-2 rounded-xl border border-border bg-card px-3.5 py-2.5 text-left cursor-pointer transition-colors hover:bg-muted/50 active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary text-primary-foreground flex-shrink-0">
+            <ActiveIcon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{activeItem?.label ?? "Seleccionar"}</p>
+            <p className="text-[11px] text-muted-foreground">{sections.indexOf(activeItem!) + 1} de {sections.length} secciones</p>
+          </div>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {/* Collapsible section list */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          open ? "max-h-[600px] opacity-100 mt-2" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {sections.map((section, idx) => {
+            const Icon = section.icon;
+            const isActive = section.id === activeSection;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => {
+                  onSelect(section.id);
+                  setOpen(false);
+                }}
+                className={`
+                  flex w-full items-center gap-3 px-3.5 py-2.5 text-left cursor-pointer transition-colors
+                  ${isActive ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/50"}
+                  ${idx < sections.length - 1 ? "border-b border-border/50" : ""}
+                `}
+              >
+                <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                <span className={`text-sm ${isActive ? "font-semibold" : "font-normal"}`}>{section.label}</span>
+                {isActive && (
+                  <Check className="h-3.5 w-3.5 ml-auto text-primary flex-shrink-0" />
+                )}
+              </button>
+            );
+          })}
+
+          {/* Export/Import buttons in mobile */}
+          <div className="border-t border-border p-2 flex gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setOpen(false);
+                onExport();
+              }}
+              className="flex-1 h-8 text-xs gap-1.5 cursor-pointer text-muted-foreground"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setOpen(false);
+                onImport();
+              }}
+              className="flex-1 h-8 text-xs gap-1.5 cursor-pointer text-muted-foreground"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Importar
+            </Button>
           </div>
         </div>
       </div>
@@ -790,85 +897,112 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background font-site">
       <header className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Configuración del sitio</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Personaliza la apariencia y el comportamiento de tu página web.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex items-center justify-center gap-1 rounded-lg bg-muted p-1 sm:justify-start">
+        <div className="container mx-auto px-4 py-3 sm:py-4">
+          {/* ── Mobile header: 1 row ── */}
+          <div className="flex items-center justify-between gap-2 sm:hidden">
+            <h1 className="text-base font-bold text-foreground truncate">Configuracion del sitio</h1>
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5 flex-shrink-0">
               <Button
                 variant={themeMode === "light" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handleThemeModeChange("light")}
-                className="h-8 w-8 p-0"
+                className="h-7 w-7 p-0 cursor-pointer"
               >
-                <Sun className="h-4 w-4" />
+                <Sun className="h-3.5 w-3.5" />
               </Button>
               <Button
                 variant={themeMode === "system" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handleThemeModeChange("system")}
-                className="h-8 w-8 p-0"
+                className="h-7 w-7 p-0 cursor-pointer"
               >
-                <Monitor className="h-4 w-4" />
+                <Monitor className="h-3.5 w-3.5" />
               </Button>
               <Button
                 variant={themeMode === "dark" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handleThemeModeChange("dark")}
-                className="h-8 w-8 p-0"
+                className="h-7 w-7 p-0 cursor-pointer"
               >
-                <Moon className="h-4 w-4" />
+                <Moon className="h-3.5 w-3.5" />
               </Button>
             </div>
+          </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmExportOpen(true)}
-              className="w-full sm:w-auto"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Exportar JSON
-            </Button>
+          {/* ── Desktop header: full layout ── */}
+          <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Configuracion del sitio</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Personaliza la apariencia y el comportamiento de tu pagina web.
+              </p>
+            </div>
 
-            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Importar JSON
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+                <Button
+                  variant={themeMode === "light" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleThemeModeChange("light")}
+                  className="h-8 w-8 p-0 cursor-pointer"
+                >
+                  <Sun className="h-4 w-4" />
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Importar configuración</DialogTitle>
-                  <DialogDescription>Pega el JSON de configuración exportado previamente.</DialogDescription>
-                </DialogHeader>
-                <Textarea
-                  value={importJson}
-                  onChange={(event) => setImportJson(event.target.value)}
-                  placeholder='{"brand": {...}, "theme": {...}}'
-                  className="min-h-[200px] font-mono text-sm"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleImport}>Importar</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                <Button
+                  variant={themeMode === "system" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleThemeModeChange("system")}
+                  className="h-8 w-8 p-0 cursor-pointer"
+                >
+                  <Monitor className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={themeMode === "dark" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleThemeModeChange("dark")}
+                  className="h-8 w-8 p-0 cursor-pointer"
+                >
+                  <Moon className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmExportOpen(true)}
+                className="cursor-pointer"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Exportar JSON
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setImportDialogOpen(true)}
+                className="cursor-pointer"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Importar JSON
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
+        {/* ── Mobile: Section selector dropdown ── */}
+        <MobileSectionSelector
+          sections={sections}
+          activeSection={activeSection}
+          onSelect={setActiveSection}
+          onExport={() => setConfirmExportOpen(true)}
+          onImport={() => setImportDialogOpen(true)}
+        />
+
         <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
-          <aside className="h-fit lg:sticky lg:top-24">
+          {/* ── Desktop: Sidebar nav ── */}
+          <aside className="hidden lg:block h-fit lg:sticky lg:top-24">
             <nav className="space-y-1">
               {sections.map((section) => {
                 const Icon = section.icon;
@@ -878,7 +1012,7 @@ export default function SettingsPage() {
                   <motion.button
                     key={section.id}
                     onClick={() => setActiveSection(section.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer ${
                       isActive
                         ? "bg-primary text-primary-foreground shadow-md"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -1021,14 +1155,60 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 pb-8">
+      {/* ── Mobile: Fixed bottom action bar ── */}
+      <div className="fixed bottom-0 inset-x-0 z-50 border-t border-border bg-card/95 backdrop-blur-sm safe-area-pb lg:hidden">
+        <div className="flex items-center gap-2 px-3 py-2.5">
+          {/* Unsaved indicator dot */}
+          {hasUnsavedChanges && (
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+          )}
+
+          <div className="flex items-center gap-1.5 w-full min-w-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleReset}
+              disabled={isSaving}
+              className="h-9 px-2.5 cursor-pointer flex-shrink-0"
+              title="Restablecer"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDiscard}
+              disabled={!hasUnsavedChanges || isSaving}
+              className="h-9 px-3 gap-1.5 cursor-pointer text-xs flex-1 min-w-0"
+            >
+              <X className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">Descartar</span>
+            </Button>
+            <Button
+              type="submit"
+              form="settings-form"
+              size="sm"
+              disabled={!hasUnsavedChanges || isSaving}
+              className="h-9 px-3 gap-1.5 cursor-pointer text-xs flex-1 min-w-0 relative"
+            >
+              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" /> : <Save className="h-3.5 w-3.5 flex-shrink-0" />}
+              <span className="truncate">{isSaving ? "Guardando" : "Guardar"}</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Desktop: Floating bottom bar ── */}
+      <div className="hidden lg:block container mx-auto px-4 pb-8">
         <motion.div
-          className="sticky bottom-4 z-50 border border-border bg-card/95 backdrop-blur-sm"
+          className="sticky bottom-4 z-50 border border-border bg-card/95 backdrop-blur-sm rounded-xl"
           initial={{ y: 100 }}
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               {hasUnsavedChanges && (
                 <Badge variant="secondary" className="animate-pulse">
@@ -1038,18 +1218,19 @@ export default function SettingsPage() {
               {hasConflict && (
                 <Badge variant="destructive" className="gap-2">
                   <AlertCircle className="h-3 w-3" />
-                  Configuración actualizada en otro lugar
+                  Configuracion actualizada en otro lugar
                 </Badge>
               )}
             </div>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={handleReset}
                 disabled={isSaving}
-                className="gap-2 bg-transparent"
+                className="gap-2 bg-transparent cursor-pointer"
               >
                 <RotateCcw className="h-4 w-4" />
                 Restablecer
@@ -1057,9 +1238,10 @@ export default function SettingsPage() {
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={handleDiscard}
                 disabled={!hasUnsavedChanges || isSaving}
-                className="gap-2 bg-transparent"
+                className="gap-2 bg-transparent cursor-pointer"
               >
                 <X className="h-4 w-4" />
                 Descartar
@@ -1067,8 +1249,9 @@ export default function SettingsPage() {
               <Button
                 type="submit"
                 form="settings-form"
+                size="sm"
                 disabled={!hasUnsavedChanges || isSaving}
-                className="gap-2"
+                className="gap-2 cursor-pointer"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {isSaving ? "Guardando..." : "Guardar cambios"}
@@ -1078,7 +1261,8 @@ export default function SettingsPage() {
         </motion.div>
       </div>
 
-      <div className="h-24" />
+      {/* Spacer for mobile fixed bottom bar */}
+      <div className="h-16 lg:h-24" />
 
       <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
         <AlertDialogContent>
@@ -1124,6 +1308,28 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import JSON Dialog — rendered outside desktop header so it works on mobile too */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>Importar configuracion</DialogTitle>
+            <DialogDescription>Pega el JSON de configuracion exportado previamente.</DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={importJson}
+            onChange={(event) => setImportJson(event.target.value)}
+            placeholder='{"brand": {...}, "theme": {...}}'
+            className="min-h-[200px] font-mono text-sm"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)} className="cursor-pointer">
+              Cancelar
+            </Button>
+            <Button onClick={handleImport} className="cursor-pointer">Importar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

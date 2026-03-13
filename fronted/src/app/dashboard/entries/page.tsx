@@ -8,6 +8,7 @@ import { useTenantSelection } from '@/context/tenant-selection-context';
 import { queryKeys } from '@/lib/query-keys';
 import { TablePageSkeleton } from '@/components/table-page-skeleton';
 import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export default function Page() {
   const { selection } = useTenantSelection();
+  const searchParams = useSearchParams();
+  const initialEntryId = searchParams.get("entryId");
 
   const { data: entryes = [], isLoading } = useQuery<any[]>({
     queryKey: queryKeys.entries.list(selection.orgId, selection.companyId),
@@ -77,7 +80,7 @@ export default function Page() {
             <TablePageSkeleton title={false} columns={5} rows={6} actions={false} />
           ) : (
             <div className="overflow-x-auto">
-              <DataTable data={mappedData}></DataTable>
+              <DataTable data={mappedData} initialEntryId={initialEntryId}></DataTable>
             </div>
           )}
         </div>

@@ -1,8 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload, Megaphone, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import {
+  LayoutGrid, List, Search, Plus, FileSpreadsheet, MoreVertical, ArrowRightLeft, Upload,
+  Megaphone, Loader2, Pencil, PenLine, Eye, Camera, ImagePlus, Trash2, X, Send, Package,
+} from "lucide-react"
 import { ManualPagination } from "@/components/data-table-pagination"
 
 import { Button } from "@/components/ui/button"
@@ -17,6 +21,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ProductsTable } from "./products-table"
@@ -183,7 +188,7 @@ export function ProductsClient() {
                 <p className="text-sm uppercase tracking-wide text-muted-foreground">Carta digital</p>
                 <h1 className="text-2xl font-semibold sm:text-3xl">Platos disponibles</h1>
                 <p className="text-sm text-muted-foreground">
-                  Gestiona tus platos y precios desde una vista r\u00e1pida.
+                  Gestiona tus platos y precios desde una vista rápida.
                 </p>
               </div>
               <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
@@ -212,7 +217,7 @@ export function ProductsClient() {
                 <p className="mt-2 text-2xl font-semibold">{filteredProducts.length}</p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-muted/30 p-4 shadow-sm">
-                <p className="text-xs uppercase text-muted-foreground">Categor\u00edas</p>
+                <p className="text-xs uppercase text-muted-foreground">Categorías</p>
                 <p className="mt-2 text-2xl font-semibold">{categories.length}</p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-muted/30 p-4 shadow-sm">
@@ -238,10 +243,10 @@ export function ProductsClient() {
               <div className="w-full lg:w-[220px]">
                 <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as CategoryFilter)}>
                   <SelectTrigger className="h-11">
-                    <SelectValue placeholder="Categor\u00eda" />
+                    <SelectValue placeholder="Categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todas las categor\u00edas</SelectItem>
+                    <SelectItem value="all">Todas las categorías</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category} value={category}>
                         {category}
@@ -274,71 +279,13 @@ export function ProductsClient() {
                 No hay platos registrados con esos filtros.
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredProducts.map((product) => {
-                  const images = Array.isArray((product as any).images)
-                    ? ((product as any).images as string[]).filter(Boolean)
-                    : []
-                  const imageUrl = images[0] ? resolveImageVariant(images[0], "card") : null
-                  const price = Number(product.priceSell ?? product.price ?? 0)
-                  const isActive = isProductActive(product.status)
-                  return (
-                    <div
-                      key={product.id}
-                      className="group flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-muted/20 shadow-sm transition hover:-translate-y-1 hover:border-primary/40 hover:bg-muted/40"
-                    >
-                      <div className="relative h-44 w-full overflow-hidden bg-background/40">
-                        {imageUrl ? (
-                          <img
-                            src={imageUrl}
-                            alt={product.name}
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                            Sin imagen
-                          </div>
-                        )}
-                        <Badge className="absolute left-3 top-3 bg-background/80 text-foreground">
-                          {product.category_name}
-                        </Badge>
-                        <Badge
-                          className={`absolute right-3 top-3 ${
-                            isActive ? "bg-emerald-500/80" : "bg-rose-500/80"
-                          } text-white`}
-                        >
-                          {isActive ? "Disponible" : "Inactivo"}
-                        </Badge>
-                      </div>
-                      <div className="flex flex-1 flex-col gap-2 p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="text-base font-semibold">{product.name}</h3>
-                            <p className="line-clamp-2 text-xs text-muted-foreground">
-                              {product.description || "Sin descripci\u00f3n"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-auto flex items-center justify-between">
-                          <span className="text-lg font-semibold text-emerald-400">
-                            S/. {Number.isFinite(price) ? price.toFixed(2) : "0.00"}
-                          </span>
-                          <div className="flex gap-1.5">
-                            <Button asChild size="sm" variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
-                              <Link href={`/dashboard/products/${product.id}/promote`}>
-                                <Megaphone className="h-3.5 w-3.5" />
-                              </Link>
-                            </Button>
-                            <Button asChild size="sm" variant="outline">
-                              <Link href={`/dashboard/products/new?id=${product.id}`}>Editar</Link>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+              <RestaurantProductGrid
+                products={filteredProducts}
+                onViewProduct={setDetailProduct}
+                onImageUpload={handleDialogImageUpload}
+                onDelete={(product) => setDeleteTarget(product)}
+                onProductUpdated={reloadProducts}
+              />
             )}
           </div>
         ) : (
@@ -614,5 +561,277 @@ export function ProductsClient() {
       </AlertDialogContent>
     </AlertDialog>
     </>
+  )
+}
+
+/* ─── Restaurant Product Grid (with gallery effects matching COMPUTERS vertical) ── */
+
+function RestaurantProductGrid({
+  products,
+  onViewProduct,
+  onImageUpload,
+  onDelete,
+  onProductUpdated,
+}: {
+  products: Products[]
+  onViewProduct: (product: Products) => void
+  onImageUpload: (productId: string, file: File) => Promise<void>
+  onDelete: (product: Products) => void
+  onProductUpdated: () => void
+}) {
+  const router = useRouter()
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+
+  const handleFileChange = async (productId: string, file: File) => {
+    setUploadingId(productId)
+    try {
+      await onImageUpload(productId, file)
+    } finally {
+      setUploadingId(null)
+      const input = fileInputRefs.current[productId]
+      if (input) input.value = ""
+    }
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {products.map((product) => {
+        const images = Array.isArray((product as any).images)
+          ? ((product as any).images as string[]).filter(Boolean)
+          : []
+        const imageUrl = images[0] ? resolveImageVariant(images[0], "card") : null
+        const price = Number(product.priceSell ?? product.price ?? 0)
+        const active = isProductActive(product.status)
+        const isUploading = uploadingId === product.id
+
+        return (
+          <div
+            key={product.id}
+            className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-card transition-all duration-200 hover:shadow-lg hover:shadow-black/8 dark:hover:shadow-black/25"
+            onClick={() => onViewProduct(product)}
+          >
+            {/* Hidden file input */}
+            <input
+              ref={(el) => { fileInputRefs.current[product.id] = el }}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleFileChange(product.id, file)
+              }}
+            />
+
+            {/* Image */}
+            <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/30">
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={product.name}
+                  className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Package className="h-12 w-12 text-muted-foreground/20" />
+                </div>
+              )}
+
+              {/* Upload spinner */}
+              {isUploading && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+              )}
+
+              {/* Badges (hide on hover) */}
+              <div className="absolute left-2.5 top-2.5 flex flex-col gap-1.5 transition-opacity duration-200 group-hover:opacity-0">
+                <Badge variant="secondary" className="bg-background/80 text-[11px] font-medium backdrop-blur-sm">
+                  {product.category_name || "Sin categoría"}
+                </Badge>
+              </div>
+              <Badge
+                className={`absolute right-2.5 top-2.5 text-[11px] backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-0 ${
+                  active
+                    ? "border-emerald-500/30 bg-emerald-500/80 text-white"
+                    : "border-rose-500/30 bg-rose-500/80 text-white"
+                }`}
+              >
+                {active ? "Disponible" : "Inactivo"}
+              </Badge>
+            </div>
+
+            {/* Card body (hides on hover) */}
+            <div className="flex flex-1 flex-col gap-1 p-3 transition-opacity duration-200 group-hover:opacity-0">
+              <h3 className="truncate text-sm font-semibold leading-tight">{product.name}</h3>
+              <p className="line-clamp-1 text-xs text-muted-foreground">
+                {product.description || "Sin descripción"}
+              </p>
+              <div className="mt-auto flex items-baseline justify-between gap-2 pt-2">
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground">Compra</span>
+                  <span className="text-sm font-medium">
+                    {Number.isFinite(product.price) && product.price > 0 ? `S/. ${product.price.toFixed(2)}` : "—"}
+                  </span>
+                </div>
+                <div className="flex flex-col text-right">
+                  <span className="text-xs text-muted-foreground">Venta</span>
+                  <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    {Number.isFinite(price) && price > 0 ? `S/. ${price.toFixed(2)}` : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Slide-up detail overlay */}
+            <div className="pointer-events-none absolute inset-0 z-20 flex translate-y-full flex-col opacity-0 transition-all duration-300 ease-out group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+              <div className="flex h-full flex-col rounded-2xl bg-gradient-to-b from-slate-950/95 via-slate-900/95 to-slate-950/98 backdrop-blur-md">
+                {/* Scrollable content */}
+                <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-semibold leading-tight text-white">{product.name}</h3>
+                    <Badge
+                      className={`shrink-0 text-[10px] ${
+                        active
+                          ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-300"
+                          : "border-rose-500/30 bg-rose-500/20 text-rose-300"
+                      }`}
+                    >
+                      {active ? "Disponible" : "Inactivo"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/70">
+                      {product.category_name || "Sin categoría"}
+                    </span>
+                  </div>
+
+                  {product.description ? (
+                    <p className="text-xs leading-relaxed text-white/75">{product.description}</p>
+                  ) : (
+                    <p className="text-[11px] italic text-white/30">Sin descripción</p>
+                  )}
+
+                  <div className="h-px bg-white/10" />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-white/40">Compra</span>
+                      <span className="text-sm font-medium text-white">
+                        {Number.isFinite(product.price) && product.price > 0 ? `S/. ${product.price.toFixed(2)}` : "—"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-[10px] text-white/40">Venta</span>
+                      <span className="text-sm font-semibold text-emerald-400">
+                        {Number.isFinite(price) && price > 0 ? `S/. ${price.toFixed(2)}` : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action buttons with icon crossfade effects */}
+                <TooltipProvider delayDuration={100}>
+                  <div
+                    className="flex items-center gap-1.5 border-t border-white/10 px-2 py-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="group/ver h-7 flex-1 cursor-pointer bg-white/90 p-0 text-slate-900 hover:bg-white"
+                          onClick={() => onViewProduct(product)}
+                        >
+                          <span className="relative inline-flex">
+                            <Eye className="h-3.5 w-3.5 transition-all duration-200 ease-out group-hover/ver:scale-0 group-hover/ver:opacity-0 group-hover/ver:rotate-12" />
+                            <Search className="absolute inset-0 h-3.5 w-3.5 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/ver:scale-100 group-hover/ver:opacity-100 group-hover/ver:rotate-0" />
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">Ver detalle</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="secondary"
+                          className="group/edit h-7 flex-1 bg-white/90 p-0 text-slate-900 hover:bg-white"
+                        >
+                          <Link href={`/dashboard/products/${product.id}/edit`}>
+                            <span className="relative inline-flex">
+                              <Pencil className="h-3.5 w-3.5 transition-all duration-200 ease-out group-hover/edit:scale-0 group-hover/edit:opacity-0 group-hover/edit:rotate-12" />
+                              <PenLine className="absolute inset-0 h-3.5 w-3.5 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/edit:scale-100 group-hover/edit:opacity-100 group-hover/edit:rotate-0" />
+                            </span>
+                          </Link>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">Editar</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="group/cam h-7 flex-1 cursor-pointer bg-white/90 p-0 text-slate-900 hover:bg-white"
+                          disabled={isUploading}
+                          onClick={() => fileInputRefs.current[product.id]?.click()}
+                        >
+                          <span className="relative inline-flex">
+                            <Camera className="h-3.5 w-3.5 transition-all duration-200 ease-out group-hover/cam:scale-0 group-hover/cam:opacity-0 group-hover/cam:rotate-12" />
+                            <ImagePlus className="absolute inset-0 h-3.5 w-3.5 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/cam:scale-100 group-hover/cam:opacity-100 group-hover/cam:rotate-0" />
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">Cambiar imagen</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="group/promo h-7 flex-1 cursor-pointer bg-violet-500/80 p-0 text-white hover:bg-violet-600"
+                          onClick={() => router.push(`/dashboard/products/${product.id}/promote`)}
+                        >
+                          <span className="relative inline-flex">
+                            <Megaphone className="h-3.5 w-3.5 transition-all duration-200 ease-out group-hover/promo:scale-0 group-hover/promo:opacity-0 group-hover/promo:rotate-12" />
+                            <Send className="absolute inset-0 h-3.5 w-3.5 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/promo:scale-100 group-hover/promo:opacity-100 group-hover/promo:rotate-0" />
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">Promocionar</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="group/del h-7 flex-1 cursor-pointer bg-rose-500/80 p-0 text-white hover:bg-rose-600"
+                          onClick={() => onDelete(product)}
+                        >
+                          <span className="relative inline-flex">
+                            <Trash2 className="h-3.5 w-3.5 transition-all duration-200 ease-out group-hover/del:scale-0 group-hover/del:opacity-0 group-hover/del:rotate-12" />
+                            <X className="absolute inset-0 h-3.5 w-3.5 scale-0 opacity-0 -rotate-12 transition-all duration-200 ease-out group-hover/del:scale-100 group-hover/del:opacity-100 group-hover/del:rotate-0" />
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">Eliminar</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }

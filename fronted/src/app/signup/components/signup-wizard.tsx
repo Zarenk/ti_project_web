@@ -43,6 +43,10 @@ export function SignupWizard() {
   const [recaptchaError, setRecaptchaError] = useState<string | null>(null)
   const [generalError, setGeneralError] = useState<string | null>(null)
 
+  // Server-side field errors (from backend rejections)
+  const [accountServerErrors, setAccountServerErrors] = useState<Partial<Record<"fullName" | "email" | "password", string>>>({})
+  const [businessServerErrors, setBusinessServerErrors] = useState<Partial<Record<"organizationName" | "companyName", string>>>({})
+
   const handleSubmit = async () => {
     if (!recaptchaToken) {
       setRecaptchaError("Confirma que no eres un robot.")
@@ -79,12 +83,19 @@ export function SignupWizard() {
       toast.error(message)
       setRecaptchaToken(null)
 
-      if (message.toLowerCase().includes("correo")) {
+      // Clear previous server errors
+      setAccountServerErrors({})
+      setBusinessServerErrors({})
+
+      const msgLower = message.toLowerCase()
+      if (msgLower.includes("correo") || msgLower.includes("email")) {
         setStep(1)
-        setGeneralError(message)
-      } else if (message.toLowerCase().includes("organización")) {
+        setAccountServerErrors({ email: message })
+        setGeneralError(null)
+      } else if (msgLower.includes("organización") || msgLower.includes("organizacion")) {
         setStep(2)
-        setGeneralError(message)
+        setBusinessServerErrors({ organizationName: message })
+        setGeneralError(null)
       } else {
         setGeneralError(message)
       }
@@ -146,17 +157,19 @@ export function SignupWizard() {
           {step === 1 && (
             <StepAccount
               data={account}
-              onChange={setAccount}
+              onChange={(d) => { setAccount(d); setAccountServerErrors({}) }}
               onNext={() => setStep(2)}
+              serverErrors={accountServerErrors}
             />
           )}
 
           {step === 2 && (
             <StepBusiness
               data={business}
-              onChange={setBusiness}
+              onChange={(d) => { setBusiness(d); setBusinessServerErrors({}) }}
               onNext={() => setStep(3)}
               onBack={() => setStep(1)}
+              serverErrors={businessServerErrors}
             />
           )}
 

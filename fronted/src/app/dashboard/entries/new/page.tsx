@@ -19,9 +19,9 @@ export default async function EntriesNewPage({ params, searchParams }: Props) {
   const categories = await getCategories()
 
   return (
-    <div className="min-h-screen w-full px-4 py-6 sm:px-6 lg:px-10">
+    <div className="min-h-screen w-full min-w-0 overflow-hidden px-4 py-6 sm:px-6 lg:px-10">
       {editId ? (
-        <Card className="mx-auto w-full max-w-6xl shadow-sm">
+        <Card className="mx-auto w-full min-w-0 max-w-6xl overflow-hidden shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-center gap-2 pt-5">
               <CardTitle className="text-center text-xl font-bold">

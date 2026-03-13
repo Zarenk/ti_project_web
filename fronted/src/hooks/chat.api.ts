@@ -1,5 +1,4 @@
 import { BACKEND_URL } from "@/lib/utils";
-import { authFetch } from "@/utils/auth-fetch";
 
 export type GuestChatSession = {
   userId: number;
@@ -8,8 +7,9 @@ export type GuestChatSession = {
 };
 
 export async function createGuestUser(): Promise<GuestChatSession> {
-  const res = await authFetch(`${BACKEND_URL}/api/public/clients/guest`, {
+  const res = await fetch(`${BACKEND_URL}/api/public/clients/guest`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
   });
 
   if (!res.ok) {

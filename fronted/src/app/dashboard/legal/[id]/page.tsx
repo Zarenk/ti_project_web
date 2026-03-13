@@ -18,6 +18,8 @@ import {
   Check,
   Pencil,
   Save,
+  History,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -61,6 +63,8 @@ import {
   type LegalEvent,
   type LegalNote,
   type LegalTimeEntry,
+  type LegalMatterAuditLog,
+  getLegalMatterAuditLog,
 } from "../legal-matters.api"
 
 const STATUS_LABELS: Record<string, string> = {
@@ -586,7 +590,7 @@ export default function LegalMatterDetailPage({
 
       {/* Tabs */}
       <Tabs defaultValue="parties" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="parties" className="gap-1">
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Partes</span>
@@ -637,6 +641,10 @@ export default function LegalMatterDetailPage({
               {matter.notes.length}
             </Badge>
           </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1">
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Historial</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Parties Tab */}
@@ -682,6 +690,11 @@ export default function LegalMatterDetailPage({
             notes={matter.notes}
             onUpdate={reload}
           />
+        </TabsContent>
+
+        {/* Audit History Tab */}
+        <TabsContent value="history" className="mt-4">
+          <AuditHistoryTab matterId={matter.id} />
         </TabsContent>
       </Tabs>
     </div>
@@ -2098,6 +2111,160 @@ function NotesTab({
                 </div>
               ),
             )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Audit History Tab Component ──────────────────────────
+
+const FIELD_LABELS: Record<string, string> = {
+  title: "Titulo",
+  description: "Descripcion",
+  area: "Area Legal",
+  status: "Estado",
+  priority: "Prioridad",
+  court: "Juzgado",
+  judge: "Juez",
+  jurisdiction: "Jurisdiccion",
+  internalCode: "Codigo Interno",
+  externalCode: "Nro. Expediente Judicial",
+  caseValue: "Cuantia",
+  currency: "Moneda",
+  nextDeadline: "Proxima Fecha Limite",
+  assignedToId: "Responsable",
+  clientId: "Cliente",
+}
+
+function formatAuditValue(field: string, value: string | null): string {
+  if (value == null || value === "null") return "—"
+  if (field === "status") return STATUS_LABELS[value] || value
+  if (field === "area") return AREA_LABELS[value] || value
+  if (field === "priority") return PRIORITY_LABELS[value] || value
+  if (field === "caseValue") {
+    const num = parseFloat(value)
+    return isNaN(num) ? value : num.toLocaleString("es-PE", { minimumFractionDigits: 2 })
+  }
+  if (field === "nextDeadline") return formatDate(value)
+  return value
+}
+
+function AuditHistoryTab({ matterId }: { matterId: number }) {
+  const [logs, setLogs] = useState<LegalMatterAuditLog[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const data = await getLegalMatterAuditLog(matterId)
+        if (!cancelled) setLogs(data)
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [matterId])
+
+  // Group logs by date+user+timestamp (changes made in same update)
+  const grouped = logs.reduce<{ key: string; changedAt: string; changedBy: string; entries: LegalMatterAuditLog[] }[]>(
+    (acc, log) => {
+      // Group by same second (batch from same update call)
+      const ts = new Date(log.changedAt).toISOString().slice(0, 19)
+      const key = `${ts}-${log.changedById}`
+      const last = acc[acc.length - 1]
+      if (last && last.key === key) {
+        last.entries.push(log)
+      } else {
+        acc.push({
+          key,
+          changedAt: log.changedAt,
+          changedBy: log.changedBy?.username || "Usuario",
+          entries: [log],
+        })
+      }
+      return acc
+    },
+    [],
+  )
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="h-4 w-4 text-indigo-600" />
+          Historial de Modificaciones
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : grouped.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <History className="mb-3 h-8 w-8 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">
+              No hay modificaciones registradas
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground/70">
+              Los cambios al expediente se registraran automaticamente
+            </p>
+          </div>
+        ) : (
+          <div className="relative space-y-0">
+            {/* Timeline line */}
+            <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border" />
+
+            {grouped.map((group) => (
+              <div key={group.key} className="relative flex gap-4 pb-6 last:pb-0">
+                {/* Timeline dot */}
+                <div className="relative z-10 mt-1.5 flex h-[9px] w-[9px] shrink-0 items-center justify-center ml-[11px]">
+                  <div className="h-2.5 w-2.5 rounded-full bg-indigo-500 ring-2 ring-background" />
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  {/* Header: user + date */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {group.changedBy}
+                    </span>
+                    <span>modifico {group.entries.length === 1 ? "1 campo" : `${group.entries.length} campos`}</span>
+                    <span className="text-[10px]">
+                      {formatDateTime(group.changedAt)}
+                    </span>
+                  </div>
+
+                  {/* Changes */}
+                  <div className="space-y-1">
+                    {group.entries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-md border bg-muted/20 px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium text-muted-foreground">
+                          {FIELD_LABELS[entry.field] || entry.field}
+                        </span>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-red-600 dark:text-red-400 line-through">
+                            {formatAuditValue(entry.field, entry.oldValue)}
+                          </span>
+                          <span className="text-muted-foreground">&rarr;</span>
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-400">
+                            {formatAuditValue(entry.field, entry.newValue)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

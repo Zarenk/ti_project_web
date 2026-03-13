@@ -93,9 +93,10 @@ type Props = {
   onChange: (data: BusinessData) => void
   onNext: () => void
   onBack: () => void
+  serverErrors?: Partial<Record<"organizationName" | "companyName", string>>
 }
 
-export function StepBusiness({ data, onChange, onNext, onBack }: Props) {
+export function StepBusiness({ data, onChange, onNext, onBack, serverErrors }: Props) {
   const [errors, setErrors] = useState<Errors>({})
 
   const update = (field: keyof BusinessData, value: string) => {
@@ -119,6 +120,12 @@ export function StepBusiness({ data, onChange, onNext, onBack }: Props) {
     if (validate()) onNext()
   }
 
+  // Merge client + server errors (client takes priority)
+  const displayErrors = {
+    ...serverErrors,
+    ...Object.fromEntries(Object.entries(errors).filter(([, v]) => v)),
+  } as Errors
+
   const inputClasses = (hasError?: boolean) =>
     `w-full rounded-lg border px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 transition-colors ${
       hasError
@@ -136,13 +143,13 @@ export function StepBusiness({ data, onChange, onNext, onBack }: Props) {
           name="organizationName"
           value={data.organizationName}
           onChange={(e) => update("organizationName", e.target.value)}
-          className={inputClasses(Boolean(errors.organizationName))}
+          className={inputClasses(Boolean(displayErrors.organizationName))}
           placeholder="Ej. Grupo Empresarial SAC"
           autoFocus
         />
-        {errors.organizationName && (
+        {displayErrors.organizationName && (
           <p className="mt-1 text-xs text-destructive">
-            {errors.organizationName}
+            {displayErrors.organizationName}
           </p>
         )}
       </div>
@@ -163,11 +170,11 @@ export function StepBusiness({ data, onChange, onNext, onBack }: Props) {
           name="companyName"
           value={data.companyName}
           onChange={(e) => update("companyName", e.target.value)}
-          className={inputClasses(Boolean(errors.companyName))}
+          className={inputClasses(Boolean(displayErrors.companyName))}
           placeholder="Ej. Mi Tienda Central"
         />
-        {errors.companyName && (
-          <p className="mt-1 text-xs text-destructive">{errors.companyName}</p>
+        {displayErrors.companyName && (
+          <p className="mt-1 text-xs text-destructive">{displayErrors.companyName}</p>
         )}
       </div>
 

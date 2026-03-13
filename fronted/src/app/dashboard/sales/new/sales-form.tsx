@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Banknote, Barcode, Building2, CalendarIcon, Check, ChevronsUpDown, CreditCard, Landmark, Layers, Loader2, MapPin, Plus, Save, Search, Smartphone, X } from 'lucide-react'
+import { ArrowLeft, Banknote, Barcode, Building2, CalendarIcon, Check, ChevronsUpDown, CreditCard, Eraser, Landmark, Layers, Loader2, MapPin, Plus, Save, Search, ShoppingCart, Smartphone, X } from 'lucide-react'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { BACKEND_URL, cn, normalizeOptionValue, uploadPdfToServer } from '@/lib/utils'
 import { isDraftExpired } from '@/lib/draft-utils'
@@ -1154,6 +1154,55 @@ const getSaleReferenceId = () => {
     ],
   );
 
+  const handleClear = useCallback(() => {
+    form.reset(buildDefaultSaleValues());
+    setSelectedProducts([]);
+    setCurrentProduct(null);
+    setQuantity(1);
+    setStock(0);
+    setActiveProductIndex(null);
+    setShowOutOfStock(false);
+    setPayments([]);
+    setSeries([]);
+    setCurrentSeries([]);
+    setAvailableSeries([]);
+    setSelectedSeries([]);
+    setAutoSyncPayment(false);
+    setQuickPaymentMethodId(null);
+    setValueProduct("");
+    setValueClient("");
+    setValueStore("");
+    setValueInvoice("");
+    setSelectedStoreId(null);
+    setIsClientDisabled(true);
+    const today = new Date();
+    setSelectedDate(today);
+    form.setValue("fecha_emision_comprobante", today.toISOString().split("T")[0]);
+    setCurrency("PEN");
+    form.setValue("tipo_moneda", "PEN");
+    setShowPDF(false);
+    setPdfData(null);
+    setSunatSearchValue("");
+    setSunatSearchResults([]);
+    setSunatSearchError(null);
+    setOpen(false);
+    setOpenClient(false);
+    setOpenStore(false);
+    setOpenInvoice(false);
+    setOpenCalendar(false);
+    if (draftSaveTimerRef.current) {
+      window.clearTimeout(draftSaveTimerRef.current);
+      draftSaveTimerRef.current = null;
+    }
+    if (salesDraftKey && typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(salesDraftKey);
+      } catch (e) {
+        console.warn("No se pudo limpiar el borrador:", e);
+      }
+    }
+  }, [form, salesDraftKey]);
+
   //handlesubmit para manejar los datos
   const onSubmit = handleSubmit(async (data) => {
 
@@ -2194,7 +2243,7 @@ const getSaleReferenceId = () => {
   ]);
 
   return (
-    <div className="container mx-auto w-full max-w-4xl grid sm:max-w-md md:max-w-lg lg:max-w-4xl overflow-hidden">
+    <div className="mx-auto w-full min-w-0 max-w-4xl overflow-hidden">
       {isSubmitting && (
         <div
           aria-live="assertive"
@@ -2207,10 +2256,10 @@ const getSaleReferenceId = () => {
           </div>
         </div>
       )}
-      <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
+      <form className='relative flex w-full min-w-0 flex-col gap-2' onSubmit={onSubmit}>
         <TooltipProvider delayDuration={150}>
-          <fieldset disabled={isSubmitting} className="contents">                  
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <fieldset disabled={isSubmitting} className="w-full min-w-0 contents">
+                  <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="min-w-0 flex-col border rounded-md p-2">                  
                         <Label className="text-sm font-medium mb-2">
                           <div className="flex items-center">
@@ -3006,6 +3055,11 @@ const getSaleReferenceId = () => {
                             selectedSeries={selectedSeries}
                             setSelectedSeries={setSelectedSeries}
                             quantity={quantity}
+                            productId={currentProduct?.id}
+                            storeId={selectedStoreId ?? undefined}
+                            onSeriesRegistered={(serial) => {
+                              setAvailableSeries((prev) => [...prev, serial]);
+                            }}
                             />                                        
                                                   
                           </div>                                      
@@ -3107,7 +3161,7 @@ const getSaleReferenceId = () => {
                     {/* Datatable para mostrar los productos seleccionados */}
                     <div
                       ref={productTableContainerRef}
-                      className="border px-1 sm:px-2 overflow-x-auto max-w-full max-h-[280px] overflow-y-auto sm:max-h-none sm:overflow-y-visible"
+                      className="w-full min-w-0 border px-1 sm:px-2 overflow-x-auto max-w-full max-h-[280px] overflow-y-auto sm:max-h-none sm:overflow-y-visible"
                     >
                       <Table className="w-full min-w-[280px] sm:min-w-[620px] text-xs sm:text-sm table-auto">
                         <TableHeader className="bg-muted/50">
@@ -3314,7 +3368,40 @@ const getSaleReferenceId = () => {
                       }}
                     />                   
 
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    {/* ── Mobile: fixed bottom bar with icons above text ── */}
+                    <div className="h-14 sm:hidden" />
+                    <div className="fixed bottom-0 left-0 right-0 z-50 flex items-stretch border-t bg-background/95 backdrop-blur sm:hidden">
+                      <button
+                        type="button"
+                        onClick={() => setIsDialogOpen(true)}
+                        disabled={isSubmitting}
+                        className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 py-2.5 text-emerald-600 transition-colors dark:text-emerald-400 disabled:opacity-50"
+                      >
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                        <span className="text-[10px] font-medium leading-tight">{isSubmitting ? "..." : "Registrar"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClear}
+                        disabled={isSubmitting}
+                        className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 py-2.5 text-muted-foreground transition-colors disabled:opacity-50"
+                      >
+                        <Eraser className="h-4 w-4" />
+                        <span className="text-[10px] font-medium leading-tight">Limpiar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.back()}
+                        disabled={isSubmitting}
+                        className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 py-2.5 text-muted-foreground transition-colors disabled:opacity-50"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        <span className="text-[10px] font-medium leading-tight">Volver</span>
+                      </button>
+                    </div>
+
+                    {/* ── Desktop: original horizontal layout ── */}
+                    <div className="mt-4 hidden flex-row gap-2 sm:flex sm:justify-end">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -3331,76 +3418,12 @@ const getSaleReferenceId = () => {
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button className="cursor-pointer bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-                          type="button" // Evita que el bot?n env?e el formulario
-                          onClick={() => {
-                        form.reset(buildDefaultSaleValues())
-
-                        // Limpia productos y stock
-                        setSelectedProducts([]);
-                        setCurrentProduct(null);
-                        setQuantity(1);
-                        setStock(0);
-                        setActiveProductIndex(null);
-                        setShowOutOfStock(false);
-
-                        // Limpia pagos y series
-                        setPayments([]);
-                        setSeries([]);
-                        setCurrentSeries([]);
-                        setAvailableSeries([]);
-                        setSelectedSeries([]);
-                        setAutoSyncPayment(false);
-                        setQuickPaymentMethodId(null);
-
-                        // Limpia combobox
-                        setValueProduct("");
-                        setValueClient("");
-                        setValueStore("");
-                        setValueInvoice("");
-
-                        // Limpia seleccion de tienda y cliente
-                        setSelectedStoreId(null);
-                        setIsClientDisabled(true);
-
-                        // Restablece el calendario al dia de hoy
-                        const today = new Date();
-                        setSelectedDate(today);
-                        form.setValue("fecha_emision_comprobante", today.toISOString().split("T")[0]);
-
-                        // Restablece la moneda a PEN
-                        setCurrency("PEN");
-                        form.setValue("tipo_moneda", "PEN");
-
-                        // Limpia PDF y SUNAT
-                        setShowPDF(false);
-                        setPdfData(null);
-                        setSunatSearchValue("");
-                        setSunatSearchResults([]);
-                        setSunatSearchError(null);
-
-                        // Cierra todos los popovers
-                        setOpen(false);
-                        setOpenClient(false);
-                        setOpenStore(false);
-                        setOpenInvoice(false);
-                        setOpenCalendar(false);
-
-                        // Limpiar draft sincronicamente
-                        if (draftSaveTimerRef.current) {
-                          window.clearTimeout(draftSaveTimerRef.current);
-                          draftSaveTimerRef.current = null;
-                        }
-                        if (salesDraftKey && typeof window !== "undefined") {
-                          try {
-                            window.localStorage.removeItem(salesDraftKey);
-                          } catch (e) {
-                            console.warn("No se pudo limpiar el borrador:", e);
-                          }
-                        }
-                    }}  // Restablece los campos del formulario
+                          <Button
+                            className="cursor-pointer bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                            type="button"
+                            onClick={handleClear}
                           >
-                            Limpiar 
+                            Limpiar
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -3410,9 +3433,9 @@ const getSaleReferenceId = () => {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                          className="cursor-pointer bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
-                          type="button" // Evita que el bot?n env?e el formulario
-                          onClick={() => router.back()} // Regresa a la p?gina anterior
+                            className="cursor-pointer bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                            type="button"
+                            onClick={() => router.back()}
                           >
                             Volver
                           </Button>

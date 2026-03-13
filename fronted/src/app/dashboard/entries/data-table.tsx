@@ -71,6 +71,7 @@ guiaUrl: string,
 details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[];
 }, TValue> {
   data: TData[]
+  initialEntryId?: string | null
 }
 
 export function DataTable<TData extends {
@@ -88,6 +89,7 @@ guiaUrl: string,
 details: { product_name: string; quantity: number; price: number; series?: string[]; category_name?: string }[];
 }, TValue>({
   data,
+  initialEntryId,
 }: DataTableProps<TData, TValue>) {
   const queryClient = useQueryClient();
   const { selection } = useTenantSelection();
@@ -204,12 +206,22 @@ details: { product_name: string; quantity: number; price: number; series?: strin
   const [selectedRowData, setSelectedRowData] = useState<TData | null>(null);
 
   const handleRowDoubleClick = (rowData: TData) => {
-    // Ejemplo: Abrir un modal con los detalles de la fila
-    console.log("Doble clic en la fila:", rowData);
-    setSelectedRowData(rowData); // Guarda los datos de la fila seleccionada
-    setIsModalOpen(true); // Abre el modal
+    setSelectedRowData(rowData);
+    setIsModalOpen(true);
   };
-  //
+
+  // Auto-open entry detail when navigating with ?entryId=X
+  const deepLinkHandled = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialEntryId || deepLinkHandled.current || data.length === 0) return;
+    const match = data.find((d) => String(d.id) === initialEntryId);
+    if (match) {
+      deepLinkHandled.current = true;
+      setSelectedRowData(match);
+      setIsModalOpen(true);
+      window.history.replaceState(null, "", "/dashboard/entries");
+    }
+  }, [initialEntryId, data]);
 
   // PARA EL MENSAJE DE ALERTA DE ELIMINAR
   const [isDialogOpen, setIsDialogOpen] = useState(false)

@@ -234,6 +234,7 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
     handleSerialClick, handleSerialSave,
     serialDialogProduct, serialDialogAssigned,
     serialDialogAvailable, serialDialogOtherSerials,
+    handleSeriesRegistered,
     hydrateCart, resetCart,
   } = useSaleCart(storeId, serialsEnabled)
 
@@ -1260,6 +1261,9 @@ export function QuickSaleView({ categories }: QuickSaleViewProps) {
         otherProductSerials={serialDialogOtherSerials}
         loading={serialDialogLoading}
         onSave={handleSerialSave}
+        productId={serialDialogProduct?.product.id}
+        storeId={storeId ?? undefined}
+        onSeriesRegistered={handleSeriesRegistered}
       />
 
       {/* Store change dialog */}

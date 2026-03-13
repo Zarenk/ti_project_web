@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Eye,
+  FileText,
   Loader2,
   MapPin,
   Package,
@@ -103,6 +104,11 @@ import {
 } from "../../inventory/inventory.api";
 import { isSubscriptionBlockedError } from "@/lib/subscription-error";
 import { SubscriptionBlockedDialog } from "@/components/subscription-blocked-dialog";
+import { pdf } from "@react-pdf/renderer";
+import {
+  GuideDocument,
+  type GuideDocumentData,
+} from "../components/GuideDocument";
 
 // ── Zod schema ────────────────────────────────────────────────
 const itemSchema = z.object({
@@ -404,6 +410,9 @@ export default function NewGuidePage() {
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
 
   // ── Inter-store transfer state ─────────────────────────────
   const [interStoreEnabled, setInterStoreEnabled] = useState(
@@ -851,6 +860,71 @@ export default function NewGuidePage() {
       { duration: 6000 },
     );
   }
+
+  // ── PDF Preview ─────────────────────────────────────────────
+  const onPdfPreview = handleSubmit(async (data) => {
+    setGeneratingPreview(true);
+    try {
+      // Build items list from form data + transfer items
+      const formItems = data.items.map((it) => ({
+        codigo: it.codigo,
+        descripcion: it.descripcion,
+        cantidad: it.cantidad,
+        unidadMedida: it.unidadMedida,
+      }));
+      const transferSerials = interStoreEnabled
+        ? transferItems.map((ti) => ({
+            codigo: ti.barcode || String(ti.productId),
+            descripcion: ti.name,
+            cantidad: ti.quantity,
+            unidadMedida: "NIU",
+            serials: ti.selectedSerials.length > 0 ? ti.selectedSerials : undefined,
+          }))
+        : [];
+
+      const previewItems = interStoreEnabled && transferSerials.length > 0
+        ? transferSerials
+        : formItems;
+
+      const pdfData: GuideDocumentData = {
+        serie: "T0XX",
+        correlativo: "BORRADOR",
+        fechaTraslado: data.fechaTraslado,
+        fechaEmision: data.fechaTraslado,
+        motivoTraslado: data.motivoTrasladoCodigo,
+        modalidadTraslado: data.modalidadTraslado,
+        remitenteRuc: data.numeroDocumentoRemitente,
+        remitenteRazonSocial: data.razonSocialRemitente,
+        destinatarioTipoDocumento: data.destinatarioTipoDoc,
+        destinatarioNumeroDocumento: data.destinatarioNumeroDoc,
+        destinatarioRazonSocial: data.destinatarioRazonSocial,
+        transportistaTipoDocumento: data.transportistaTipoDoc,
+        transportistaNumeroDocumento: data.transportistaNumeroDoc,
+        transportistaRazonSocial: data.transportistaRazonSocial,
+        transportistaNumeroPlaca: data.transportistaPlaca || "",
+        puntoPartida: data.puntoPartida,
+        puntoPartidaDireccion: data.puntoPartida,
+        puntoPartidaUbigeo: data.puntoPartidaUbigeo,
+        puntoLlegada: data.puntoLlegada,
+        puntoLlegadaDireccion: data.puntoLlegada,
+        puntoLlegadaUbigeo: data.puntoLlegadaUbigeo,
+        pesoBrutoTotal: data.pesoBrutoTotal,
+        pesoBrutoUnidad: data.pesoBrutoUnidad,
+        items: previewItems,
+      };
+
+      const blob = await pdf(<GuideDocument data={pdfData} />).toBlob();
+      // Revoke previous URL if any
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+      const url = URL.createObjectURL(blob);
+      setPdfPreviewUrl(url);
+      setPdfPreviewOpen(true);
+    } catch (err: any) {
+      toast.error(err.message || "Error al generar vista previa");
+    } finally {
+      setGeneratingPreview(false);
+    }
+  }, onFormInvalid);
 
   // ── Handlers ──────────────────────────────────────────────
   const onValidate = handleSubmit(async (data) => {
@@ -3151,6 +3225,20 @@ export default function NewGuidePage() {
                     type="button"
                     variant="outline"
                     className="cursor-pointer gap-2 w-full sm:w-auto rounded-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    disabled={generatingPreview}
+                    onClick={onPdfPreview}
+                  >
+                    {generatingPreview ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                    Vista Previa
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="cursor-pointer gap-2 w-full sm:w-auto rounded-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
                     disabled={validating}
                     onClick={onValidate}
                   >
@@ -3215,6 +3303,59 @@ export default function NewGuidePage() {
             </Button>
             <Button
               className="cursor-pointer gap-2 rounded-full transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              disabled={submitting}
+              onClick={onSubmit}
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Enviar a SUNAT
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PDF Preview Dialog ──────────────────────────── */}
+      <Dialog
+        open={pdfPreviewOpen}
+        onOpenChange={(open) => {
+          setPdfPreviewOpen(open);
+          if (!open && pdfPreviewUrl) {
+            URL.revokeObjectURL(pdfPreviewUrl);
+            setPdfPreviewUrl(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-500" />
+              Vista Previa del Documento
+            </DialogTitle>
+            <DialogDescription>
+              Borrador — este documento aún no ha sido enviado a SUNAT.
+            </DialogDescription>
+          </DialogHeader>
+          {pdfPreviewUrl && (
+            <iframe
+              src={pdfPreviewUrl}
+              className="w-full border-0"
+              style={{ height: "calc(90vh - 140px)" }}
+              title="Vista previa de la guía de remisión"
+            />
+          )}
+          <div className="flex justify-end gap-2 px-6 pb-4">
+            <Button
+              variant="outline"
+              className="cursor-pointer rounded-full"
+              onClick={() => setPdfPreviewOpen(false)}
+            >
+              Cerrar
+            </Button>
+            <Button
+              className="cursor-pointer gap-2 rounded-full"
               disabled={submitting}
               onClick={onSubmit}
             >

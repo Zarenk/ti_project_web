@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   Briefcase,
+  Building2,
   FileText,
   Gavel,
   Loader2,
   Mail,
+  MapPin,
   Phone,
   Plus,
   Save,
@@ -22,10 +24,23 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   Select,
   SelectContent,
@@ -38,7 +53,8 @@ import { toast } from "sonner"
 import { PageGuideButton } from "@/components/page-guide-dialog"
 import { LEGAL_FORM_GUIDE_STEPS } from "./legal-form-guide-steps"
 import { createLegalMatter } from "../legal-matters.api"
-import { getRegisteredClients } from "../../clients/clients.api"
+import { getRegisteredClients, createClient } from "../../clients/clients.api"
+import { lookupSunatDocument, type LookupResponse } from "../../sales/sales.api"
 
 /* ─── Constants ─────────────────────────────────────────── */
 
@@ -120,6 +136,13 @@ export default function NewLegalMatterPage() {
   const [clientId, setClientId] = useState<number | null>(null)
   const [clientSearch, setClientSearch] = useState("")
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
+
+  // SUNAT lookup dialog
+  const [isSunatDialogOpen, setIsSunatDialogOpen] = useState(false)
+  const [sunatSearchValue, setSunatSearchValue] = useState("")
+  const [sunatSearchResults, setSunatSearchResults] = useState<LookupResponse[]>([])
+  const [sunatSearchError, setSunatSearchError] = useState<string | null>(null)
+  const [sunatSearchLoading, setSunatSearchLoading] = useState(false)
 
   // Form fields
   const [title, setTitle] = useState("")
@@ -216,6 +239,131 @@ export default function NewLegalMatterPage() {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  function resetSunatDialog() {
+    setSunatSearchValue("")
+    setSunatSearchResults([])
+    setSunatSearchError(null)
+    setSunatSearchLoading(false)
+  }
+
+  async function handleSunatSearch() {
+    const documentValue = sunatSearchValue.trim()
+    if (!documentValue) {
+      toast.error("Ingresa un DNI (8 digitos) o RUC (11 digitos) para buscar.")
+      setSunatSearchResults([])
+      return
+    }
+
+    setSunatSearchLoading(true)
+    setSunatSearchError(null)
+    try {
+      const result = await lookupSunatDocument(documentValue)
+      setSunatSearchResults([result])
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo consultar el documento."
+      const isNotFound =
+        message.toLowerCase().includes("no se encontraron") ||
+        message.toLowerCase().includes("not found")
+      if (isNotFound) {
+        const isRuc = documentValue.length === 11
+        setSunatSearchResults([
+          {
+            identifier: documentValue,
+            name: "(No registrado en la base de datos)",
+            address: null,
+            status: null,
+            type: isRuc ? "RUC" : "DNI",
+            raw: {},
+          },
+        ])
+        setSunatSearchError(
+          "El documento no fue encontrado en la base de datos externa. Puedes usar el resultado de abajo e ingresar el nombre manualmente.",
+        )
+      } else {
+        setSunatSearchError(message)
+        setSunatSearchResults([])
+      }
+    } finally {
+      setSunatSearchLoading(false)
+    }
+  }
+
+  async function handleSelectSunatResult(result: LookupResponse) {
+    const isPlaceholder = !result.name || result.name.startsWith("(")
+    const clientName = isPlaceholder ? "" : result.name
+    const clientType = result.type === "RUC" ? "RUC" : "DNI"
+    const clientTypeNumber = result.identifier ?? ""
+
+    if (isPlaceholder || !clientName) {
+      setIsSunatDialogOpen(false)
+      resetSunatDialog()
+      toast.info("Documento aplicado. Crea el cliente manualmente con este numero.")
+      return
+    }
+
+    // Check if client already exists locally
+    const existingLocal = clients.find((c) => c.typeNumber === clientTypeNumber)
+    if (existingLocal) {
+      setClientId(existingLocal.id)
+      setClientSearch("")
+      setClientDropdownOpen(false)
+      setIsSunatDialogOpen(false)
+      resetSunatDialog()
+      toast.success("Cliente encontrado en el sistema.")
+      return
+    }
+
+    // Auto-register the client
+    setSunatSearchLoading(true)
+    setSunatSearchError(null)
+
+    try {
+      const createdClient = await createClient({
+        name: clientName,
+        type: clientType,
+        typeNumber: clientTypeNumber,
+        adress: result.address || "",
+      })
+
+      if (createdClient?.id) {
+        setClients((prev) => [...prev, createdClient])
+        setClientId(createdClient.id)
+        setClientSearch("")
+        setClientDropdownOpen(false)
+        toast.success("Cliente registrado y seleccionado automaticamente.")
+      }
+    } catch (error: any) {
+      const isConflict =
+        error?.response?.status === 409 || error?.response?.data?.statusCode === 409
+
+      if (isConflict) {
+        try {
+          const allClients = await getRegisteredClients()
+          const found = allClients?.find?.((c: any) => c.typeNumber === clientTypeNumber)
+          if (found) {
+            setClients((prev) => {
+              if (prev.some((c) => c.typeNumber === clientTypeNumber)) return prev
+              return [...prev, found]
+            })
+            setClientId(found.id)
+            toast.success("Cliente encontrado y seleccionado.")
+          } else {
+            toast.info("Cliente ya existe pero no se pudo vincular. Buscalo manualmente.")
+          }
+        } catch {
+          toast.info("Cliente ya existe. Buscalo manualmente.")
+        }
+      } else {
+        toast.error("No se pudo registrar el cliente automaticamente.")
+      }
+    } finally {
+      setSunatSearchLoading(false)
+      setIsSunatDialogOpen(false)
+      resetSunatDialog()
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -345,11 +493,11 @@ export default function NewLegalMatterPage() {
                 <Separator />
 
                 {/* Area, Prioridad, Moneda */}
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Area Legal</Label>
                     <Select value={area} onValueChange={setArea}>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -364,7 +512,7 @@ export default function NewLegalMatterPage() {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Prioridad</Label>
                     <Select value={priority} onValueChange={setPriority}>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue>
                           {selectedPriority && (
                             <span className="flex items-center gap-2">
@@ -405,7 +553,7 @@ export default function NewLegalMatterPage() {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Moneda</Label>
                     <Select value={currency} onValueChange={setCurrency}>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -705,23 +853,41 @@ export default function NewLegalMatterPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar por nombre o documento..."
-                        value={clientSearch}
-                        onChange={(e) => {
-                          setClientSearch(e.target.value)
-                          setClientDropdownOpen(e.target.value.length > 0)
-                        }}
-                        onFocus={() => {
-                          if (clientSearch.length > 0) setClientDropdownOpen(true)
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => setClientDropdownOpen(false), 200)
-                        }}
-                        className="pl-9"
-                      />
+                    <div className="flex gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar por nombre o documento..."
+                          value={clientSearch}
+                          onChange={(e) => {
+                            setClientSearch(e.target.value)
+                            setClientDropdownOpen(e.target.value.length > 0)
+                          }}
+                          onFocus={() => {
+                            if (clientSearch.length > 0) setClientDropdownOpen(true)
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setClientDropdownOpen(false), 200)
+                          }}
+                          className="pl-9"
+                        />
+                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="shrink-0 cursor-pointer"
+                              onClick={() => setIsSunatDialogOpen(true)}
+                            >
+                              <Search className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Buscar en SUNAT (DNI/RUC)</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     {clientDropdownOpen && filteredClients.length > 0 && (
                       <div className="max-h-48 overflow-y-auto rounded-lg border animate-in fade-in slide-in-from-top-1 duration-150">
@@ -830,6 +996,127 @@ export default function NewLegalMatterPage() {
           </div>
         </div>
       </form>
+
+      {/* ─── SUNAT Lookup Dialog ─── */}
+      <Dialog
+        open={isSunatDialogOpen}
+        onOpenChange={(open) => {
+          setIsSunatDialogOpen(open)
+          if (!open) resetSunatDialog()
+        }}
+      >
+        <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+              Buscar Clientes
+            </DialogTitle>
+            <DialogDescription>
+              Ingresa un DNI (8 digitos) o RUC (11 digitos). Doble clic en el resultado para seleccionar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 w-full min-w-0">
+            <div className="flex gap-2">
+              <Input
+                value={sunatSearchValue}
+                onChange={(e) => setSunatSearchValue(e.target.value)}
+                placeholder="Ej: 20519857538"
+                className="font-mono"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    void handleSunatSearch()
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleSunatSearch}
+                disabled={sunatSearchLoading}
+                className="cursor-pointer flex-shrink-0"
+              >
+                {sunatSearchLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            {sunatSearchError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 w-full min-w-0 overflow-hidden">
+                <X className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive break-words">{sunatSearchError}</p>
+              </div>
+            )}
+
+            {sunatSearchLoading && sunatSearchResults.length > 0 && (
+              <div className="flex items-center justify-center gap-2 p-4 rounded-lg border bg-muted/30">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm font-medium">Registrando cliente...</span>
+              </div>
+            )}
+
+            <div className="max-h-72 overflow-y-auto w-full min-w-0">
+              {sunatSearchResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border border-dashed text-center">
+                  <Search className="h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">
+                    Ingresa un documento y presiona buscar.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sunatSearchResults.map((result) => (
+                    <div
+                      key={result.identifier}
+                      className={cn(
+                        "p-3 rounded-lg border cursor-pointer w-full min-w-0 overflow-hidden",
+                        "transition-all duration-200 ease-out",
+                        "hover:bg-primary/5 hover:border-primary/30 hover:shadow-sm",
+                        "active:scale-[0.98]",
+                        "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+                        sunatSearchLoading && "pointer-events-none opacity-50",
+                      )}
+                      onDoubleClick={() => handleSelectSunatResult(result)}
+                    >
+                      <div className="flex items-start justify-between gap-2 w-full min-w-0">
+                        <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
+                          <p className="text-sm font-semibold break-words leading-snug">
+                            {result.name}
+                          </p>
+                          <p className="text-xs font-mono text-muted-foreground">
+                            {result.type === "RUC" ? "RUC" : "DNI"}: {result.identifier}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 tracking-wide",
+                            result.status === "ACTIVO"
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                              : "bg-red-500/15 text-red-600 dark:text-red-400",
+                          )}
+                        >
+                          {result.status ?? "—"}
+                        </span>
+                      </div>
+                      {result.address && result.address !== "—" && (
+                        <div className="flex items-start gap-1.5 mt-2 pt-2 border-t w-full min-w-0 overflow-hidden">
+                          <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-muted-foreground break-words leading-relaxed">
+                            {result.address}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

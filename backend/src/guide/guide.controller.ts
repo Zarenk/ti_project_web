@@ -10,6 +10,7 @@ import {
   StreamableFile,
   InternalServerErrorException,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { createReadStream } from 'fs';
@@ -90,8 +91,10 @@ export class GuideController {
     @Param('id') id: string,
     @CurrentTenant('organizationId') organizationId: number | null,
     @Body() body: { reason?: string },
+    @Req() req: any,
   ) {
-    return this.guideService.voidGuide(Number(id), organizationId, body?.reason);
+    const userId: number = req.user?.userId ?? req.user?.sub ?? 0;
+    return this.guideService.voidGuide(Number(id), organizationId, body?.reason, userId);
   }
 
   @Get(':id/files/:type')

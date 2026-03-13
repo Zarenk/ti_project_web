@@ -51,7 +51,7 @@ export default function UltimosIngresosSection({
           </h2>
         </div>
         {/* Mobile: horizontal scroller with chevrons */}
-        <div className="md:hidden">
+        <div className="md:hidden w-full min-w-0 overflow-hidden">
           <HorizontalScroller>
             {visibleRecent.map((product, idx) => (
               <MotionProductCard

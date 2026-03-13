@@ -161,6 +161,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (isGymVertical && GYM_HIDDEN_PROJECTS.has(project.name)) {
       return false
     }
+    if (project.requiredRoles?.length) {
+      if (!normalizedRoleValue) return false
+      if (!project.requiredRoles.some((r) => r.toUpperCase() === normalizedRoleValue)) {
+        return false
+      }
+    }
     return checkPermission(project.permission)
   }).sort((a, b) => a.name.localeCompare(b.name, "es"))
 

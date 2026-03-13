@@ -829,7 +829,16 @@ export class UsersService {
   }
 
   findAll(search?: string, organizationId?: number | null) {
-    const where: Prisma.UserWhereInput = {};
+    const where: Prisma.UserWhereInput = {
+      // Exclude auto-generated anonymous users (web checkout + generic placeholders)
+      NOT: {
+        OR: [
+          { username: { startsWith: 'web_' } },
+          { username: { startsWith: 'generic_' } },
+        ],
+      },
+      role: { not: 'GUEST' },
+    };
 
     if (search && search.trim().length > 0) {
       where.OR = [

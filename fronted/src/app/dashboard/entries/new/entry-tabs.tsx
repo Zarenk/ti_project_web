@@ -51,7 +51,7 @@ export function EntryTabs({ categories }: EntryTabsProps) {
   return (
     <Tabs
       value={activeTab}
-      className="mx-auto w-full max-w-7xl"
+      className="mx-auto w-full min-w-0 max-w-7xl overflow-hidden"
       onValueChange={handleTabChange}
     >
       <TooltipProvider delayDuration={200}>

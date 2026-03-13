@@ -3,10 +3,10 @@
 // Stable empty array to prevent unstable references in useMemo dependencies.
 const STABLE_EMPTY: any[] = []
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Search, ShoppingCart, Loader2, ChevronsUpDown, Check, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, ShoppingCart, Loader2, ChevronsUpDown, Check, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react"
 import { jwtDecode } from "jwt-decode"
 
 import { Input } from "@/components/ui/input"
@@ -32,6 +32,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { cn, normalizeSearch } from "@/lib/utils"
+import { useHelpAssistant } from "@/context/help-assistant-context"
 import { useTenantSelection } from "@/context/tenant-selection-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
@@ -133,6 +134,7 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [categoryFilterOpen, setCategoryFilterOpen] = useState(false)
   const [showAllCategories, setShowAllCategories] = useState(false)
+  const [hideCategoryPills, setHideCategoryPills] = useState(false)
 
   // --- Pagination ---
   const [currentPage, setCurrentPage] = useState(1)
@@ -166,6 +168,11 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
 
   // --- Mobile sheet ---
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
+  const [mobileCartBarHidden, setMobileCartBarHidden] = useState(false)
+  const [cartBarDragX, setCartBarDragX] = useState(0)
+  const cartBarTouchStartRef = useRef<{ x: number; y: number; locked: boolean } | null>(null)
+  const cartBarRef = useRef<HTMLButtonElement | null>(null)
+  const { isMascotMinimized } = useHelpAssistant()
 
   // Data is loaded via useQuery hooks above
 
@@ -437,38 +444,61 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
 
             {/* Category pills (quick access) - show top 10 most used */}
             {usedCategories.length > 1 && (
-              <div className="flex flex-wrap gap-1.5">
-                <Badge
-                  variant={selectedCategory === null ? "default" : "outline"}
-                  className="cursor-pointer transition-colors"
-                  onClick={() => setSelectedCategory(null)}
-                >
-                  Todas
-                </Badge>
-                {visibleCategories.map((cat) => (
-                  <Badge
-                    key={cat.id}
-                    variant={
-                      selectedCategory === cat.id ? "default" : "outline"
-                    }
-                    className="cursor-pointer transition-colors"
-                    onClick={() =>
-                      setSelectedCategory(
-                        selectedCategory === cat.id ? null : cat.id,
-                      )
-                    }
+              <div className="space-y-1.5">
+                {/* Mobile toggle */}
+                {hideCategoryPills && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground sm:hidden cursor-pointer"
+                    onClick={() => setHideCategoryPills(false)}
                   >
-                    {cat.name}
-                  </Badge>
-                ))}
-                {usedCategories.length > 10 && (
-                  <Badge
-                    variant="secondary"
-                    className="cursor-pointer transition-colors hover:bg-secondary/80"
-                    onClick={() => setShowAllCategories(!showAllCategories)}
-                  >
-                    {showAllCategories ? "Ver menos..." : `Ver más... (+${usedCategories.length - 10})`}
-                  </Badge>
+                    <ChevronDown className="h-3.5 w-3.5" />
+                    Mostrar categorías
+                  </button>
+                )}
+                {!hideCategoryPills && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge
+                      variant={selectedCategory === null ? "default" : "outline"}
+                      className="cursor-pointer transition-colors"
+                      onClick={() => setSelectedCategory(null)}
+                    >
+                      Todas
+                    </Badge>
+                    {visibleCategories.map((cat) => (
+                      <Badge
+                        key={cat.id}
+                        variant={
+                          selectedCategory === cat.id ? "default" : "outline"
+                        }
+                        className="cursor-pointer transition-colors"
+                        onClick={() =>
+                          setSelectedCategory(
+                            selectedCategory === cat.id ? null : cat.id,
+                          )
+                        }
+                      >
+                        {cat.name}
+                      </Badge>
+                    ))}
+                    {usedCategories.length > 10 && (
+                      <Badge
+                        variant="secondary"
+                        className="cursor-pointer transition-colors hover:bg-secondary/80"
+                        onClick={() => setShowAllCategories(!showAllCategories)}
+                      >
+                        {showAllCategories ? "Ver menos..." : `Ver más... (+${usedCategories.length - 10})`}
+                      </Badge>
+                    )}
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground sm:hidden cursor-pointer"
+                      onClick={() => setHideCategoryPills(true)}
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                      Ocultar
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -586,13 +616,70 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
         </div>
       </div>
 
-      {/* Mobile bottom bar */}
-      {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 lg:hidden">
+      {/* Mobile bottom bar — swipeable to hide */}
+      {cartCount > 0 && !mobileCartBarHidden && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 px-4 pb-4 lg:hidden animate-in slide-in-from-bottom-4 fade-in duration-300"
+        >
           <button
+            ref={cartBarRef}
             type="button"
-            className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-background/80 px-4 py-3.5 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] backdrop-blur-xl transition-all duration-200 active:scale-[0.98] dark:border-white/[0.06] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]"
-            onClick={() => setMobileCartOpen(true)}
+            className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-background/80 px-4 py-3.5 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/[0.06] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]"
+            style={{
+              transform: cartBarDragX !== 0
+                ? `translateX(${cartBarDragX}px) rotate(${cartBarDragX * 0.05}deg)`
+                : undefined,
+              opacity: cartBarDragX !== 0
+                ? Math.max(0.3, 1 - Math.abs(cartBarDragX) / 250)
+                : undefined,
+              transition: cartBarDragX !== 0 ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
+            }}
+            onClick={() => {
+              if (Math.abs(cartBarDragX) < 5) setMobileCartOpen(true)
+            }}
+            onTouchStart={(e) => {
+              const touch = e.touches[0]
+              cartBarTouchStartRef.current = { x: touch.clientX, y: touch.clientY, locked: false }
+            }}
+            onTouchMove={(e) => {
+              if (!cartBarTouchStartRef.current) return
+              const touch = e.touches[0]
+              const dx = touch.clientX - cartBarTouchStartRef.current.x
+              const dy = Math.abs(touch.clientY - cartBarTouchStartRef.current.y)
+              // Lock direction after 10px movement
+              if (!cartBarTouchStartRef.current.locked && (Math.abs(dx) > 10 || dy > 10)) {
+                cartBarTouchStartRef.current.locked = true
+                if (dy > Math.abs(dx)) {
+                  // Vertical scroll — abort drag
+                  cartBarTouchStartRef.current = null
+                  setCartBarDragX(0)
+                  return
+                }
+              }
+              if (cartBarTouchStartRef.current?.locked) {
+                setCartBarDragX(dx)
+              }
+            }}
+            onTouchEnd={(e) => {
+              if (!cartBarTouchStartRef.current) {
+                setCartBarDragX(0)
+                return
+              }
+              const wasDragging = cartBarTouchStartRef.current.locked
+              cartBarTouchStartRef.current = null
+              if (Math.abs(cartBarDragX) > 80) {
+                // Swipe confirmed — animate out
+                setCartBarDragX(cartBarDragX > 0 ? 400 : -400)
+                setTimeout(() => {
+                  setMobileCartBarHidden(true)
+                  setCartBarDragX(0)
+                }, 200)
+              } else {
+                // Snap back
+                setCartBarDragX(0)
+              }
+              if (wasDragging) e.preventDefault()
+            }}
           >
             <div className="relative">
               <ShoppingCart className="h-5 w-5 text-primary" />
@@ -606,6 +693,26 @@ export function QuickEntryView({ categories }: QuickEntryViewProps) {
             </span>
           </button>
         </div>
+      )}
+
+      {/* Mobile FAB — appears when cart bar is swiped away */}
+      {cartCount > 0 && mobileCartBarHidden && (
+        <button
+          type="button"
+          className="fixed bottom-6 z-40 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-white/10 transition-all duration-300 ease-out hover:scale-[1.08] active:scale-90 lg:hidden animate-in zoom-in-50 fade-in spin-in-12"
+          style={{ right: isMascotMinimized ? 36 : 96 }}
+          onClick={() => {
+            setMobileCartBarHidden(false)
+          }}
+          aria-label={`Mostrar carrito (${cartCount} items)`}
+        >
+          <ShoppingCart className="h-5 w-5" />
+          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
+            {cartCount}
+          </span>
+          {/* Pulse ring — plays 3 times */}
+          <span className="absolute inset-0 rounded-full bg-primary/25" style={{ animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) 3' }} />
+        </button>
       )}
 
       {/* Mobile cart sheet */}

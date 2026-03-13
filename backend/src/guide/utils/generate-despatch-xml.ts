@@ -2,6 +2,19 @@ import { create } from 'xmlbuilder2';
 import { CreateGuideDto } from '../dto/create-guide.dto';
 import { format } from 'date-fns';
 
+/**
+ * Parse a date string as a LOCAL date (Peru UTC-5).
+ * Date-only strings like "2026-01-23" are interpreted as UTC midnight by `new Date()`,
+ * which becomes 2026-01-22 19:00 in Peru — off by one day.
+ * Appending T00:00:00 forces local-time interpretation.
+ */
+function parseLocalDate(dateStr: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(`${dateStr}T00:00:00`);
+  }
+  return new Date(dateStr);
+}
+
 type AddressData = {
   direccion?: string;
   ubigeo?: string;
@@ -98,7 +111,7 @@ export function generateDespatchXML(
   correlativo: string,
 ): string {
   const issueDateSource = dto.fechaEmision ?? dto.fechaTraslado;
-  const issueDate = format(new Date(issueDateSource), 'yyyy-MM-dd');
+  const issueDate = format(parseLocalDate(issueDateSource), 'yyyy-MM-dd');
   const pdfTemplate = process.env.SUNAT_GRE_PDF_TEMPLATE?.trim();
   const disableCtsInfo = process.env.SUNAT_GRE_DISABLE_CTS === 'true';
   const includeCtsInfo = !!pdfTemplate && !disableCtsInfo;
@@ -375,7 +388,7 @@ export function generateDespatchXML(
   shipmentStage
     .ele('cac:TransitPeriod')
     .ele('cbc:StartDate')
-    .txt(format(new Date(dto.fechaTraslado), 'yyyy-MM-dd'))
+    .txt(format(parseLocalDate(dto.fechaTraslado), 'yyyy-MM-dd'))
     .up()
     .up();
   const carrierParty = shipmentStage.ele('cac:CarrierParty');

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,21 +13,29 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useVerticalConfig } from "@/hooks/use-vertical-config";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { useKitchenSocket } from "@/hooks/use-kitchen-socket";
+import { Building2, Loader2, MapPin, Search } from "lucide-react";
 import {
   getRestaurantOrder,
   updateRestaurantOrder,
   checkoutRestaurantOrder,
 } from "@/app/dashboard/orders/orders.api";
 import { getStores } from "@/app/dashboard/stores/stores.api";
+import { lookupSunatDocument } from "@/app/dashboard/sales/sales.api";
+import { createClient } from "@/app/dashboard/clients/clients.api";
+import { getCompanyDetail, type CompanyDetail } from "../../../dashboard/tenancy/tenancy.api";
+import { useTenantSelection } from "@/context/tenant-selection-context";
 import { pdf } from "@react-pdf/renderer";
 import {
   RestaurantReceiptPdf,
   type RestaurantReceiptData,
 } from "../components/RestaurantReceiptPdf";
+import { TicketRestaurantReceiptPdf } from "../components/TicketRestaurantReceiptPdf";
+import { useSiteSettings } from "@/context/site-settings-context";
 
 type RestaurantOrderStatus =
   | "OPEN"
@@ -102,12 +110,16 @@ export default function RestaurantOrderDetailPage() {
   const router = useRouter();
   const { id } = useParams();
   const { info: verticalInfo } = useVerticalConfig();
+  const { settings } = useSiteSettings();
+  const { selection } = useTenantSelection();
   const isRestaurant = verticalInfo?.businessVertical === "RESTAURANTS";
+  const receiptFormat = settings.company?.receiptFormat ?? "a4";
 
   const [order, setOrder] = useState<RestaurantOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
+  const [activeCompany, setActiveCompany] = useState<CompanyDetail | null>(null);
 
   // Checkout dialog state
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -115,9 +127,19 @@ export default function RestaurantOrderDetailPage() {
   const [stores, setStores] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState("-1");
-  const [tipoComprobante, setTipoComprobante] = useState("BOLETA");
+  const [tipoComprobante, setTipoComprobante] = useState("SIN COMPROBANTE");
   const [servicePercent, setServicePercent] = useState("10");
   const [tipAmount, setTipAmount] = useState("0");
+
+  // Client state for Boleta/Factura
+  const [checkoutClientId, setCheckoutClientId] = useState<number | null>(null);
+  const [checkoutClientName, setCheckoutClientName] = useState("");
+  const [checkoutClientType, setCheckoutClientType] = useState("");
+  const [checkoutClientTypeNumber, setCheckoutClientTypeNumber] = useState("");
+  const [checkoutClientAddress, setCheckoutClientAddress] = useState("");
+  const [sunatDialogOpen, setSunatDialogOpen] = useState(false);
+  const [sunatQuery, setSunatQuery] = useState("");
+  const [sunatLoading, setSunatLoading] = useState(false);
 
   const computedHistory = useMemo(() => {
     if (!order) return [];
@@ -239,7 +261,13 @@ export default function RestaurantOrderDetailPage() {
         if (list.length === 1) setSelectedStoreId(String(list[0].id));
       })
       .catch(() => {});
-  }, [isRestaurant]);
+    // Fetch company detail for receipt data
+    if (selection.companyId) {
+      getCompanyDetail(selection.companyId)
+        .then((detail) => setActiveCompany(detail))
+        .catch(() => {});
+    }
+  }, [isRestaurant, selection.companyId]);
 
   const checkoutSubtotal = useMemo(() => {
     if (!order) return 0;
@@ -255,15 +283,138 @@ export default function RestaurantOrderDetailPage() {
   const checkoutIgv = Number((checkoutTaxable * 0.18).toFixed(2));
   const checkoutTotal = checkoutTaxable + checkoutTip;
 
+  const needsClient = tipoComprobante === "BOLETA" || tipoComprobante === "FACTURA";
+
+  const handleSunatSearch = useCallback(async () => {
+    const trimmed = sunatQuery.trim();
+    if (!/^\d{8}$|^\d{11}$/.test(trimmed)) {
+      toast.error("Ingresa un DNI (8 dígitos) o RUC (11 dígitos).");
+      return;
+    }
+    setSunatLoading(true);
+    try {
+      const result = await lookupSunatDocument(trimmed);
+      const isRuc = trimmed.length === 11;
+      const clientData = {
+        name: result.name ?? "",
+        type: isRuc ? "RUC" : "DNI",
+        typeNumber: trimmed,
+        adress: result.address ?? "",
+      };
+      const created = await createClient(clientData);
+      setCheckoutClientId(created.id);
+      setCheckoutClientName(clientData.name);
+      setCheckoutClientType(clientData.type);
+      setCheckoutClientTypeNumber(trimmed);
+      setCheckoutClientAddress(clientData.adress);
+      setSunatDialogOpen(false);
+      setSunatQuery("");
+      toast.success(`Cliente ${clientData.name} registrado.`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "No se pudo consultar SUNAT.");
+    } finally {
+      setSunatLoading(false);
+    }
+  }, [sunatQuery]);
+
+  const PAYMENT_LABELS: Record<string, string> = useMemo(() => ({
+    "-1": "Efectivo", "-2": "Transferencia", "-3": "Visa",
+    "-4": "Yape", "-5": "Plin", "-6": "Otro",
+  }), []);
+
+  const generateReceipt = useCallback(async (targetOrder?: RestaurantOrder) => {
+    const o = targetOrder ?? order;
+    if (!o) return;
+    const items = (o.items ?? []).map((i) => ({
+      name: i.product?.name ?? "Producto",
+      quantity: i.quantity ?? 1,
+      unitPrice: i.unitPrice ?? 0,
+      total: (i.quantity ?? 1) * (i.unitPrice ?? 0),
+    }));
+    const subtotal = o.subtotal ?? items.reduce((sum, i) => sum + i.total, 0);
+    const service = o.serviceCharge ?? 0;
+    const igv = o.tax ?? subtotal * 0.18;
+    const total = o.total ?? (subtotal + service + igv);
+
+    const orderStore = o.store;
+    const fallbackStore = stores.find((s) => s.id === o.storeId);
+
+    // Company data for receipt header (from SUNAT fields or fallback to store)
+    const companyName =
+      activeCompany?.sunatBusinessName?.trim() ||
+      activeCompany?.legalName?.trim() ||
+      activeCompany?.name?.trim() ||
+      undefined;
+    const companyRuc =
+      activeCompany?.sunatRuc?.trim() ||
+      activeCompany?.taxId?.trim() ||
+      undefined;
+    const companyAddress =
+      activeCompany?.sunatAddress?.trim() || undefined;
+    const companyPhone =
+      activeCompany?.sunatPhone?.trim() || undefined;
+
+    // Receipt number: salesId from the generated sale, or order id as fallback
+    const receiptNumber = o.salesId
+      ? String(o.salesId).padStart(6, "0")
+      : String(o.id).padStart(6, "0");
+
+    const receiptData: RestaurantReceiptData = {
+      storeName: orderStore?.name ?? fallbackStore?.name ?? "Restaurante",
+      storeAddress: orderStore?.adress ?? undefined,
+      companyName,
+      companyRuc,
+      companyAddress,
+      companyPhone,
+      receiptNumber,
+      orderNumber: String(o.id),
+      tableName: o.table?.name ?? undefined,
+      orderType: o.orderType ?? "DINE_IN",
+      dateTime: o.closedAt
+        ? new Date(o.closedAt).toLocaleString()
+        : new Date().toLocaleString(),
+      items,
+      subtotal,
+      serviceCharge: service > 0 ? service : undefined,
+      serviceChargePercent: Number(servicePercent) || undefined,
+      igv,
+      total,
+      paymentMethod: PAYMENT_LABELS[String(paymentMethod)] ?? "Efectivo",
+      tipoComprobante: tipoComprobante,
+      notes: o.notes ?? undefined,
+    };
+
+    try {
+      const receiptDoc = receiptFormat === "ticket"
+        ? <TicketRestaurantReceiptPdf data={receiptData} />
+        : <RestaurantReceiptPdf data={receiptData} />;
+      const blob = await pdf(receiptDoc).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast.error("Error al generar el recibo.");
+      console.error(err);
+    }
+  }, [order, stores, paymentMethod, tipoComprobante, receiptFormat, servicePercent, PAYMENT_LABELS, activeCompany]);
+
+  const handlePrintReceipt = useCallback(() => {
+    generateReceipt();
+  }, [generateReceipt]);
+
   const handleCheckout = useCallback(async () => {
     if (!order || !selectedStoreId) {
       toast.error("Selecciona una tienda para procesar el pago.");
+      return;
+    }
+    if (needsClient && !checkoutClientId) {
+      toast.error("Selecciona un cliente para emitir comprobante.");
       return;
     }
     setCheckoutLoading(true);
     try {
       const result = await checkoutRestaurantOrder(order.id, {
         storeId: Number(selectedStoreId),
+        clientId: needsClient ? checkoutClientId : undefined,
         tipoComprobante,
         tipoMoneda: "PEN",
         serviceChargePercent: Number(servicePercent),
@@ -281,60 +432,14 @@ export default function RestaurantOrderDetailPage() {
       // Reload order to reflect CLOSED status + salesId
       const updated = await getRestaurantOrder(order.id);
       setOrder(updated as RestaurantOrder);
+      // Auto-generate receipt after successful checkout
+      generateReceipt(updated as RestaurantOrder);
     } catch (err: any) {
       toast.error(err?.message ?? "Error al procesar el pago.");
     } finally {
       setCheckoutLoading(false);
     }
-  }, [order, selectedStoreId, tipoComprobante, servicePercent, checkoutTip, paymentMethod, checkoutTotal]);
-
-  const handlePrintReceipt = useCallback(async () => {
-    if (!order) return;
-    const PAYMENT_LABELS: Record<string, string> = {
-      "-1": "Efectivo", "-2": "Transferencia", "-3": "Visa",
-      "-4": "Yape", "-5": "Plin", "-6": "Otro",
-    };
-    const items = (order.items ?? []).map((i) => ({
-      name: i.product?.name ?? "Producto",
-      quantity: i.quantity ?? 1,
-      unitPrice: i.unitPrice ?? 0,
-      total: (i.quantity ?? 1) * (i.unitPrice ?? 0),
-    }));
-    const subtotal = order.subtotal ?? items.reduce((sum, i) => sum + i.total, 0);
-    const service = order.serviceCharge ?? 0;
-    const igv = order.tax ?? subtotal * 0.18;
-    const total = order.total ?? (subtotal + service + igv);
-
-    const orderStore = order.store;
-    const fallbackStore = stores.find((s) => s.id === order.storeId);
-    const receiptData: RestaurantReceiptData = {
-      storeName: orderStore?.name ?? fallbackStore?.name ?? "Restaurante",
-      storeAddress: orderStore?.adress ?? undefined,
-      orderNumber: String(order.id),
-      tableName: order.table?.name ?? undefined,
-      orderType: order.orderType ?? "DINE_IN",
-      dateTime: order.closedAt
-        ? new Date(order.closedAt).toLocaleString()
-        : new Date().toLocaleString(),
-      items,
-      subtotal,
-      serviceCharge: service > 0 ? service : undefined,
-      igv,
-      total,
-      paymentMethod: PAYMENT_LABELS[String(paymentMethod)] ?? "Efectivo",
-      tipoComprobante: tipoComprobante,
-      notes: order.notes ?? undefined,
-    };
-
-    try {
-      const blob = await pdf(<RestaurantReceiptPdf data={receiptData} />).toBlob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast.error("Error al generar el recibo.");
-      console.error(err);
-    }
-  }, [order, stores, paymentMethod, tipoComprobante]);
+  }, [order, selectedStoreId, tipoComprobante, servicePercent, checkoutTip, paymentMethod, checkoutTotal, needsClient, checkoutClientId, generateReceipt]);
 
   if (!isRestaurant) {
     return (
@@ -574,7 +679,7 @@ export default function RestaurantOrderDetailPage() {
                   <div className="space-y-2">
                     <Label>Tienda / Caja</Label>
                     <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Seleccionar tienda" />
                       </SelectTrigger>
                       <SelectContent>
@@ -611,7 +716,20 @@ export default function RestaurantOrderDetailPage() {
                   {/* Document type */}
                   <div className="space-y-2">
                     <Label>Comprobante</Label>
-                    <RadioGroup value={tipoComprobante} onValueChange={setTipoComprobante} className="flex gap-3">
+                    <RadioGroup
+                      value={tipoComprobante}
+                      onValueChange={(v) => {
+                        setTipoComprobante(v);
+                        if (v === "SIN COMPROBANTE") {
+                          setCheckoutClientId(null);
+                          setCheckoutClientName("");
+                          setCheckoutClientType("");
+                          setCheckoutClientTypeNumber("");
+                          setCheckoutClientAddress("");
+                        }
+                      }}
+                      className="flex gap-3"
+                    >
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="BOLETA" id="boleta" />
                         <Label htmlFor="boleta" className="cursor-pointer text-sm">Boleta</Label>
@@ -626,6 +744,69 @@ export default function RestaurantOrderDetailPage() {
                       </div>
                     </RadioGroup>
                   </div>
+
+                  {/* Client section (only for Boleta/Factura) */}
+                  {needsClient && (
+                    <div className="space-y-2 rounded-lg border border-border/60 p-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm">Cliente</Label>
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7 cursor-pointer flex-shrink-0 text-muted-foreground"
+                                disabled={sunatLoading}
+                                onClick={() => setSunatDialogOpen(true)}
+                              >
+                                {sunatLoading
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <Search className="h-3.5 w-3.5" />
+                                }
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Consulta SUNAT</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      {checkoutClientId ? (
+                        <div className="space-y-1.5 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] flex-shrink-0">{checkoutClientType}</Badge>
+                            <span className="font-mono text-xs text-muted-foreground">{checkoutClientTypeNumber}</span>
+                          </div>
+                          <p className="font-medium break-words">{checkoutClientName}</p>
+                          {checkoutClientAddress && (
+                            <p className="text-xs text-muted-foreground flex items-start gap-1">
+                              <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                              <span className="break-words">{checkoutClientAddress}</span>
+                            </p>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs text-muted-foreground cursor-pointer"
+                            onClick={() => {
+                              setCheckoutClientId(null);
+                              setCheckoutClientName("");
+                              setCheckoutClientType("");
+                              setCheckoutClientTypeNumber("");
+                              setCheckoutClientAddress("");
+                            }}
+                          >
+                            Cambiar cliente
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Busca un cliente por DNI o RUC usando el boton de consulta SUNAT.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Service charge & tip */}
                   <div className="grid grid-cols-2 gap-3">
@@ -679,10 +860,46 @@ export default function RestaurantOrderDetailPage() {
 
                   <Button
                     className="w-full"
-                    disabled={checkoutLoading || !selectedStoreId}
+                    disabled={checkoutLoading || !selectedStoreId || (needsClient && !checkoutClientId)}
                     onClick={handleCheckout}
                   >
                     {checkoutLoading ? "Procesando..." : `Confirmar pago S/. ${checkoutTotal.toFixed(2)}`}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* SUNAT Lookup Dialog */}
+            <Dialog open={sunatDialogOpen} onOpenChange={setSunatDialogOpen}>
+              <DialogContent className="sm:max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-primary flex-shrink-0" />
+                    Consulta SUNAT
+                  </DialogTitle>
+                  <DialogDescription>
+                    Ingresa un DNI (8 digitos) o RUC (11 digitos) para buscar y registrar al cliente.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex gap-2">
+                  <Input
+                    value={sunatQuery}
+                    onChange={(e) => setSunatQuery(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Ej: 20519857538"
+                    className="font-mono flex-1 min-w-0"
+                    maxLength={11}
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSunatSearch(); }}
+                  />
+                  <Button
+                    onClick={handleSunatSearch}
+                    disabled={sunatLoading}
+                    className="cursor-pointer flex-shrink-0"
+                  >
+                    {sunatLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Search className="h-4 w-4" />
+                    }
                   </Button>
                 </div>
               </DialogContent>

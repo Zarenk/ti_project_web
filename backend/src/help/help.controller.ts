@@ -19,6 +19,7 @@ import {
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { HelpService } from './help.service';
+import { HelpArbiterService } from './help-arbiter.service';
 
 interface AskDto {
   question: string;
@@ -72,7 +73,10 @@ interface ApproveEntryDto {
 export class HelpController {
   private readonly rateLimits = new Map<number, number[]>();
 
-  constructor(private readonly helpService: HelpService) {}
+  constructor(
+    private readonly helpService: HelpService,
+    private readonly arbiterService: HelpArbiterService,
+  ) {}
 
   @Get('conversation')
   @UseGuards(JwtAuthGuard)
@@ -205,6 +209,54 @@ export class HelpController {
 
     const adminId = req.user?.userId ?? req.user?.sub;
     await this.helpService.reviewCandidate(id, status, adminId, answer);
+    return { ok: true };
+  }
+
+  // ========== ARBITER ENDPOINTS (SUPER_ADMIN) ==========
+
+  @Get('admin/arbiter/status')
+  @UseGuards(JwtAuthGuard)
+  async getArbiterStatus(@Req() req: any) {
+    this.ensureSuperAdmin(req);
+    return this.arbiterService.getStatus();
+  }
+
+  @Post('admin/arbiter/run')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async triggerArbiter(@Req() req: any) {
+    this.ensureSuperAdmin(req);
+    // Non-blocking: start the run and return immediately
+    this.arbiterService.runFull().catch((err) => {
+      // Error is already logged in the service
+    });
+    return { ok: true, message: 'Árbitro iniciado' };
+  }
+
+  @Post('admin/arbiter/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async cancelArbiter(@Req() req: any) {
+    this.ensureSuperAdmin(req);
+    this.arbiterService.abort();
+    return { ok: true, message: 'Cancelación solicitada' };
+  }
+
+  @Post('admin/arbiter/override/:id')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async overrideArbiter(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { decision: 'APPROVED' | 'REJECTED' },
+    @Req() req: any,
+  ) {
+    this.ensureSuperAdmin(req);
+    const { decision } = body;
+    if (!decision || !['APPROVED', 'REJECTED'].includes(decision)) {
+      throw new BadRequestException('decision (APPROVED/REJECTED) es requerido.');
+    }
+    const adminId = req.user?.userId ?? req.user?.sub;
+    await this.arbiterService.overrideDecision(id, decision, adminId);
     return { ok: true };
   }
 

@@ -2,9 +2,11 @@
 
 import { memo } from 'react'
 import Link from 'next/link'
+import { UtensilsCrossed, GlassWater, IceCreamCone, Package } from 'lucide-react'
 
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 import type { ProductFormContext } from './types'
 
@@ -18,6 +20,23 @@ export type ProductSchemaFieldsProps = ProductFormContext & {
   renderSchemaField: (field: any) => React.ReactNode
   productId?: string | number | null
   migrationAssistantPath: string
+  productKind?: string | null
+  onProductKindChange?: (kind: string) => void
+}
+
+const PRODUCT_KINDS = [
+  { value: "DISH", label: "Plato", icon: UtensilsCrossed, description: "Preparado en cocina" },
+  { value: "BEVERAGE", label: "Bebida", icon: GlassWater, description: "Gaseosas, jugos, cocteles" },
+  { value: "DESSERT", label: "Postre", icon: IceCreamCone, description: "Helados, tortas, dulces" },
+  { value: "PACKAGED", label: "Empaquetado", icon: Package, description: "Snacks, envasados" },
+] as const
+
+const GROUP_DESCRIPTIONS: Record<string, string> = {
+  clothing: "Administra tallas y colores para cada variante.",
+  kitchen: "Define estaciones y tiempos de preparacion para la cocina.",
+  nutrition: "Informacion nutricional y dietetica del plato.",
+  trazabilidad: "Control de lotes y fechas de vencimiento.",
+  bebida: "Configuracion de presentacion y servicio de la bebida.",
 }
 
 export const ProductSchemaFields = memo(function ProductSchemaFields({
@@ -30,8 +49,12 @@ export const ProductSchemaFields = memo(function ProductSchemaFields({
   renderSchemaField,
   productId,
   migrationAssistantPath,
+  productKind,
+  onProductKindChange,
 }: ProductSchemaFieldsProps) {
   if (!schemaFields.length) return null
+
+  const isRestaurant = productKind !== undefined && productKind !== null
 
   return (
     <div className="mt-4 space-y-4 rounded-lg border bg-muted/30 p-4 md:col-span-1 lg:col-span-2 lg:col-start-1 lg:row-start-5 lg:pr-6">
@@ -64,6 +87,48 @@ export const ProductSchemaFields = memo(function ProductSchemaFields({
           </Link>
         </div>
       )}
+
+      {/* ── Product Kind Selector (restaurant only) ── */}
+      {isRestaurant && onProductKindChange && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Tipo de producto</Label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {PRODUCT_KINDS.map(({ value, label, icon: Icon, description }) => {
+              const selected = (productKind || "DISH") === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onProductKindChange(value)}
+                  className={cn(
+                    "group relative flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all duration-200",
+                    selected
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-muted hover:border-muted-foreground/30 hover:bg-muted/50"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                      selected ? "text-primary" : "text-muted-foreground"
+                    )}
+                  />
+                  <span className={cn(
+                    "text-xs font-medium",
+                    selected ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    {label}
+                  </span>
+                  <span className="text-[10px] leading-tight text-muted-foreground text-center">
+                    {description}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {groupedSchemaFields.map(([groupKey, fields]) => (
         <div key={groupKey} className="space-y-3 rounded-md border border-dashed p-3">
           <div>
@@ -72,24 +137,9 @@ export const ProductSchemaFields = memo(function ProductSchemaFields({
                 ? "Campos generales"
                 : groupKey.replace(/[-_]/g, " ")}
             </p>
-            {groupKey === "clothing" && (
+            {GROUP_DESCRIPTIONS[groupKey] && (
               <p className="text-xs text-muted-foreground">
-                Administra tallas y colores para cada variante.
-              </p>
-            )}
-            {groupKey === "kitchen" && (
-              <p className="text-xs text-muted-foreground">
-                Define estaciones y tiempos de preparacion para la cocina.
-              </p>
-            )}
-            {groupKey === "nutrition" && (
-              <p className="text-xs text-muted-foreground">
-                Informacion nutricional y dietetica del plato.
-              </p>
-            )}
-            {groupKey === "trazabilidad" && (
-              <p className="text-xs text-muted-foreground">
-                Control de lotes y fechas de vencimiento.
+                {GROUP_DESCRIPTIONS[groupKey]}
               </p>
             )}
           </div>

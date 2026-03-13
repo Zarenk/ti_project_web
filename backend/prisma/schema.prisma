@@ -523,6 +523,7 @@ model Company {
   restaurantOrders                RestaurantOrder[]
   restaurantTables                RestaurantTable[]
   sales                           Sales[]
+  menuConfigs                     MenuConfig[]
   siteSettings                    SiteSettings[]
   stores                          Store[]
   subscriptionInvoices            SubscriptionInvoice[]
@@ -536,6 +537,7 @@ model Company {
   whatsAppSessions                WhatsAppSession[]
   whatsAppTemplates               WhatsAppTemplate[]
   workOrders                      WorkOrder[]
+  complaints                      complaint_book[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -971,11 +973,15 @@ model HelpKBCandidate {
   section       String
   positiveVotes Int                 @default(0)
   negativeVotes Int                 @default(0)
-  status        HelpCandidateStatus @default(PENDING)
-  approvedById  Int?
-  createdAt     DateTime            @default(now())
-  reviewedAt    DateTime?
-  user          User?               @relation(fields: [approvedById], references: [id])
+  status          HelpCandidateStatus @default(PENDING)
+  approvedById    Int?
+  createdAt       DateTime            @default(now())
+  reviewedAt      DateTime?
+  qualityScore    Float?
+  arbiterDecision String?
+  scoredAt        DateTime?
+  scoreFactors    Json?
+  user            User?               @relation(fields: [approvedById], references: [id])
 
   @@unique([questionNorm, section])
   @@index([section])
@@ -1668,6 +1674,7 @@ model LegalMatter {
   parties                             LegalMatterParty[]
   notes                               LegalNote[]
   timeEntries                         LegalTimeEntry[]
+  auditLogs                           LegalMatterAuditLog[]
 
   @@unique([organizationId, internalCode])
   @@index([area])
@@ -1732,6 +1739,21 @@ model LegalTimeEntry {
   @@index([date])
   @@index([matterId])
   @@index([userId])
+}
+
+model LegalMatterAuditLog {
+  id          Int         @id @default(autoincrement())
+  matterId    Int
+  field       String
+  oldValue    String?
+  newValue    String?
+  changedById Int
+  changedAt   DateTime    @default(now())
+  matter      LegalMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  changedBy   User        @relation(fields: [changedById], references: [id])
+
+  @@index([matterId, changedAt])
+  @@index([changedById])
 }
 
 model MonitoringAlert {
@@ -1914,6 +1936,7 @@ model Organization {
   recipeItems                     RecipeItem[]
   restaurantOrders                RestaurantOrder[]
   restaurantTables                RestaurantTable[]
+  menuConfigs                     MenuConfig[]
   siteSettings                    SiteSettings[]
   socialAccounts                  SocialAccount[]
   subscription                    Subscription?
@@ -1930,6 +1953,9 @@ model Organization {
   whatsAppMessages                WhatsAppMessage[]
   whatsAppSessions                WhatsAppSession[]
   whatsAppTemplates               WhatsAppTemplate[]
+  complaints                      complaint_book[]
+  membershipRequestsFrom          MembershipRequest[]          @relation("MembershipRequestFrom")
+  membershipRequestsTo            MembershipRequest[]          @relation("MembershipRequestTo")
 
   @@index([businessVertical])
   @@index([status])
@@ -1960,6 +1986,9 @@ model OrganizationMembership {
   organizationUnitId Int?
   role               OrganizationMembershipRole @default(MEMBER)
   isDefault          Boolean                    @default(false)
+  isActive           Boolean                    @default(true)
+  deactivatedAt      DateTime?
+  deactivatedBy      Int?
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime @updatedAt
   modulePermissions  Json?
@@ -1971,6 +2000,35 @@ model OrganizationMembership {
   @@index([organizationId])
   @@index([organizationUnitId])
   @@index([userId, isDefault])
+  @@index([userId, isActive])
+}
+
+model MembershipRequest {
+  id                   Int                     @id @default(autoincrement())
+  requesterId          Int
+  targetUserId         Int?
+  fromOrganizationId   Int?
+  toOrganizationId     Int
+  requestedRole        OrganizationMembershipRole @default(MEMBER)
+  type                 MembershipRequestType
+  status               MembershipRequestStatus @default(PENDING)
+  reason               String?
+  resolvedBy           Int?
+  resolvedAt           DateTime?
+  resolutionNote       String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime @updatedAt
+
+  requester            User                    @relation("MembershipRequestRequester", fields: [requesterId], references: [id])
+  targetUser           User?                   @relation("MembershipRequestTarget", fields: [targetUserId], references: [id])
+  fromOrganization     Organization?           @relation("MembershipRequestFrom", fields: [fromOrganizationId], references: [id])
+  toOrganization       Organization            @relation("MembershipRequestTo", fields: [toOrganizationId], references: [id])
+  resolver             User?                   @relation("MembershipRequestResolver", fields: [resolvedBy], references: [id])
+
+  @@index([status])
+  @@index([toOrganizationId, status])
+  @@index([requesterId])
+  @@index([targetUserId])
 }
 
 model OrganizationSetting {
@@ -2593,6 +2651,21 @@ model SiteSettings {
   @@index([organizationId])
 }
 
+model MenuConfig {
+  id             Int           @id @default(autoincrement())
+  data           Json
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  companyId      Int?
+  organizationId Int?
+  tenantKey      String        @unique @default("org:0|company:0")
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([organizationId])
+}
+
 model SocialAccount {
   id             Int            @id @default(autoincrement())
   organizationId Int
@@ -2943,6 +3016,11 @@ model User {
   verticalChangeAudits                              VerticalChangeAudit[]
   cash_closures                                     cash_closures[]
   cash_transactions                                 cash_transactions[]
+  complaintsResponded                               complaint_book[]             @relation("complaintResponder")
+  membershipRequestsAsRequester                     MembershipRequest[]          @relation("MembershipRequestRequester")
+  membershipRequestsAsTarget                        MembershipRequest[]          @relation("MembershipRequestTarget")
+  membershipRequestsResolved                        MembershipRequest[]          @relation("MembershipRequestResolver")
+  legalMatterAuditLogs                              LegalMatterAuditLog[]
 
   @@index([email])
   @@index([lastActiveAt])
@@ -3564,6 +3642,18 @@ enum OrganizationMembershipRole {
   SUPER_ADMIN
 }
 
+enum MembershipRequestType {
+  SELF_REQUEST
+  ADMIN_ADD
+  ADMIN_MOVE
+}
+
+enum MembershipRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum PaymentTerm {
   CASH
   CREDIT
@@ -3705,4 +3795,161 @@ enum WhatsAppSessionStatus {
   CONNECTED
   QR_PENDING
   FAILED
+}
+
+// ── Payment Orchestration ──────────────────────────────────
+// New module: does NOT modify any existing table.
+// orderId/salesId are informational references (no FK) to avoid
+// touching Orders or Sales models.
+
+model PaymentOrder {
+  id                 Int       @id @default(autoincrement())
+  code               String    @unique
+
+  // Informational references — NO FK to avoid coupling
+  orderId            Int?
+  salesId            Int?
+
+  // Amount
+  amount             Decimal   @db.Decimal(12, 2)
+  currency           String    @default("PEN")
+
+  // Provider chosen by orchestrator
+  provider           String    // culqi | mercadopago | cobrana | manual
+  providerPaymentId  String?
+
+  // State machine: PENDING → PROCESSING → SETTLING → COMPLETED / FAILED / EXPIRED / REFUNDED
+  status             String    @default("PENDING")
+
+  // Client info
+  clientName         String?
+  clientEmail        String?
+  clientPhone        String?
+
+  // Payment link
+  paymentUrl         String?
+  expiresAt          DateTime?
+
+  // Provider response
+  providerResponse   Json?
+  completedAt        DateTime?
+  failedAt           DateTime?
+  failureReason      String?
+
+  // Monetary (immutable after COMPLETED)
+  grossAmount        Decimal?  @db.Decimal(12, 2)
+  netAmount          Decimal?  @db.Decimal(12, 2)
+  commissionAmount   Decimal?  @db.Decimal(12, 2)
+  commissionRate     Decimal?  @db.Decimal(5, 4)
+
+  // Operational
+  idempotencyKey     String?   @unique
+  lastWebhookAt      DateTime?
+  webhookAttempts    Int       @default(0)
+
+  // Multi-tenant
+  organizationId     Int
+  companyId          Int?
+  createdBy          Int?
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  events             PaymentOrderEvent[]
+
+  @@unique([provider, providerPaymentId])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([status, lastWebhookAt])
+  @@index([code])
+}
+
+model PaymentOrderEvent {
+  id              Int      @id @default(autoincrement())
+  paymentOrderId  Int
+  fromStatus      String
+  toStatus        String
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  paymentOrder    PaymentOrder @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+
+  @@index([paymentOrderId, createdAt])
+}
+
+// ── Libro de Reclamaciones (DS 101-2022-PCM, Ley 29571) ─────────────────────
+
+model complaint_book {
+  id                  Int       @id @default(autoincrement())
+  organizationId      Int
+  companyId           Int
+  correlativeNumber   String    // "000000001-2026"
+  year                Int
+  trackingCode        String    @unique // "LR-A1B2C3D4"
+  status              String    @default("PENDING") // PENDING | RESPONDED | OVERDUE
+
+  // Sección 1: Identificación del consumidor reclamante
+  consumerName        String
+  consumerDocType     String    // DNI, CE
+  consumerDocNumber   String
+  consumerAddress     String?
+  consumerPhone       String?
+  consumerEmail       String
+  isMinor             Boolean   @default(false)
+  parentName          String?
+  parentDocType       String?
+  parentDocNumber     String?
+
+  // Sección 2: Identificación del bien contratado
+  goodType            String    // PRODUCTO, SERVICIO
+  claimedAmount       Float?
+  amountCurrency      String    @default("PEN")
+  goodDescription     String
+
+  // Sección 3: Detalle de la reclamación y pedido del consumidor
+  complaintType       String    // RECLAMO, QUEJA
+  detail              String
+  consumerRequest     String
+  reclassified        Boolean   @default(false)
+  reclassifiedAt      DateTime?
+  reclassifiedBy      Int?
+
+  // Firma virtual (equivalente digital)
+  signatureConfirmed  Boolean   @default(true)
+  signatureTimestamp  DateTime  @default(now())
+
+  // Sección 4: Observaciones y acciones adoptadas por el proveedor
+  responseText        String?
+  responseDate        DateTime?
+  respondedByUserId   Int?
+
+  // Plazos (15 días hábiles improrrogables)
+  deadlineDate        DateTime
+  businessDaysUsed    Int?
+
+  // Auditoría de emails enviados
+  emailSentToConsumer Boolean   @default(false)
+  emailSentAt         DateTime?
+  responseEmailSentAt DateTime?
+
+  // Snapshot datos del proveedor (congelados al momento de creación)
+  providerLegalName   String
+  providerRuc         String
+  providerAddress     String
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  organization        Organization @relation(fields: [organizationId], references: [id])
+  company             Company      @relation(fields: [companyId], references: [id])
+  respondedBy         User?        @relation("complaintResponder", fields: [respondedByUserId], references: [id])
+
+  @@unique([companyId, correlativeNumber, year])
+  @@index([organizationId, companyId])
+  @@index([trackingCode])
+  @@index([status])
+  @@index([deadlineDate])
+  @@index([companyId, year])
 }

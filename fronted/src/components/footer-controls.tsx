@@ -7,7 +7,7 @@ import ConditionalFooter from "@/components/conditional-footer";
 
 export default function FooterControls() {
   const pathname = usePathname();
-  if (pathname.startsWith("/verify")) {
+  if (pathname.startsWith("/verify") || pathname.startsWith("/menu")) {
     return null;
   }
   if (pathname.startsWith("/signup")) {

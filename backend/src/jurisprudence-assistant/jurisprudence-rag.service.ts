@@ -99,15 +99,22 @@ export class JurisprudenceRagService {
     // Generate query embedding
     const queryEmbedding = await this.generateQueryEmbedding(queryText);
 
-    // Vector search with pre-filtering
+    // Vector search with pre-filtering (jurisprudence embeddings)
     const chunks = await this.searchWithFilters(queryEmbedding, searchFilters, this.TOP_K);
 
-    if (chunks.length === 0) {
+    // Also search legal matter context (notes, documents metadata, matter details)
+    const legalMatterContext = await this.searchLegalMatterContext(
+      organizationId,
+      queryText,
+      legalMatterId,
+    );
+
+    if (chunks.length === 0 && !legalMatterContext) {
       this.logger.warn(`No relevant documents found for query: "${queryText}"`);
 
       const responseTime = Date.now() - startTime;
       return {
-        answer: 'No se encontraron documentos de jurisprudencia relevantes para su consulta. Intente reformular la pregunta o ampliar los filtros de búsqueda.',
+        answer: 'No se encontraron documentos relevantes para su consulta. Suba documentos de jurisprudencia o agregue notas a sus expedientes para que el asistente pueda ayudarle.',
         confidence: 'NO_CONCLUYENTE',
         sources: [],
         metadata: {
@@ -122,14 +129,17 @@ export class JurisprudenceRagService {
     }
 
     // Build context with complete metadata
-    const context = this.buildContext(chunks);
+    const jurisprudenceContext = this.buildContext(chunks);
+    const fullContext = legalMatterContext
+      ? `${jurisprudenceContext}\n\n=== CONTEXTO DE EXPEDIENTES ===\n\n${legalMatterContext}`
+      : jurisprudenceContext;
 
     // Generate answer with GPT-4
-    const { answer, usage } = await this.generateAnswer(queryText, context);
+    const { answer, usage } = await this.generateAnswer(queryText, fullContext);
 
     // Determine confidence and validate citations
     const confidence = this.determineConfidence(answer, chunks);
-    const hasValidCitations = this.validateCitations(answer, chunks);
+    const hasValidCitations = chunks.length > 0 ? this.validateCitations(answer, chunks) : false;
 
     // Build sources array
     const sources = this.buildSources(chunks, answer);
@@ -138,8 +148,8 @@ export class JurisprudenceRagService {
     const tokensUsed = usage.total_tokens;
     const costUsd = this.calculateCost(usage.prompt_tokens, usage.completion_tokens);
 
-    // Save query to database
-    await this.saveQuery({
+    // Save query to database (non-blocking)
+    this.saveQuery({
       organizationId,
       companyId,
       userId,
@@ -175,15 +185,21 @@ export class JurisprudenceRagService {
    */
   private async generateQueryEmbedding(query: string): Promise<number[]> {
     if (!this.openai) {
-      throw new Error('OpenAI client not initialized - OPENAI_API_KEY is required');
+      throw new Error('OPENAI_API_KEY no está configurada. El asistente de jurisprudencia requiere una clave de OpenAI.');
     }
 
-    const response = await this.openai.embeddings.create({
-      model: process.env.JURISPRUDENCE_EMBEDDING_MODEL || 'text-embedding-3-small',
-      input: query,
-    });
+    try {
+      const response = await this.openai.embeddings.create({
+        model: process.env.JURISPRUDENCE_EMBEDDING_MODEL || 'text-embedding-3-small',
+        input: query,
+      });
 
-    return response.data[0].embedding;
+      return response.data[0].embedding;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`OpenAI embedding generation failed: ${message}`);
+      throw new Error(`Error al generar embedding de consulta (OpenAI): ${message}`);
+    }
   }
 
   /**
@@ -198,47 +214,50 @@ export class JurisprudenceRagService {
   ): Promise<any[]> {
     this.logger.log('Performing vector search (temporary JSON-based implementation)');
 
-    // Fetch all embeddings for the organization
-    // TODO: Add proper WHERE filters when pgvector is available
+    // Fetch all embeddings for the organization (org-wide, not company-specific)
     const embeddings = await this.prisma.jurisprudenceEmbedding.findMany({
       where: {
         organizationId: filters.organizationId,
-        companyId: filters.companyId,
       },
       include: {
         document: true,
       },
-      take: 500, // Temporary limit
+      take: 500,
     });
 
+    this.logger.log(`Found ${embeddings.length} total embeddings for org ${filters.organizationId}`);
+
     // Calculate cosine similarity for each embedding
-    const withSimilarity = embeddings
-      .filter((e) => {
-        // Filter by document criteria
-        if (!e.document) return false;
-        if (e.document.processingStatus !== 'COMPLETED') return false;
-        if (e.document.deletedAt) return false;
-        if (filters.minYear && e.document.year < filters.minYear) return false;
-        if (filters.courts?.length && !filters.courts.includes(e.document.court)) return false;
-        return true;
-      })
-      .map((embedding) => {
+    const withSimilarity: any[] = [];
+
+    for (const embedding of embeddings) {
+      // Filter by document criteria
+      if (!embedding.document) continue;
+      if (embedding.document.processingStatus !== 'COMPLETED' &&
+          embedding.document.processingStatus !== 'COMPLETED_WITH_WARNINGS') continue;
+      if (embedding.document.deletedAt) continue;
+      if (filters.minYear && embedding.document.year < filters.minYear) continue;
+      if (filters.courts?.length && !filters.courts.includes(embedding.document.court)) continue;
+
+      try {
         // Parse embedding from Bytes (temporary until pgvector)
         const embeddingVector = JSON.parse(embedding.embedding.toString());
         const similarity = this.cosineSimilarity(queryEmbedding, embeddingVector);
 
-        return {
-          ...embedding,
-          similarity,
-        };
-      })
-      .filter((e) => e.similarity >= this.MIN_SIMILARITY)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, topK);
+        if (similarity >= this.MIN_SIMILARITY) {
+          withSimilarity.push({ ...embedding, similarity });
+        }
+      } catch (err) {
+        this.logger.warn(`Failed to parse embedding ${embedding.id}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
 
-    this.logger.log(`Found ${withSimilarity.length} relevant chunks (min similarity: ${this.MIN_SIMILARITY})`);
+    withSimilarity.sort((a, b) => b.similarity - a.similarity);
+    const topResults = withSimilarity.slice(0, topK);
 
-    return withSimilarity;
+    this.logger.log(`Found ${topResults.length} relevant chunks (min similarity: ${this.MIN_SIMILARITY})`);
+
+    return topResults;
   }
 
   /**
@@ -287,47 +306,56 @@ ${chunk.chunkText}`;
    */
   private async generateAnswer(query: string, context: string) {
     if (!this.openai) {
-      throw new Error('OpenAI client not initialized - OPENAI_API_KEY is required');
+      throw new Error('OPENAI_API_KEY no está configurada.');
     }
 
-    const systemPrompt = `Eres un asistente legal especializado en jurisprudencia peruana.
+    const systemPrompt = `Eres un asistente legal especializado en derecho peruano. Tienes acceso a dos tipos de información:
+
+1. **FUENTES DE JURISPRUDENCIA**: Documentos de jurisprudencia con citas formales (marcados como [FUENTE X])
+2. **CONTEXTO DE EXPEDIENTES**: Información de expedientes del estudio (notas, documentos, detalles de casos) (marcados como [EXPEDIENTE: ...])
 
 REGLAS ESTRICTAS:
 1. Usa SOLO información del contexto proporcionado
-2. CITA OBLIGATORIA: Cada afirmación DEBE incluir [FUENTE X, pág. Y] donde X es el número de fuente y Y son las páginas
-3. Si la evidencia es insuficiente → Responde "NO CONCLUYENTE: [razón específica]"
-4. NO inventes precedentes ni interpretes más allá del texto literal
-5. Distingue entre ratio decidendi (fundamento de la decisión) y obiter dicta (comentarios adicionales)
-6. Si hay precedentes contradictorios, menciónalos todos con sus citas
+2. Para jurisprudencia: CITA OBLIGATORIA con [FUENTE X, pág. Y] donde X es el número de fuente y Y son las páginas
+3. Para expedientes: Referencia el nombre del expediente cuando uses esa información
+4. Si la evidencia es insuficiente → Responde "NO CONCLUYENTE: [razón específica]"
+5. NO inventes precedentes ni interpretes más allá del texto literal
+6. Distingue entre ratio decidendi (fundamento de la decisión) y obiter dicta (comentarios adicionales)
+7. Si hay precedentes contradictorios, menciónalos todos con sus citas
 
 FORMATO DE RESPUESTA:
-- Respuesta directa y concisa con citas inline después de cada afirmación
-- Lista numerada de fuentes consultadas al final
 - Nivel de confianza al inicio: [CONFIANZA: ALTA/MEDIA/BAJA/NO_CONCLUYENTE]
+- Respuesta directa y concisa con citas inline
+- Lista numerada de fuentes consultadas al final
 
 EJEMPLO:
 [CONFIANZA: ALTA]
 
-Según la Casación N° 1234-2020-Lima, el plazo de prescripción para delitos de robo es de 6 años [FUENTE 1, págs. 5-6]. Este criterio ha sido ratificado en casos posteriores [FUENTE 2, pág. 12].
+Según la Casación N° 1234-2020-Lima, el plazo de prescripción para delitos de robo es de 6 años [FUENTE 1, págs. 5-6]. En el expediente "Caso García vs. López", se aplicó este mismo criterio.
 
 Fuentes consultadas:
-1. Casación N° 1234-2020-Lima (Corte Suprema, 2020)
-2. Expediente N° 5678-2021 (Corte Superior de Lima, 2021)`;
+1. Casación N° 1234-2020-Lima (Corte Suprema, 2020)`;
 
-    const response = await this.openai.chat.completions.create({
-      model: this.CHAT_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `CONTEXTO:\n\n${context}\n\nPREGUNTA: ${query}` },
-      ],
-      temperature: 0.1, // Low temperature for consistency
-      max_tokens: 2000,
-    });
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: this.CHAT_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `CONTEXTO:\n\n${context}\n\nPREGUNTA: ${query}` },
+        ],
+        temperature: 0.1,
+        max_tokens: 2000,
+      });
 
-    const answer = response.choices[0].message.content || '';
-    const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+      const answer = response.choices[0].message.content || '';
+      const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
-    return { answer, usage };
+      return { answer, usage };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`OpenAI chat completion failed: ${message}`);
+      throw new Error(`Error al generar respuesta (OpenAI): ${message}`);
+    }
   }
 
   /**
@@ -416,6 +444,143 @@ Fuentes consultadas:
   }
 
   /**
+   * Search legal matter context: notes, document metadata, and matter details
+   * Returns text context or null if nothing relevant found
+   */
+  private async searchLegalMatterContext(
+    organizationId: number,
+    queryText: string,
+    legalMatterId?: number,
+  ): Promise<string | null> {
+    try {
+      const searchTerms = queryText
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((t) => t.length > 3)
+        .slice(0, 5);
+
+      if (searchTerms.length === 0) return null;
+
+      // If specific matter, get full context from it
+      if (legalMatterId) {
+        const matter = await this.prisma.legalMatter.findFirst({
+          where: { id: legalMatterId, organizationId },
+          include: {
+            notes: { orderBy: { createdAt: 'desc' }, take: 20 },
+            documents: {
+              select: { title: true, description: true, type: true, fileName: true },
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+            },
+            parties: { select: { name: true, role: true, lawyerName: true } },
+          },
+        });
+
+        if (matter) {
+          return this.formatMatterContext(matter);
+        }
+      }
+
+      // Otherwise, search across all matters by keyword matching
+      const orConditions = searchTerms.map((term) => ({
+        OR: [
+          { title: { contains: term, mode: 'insensitive' as const } },
+          { description: { contains: term, mode: 'insensitive' as const } },
+          { court: { contains: term, mode: 'insensitive' as const } },
+          { internalCode: { contains: term, mode: 'insensitive' as const } },
+          { externalCode: { contains: term, mode: 'insensitive' as const } },
+        ],
+      }));
+
+      const matters = await this.prisma.legalMatter.findMany({
+        where: {
+          organizationId,
+          OR: orConditions,
+        },
+        include: {
+          notes: { orderBy: { createdAt: 'desc' }, take: 5 },
+          documents: {
+            select: { title: true, description: true, type: true },
+            take: 5,
+          },
+        },
+        take: 3,
+      });
+
+      if (matters.length === 0) {
+        // Also search notes directly
+        const notes = await this.prisma.legalNote.findMany({
+          where: {
+            matter: { organizationId },
+            OR: searchTerms.map((term) => ({
+              content: { contains: term, mode: 'insensitive' as const },
+            })),
+          },
+          include: {
+            matter: { select: { id: true, title: true, internalCode: true } },
+          },
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (notes.length === 0) return null;
+
+        return notes
+          .map(
+            (n) =>
+              `[EXPEDIENTE: ${n.matter.title} (${n.matter.internalCode || 'Sin código'})]\n${n.content}`,
+          )
+          .join('\n\n---\n\n');
+      }
+
+      return matters.map((m) => this.formatMatterContext(m)).join('\n\n===\n\n');
+    } catch (err) {
+      this.logger.warn(
+        `Failed to search legal matter context: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Format a legal matter into context text
+   */
+  private formatMatterContext(matter: any): string {
+    const parts: string[] = [];
+
+    parts.push(`[EXPEDIENTE: ${matter.title}]`);
+    parts.push(`Código: ${matter.internalCode || 'N/A'} | Código externo: ${matter.externalCode || 'N/A'}`);
+    parts.push(`Área: ${matter.area} | Estado: ${matter.status} | Prioridad: ${matter.priority}`);
+    if (matter.court) parts.push(`Juzgado: ${matter.court}`);
+    if (matter.judge) parts.push(`Juez: ${matter.judge}`);
+    if (matter.jurisdiction) parts.push(`Jurisdicción: ${matter.jurisdiction}`);
+    if (matter.description) parts.push(`\nDescripción: ${matter.description}`);
+
+    if (matter.parties?.length > 0) {
+      parts.push(`\nPartes involucradas:`);
+      for (const p of matter.parties) {
+        parts.push(`- ${p.name} (${p.role})${p.lawyerName ? ` | Abogado: ${p.lawyerName}` : ''}`);
+      }
+    }
+
+    if (matter.documents?.length > 0) {
+      parts.push(`\nDocumentos del expediente:`);
+      for (const d of matter.documents) {
+        parts.push(`- [${d.type}] ${d.title}${d.description ? ': ' + d.description : ''}`);
+      }
+    }
+
+    if (matter.notes?.length > 0) {
+      parts.push(`\nNotas del expediente:`);
+      for (const n of matter.notes) {
+        parts.push(`- ${n.content.substring(0, 500)}`);
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
    * Detect query type (heuristic)
    */
   private detectQueryType(query: string): string {
@@ -461,25 +626,29 @@ Fuentes consultadas:
     costUsd: number;
     responseTime: number;
   }) {
-    await this.prisma.jurisprudenceQuery.create({
-      data: {
-        organizationId: data.organizationId,
-        companyId: data.companyId,
-        userId: data.userId,
-        legalMatterId: data.legalMatterId,
-        query: data.query,
-        answer: data.answer,
-        confidence: data.confidence,
-        hasValidCitations: data.hasValidCitations,
-        needsHumanReview: data.needsHumanReview,
-        documentsUsed: data.documentsUsed as any,
-        tokensUsed: data.tokensUsed,
-        costUsd: data.costUsd,
-        responseTime: data.responseTime,
-      },
-    });
+    try {
+      await this.prisma.jurisprudenceQuery.create({
+        data: {
+          organizationId: data.organizationId,
+          companyId: data.companyId,
+          userId: data.userId,
+          legalMatterId: data.legalMatterId,
+          query: data.query,
+          answer: data.answer,
+          confidence: data.confidence,
+          hasValidCitations: data.hasValidCitations,
+          needsHumanReview: data.needsHumanReview,
+          documentsUsed: data.documentsUsed as any,
+          tokensUsed: data.tokensUsed,
+          costUsd: data.costUsd,
+          responseTime: data.responseTime,
+        },
+      });
 
-    this.logger.log(`Query saved: ${data.tokensUsed} tokens, $${data.costUsd.toFixed(6)}, ${data.responseTime}ms`);
+      this.logger.log(`Query saved: ${data.tokensUsed} tokens, $${data.costUsd.toFixed(6)}, ${data.responseTime}ms`);
+    } catch (err) {
+      this.logger.warn(`Failed to save query history: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   /**

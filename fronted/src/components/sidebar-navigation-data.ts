@@ -16,6 +16,7 @@ import {
   QrCode,
   Scale,
   Settings2Icon,
+  Shield,
   ShoppingCart,
   SquareTerminal,
   Store,
@@ -60,6 +61,7 @@ export type ProjectItem = {
   url: string
   icon: LucideIcon
   permission?: ModulePermissionKey
+  requiredRoles?: string[]
 }
 
 export type SidebarData = {
@@ -366,6 +368,11 @@ export const data: SidebarData = {
           url: "/dashboard/sales",
           permission: "sales",
         },
+        {
+          title: "Pagos Digitales",
+          url: "/dashboard/payments",
+          permission: "sales",
+        },
       ],
     },
     {
@@ -392,6 +399,11 @@ export const data: SidebarData = {
       icon: Home,
     },
     {
+      name: "Libro de Reclamaciones",
+      url: "/dashboard/libro-reclamaciones",
+      icon: ClipboardList,
+    },
+    {
       name: "Login",
       url: "/login",
       icon: UserIcon,
@@ -412,6 +424,12 @@ export const data: SidebarData = {
       url: "/store",
       icon: Globe,
       permission: "store",
+    },
+    {
+      name: "Panel Administrador",
+      url: "/dashboard/admin-signups",
+      icon: Shield,
+      requiredRoles: ["SUPER_ADMIN_GLOBAL"],
     },
   ],
 }
@@ -468,6 +486,7 @@ export const CUSTOM_MENU_ICONS: Record<string, LucideIcon> = {
   classes: CalendarDays,
   trainers: Dumbbell,
   dashboard: BarChart3,
+  "qr-menu": QrCode,
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

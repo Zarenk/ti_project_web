@@ -3,217 +3,167 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { BACKEND_URL } from "@/lib/utils"
 import { resolveImageUrl } from "@/lib/images"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import type {
+  MenuCategory, MenuBranding, MenuAppearance, MenuHours,
+  MenuContact, MenuSocialLinks, MenuResponse, MenuStyle, MenuStyleProps,
+} from "./menu-types"
+import { buildPalette } from "./menu-helpers"
+import { StyleElegante } from "./styles/style-elegante"
+import { StyleLuxury } from "./styles/style-luxury"
+import { StyleModerno } from "./styles/style-moderno"
+import { StyleTropical } from "./styles/style-tropical"
 
-type MenuItem = {
-  id: number
-  name: string
-  description: string | null
-  price: number
-  image: string | null
-  images: string[]
-  available: boolean
-  prepTime: number | null
-  kitchenStation: string | null
-}
-
-type MenuCategory = {
-  categoryId: number
-  categoryName: string
-  items: MenuItem[]
-}
-
-type MenuResponse = {
-  categories: MenuCategory[]
-  total: number
+const DEFAULT_APPEARANCE: MenuAppearance = {
+  theme: "dark",
+  primaryColor: "#f59e0b",
+  backgroundColor: "#1a1a1a",
+  textColor: "#ffffff",
+  menuStyle: "elegante",
 }
 
 export default function MenuPage() {
-  const [menu, setMenu] = useState<MenuCategory[]>([])
+  const [categories, setCategories] = useState<MenuCategory[]>([])
+  const [branding, setBranding] = useState<MenuBranding | null>(null)
+  const [appearance, setAppearance] = useState<MenuAppearance>(DEFAULT_APPEARANCE)
+  const [hours, setHours] = useState<MenuHours | null>(null)
+  const [contact, setContact] = useState<MenuContact | null>(null)
+  const [socialLinks, setSocialLinks] = useState<MenuSocialLinks | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
 
+  const urlParams = useMemo(() => {
+    if (typeof window === "undefined") return { slug: null, orgId: "1", companyId: "1" }
+    const params = new URLSearchParams(window.location.search)
+    const slug = params.get("slug")
+    const orgId = params.get("org") ?? params.get("tenant") ?? "1"
+    const companyId = params.get("company") ?? orgId
+    return { slug, orgId, companyId }
+  }, [])
+
   const loadMenu = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${BACKEND_URL}/public/menu`, {
-        cache: "no-store",
-        headers: { "x-tenant-id": "1" },
-      })
+      let res: Response
+      if (urlParams.slug) {
+        res = await fetch(
+          `${BACKEND_URL}/api/public/menu/by-slug/${encodeURIComponent(urlParams.slug)}`,
+          { cache: "no-store" },
+        )
+      } else {
+        res = await fetch(`${BACKEND_URL}/api/public/menu`, {
+          cache: "no-store",
+          headers: {
+            "x-org-id": urlParams.orgId,
+            "x-company-id": urlParams.companyId,
+          },
+        })
+      }
       if (!res.ok) throw new Error("No se pudo cargar el menu")
       const data: MenuResponse = await res.json()
-      setMenu(data.categories)
+      setCategories(data.categories)
+      if (data.branding) setBranding(data.branding)
+      if (data.appearance) setAppearance(data.appearance)
+      if (data.hours) setHours(data.hours)
+      if (data.contact) setContact(data.contact)
+      if (data.socialLinks) setSocialLinks(data.socialLinks)
       if (data.categories.length > 0 && !activeCategory) {
         setActiveCategory(data.categories[0].categoryName)
       }
     } catch {
-      setMenu([])
+      setCategories([])
     } finally {
       setLoading(false)
     }
-  }, [activeCategory])
+  }, [urlParams, activeCategory])
 
   useEffect(() => {
     loadMenu()
   }, [loadMenu])
 
   const filteredMenu = useMemo(() => {
-    if (!search.trim()) return menu
+    if (!search.trim()) return categories
     const q = search.toLowerCase()
-    return menu
+    return categories
       .map((cat) => ({
         ...cat,
         items: cat.items.filter(
           (item) =>
             item.name.toLowerCase().includes(q) ||
-            item.description?.toLowerCase().includes(q)
+            item.description?.toLowerCase().includes(q),
         ),
       }))
       .filter((cat) => cat.items.length > 0)
-  }, [menu, search])
+  }, [categories, search])
 
+  const featuredItems = useMemo(() => {
+    return categories.flatMap((cat) => cat.items.filter((i) => i.featured))
+  }, [categories])
+
+  const palette = useMemo(() => buildPalette(appearance), [appearance])
+
+  const restaurantName = branding?.restaurantName || "Nuestra Carta"
+  const description = branding?.description || "Descubre nuestros platos preparados con los mejores ingredientes"
+  const logoUrl = branding?.logoUrl ? resolveImageUrl(branding.logoUrl) : null
+  const bannerUrl = branding?.bannerUrl ? resolveImageUrl(branding.bannerUrl) : null
+  const showSearch = branding?.showSearch ?? true
+
+  // Loading skeleton
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-950 text-white">
-        <div className="animate-pulse text-lg">Cargando carta...</div>
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-3"
+        style={{ backgroundColor: palette.bgColor, color: palette.textColor }}
+      >
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-2.5 w-2.5 rounded-full animate-bounce"
+              style={{
+                backgroundColor: palette.accentColor,
+                animationDelay: `${i * 150}ms`,
+              }}
+            />
+          ))}
+        </div>
+        <p className="text-sm" style={{ color: palette.mutedText }}>Cargando carta...</p>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-neutral-950 text-white">
-      {/* Hero header */}
-      <header className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900">
-        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 text-center">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
-            Nuestra Carta
-          </h1>
-          <p className="mt-3 text-base text-neutral-400 sm:text-lg">
-            Descubre nuestros platos preparados con los mejores ingredientes
-          </p>
-          <div className="mx-auto mt-6 max-w-md">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar plato..."
-              className="border-white/20 bg-white/5 text-white placeholder:text-neutral-500"
-            />
-          </div>
-        </div>
-      </header>
+  const styleProps: MenuStyleProps = {
+    categories,
+    filteredMenu,
+    featuredItems,
+    branding,
+    appearance,
+    hours,
+    contact,
+    socialLinks,
+    palette,
+    search,
+    setSearch,
+    activeCategory,
+    setActiveCategory,
+    restaurantName,
+    description,
+    logoUrl,
+    bannerUrl,
+    showSearch,
+  }
 
-      {/* Category nav pills */}
-      {menu.length > 1 && (
-        <nav className="sticky top-0 z-10 border-b border-white/10 bg-neutral-950/90 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-5xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
-            {menu.map((cat) => (
-              <button
-                key={cat.categoryId}
-                onClick={() => {
-                  setActiveCategory(cat.categoryName)
-                  document
-                    .getElementById(`cat-${cat.categoryId}`)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }}
-                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  activeCategory === cat.categoryName
-                    ? "bg-white text-neutral-950"
-                    : "bg-white/10 text-neutral-300 hover:bg-white/20"
-                }`}
-              >
-                {cat.categoryName}
-              </button>
-            ))}
-          </div>
-        </nav>
-      )}
+  const menuStyle: MenuStyle = appearance.menuStyle || "elegante"
 
-      {/* Menu content */}
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        {filteredMenu.length === 0 ? (
-          <p className="py-12 text-center text-neutral-500">
-            {search ? "No se encontraron platos." : "No hay platos disponibles."}
-          </p>
-        ) : (
-          <div className="space-y-12">
-            {filteredMenu.map((cat) => (
-              <section key={cat.categoryId} id={`cat-${cat.categoryId}`}>
-                <h2 className="mb-6 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                  {cat.categoryName}
-                </h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {cat.items.map((item) => {
-                    const imgSrc = resolveImageUrl(
-                      item.image || item.images?.[0] || undefined
-                    )
-                    return (
-                      <div
-                        key={item.id}
-                        className={`group flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition-colors hover:bg-white/10 ${
-                          !item.available ? "opacity-50" : ""
-                        }`}
-                      >
-                        {imgSrc ? (
-                          <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl">
-                            <img
-                              src={imgSrc}
-                              alt={item.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-2xl">
-                            🍽
-                          </div>
-                        )}
-                        <div className="flex flex-1 flex-col justify-between">
-                          <div>
-                            <div className="flex items-start justify-between gap-2">
-                              <h3 className="font-semibold leading-tight">
-                                {item.name}
-                              </h3>
-                              <span className="whitespace-nowrap text-base font-bold text-emerald-400">
-                                S/. {item.price.toFixed(2)}
-                              </span>
-                            </div>
-                            {item.description && (
-                              <p className="mt-1 line-clamp-2 text-xs text-neutral-400">
-                                {item.description}
-                              </p>
-                            )}
-                          </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            {item.prepTime != null && (
-                              <Badge
-                                variant="outline"
-                                className="border-white/20 text-[10px] text-neutral-400"
-                              >
-                                ~{item.prepTime} min
-                              </Badge>
-                            )}
-                            {!item.available && (
-                              <Badge variant="destructive" className="text-[10px]">
-                                Agotado
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-6 text-center text-xs text-neutral-500">
-        Carta digital generada automaticamente
-      </footer>
-    </div>
-  )
+  switch (menuStyle) {
+    case "luxury":
+      return <StyleLuxury {...styleProps} />
+    case "moderno":
+      return <StyleModerno {...styleProps} />
+    case "tropical":
+      return <StyleTropical {...styleProps} />
+    case "elegante":
+    default:
+      return <StyleElegante {...styleProps} />
+  }
 }

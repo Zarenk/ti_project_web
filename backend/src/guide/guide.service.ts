@@ -291,7 +291,9 @@ export class GuideService {
         serie,
         correlativo,
         motivoTraslado: dto.motivoTraslado,
-        fechaTraslado: new Date(dto.fechaTraslado),
+        fechaTraslado: /^\d{4}-\d{2}-\d{2}$/.test(dto.fechaTraslado)
+          ? new Date(`${dto.fechaTraslado}T00:00:00`)
+          : new Date(dto.fechaTraslado),
         puntoPartida: dto.puntoPartida,
         puntoLlegada: dto.puntoLlegada,
         transportistaTipoDocumento: dto.transportista.tipoDocumento,
@@ -652,7 +654,7 @@ export class GuideService {
    * Mark a SUNAT-accepted guide as voided.
    * The user must first void it in the SUNAT SOL Portal manually.
    */
-  async voidGuide(id: number, organizationId: number | null, reason?: string) {
+  async voidGuide(id: number, organizationId: number | null, reason?: string, userId?: number) {
     const guide = await this.prismaService.shippingGuide.findFirst({
       where: { id, ...(organizationId ? { organizationId } : {}) },
     });
@@ -663,15 +665,50 @@ export class GuideService {
       throw new ConflictException('Esta guía ya fue anulada.');
     }
 
-    const updated = await this.prismaService.shippingGuide.update({
-      where: { id: guide.id },
-      data: {
-        status: 'VOIDED',
-        voidedAt: new Date(),
-        voidReason: reason || null,
-        ventaId: null,
-        entryId: null,
-      },
+    // Use a transaction to ensure guide void + transfer reversal are atomic
+    const updated = await this.prismaService.$transaction(async (tx) => {
+      // 1. Mark guide as voided
+      const voidedGuide = await tx.shippingGuide.update({
+        where: { id: guide.id },
+        data: {
+          status: 'VOIDED',
+          voidedAt: new Date(),
+          voidReason: reason || null,
+          ventaId: null,
+          entryId: null,
+        },
+      });
+
+      // 2. Reverse inter-store transfers if applicable
+      if (guide.isInterStore && guide.transferIds && guide.transferIds.length > 0) {
+        const effectiveUserId = userId ?? 0;
+        const voidReason = `Reversión por anulación de guía ${guide.serie}-${guide.correlativo}`;
+
+        for (const transferId of guide.transferIds) {
+          try {
+            await this.inventoryService.reverseTransfer(
+              transferId,
+              effectiveUserId,
+              voidReason,
+              tx, // pass transaction client
+            );
+          } catch (reverseError: unknown) {
+            const errMsg = reverseError instanceof Error ? reverseError.message : String(reverseError);
+            this.logger.error(
+              `[Guide] Failed to reverse transfer ${transferId} for guide ${guide.serie}-${guide.correlativo}: ${errMsg}`,
+            );
+            throw new BadRequestException(
+              `Error al revertir transferencia de inventario (transfer ${transferId}): ${errMsg}`,
+            );
+          }
+        }
+
+        this.logger.log(
+          `[Guide] ${guide.transferIds.length} transferencia(s) revertida(s) para guía ${guide.serie}-${guide.correlativo}`,
+        );
+      }
+
+      return voidedGuide;
     });
 
     this.logger.log(`[Guide] Guía ${guide.serie}-${guide.correlativo} marcada como ANULADA (id=${id})`);

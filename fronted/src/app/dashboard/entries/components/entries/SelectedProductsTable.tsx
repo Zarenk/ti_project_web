@@ -219,7 +219,7 @@ export const SelectedProductsTable = ({
   }
 
   return (
-    <div className="w-full overflow-x-auto border rounded-md">
+    <div className="w-full min-w-0 overflow-x-auto border rounded-md">
       {usdPendingConversion && (
         <div className="flex items-center justify-between gap-3 rounded-t-md border-b border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex flex-col gap-0.5 min-w-0">
@@ -264,7 +264,7 @@ export const SelectedProductsTable = ({
           </Button>
         </div>
       )}
-      <div ref={tableContainerRef} className='px-1 sm:px-2'>
+      <div ref={tableContainerRef} className='w-full min-w-0 overflow-x-auto px-1 sm:px-2'>
         <Table className={cn("w-full text-[11px] sm:text-xs")}>
           <TableHeader>
           <TableRow>

@@ -1757,10 +1757,10 @@ export function EntriesForm({entries, categories, isDraftEdit = false}: {entries
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-2 sm:px-4 lg:px-8">
-      <form className='relative flex flex-col gap-2' onSubmit={onSubmit}>
-        <fieldset disabled={isSubmitting} className='flex flex-col gap-2'>
-                  <div className="flex flex-col gap-2">
+    <div className="mx-auto w-full min-w-0 max-w-5xl overflow-hidden px-2 sm:px-4 lg:px-8">
+      <form className='relative flex w-full min-w-0 flex-col gap-2' onSubmit={onSubmit}>
+        <fieldset disabled={isSubmitting} className='flex w-full min-w-0 flex-col gap-2'>
+                  <div className="flex w-full min-w-0 flex-col gap-2">
                     <UploadSection
                       register={register}
                       watch={form.watch}

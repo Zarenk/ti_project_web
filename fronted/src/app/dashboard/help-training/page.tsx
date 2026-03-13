@@ -30,6 +30,7 @@ import type {
 } from "./help-training.api"
 
 import { MetricsOverview } from "./components/metrics-overview"
+import { ArbiterPanel } from "./components/arbiter-panel"
 import { TrainingPanel } from "./components/training-panel"
 import { CandidatesReview } from "./components/candidates-review"
 import { PerformanceChart } from "./components/performance-chart"
@@ -173,6 +174,9 @@ export default function HelpTrainingPage() {
 
         {/* Tab: Resumen */}
         <TabsContent value="overview" className="space-y-4">
+          {/* Arbiter Panel */}
+          <ArbiterPanel onComplete={handleRefresh} />
+
           {/* Top unanswered */}
           {analytics && analytics.topUnanswered.length > 0 && (
             <Card>

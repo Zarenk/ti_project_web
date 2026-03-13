@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, Req, ParseIntPipe } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, Req, ParseIntPipe, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { JurisprudenceRagService } from './jurisprudence-rag.service';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import { RolesGuard } from '../users/roles.guard';
@@ -13,6 +13,8 @@ import { PrismaService } from '../prisma/prisma.service';
 @UseGuards(JwtAuthGuard, RolesGuard, TenantRequiredGuard)
 @ModulePermission('legal')
 export class JurisprudenceAssistantController {
+  private readonly logger = new Logger(JurisprudenceAssistantController.name);
+
   constructor(
     private readonly ragService: JurisprudenceRagService,
     private readonly prisma: PrismaService,
@@ -33,23 +35,43 @@ export class JurisprudenceAssistantController {
     const { organizationId, companyId } = req.tenantContext;
     const userId = req.user?.userId;
 
-    const result = await this.ragService.query(
-      organizationId,
-      companyId,
-      userId,
-      dto.query,
-      dto.legalMatterId,
-      {
-        courts: dto.courts,
-        minYear: dto.minYear,
-        areas: dto.areas,
-      },
-    );
+    if (!organizationId) {
+      throw new BadRequestException('Se requiere contexto de organización para consultar jurisprudencia.');
+    }
 
-    return {
-      success: true,
-      ...result,
-    };
+    try {
+      const result = await this.ragService.query(
+        organizationId,
+        companyId,
+        userId,
+        dto.query,
+        dto.legalMatterId,
+        {
+          courts: dto.courts,
+          minYear: dto.minYear,
+          areas: dto.areas,
+        },
+      );
+
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`RAG query failed: ${message}`, error instanceof Error ? error.stack : undefined);
+
+      if (message.includes('OPENAI_API_KEY')) {
+        throw new BadRequestException('El servicio de IA no está configurado. Contacte al administrador.');
+      }
+      if (message.includes('OpenAI') || message.includes('openai')) {
+        throw new InternalServerErrorException('Error al comunicarse con el servicio de IA. Intente de nuevo.');
+      }
+
+      throw new InternalServerErrorException(
+        `Error al procesar la consulta: ${message}`,
+      );
+    }
   }
 
   /**

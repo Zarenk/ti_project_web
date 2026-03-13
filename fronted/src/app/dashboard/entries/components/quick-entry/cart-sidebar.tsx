@@ -148,7 +148,7 @@ export function CartSidebar({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5 shrink-0 cursor-pointer opacity-0 transition-opacity group-hover/item:opacity-100 text-muted-foreground hover:text-destructive"
+                    className="h-5 w-5 shrink-0 cursor-pointer opacity-100 sm:opacity-0 transition-opacity sm:group-hover/item:opacity-100 text-muted-foreground hover:text-destructive"
                     onClick={() => onRemove(item.product.id)}
                   >
                     <X className="h-3 w-3" />

@@ -113,6 +113,17 @@ export interface LegalStats {
   upcomingEvents: number
 }
 
+export interface LegalMatterAuditLog {
+  id: number
+  matterId: number
+  field: string
+  oldValue: string | null
+  newValue: string | null
+  changedById: number
+  changedAt: string
+  changedBy?: { id: number; username: string } | null
+}
+
 export interface LegalEventWithMatter extends LegalEvent {
   matter?: { id: number; title: string; internalCode: string | null }
 }
@@ -242,6 +253,24 @@ export async function deleteLegalMatter(id: number): Promise<void> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err?.message || "Error al eliminar el expediente")
+  }
+}
+
+// ── Audit Log ────────────────────────────────────────
+
+export async function getLegalMatterAuditLog(
+  matterId: number,
+): Promise<LegalMatterAuditLog[]> {
+  try {
+    const res = await authFetch(
+      `${BACKEND_URL}/api/legal-matters/${matterId}/audit-log`,
+      { cache: "no-store" },
+    )
+    if (!res.ok) throw new Error("Error al obtener el historial de cambios")
+    return res.json()
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) return []
+    throw error
   }
 }
 

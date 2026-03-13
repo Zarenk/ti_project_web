@@ -61,7 +61,7 @@ export default function ContactPage() {
       {/* Header Section */}
       <div
         className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-500 dark:from-blue-700 dark:to-cyan-700 py-16 px-4"
-        data-navcolor="#3b82f6"
+        data-navcolor="#ffffff"
       >
         <div className="absolute inset-0 bg-white/10 dark:bg-black/20 backdrop-blur-sm"></div>
         <div className="relative max-w-7xl mx-auto text-center">

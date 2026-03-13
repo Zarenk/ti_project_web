@@ -167,6 +167,11 @@ const s = StyleSheet.create({
 export type RestaurantReceiptData = {
   storeName: string
   storeAddress?: string
+  companyName?: string
+  companyRuc?: string
+  companyAddress?: string
+  companyPhone?: string
+  receiptNumber?: string
   orderNumber: string
   tableName?: string
   orderType: string
@@ -195,9 +200,15 @@ export function RestaurantReceiptPdf({ data }: { data: RestaurantReceiptData }) 
       <Page size="A5" style={s.page}>
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.storeName}>{data.storeName}</Text>
-          {data.storeAddress && (
-            <Text style={s.storeInfo}>{data.storeAddress}</Text>
+          <Text style={s.storeName}>{data.companyName || data.storeName}</Text>
+          {data.companyRuc && (
+            <Text style={s.storeInfo}>RUC: {data.companyRuc}</Text>
+          )}
+          {(data.companyAddress || data.storeAddress) && (
+            <Text style={s.storeInfo}>{data.companyAddress || data.storeAddress}</Text>
+          )}
+          {data.companyPhone && (
+            <Text style={s.storeInfo}>Tel: {data.companyPhone}</Text>
           )}
           <Text style={s.receiptTitle}>
             {data.tipoComprobante === 'FACTURA'
@@ -206,6 +217,11 @@ export function RestaurantReceiptPdf({ data }: { data: RestaurantReceiptData }) 
                 ? 'BOLETA DE VENTA'
                 : 'NOTA DE VENTA'}
           </Text>
+          {data.receiptNumber && (
+            <Text style={[s.receiptMeta, { fontWeight: 'bold', fontSize: 9, color: BRAND }]}>
+              N° {data.receiptNumber}
+            </Text>
+          )}
           <Text style={s.receiptMeta}>
             Orden #{data.orderNumber} | {data.dateTime}
           </Text>

@@ -7,6 +7,12 @@ export function resolveImageUrl(path?: string): string {
 
   // If it's an absolute URL, rewrite only if it's an uploads path
   // so we can recover from stale hosts/IPs stored in DB.
+  // Also handle URLs missing protocol (e.g. "192.168.1.41/uploads/...")
+  if (/^\d+\.\d+\.\d+\.\d+/.test(path) || /^[a-z0-9-]+\.[a-z]/.test(path)) {
+    if (!path.startsWith("http")) {
+      path = `http://${path}`;
+    }
+  }
   if (path.startsWith("http")) {
     try {
       const url = new URL(path);
