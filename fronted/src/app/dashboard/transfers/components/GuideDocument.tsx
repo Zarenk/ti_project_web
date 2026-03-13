@@ -120,7 +120,13 @@ const UM_MAP: Record<string, string> = {
 function formatDate(dateStr?: string): string {
   if (!dateStr) return "—";
   try {
-    const d = new Date(dateStr);
+    // If dateStr is "yyyy-MM-dd", parse parts directly to avoid UTC timezone shift
+    const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+    }
+    // For ISO datetime strings, use T12:00:00 trick to avoid day shift
+    const d = new Date(dateStr.includes("T") ? dateStr : dateStr + "T12:00:00");
     return d.toLocaleDateString("es-PE", {
       day: "2-digit",
       month: "2-digit",
