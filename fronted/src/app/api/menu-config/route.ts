@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"
 
 function forwardHeaders(req: NextRequest) {
   const headers: Record<string, string> = {}
   const cookie = req.headers.get("cookie") || ""
-  const match = cookie.match(/authToken=([^;]+)/)
+  const match = cookie.match(/token=([^;]+)/)
   if (match) headers["Authorization"] = `Bearer ${match[1]}`
   const tid = req.headers.get("x-tenant-id")
   if (tid) headers["x-tenant-id"] = tid
